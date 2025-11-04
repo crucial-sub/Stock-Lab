@@ -584,7 +584,7 @@ async def list_available_factors():
     }
 
 
-@router.get("/sub_factors/list")
+@router.get("/sub-factors/list")
 async def list_available_sub_factors():
     """사용 가능한 함수 목록"""
     return {
@@ -601,3 +601,42 @@ async def list_available_sub_factors():
             {"id": "COMPARE", "name": "비교", "description": "두 값을 비교"}
         ]
     }
+
+
+@router.get("/themes/list")
+async def list_available_themes():
+    """사용 가능한 테마 목록"""
+    return {
+        "sectors": [
+            {"id": "construction", "name": "건설"},
+            {"id": "metal", "name": "금속"},
+            {"id": "finance", "name": "금융"},
+            {"id": "machinery", "name": "기계 / 장비"},
+            {"id": "other-finance", "name": "기타 금융"},
+            {"id": "other-manufacturing", "name": "기타 제조"},
+            {"id": "other", "name": "기타"},
+            {"id": "agriculture", "name": "농업 / 임업 / 어업"},
+            {"id": "insurance", "name": "보험"},
+            {"id": "real-estate", "name": "부동산"},
+            {"id": "non-metal", "name": "비금속"},
+            {"id": "textile", "name": "섬유 / 의류"},
+            {"id": "entertainment", "name": "오락 / 문화"},
+            {"id": "transport", "name": "운송 / 창고"},
+            {"id": "transport-equipment", "name": "운송장비 / 부품"},
+            {"id": "distribution", "name": "유통"},
+            {"id": "bank", "name": "은행"},
+            {"id": "food", "name": "음식료 / 담배"},
+            {"id": "medical", "name": "의료 / 정밀기기"},
+            {"id": "service", "name": "일반 서비스"},
+            {"id": "utility", "name": "전기 / 가스 / 수도"},
+            {"id": "electronics", "name": "전기 / 전자"},
+            {"id": "pharma", "name": "제약"},
+            {"id": "paper", "name": "종이 / 목재"},
+            {"id": "securities", "name": "증권"},
+            {"id": "publishing", "name": "출판 / 매체 복제"},
+            {"id": "telecom", "name": "통신"},
+            {"id": "chemical", "name": "화학"},
+            {"id": "it-service", "name": "IT서비스"},
+        ]
+    }
+

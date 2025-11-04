@@ -18,6 +18,12 @@ export interface SubFactor {
   parameters?: string[];
 }
 
+/** 테마 타입 */
+export interface Themes {
+  id: string;
+  name: string;
+}
+
 /** 백테스트 실행 요청 타입 */
 export interface BacktestRunRequest {
     /* 기본 설정*/

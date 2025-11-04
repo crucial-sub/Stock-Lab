@@ -60,6 +60,13 @@ export function SellConditionTab() {
   const [condSellCostBasisValue, setCondSellCostBasisValue] =
     useState<number>(0);
 
+  // 조건식 분해 상태 (팩터명, 부등호, 값)
+  const [sellFactorName, setSellFactorName] = useState<string>("");
+  const [sellOperator, setSellOperator] = useState<
+    ">=" | "<=" | ">" | "<" | "=" | "!="
+  >(">=");
+  const [sellValue, setSellValue] = useState<number>(0);
+
   /**
    * 목표가/손절가 토글 및 값 변경 시 전역 스토어 업데이트
    */
@@ -105,13 +112,18 @@ export function SellConditionTab() {
 
   /**
    * 조건 매도 토글 및 값 변경 시 전역 스토어 업데이트
+   * 팩터명, 부등호, 값으로부터 조건식 자동 생성
    */
   useEffect(() => {
     if (toggles.conditionalSell) {
       const sellBasis = `${condSellCostBasis} ${condSellCostBasisValue}`;
+      // 팩터명이 있으면 조건식 자동 생성
+      const expression = sellFactorName
+        ? `{${sellFactorName}} ${sellOperator} ${sellValue}`
+        : "";
       setSellConditions({
         name: sellConditionName,
-        expression: sellConditionExpression,
+        expression: expression,
         sell_logic: sellLogic,
         sell_cost_basis: sellBasis,
       });
@@ -121,7 +133,9 @@ export function SellConditionTab() {
   }, [
     toggles.conditionalSell,
     sellConditionName,
-    sellConditionExpression,
+    sellFactorName,
+    sellOperator,
+    sellValue,
     sellLogic,
     condSellCostBasis,
     condSellCostBasisValue,
@@ -285,28 +299,62 @@ export function SellConditionTab() {
 
         {toggles.conditionalSell && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="block text-sm text-text-secondary">
-                  조건식 이름
-                </div>
+            <div className="space-y-2">
+              <div className="block text-sm text-text-secondary">조건식 설정</div>
+              <div className="flex items-center gap-3 p-4 rounded-lg border border-border-default">
+                {/* 조건식 이름 */}
+                <span className="text-sm font-medium text-text-primary w-6">
+                  {sellConditionName}
+                </span>
+
+                {/* 팩터명 입력 */}
                 <Input
                   type="text"
-                  value={sellConditionName}
-                  onChange={(e) => setSellConditionName(e.target.value)}
-                  placeholder="예: A"
-                  className="w-full"
+                  value={sellFactorName}
+                  onChange={(e) => setSellFactorName(e.target.value)}
+                  placeholder="팩터명 (예: PER)"
+                  className="flex-1 text-sm"
                 />
-              </div>
-              <div className="space-y-2">
-                <div className="block text-sm text-text-secondary">조건식</div>
+
+                {/* 부등호 선택 */}
+                <select
+                  value={sellOperator}
+                  onChange={(e) =>
+                    setSellOperator(
+                      e.target.value as
+                        | ">="
+                        | "<="
+                        | ">"
+                        | "<"
+                        | "="
+                        | "!=",
+                    )
+                  }
+                  className="quant-input px-3 py-2 w-24 text-sm"
+                >
+                  <option value=">=">≥</option>
+                  <option value="<=">≤</option>
+                  <option value=">">{">"}</option>
+                  <option value="<">{"<"}</option>
+                  <option value="=">=</option>
+                  <option value="!=">≠</option>
+                </select>
+
+                {/* 값 입력 */}
                 <Input
-                  type="text"
-                  value={sellConditionExpression}
-                  onChange={(e) => setSellConditionExpression(e.target.value)}
-                  placeholder="예: {PER} > 10"
-                  className="w-full"
+                  type="number"
+                  value={sellValue}
+                  onChange={(e) => setSellValue(Number(e.target.value))}
+                  className="w-32 text-sm"
+                  placeholder="값"
                 />
+
+                {/* 조건식 미리보기 */}
+                <span className="flex-1 text-sm text-text-tertiary">
+                  {sellFactorName
+                    ? `{${sellFactorName}} ${sellOperator} ${sellValue}`
+                    : "조건식이 표시됩니다"}
+                </span>
               </div>
             </div>
 

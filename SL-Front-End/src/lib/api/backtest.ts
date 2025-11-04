@@ -14,7 +14,7 @@ import type {
 
 /**
  * 백테스트 실행
- * - POST /api/backtest/run
+ * - POST /backtest/run
  * - 조건을 기반으로 백테스트를 시작합니다
  *
  * @param request - 백테스트 실행 요청 데이터
@@ -24,7 +24,7 @@ export async function runBacktest(
   request: BacktestRunRequest,
 ): Promise<BacktestRunResponse> {
   const response = await axiosInstance.post<BacktestRunResponse>(
-    "/api/backtest/run",
+    "/backtest/run",
     request,
   );
   return response.data;
@@ -32,7 +32,7 @@ export async function runBacktest(
 
 /**
  * 백테스트 결과 조회
- * - GET /api/backtest/{backtestId}
+ * - GET /backtest/{backtestId}
  * - 완료된 백테스트의 결과를 조회합니다
  *
  * @param backtestId - 백테스트 ID
@@ -46,14 +46,14 @@ export async function getBacktestResult(
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
   const response = await axios.get<BacktestResult>(
-    `/api/backtest/${backtestId}`,
+    `/backtest/${backtestId}`,
   );
   return response.data;
 }
 
 /**
  * 백테스트 목록 조회
- * - GET /api/backtest
+ * - GET /backtest
  * - 사용자의 백테스트 목록을 조회합니다
  *
  * @param params - 페이지네이션 파라미터
@@ -67,7 +67,7 @@ export async function getBacktestList(
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
   const response = await axios.get<PaginatedResponse<BacktestResult>>(
-    "/api/backtest",
+    "/backtest",
     { params },
   );
   return response.data;
@@ -75,7 +75,7 @@ export async function getBacktestList(
 
 /**
  * 백테스트 매매 내역 조회 (페이지네이션)
- * - GET /api/backtest/{backtestId}/trades
+ * - GET /backtest/{backtestId}/trades
  * - 특정 백테스트의 매매 내역을 페이지네이션으로 조회합니다
  * - 대용량 데이터 처리를 위해 사용합니다
  *
@@ -95,13 +95,13 @@ export async function getBacktestTrades(
 
   const response = await axios.get<
     PaginatedResponse<BacktestResult["trades"][number]>
-  >(`/api/backtest/${backtestId}/trades`, { params });
+  >(`/backtest/${backtestId}/trades`, { params });
   return response.data;
 }
 
 /**
  * 백테스트 수익률 차트 데이터 조회 (페이지네이션)
- * - GET /api/backtest/{backtestId}/yield-points
+ * - GET /backtest/{backtestId}/yield-points
  * - 특정 백테스트의 수익률 차트 데이터를 페이지네이션으로 조회합니다
  * - 5년치 대용량 데이터 처리를 위해 사용합니다
  *
@@ -121,13 +121,13 @@ export async function getBacktestYieldPoints(
 
   const response = await axios.get<
     PaginatedResponse<BacktestResult["yieldPoints"][number]>
-  >(`/api/backtest/${backtestId}/yield-points`, { params });
+  >(`/backtest/${backtestId}/yield-points`, { params });
   return response.data;
 }
 
 /**
  * 백테스트 상태 확인
- * - GET /api/backtest/{backtestId}/status
+ * - GET /backtest/{backtestId}/status
  * - 백테스트 실행 상태를 확인합니다 (폴링용)
  *
  * @param backtestId - 백테스트 ID
@@ -140,16 +140,16 @@ export async function getBacktestStatus(backtestId: string): Promise<{
   const response = await axiosInstance.get<{
     status: BacktestResult["status"];
     progress?: number;
-  }>(`/api/backtest/${backtestId}/status`);
+  }>(`/backtest/${backtestId}/status`);
   return response.data;
 }
 
 /**
  * 백테스트 삭제
- * - DELETE /api/backtest/{backtestId}
+ * - DELETE /backtest/{backtestId}
  *
  * @param backtestId - 백테스트 ID
  */
 export async function deleteBacktest(backtestId: string): Promise<void> {
-  await axiosInstance.delete(`/api/backtest/${backtestId}`);
+  await axiosInstance.delete(`/backtest/${backtestId}`);
 }

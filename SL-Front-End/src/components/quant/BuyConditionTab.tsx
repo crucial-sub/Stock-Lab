@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Input, Panel, Toggle } from "@/components/common";
+import { Button, DatePickerField, Input, Panel, Toggle } from "@/components/common";
 import { useBuyCondition } from "@/hooks";
 import { useBacktestConfigStore, useConditionStore } from "@/stores";
 import { useEffect, useState } from "react";
@@ -107,22 +107,18 @@ export function BuyConditionTab() {
 
   /**
    * 팩터 선택 완료 핸들러
-   * 선택된 팩터, 함수, 부등호, 값을 조건에 반영
+   * 선택된 팩터와 함수를 조건에 반영
    */
   const handleFactorSelect = (
     factorId: string,
     factorName: string,
     subFactorId: string,
-    operator: ">=" | "<=" | ">" | "<" | "=" | "!=",
-    value: number,
   ) => {
     if (currentConditionId) {
       updateBuyCondition(currentConditionId, {
         factorId,
         factorName,
         subFactorId,
-        operator,
-        value,
       });
     }
     setIsModalOpen(false);
@@ -141,9 +137,24 @@ export function BuyConditionTab() {
     return {
       factorId: condition.factorId,
       subFactorId: condition.subFactorId,
-      operator: condition.operator,
-      value: condition.value,
     };
+  };
+
+  /**
+   * 조건의 부등호 변경 핸들러
+   */
+  const handleOperatorChange = (
+    id: string,
+    operator: ">=" | "<=" | ">" | "<" | "=" | "!=",
+  ) => {
+    updateBuyCondition(id, { operator });
+  };
+
+  /**
+   * 조건의 값 변경 핸들러
+   */
+  const handleValueChange = (id: string, value: number) => {
+    updateBuyCondition(id, { value });
   };
 
   return (
@@ -196,27 +207,26 @@ export function BuyConditionTab() {
 
           <div className="space-y-2">
             <div className="block text-sm text-text-secondary">
-              투자 시작일 (YYYYMMDD)
+              투자 시작일
             </div>
-            <Input
-              type="text"
+            <DatePickerField
               value={start_date}
-              onChange={(e) => setStartDate(e.target.value)}
-              placeholder="20190101"
+              onChange={setStartDate}
+              placeholder="투자 시작일 선택"
               className="w-full"
             />
           </div>
 
           <div className="space-y-2">
             <div className="block text-sm text-text-secondary">
-              투자 종료일 (YYYYMMDD)
+              투자 종료일
             </div>
-            <Input
-              type="text"
+            <DatePickerField
               value={end_date}
-              onChange={(e) => setEndDate(e.target.value)}
-              placeholder="20241231"
+              onChange={setEndDate}
+              placeholder="투자 종료일 선택"
               className="w-full"
+              minDate={start_date ? new Date(parseInt(start_date.slice(0, 4)), parseInt(start_date.slice(4, 6)) - 1, parseInt(start_date.slice(6, 8))) : undefined}
             />
           </div>
 
@@ -250,16 +260,11 @@ export function BuyConditionTab() {
             {buyConditions.map((condition) => (
               <div
                 key={condition.id}
-                className="flex items-center gap-3 p-4 bg-bg-surface rounded-lg border border-border-default"
+                className="flex items-center gap-3 p-4 rounded-lg border border-border-default"
               >
                 {/* 조건 ID (A, B, C, ...) */}
                 <span className="text-sm font-medium text-text-primary w-6">
                   {condition.id}
-                </span>
-
-                {/* 조건식 표시 영역 */}
-                <span className="flex-1 text-sm text-text-tertiary">
-                  {getConditionExpression(condition)}
                 </span>
 
                 {/* 팩터 선택 버튼 */}
@@ -268,8 +273,49 @@ export function BuyConditionTab() {
                   onClick={() => openModal(condition.id)}
                   className="text-sm px-4 py-2"
                 >
-                  팩터 선택
+                  {condition.factorName || "팩터 선택"}
                 </Button>
+
+                {/* 부등호 선택 */}
+                <select
+                  value={condition.operator}
+                  onChange={(e) =>
+                    handleOperatorChange(
+                      condition.id,
+                      e.target.value as
+                        | ">="
+                        | "<="
+                        | ">"
+                        | "<"
+                        | "="
+                        | "!=",
+                    )
+                  }
+                  className="quant-input px-3 py-2 w-24 text-sm"
+                >
+                  <option value=">=">≥</option>
+                  <option value="<=">≤</option>
+                  <option value=">">{">"}</option>
+                  <option value="<">{"<"}</option>
+                  <option value="=">=</option>
+                  <option value="!=">≠</option>
+                </select>
+
+                {/* 값 입력 */}
+                <Input
+                  type="number"
+                  value={condition.value}
+                  onChange={(e) =>
+                    handleValueChange(condition.id, Number(e.target.value))
+                  }
+                  className="w-32 text-sm"
+                  placeholder="값"
+                />
+
+                {/* 조건식 미리보기 */}
+                <span className="flex-1 text-sm text-text-tertiary">
+                  {getConditionExpression(condition)}
+                </span>
 
                 {/* 삭제 버튼 */}
                 <button
@@ -315,12 +361,12 @@ export function BuyConditionTab() {
                 value={priority_factor}
                 onChange={(e) => setPriorityFactor(e.target.value)}
                 placeholder="예: {PBR}"
-                className="flex-1"
+                className="flex-1 min-w-0"
               />
               <select
                 value={priority_order}
                 onChange={(e) => setPriorityOrder(e.target.value)}
-                className="quant-input px-3"
+                className="quant-input px-3 w-32"
               >
                 <option value="desc">내림차순</option>
                 <option value="asc">오름차순</option>

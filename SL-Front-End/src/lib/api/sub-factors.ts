@@ -8,7 +8,7 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 
 /**
  * 함수 목록 조회
- * - GET /api/sub-factors
+ * - GET /sub-factors/list
  * - 사용 가능한 모든 함수 목록을 반환합니다
  *
  * @param isServer - 서버 사이드 요청 여부 (SSR용)
@@ -17,13 +17,13 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 export async function getSubFactors(isServer = false): Promise<SubFactor[]> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<SubFactor[]>("/api/sub-factors");
-  return response.data;
+  const response = await axios.get<{ sub_factors: SubFactor[] }>("/sub-factors/list");
+  return response.data.sub_factors;
 }
 
 /**
  * 특정 함수 상세 조회
- * - GET /api/sub-factors/{subFactorId}
+ * - GET /sub-factors/{subFactorId}
  *
  * @param subFactorId - 함수 ID
  * @param isServer - 서버 사이드 요청 여부
@@ -35,6 +35,6 @@ export async function getSubFactorById(
 ): Promise<SubFactor> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<SubFactor>(`/api/sub-factors/${subFactorId}`);
+  const response = await axios.get<SubFactor>(`/sub-factors/${subFactorId}`);
   return response.data;
 }

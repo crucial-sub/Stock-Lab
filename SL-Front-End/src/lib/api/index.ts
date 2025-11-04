@@ -6,4 +6,5 @@
 export * from "./backtest";
 export * from "./factors";
 export * from "./sub-factors";
+export * from "./themes";
 

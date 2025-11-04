@@ -20,16 +20,11 @@ logger = logging.getLogger(__name__)
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DATABASE_ECHO if hasattr(settings, 'DATABASE_ECHO') else False,
-    poolclass=NullPool,  # 비동기 엔진에서는 NullPool 사용 (asyncio와 호환)
+    pool_size=settings.DATABASE_POOL_SIZE if hasattr(settings, 'DATABASE_POOL_SIZE') else 5,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW if hasattr(settings, 'DATABASE_MAX_OVERFLOW') else 10,
+    pool_timeout=settings.DATABASE_POOL_TIMEOUT if hasattr(settings, 'DATABASE_POOL_TIMEOUT') else 30,
+    pool_recycle=settings.DATABASE_POOL_RECYCLE if hasattr(settings, 'DATABASE_POOL_RECYCLE') else 3600,
     pool_pre_ping=True,  # 커넥션 유효성 검증
-    # 대용량 쿼리 최적화
-    connect_args={
-        "statement_cache_size": 0,  # prepared statement 캐시 비활성화 (메모리 절약)
-        "server_settings": {
-            "jit": "off",  # JIT 컴파일 비활성화 (짧은 쿼리 최적화)
-            "application_name": "quant_api",
-        }
-    },
 )
 
 # 세션 팩토리
@@ -82,27 +77,16 @@ async def close_db():
     logger.info("Database connections closed")
 
 
-# PostgreSQL 성능 최적화 설정
-@event.listens_for(engine.sync_engine, "connect")
-def set_postgresql_pragma(dbapi_conn, connection_record):
-    """
-    PostgreSQL 연결 시 성능 최적화 설정 적용
-    - work_mem: 정렬/해시 작업 메모리 증가 (대용량 쿼리용)
-    - effective_cache_size: 캐시 크기 설정
-    """
-    cursor = dbapi_conn.cursor()
-    cursor.execute("SET work_mem = '256MB'")  # 정렬/조인 메모리 증가
-    cursor.execute("SET effective_cache_size = '4GB'")  # 쿼리 플래너 최적화
-    cursor.execute("SET random_page_cost = 1.1")  # SSD 최적화
-    cursor.close()
+# PostgreSQL 성능 최적화 설정 (asyncpg 사용 시 비활성화)
+# asyncpg는 psycopg2와 다른 드라이버이므로 이벤트 리스너를 다르게 처리해야 함
+# 성능 설정은 필요시 각 세션에서 개별적으로 적용
 
-
-# 쿼리 성능 모니터링 (개발 환경)
-@event.listens_for(engine.sync_engine, "before_cursor_execute")
-def receive_before_cursor_execute(conn, cursor, statement, params, context, executemany):
-    """쿼리 실행 전 로깅"""
-    if settings.DEBUG:
-        logger.debug(f"SQL Query: {statement}")
+# # 쿼리 성능 모니터링 (개발 환경)
+# @event.listens_for(engine.sync_engine, "before_cursor_execute")
+# def receive_before_cursor_execute(conn, cursor, statement, params, context, executemany):
+#     """쿼리 실행 전 로깅"""
+#     if settings.DEBUG:
+#         logger.debug(f"SQL Query: {statement}")
 
 
 # 대용량 데이터 배치 처리 헬퍼

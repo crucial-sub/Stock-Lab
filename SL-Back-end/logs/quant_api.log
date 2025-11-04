@@ -1419,3 +1419,11 @@ initial_capital
 2025-11-04 18:13:07,085 - app.core.cache - INFO - Redis connection established successfully
 2025-11-04 18:13:07,085 - app.main - INFO - Redis cache initialized successfully
 2025-11-04 18:13:07,085 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 21:09:30,337 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 21:09:30,337 - app.main - INFO - Environment: Development
+2025-11-04 21:09:30,337 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 21:09:30,349 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 21:09:30,349 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 21:09:30,349 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 21:17:25,372 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 21:17:25,380 - app.core.database - INFO - Database connections closed

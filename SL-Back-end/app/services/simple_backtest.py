@@ -1,6 +1,6 @@
 """
-간단한 백테스트 엔진 - 동기 처리 버전
-SQLAlchemy greenlet 이슈 회피
+백테스트 엔진 - 동기 처리 버전
+고도화된 백테스트 엔진 사용 (advanced_backtest.py)
 """
 import logging
 from datetime import date, datetime
@@ -28,6 +28,15 @@ sync_engine = create_engine(
     echo=False
 )
 
+# 고도화된 백테스트 엔진 import
+try:
+    from app.services.advanced_backtest import QuantBacktestEngine
+    USE_ADVANCED_ENGINE = True
+    logger.info("고도화된 백테스트 엔진 로드 완료")
+except ImportError as e:
+    USE_ADVANCED_ENGINE = False
+    logger.warning(f"고도화된 백테스트 엔진 로드 실패: {e}")
+
 
 def run_simple_backtest(
     session_id: str,
@@ -38,9 +47,20 @@ def run_simple_backtest(
     benchmark: str = "KOSPI"
 ) -> Dict:
     """
-    간단한 백테스트 실행 (동기 버전)
+    백테스트 실행 - 고도화된 엔진 우선 사용
     """
-    logger.info(f"백테스트 시작 (동기): {session_id}")
+
+    # 고도화된 백테스트 엔진 사용 시도
+    if USE_ADVANCED_ENGINE:
+        try:
+            logger.info(f"고도화된 백테스트 엔진으로 실행: {session_id}")
+            engine = QuantBacktestEngine(session_id, strategy_id)
+            return engine.run_backtest(start_date, end_date, initial_capital, benchmark)
+        except Exception as e:
+            logger.error(f"고도화된 백테스트 실행 실패, 기본 엔진으로 전환: {e}")
+
+    # 기본 백테스트 로직 (폴백)
+    logger.info(f"기본 백테스트 시작: {session_id}")
 
     with Session(sync_engine) as db:
         try:

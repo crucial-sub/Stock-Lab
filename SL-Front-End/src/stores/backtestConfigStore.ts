@@ -1,4 +1,5 @@
 import type { BacktestRunRequest } from "@/types/api";
+import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
 import { create } from "zustand";
 
 /**
@@ -41,32 +42,37 @@ interface BacktestConfigStore extends BacktestRunRequest {
 
 /**
  * 기본 설정값
+ * - 날짜는 동적으로 계산 (현재 날짜, 1년 전)
+ * - 토글 기본값: 목표가/손절가 on, 나머지 off
  */
 const defaultConfig: BacktestRunRequest = {
   user_id: "default_user", // 실제로는 로그인한 사용자 ID를 사용
   strategy_name: "새 전략", // 기본 전략 이름
-  is_day_or_month: "daily", // 기본값: 일봉
-  start_date: "20190101", // 기본 시작일
-  end_date: "20241231", // 기본 종료일
-  initial_investment: 10000, // 기본 투자 금액 (만원)
-  commission_rate: 0.3, // 기본 수수료율 (%)
+  is_day_or_month: "daily", // "일봉"
+  start_date: getOneYearAgo(), // 1년 전 날짜 (YYYYMMDD)
+  end_date: getCurrentDate(), // 현재 날짜 (YYYYMMDD)
+  initial_investment: 5000, // 5000만원
+  commission_rate: 0.1, // 0.1%
 
   // 매수 조건 기본값
   buy_conditions: [],
   buy_logic: "", // 논리 조건식 (예: "A and B")
   priority_factor: "", // 우선순위 팩터 (예: "{PBR}")
-  priority_order: "desc", // 우선순위 방향
-  per_stock_ratio: 10, // 종목당 매수 비중 (%)
-  max_holdings: 10, // 최대 보유 종목 수
-  max_buy_value: null, // 종목당 최대 매수 금액 (null이면 제한 없음)
-  max_daily_stock: null, // 일일 최대 매수 종목 수 (null이면 제한 없음)
-  buy_cost_basis: "{전일 종가} 0", // 매수 가격 기준
+  priority_order: "desc", // 내림차순
+  per_stock_ratio: 10, // 10%
+  max_holdings: 10, // 10종목
+  max_buy_value: null, // null (토글 off)
+  max_daily_stock: null, // null (토글 off)
+  buy_cost_basis: "{전일 종가} 0", // 전일 종가, 0%
 
-  // 매도 조건 기본값 (모두 null로 시작)
-  target_and_loss: null,
-  hold_days: null,
-  sell_conditions: null,
-  target_stocks: [], // 매매 대상 종목 (빈 배열이면 전체)
+  // 매도 조건 기본값
+  target_and_loss: {
+    target_gain: 10, // 목표가 10%
+    stop_loss: 10, // 손절가 10%
+  },
+  hold_days: null, // 토글 off
+  sell_conditions: null, // 토글 off
+  target_stocks: [], // 빈 배열 (모든 체크박스 해제)
 };
 
 /**

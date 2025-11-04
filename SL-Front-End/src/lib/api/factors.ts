@@ -8,7 +8,7 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 
 /**
  * 팩터 목록 조회
- * - GET /api/factors/list
+ * - GET /factors/list
  * - 사용 가능한 모든 팩터 목록을 반환합니다
  *
  * @param isServer - 서버 사이드 요청 여부 (SSR용)
@@ -17,8 +17,8 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 export async function getFactors(isServer = false): Promise<Factor[]> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<Factor[]>("/api/factors/list");
-  return response.data;
+  const response = await axios.get<{ factors: Factor[] }>("/factors/list");
+  return response.data.factors;
 }
 
 /**
@@ -35,7 +35,7 @@ export async function getFactorsByCategory(
 ): Promise<Factor[]> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<Factor[]>("/api/factors", {
+  const response = await axios.get<Factor[]>("/factors", {
     params: { category },
   });
   return response.data;
@@ -55,6 +55,6 @@ export async function getFactorById(
 ): Promise<Factor> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<Factor>(`/api/factors/${factorId}`);
+  const response = await axios.get<Factor>(`/factors/${factorId}`);
   return response.data;
 }

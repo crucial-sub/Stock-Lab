@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   DEFAULT_COMMISSION_RATE,
   DEFAULT_DATE,
@@ -8,6 +7,7 @@ import {
   INITIAL_BUY_CONDITIONS,
 } from "@/constants";
 import type { BuyCondition, DataType } from "@/types";
+import { useState } from "react";
 
 export function useBuyCondition() {
   const [dataType, setDataType] = useState<DataType>("daily");
@@ -15,7 +15,7 @@ export function useBuyCondition() {
     INITIAL_BUY_CONDITIONS,
   );
   const [toggles, setToggles] = useState({
-    maxPerStock: true,
+    maxPerStock: false,
     maxPerDay: false,
   });
 

@@ -8,7 +8,7 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 
 /**
  * 테마 목록 조회
- * - GET /api/themes/list
+ * - GET /themes/list
  * - 사용 가능한 모든 테마 목록을 반환합니다
  *
  * @param isServer - 서버 사이드 요청 여부 (SSR용)
@@ -17,8 +17,8 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 export async function getThemes(isServer = false): Promise<Themes[]> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<Themes[]>("/api/themes/list");
-  return response.data;
+  const response = await axios.get<{ sectors: Themes[] }>("/themes/list");
+  return response.data.sectors;
 }
 
 /**
@@ -35,6 +35,6 @@ export async function getThemesById(
 ): Promise<Themes> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<Themes>(`/api/themes/${themeId}`);
+  const response = await axios.get<Themes>(`/themes/${themeId}`);
   return response.data;
 }

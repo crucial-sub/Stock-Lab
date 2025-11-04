@@ -4,7 +4,7 @@ import { Checkbox, Panel } from "@/components/common";
 import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { BacktestRunButton } from "./BacktestRunButton";
+import { ShowBacktestStrategyButton } from "./ShowBacktestStrategyButton";
 
 /**
  * 매매 대상 선택 탭 컴포넌트
@@ -95,9 +95,9 @@ export function TargetSelectionTab() {
         </Panel>
       </div>
 
-      {/* 하단 버튼 영역 */}
+      {/* 하단 버튼 영역 - 최종 조건 확인 버튼 */}
       <div className="flex justify-center pt-4">
-        <BacktestRunButton />
+        <ShowBacktestStrategyButton />
       </div>
     </div>
   );

@@ -1,17 +1,9 @@
 "use client";
 
-import { formatDateToServerFromDate, parseServerDate } from "@/lib/date-utils";
-import { format } from "date-fns";
+import { formatDateFromServer, formatDateToServerFromDate, parseServerDate } from "@/lib/date-utils";
 import { ko } from "date-fns/locale";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DayPicker, type Matcher } from "react-day-picker";
-import "react-day-picker/dist/style.css";
 import { createPortal } from "react-dom";
 
 interface DatePickerFieldProps {
@@ -24,12 +16,6 @@ interface DatePickerFieldProps {
   maxDate?: Date;
 }
 
-interface PopoverPosition {
-  top: number;
-  left: number;
-  width: number;
-}
-
 export function DatePickerField({
   value,
   onChange,
@@ -40,11 +26,12 @@ export function DatePickerField({
   maxDate,
 }: DatePickerFieldProps) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<PopoverPosition | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   const selectedDate = value ? parseServerDate(value) : undefined;
-  const currentYear = selectedDate?.getFullYear() ?? new Date().getFullYear();
+  const displayValue = value ? formatDateFromServer(value) : "";
 
   const disabledMatchers = useMemo(() => {
     const matchers: Matcher[] = [];
@@ -59,30 +46,36 @@ export function DatePickerField({
     setPosition({
       top: rect.bottom + window.scrollY + 8,
       left: rect.left + window.scrollX,
-      width: rect.width,
     });
   }, []);
 
   useEffect(() => {
     if (!isOpen) return;
+
     updatePosition();
 
-    const handle = () => updatePosition();
-    window.addEventListener("resize", handle);
-    window.addEventListener("scroll", handle, true);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        popoverRef.current?.contains(event.target as Node) ||
+        triggerRef.current?.contains(event.target as Node)
+      ) {
+        return;
+      }
+      setIsOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+
     return () => {
-      window.removeEventListener("resize", handle);
-      window.removeEventListener("scroll", handle, true);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, updatePosition]);
-
-  const handleSelect = (date: Date | undefined) => {
-    if (!date) return;
-    onChange(formatDateToServerFromDate(date));
-    setIsOpen(false);
-  };
-
-  const displayValue = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
 
   return (
     <div className={`relative ${className}`}>
@@ -90,65 +83,246 @@ export function DatePickerField({
         ref={triggerRef}
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className="quant-input flex w-full items-center justify-between text-left"
+        onClick={() => {
+          if (!isOpen) updatePosition();
+          setIsOpen((prev) => !prev);
+        }}
+        className="w-full h-10 px-3 flex items-center justify-between text-left rounded border border-gray-600 bg-transparent hover:border-gray-400 transition-colors"
+        style={{
+          color: displayValue ? '#e5e5e5' : '#a3a3a3',
+          fontSize: '14px'
+        }}
       >
-        <span className={displayValue ? "text-text-primary" : "text-text-secondary"}>
-          {displayValue || placeholder}
-        </span>
-        <span className="text-text-secondary">📅</span>
+        <span>{displayValue || placeholder}</span>
+        <span style={{ color: '#a3a3a3' }}>📅</span>
       </button>
 
-      {isOpen && position &&
-        createPortal(
-          <>
-            <div
-              className="fixed inset-0 z-[999]"
-              onClick={() => setIsOpen(false)}
-            />
-            <div
-              className="fixed z-[1000] rounded-xl border border-border-subtle bg-bg-surface/95 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.2)] backdrop-blur-xl"
-              style={{ top: position.top, left: position.left, minWidth: Math.max(280, position.width) }}
-            >
-              <DayPicker
-                mode="single"
-                selected={selectedDate}
-                onSelect={handleSelect}
-                locale={ko}
-                showOutsideDays
-                captionLayout="dropdown"
-                fromYear={minDate?.getFullYear() ?? currentYear - 20}
-                toYear={maxDate?.getFullYear() ?? currentYear + 20}
-                fromDate={minDate}
-                toDate={maxDate}
-                disabled={disabledMatchers}
-                className="text-text-primary"
-                classNames={{
-                  months: "flex flex-col space-y-4",
-                  month: "space-y-4",
-                  caption: "flex items-center justify-between gap-2 text-sm font-medium",
-                  caption_label: "capitalize",
-                  caption_dropdowns: "flex items-center gap-2",
-                  table: "w-full border-collapse",
-                  head_row:
-                    "grid grid-cols-7 text-center text-[0.7rem] font-medium uppercase tracking-tight text-text-tertiary",
-                  head_cell: "py-2",
-                  row: "grid grid-cols-7 text-center text-sm",
-                  cell: "relative h-10 w-10 place-items-center justify-center",
-                  day: "mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-text-primary transition hover:bg-brand/15 hover:text-brand",
-                  day_selected:
-                    "bg-brand text-white hover:bg-brand hover:text-white focus:bg-brand focus:text-white",
-                  day_today: "border border-brand/40 text-brand",
-                  day_outside: "text-text-tertiary opacity-40",
-                  day_disabled: "text-text-tertiary opacity-30",
-                  day_range_middle: "bg-brand/10 text-text-primary",
-                  day_hidden: "invisible",
-                }}
-              />
-            </div>
-          </>,
-          document.body,
-        )}
+      {isOpen && position && createPortal(
+        <div
+          ref={popoverRef}
+          className="absolute rounded-xl border border-white/10 bg-[#0a0a0a]/95 backdrop-blur-xl p-5 shadow-2xl"
+          style={{
+            minWidth: '320px',
+            top: `${position.top}px`,
+            left: `${position.left}px`,
+            zIndex: 99999,
+            boxShadow: '0 20px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05)'
+          }}
+        >
+          <style dangerouslySetInnerHTML={{
+            __html: `
+              .rdp {
+                --rdp-accent-color: #60a5fa !important;
+                --rdp-accent-background-color: #60a5fa !important;
+                --rdp-background-color: rgba(96, 165, 250, 0.12) !important;
+                color: #f5f5f5 !important;
+                font-size: 13px;
+                font-weight: 400;
+                margin: 0;
+              }
+              .rdp * {
+                color: #f5f5f5 !important;
+              }
+              .rdp-selected {
+                background-color: #60a5fa !important;
+                color: white !important;
+                border-radius: 20%
+              }
+              .rdp-selected * {
+                color: white !important;
+              }
+              .rdp-month_caption {
+                color: #ffffff !important;
+                font-weight: 600;
+                font-size: 15px;
+                margin-bottom: 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              }
+              .rdp-weekday {
+                color: #888888 !important;
+                font-size: 11px;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+              }
+              .rdp-day {
+                color: #f5f5f5 !important;
+              }
+              .rdp-day_button {
+                color: #f5f5f5 !important;
+                border-radius: 8px;
+                width: 36px;
+                height: 36px;
+                font-size: 13px;
+                font-weight: 400;
+                transition: all 0.15s ease;
+              }
+              .rdp-day_button:hover:not(.rdp-day_selected):not(.rdp-day_disabled) {
+                background-color: rgba(96, 165, 250, 0.15) !important;
+                color: #ffffff !important;
+                transform: scale(1.05);
+              }
+              button[name="day"].rdp-day_button[aria-pressed="true"],
+              button[name="day"].rdp-day_button[aria-selected="true"],
+              .rdp-day[aria-selected="true"] button,
+              .rdp-day_button[aria-pressed="true"],
+              .rdp-day_button[data-selected="true"],
+              button.rdp-day_button[aria-selected="true"],
+              .rdp-day_selected button,
+              .rdp-day_selected .rdp-day_button,
+              .rdp-day_selected,
+              .rdp-selected,
+              .rdp-day.rdp-selected button,
+              .rdp-day[data-selected="true"] button {
+                background: #60a5fa !important;
+                background-color: #60a5fa !important;
+                background-image: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
+                color: #ffffff !important;
+                font-weight: 600 !important;
+                box-shadow: 0 4px 12px rgba(96, 165, 250, 0.4) !important;
+              }
+              button[name="day"].rdp-day_button[aria-pressed="true"]:hover,
+              .rdp-day_button[aria-pressed="true"]:hover,
+              .rdp-day_selected .rdp-day_button:hover {
+                background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+                transform: scale(1.05);
+              }
+              .rdp-day_today:not(.rdp-day_selected) .rdp-day_button {
+                border: 1px solid rgba(96, 165, 250, 0.5);
+                background-color: rgba(96, 165, 250, 0.08);
+              }
+              .rdp-day_outside {
+                opacity: 0.3;
+              }
+              .rdp-day_disabled {
+                opacity: 0.25;
+                cursor: not-allowed;
+              }
+              .rdp-caption {
+                display: block !important;
+                margin-bottom: 16px;
+              }
+              .rdp-caption > * {
+                display: inline-flex !important;
+                vertical-align: middle !important;
+              }
+              .rdp-nav {
+                display: inline-flex !important;
+                gap: 12px;
+                width: 100% !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+              }
+              .rdp-dropdowns {
+                display: inline-flex !important;
+                position: absolute !important;
+                left: 50% !important;
+                top: 6% !important;
+                transform: translateX(-50%) !important;
+                z-index: 10 !important;
+                gap: 8px;
+                align-items: center;
+              }
+              .rdp-button_previous {
+                color: #ffffff !important;
+                width: 32px;
+                height: 32px;
+                border-radius: 6px;
+                transition: all 0.15s ease;
+                display: inline-flex !important;
+                align-items: center;
+                justify-content: center;
+                background: rgba(255, 255, 255, 0.15) !important;
+                border: 1px solid rgba(255, 255, 255, 0.3) !important;
+                cursor: pointer;
+              }
+              .rdp-button_next {
+                color: #ffffff !important;
+                width: 32px;
+                height: 32px;
+                border-radius: 6px;
+                transition: all 0.15s ease;
+                display: inline-flex !important;
+                align-items: center;
+                justify-content: center;
+                background: rgba(255, 255, 255, 0.15) !important;
+                border: 1px solid rgba(255, 255, 255, 0.3) !important;
+                cursor: pointer;
+              }
+              .rdp-button_previous:hover,
+              .rdp-button_next:hover {
+                background-color: rgba(96, 165, 250, 0.4) !important;
+                border-color: rgba(96, 165, 250, 0.6) !important;
+                color: #ffffff !important;
+              }
+              .rdp-button_previous svg,
+              .rdp-button_next svg {
+                width: 16px;
+                height: 16px;
+                fill: #ffffff !important;
+                stroke: #ffffff !important;
+              }
+              .rdp-caption_label {
+                display: none !important;
+              }
+              .rdp-dropdown_root {
+                display: inline-block !important;
+              }
+              .rdp-dropdown {
+                color: #ffffff !important;
+                background-color: rgba(255, 255, 255, 0.1) !important;
+                border: 1px solid rgba(255, 255, 255, 0.3) !important;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                appearance: none;
+                -webkit-appearance: none;
+                -moz-appearance: none;
+              }
+              .rdp-dropdown:hover {
+                border-color: rgba(96, 165, 250, 0.6) !important;
+                background-color: rgba(255, 255, 255, 0.15) !important;
+              }
+              .rdp-dropdown option {
+                background-color: #1a1a1a !important;
+                color: #ffffff !important;
+              }
+              .rdp-dropdown_year,
+              .rdp-dropdown_month {
+                display: inline-block !important;
+              }
+              .rdp-month {
+                width: 100%;
+              }
+              .rdp-month_grid {
+                width: 100%;
+              }
+            `
+          }} />
+          <DayPicker
+            mode="single"
+            selected={selectedDate}
+            onSelect={(date) => {
+              if (!date) return;
+              onChange(formatDateToServerFromDate(date));
+              setIsOpen(false);
+            }}
+            locale={ko}
+            defaultMonth={selectedDate ?? minDate ?? new Date()}
+            fromDate={minDate}
+            toDate={maxDate}
+            disabled={disabledMatchers}
+            showOutsideDays
+            captionLayout="dropdown"
+            startMonth={minDate ?? new Date(2000, 0, 1)}
+            endMonth={maxDate ?? new Date(2030, 11, 31)}
+          />
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

@@ -24,7 +24,7 @@ export function QuantNewPageClient() {
 
   // 서버에서 prefetch된 데이터를 자동으로 사용 (추가 요청 없음)
   const { data: factors, isLoading: isLoadingFactors } = useFactorsQuery();
-  const { data: functions, isLoading: isLoadingSubFactors } =
+  const { data: subFactors, isLoading: isLoadingSubFactors } =
     useSubFactorsQuery();
 
   // 로딩 상태 표시
@@ -43,7 +43,7 @@ export function QuantNewPageClient() {
         {process.env.NODE_ENV === "development" && (
           <div className="text-xs text-text-tertiary">
             Factors: {factors?.length ?? 0} | SubFactors:{" "}
-            {functions?.length ?? 0}
+            {subFactors?.length ?? 0}
           </div>
         )}
 

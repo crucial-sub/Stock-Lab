@@ -584,11 +584,11 @@ async def list_available_factors():
     }
 
 
-@router.get("/functions/list")
-async def list_available_functions():
+@router.get("/sub_factors/list")
+async def list_available_sub_factors():
     """사용 가능한 함수 목록"""
     return {
-        "functions": [
+        "sub_factors": [
             {"id": "AND", "name": "AND 조건", "description": "모든 조건이 참일 때"},
             {"id": "OR", "name": "OR 조건", "description": "하나 이상의 조건이 참일 때"},
             {"id": "NOT", "name": "NOT 조건", "description": "조건이 거짓일 때"},

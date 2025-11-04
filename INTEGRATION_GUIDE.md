@@ -16,7 +16,7 @@
 │  │              │  │              │  │              │          │
 │  │  /quant/new  │  │  ConditionUI │  │ useBacktest  │          │
 │  │  /quant/     │  │  ChartView   │  │  useFactors  │          │
-│  │   result     │  │  TradeList   │  │ useFunctions │          │
+│  │   result     │  │  TradeList   │  │ useSubFactors │          │
 │  └──────────────┘  └──────────────┘  └──────────────┘          │
 │                             │                                    │
 │                             ▼                                    │
@@ -36,7 +36,7 @@
 │  │              │  │              │  │              │          │
 │  │  /backtest   │  │ BacktestEngine│ │ Simulation  │          │
 │  │  /factors    │  │FactorCalc    │  │ StockPrice  │          │
-│  │  /functions  │  │  DataLoader  │  │  Company    │          │
+│  │  /sub-factors│  │  DataLoader  │  │  Company    │          │
 │  └──────────────┘  └──────────────┘  └──────────────┘          │
 │                             │                                    │
 │                             ▼                                    │
@@ -82,14 +82,14 @@ NODE_ENV=development
 - `GET /api/v1/backtest/{backtest_id}/result` - 결과 조회
 - `GET /api/v1/backtest/list` - 백테스트 목록
 - `GET /api/v1/factors/list` - 팩터 목록
-- `GET /api/v1/functions/list` - 함수 목록
+- `GET /api/v1/sub-factors/list` - 함수 목록
 
 ### 4. Frontend API 클라이언트 수정 (완료)
 
 다음 파일들의 API 엔드포인트 경로 수정:
 - `/Users/a2/Desktop/branch-restore/SL-Front-End/src/lib/api/backtest.ts`
 - `/Users/a2/Desktop/branch-restore/SL-Front-End/src/lib/api/factors.ts`
-- `/Users/a2/Desktop/branch-restore/SL-Front-End/src/lib/api/functions.ts`
+- `/Users/a2/Desktop/branch-restore/SL-Front-End/src/lib/api/subFactors.ts`
 
 ## 📡 API 엔드포인트 매핑
 
@@ -100,7 +100,7 @@ NODE_ENV=development
 | 결과 조회 | `getBacktestResult()` | `/api/v1/backtest/{id}/result` | GET |
 | 목록 조회 | `getBacktestList()` | `/api/v1/backtest/list` | GET |
 | 팩터 목록 | `getFactors()` | `/api/v1/factors/list` | GET |
-| 함수 목록 | `getFunctions()` | `/api/v1/functions/list` | GET |
+| 함수 목록 | `getSubFactors()` | `/api/v1/sub-factors/list` | GET |
 
 ## 🔄 백테스트 실행 플로우
 

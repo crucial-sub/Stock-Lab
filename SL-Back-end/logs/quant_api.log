@@ -1427,3 +1427,85 @@ initial_capital
 2025-11-04 21:09:30,349 - app.main - INFO - Database initialized (dev mode)
 2025-11-04 21:17:25,372 - app.main - INFO - === Quant Investment API 종료 ===
 2025-11-04 21:17:25,380 - app.core.database - INFO - Database connections closed
+2025-11-04 22:19:22,819 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 22:19:22,819 - app.main - INFO - Environment: Development
+2025-11-04 22:19:22,819 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 22:19:22,826 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 22:19:22,826 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 22:19:22,826 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 22:20:17,472 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:17,474 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:17,474 - app.main - INFO - ← GET /api/v1/api/factors - 404 (2.36ms)
+2025-11-04 22:20:17,476 - app.main - INFO - ← GET /api/v1/api/factors - 404 (2.00ms)
+2025-11-04 22:20:18,373 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:18,373 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:18,374 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.95ms)
+2025-11-04 22:20:18,374 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.79ms)
+2025-11-04 22:20:18,535 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:18,540 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:18,541 - app.main - INFO - ← GET /api/v1/api/factors - 404 (5.77ms)
+2025-11-04 22:20:18,543 - app.main - INFO - ← GET /api/v1/api/factors - 404 (2.88ms)
+2025-11-04 22:20:18,548 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:18,549 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.87ms)
+2025-11-04 22:20:18,552 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:18,553 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (1.18ms)
+2025-11-04 22:20:19,558 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:19,559 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.77ms)
+2025-11-04 22:20:19,565 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:19,566 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (1.22ms)
+2025-11-04 22:20:25,437 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:25,437 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.86ms)
+2025-11-04 22:20:26,443 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:26,444 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.85ms)
+2025-11-04 22:20:26,448 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:26,450 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (1.44ms)
+2025-11-04 22:20:27,456 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:27,457 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.92ms)
+2025-11-04 22:20:27,540 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:27,541 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:27,541 - app.main - INFO - ← GET /api/v1/api/factors - 404 (1.04ms)
+2025-11-04 22:20:27,541 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.85ms)
+2025-11-04 22:20:28,560 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:20:28,562 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:20:28,563 - app.main - INFO - ← GET /api/v1/api/factors - 404 (2.78ms)
+2025-11-04 22:20:28,563 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.57ms)
+2025-11-04 22:20:41,858 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 22:20:41,860 - app.core.database - INFO - Database connections closed
+2025-11-04 22:20:44,218 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 22:20:44,218 - app.main - INFO - Environment: Development
+2025-11-04 22:20:44,218 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 22:20:44,225 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 22:20:44,225 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 22:20:44,225 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 22:21:01,674 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:21:01,675 - app.main - INFO - ← GET /api/v1/api/factors - 404 (1.00ms)
+2025-11-04 22:21:02,686 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:21:02,687 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.94ms)
+2025-11-04 22:21:02,695 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:21:02,698 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (2.44ms)
+2025-11-04 22:21:03,706 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:21:03,707 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.89ms)
+2025-11-04 22:21:03,826 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:21:03,826 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.73ms)
+2025-11-04 22:21:03,827 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:21:03,828 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (1.43ms)
+2025-11-04 22:21:04,835 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:21:04,836 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:21:04,836 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.71ms)
+2025-11-04 22:21:04,836 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.59ms)
+2025-11-04 22:21:18,274 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:21:18,279 - app.main - INFO - ← GET /api/v1/api/factors - 404 (5.35ms)
+2025-11-04 22:21:19,289 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:21:19,295 - app.main - INFO - ← GET /api/v1/api/factors - 404 (5.79ms)
+2025-11-04 22:21:19,305 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:21:19,305 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.73ms)
+2025-11-04 22:21:20,311 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:21:20,312 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.93ms)
+2025-11-04 22:21:20,420 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:21:20,420 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:21:20,421 - app.main - INFO - ← GET /api/v1/api/factors - 404 (1.14ms)
+2025-11-04 22:21:20,421 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.98ms)
+2025-11-04 22:21:21,448 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:21:21,449 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:21:21,449 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.84ms)
+2025-11-04 22:21:21,449 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.55ms)

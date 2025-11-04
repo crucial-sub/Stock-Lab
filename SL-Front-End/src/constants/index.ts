@@ -1,8 +1,8 @@
 import type { Tab } from "@/types";
 
-export * from "./mockData";
 export * from "./factors";
-export * from "./functions";
+export * from "./mockData";
+export * from "./subFactors";
 
 // Tab configurations
 export const HOME_SORT_TABS: Tab[] = [

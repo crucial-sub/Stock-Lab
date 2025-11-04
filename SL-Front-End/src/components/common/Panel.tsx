@@ -38,8 +38,8 @@ export function Panel({
   // variant에 따른 기본 스타일 선택
   const baseStyle =
     variant === "glass"
-      ? "backdrop-blur-[50px] backdrop-filter bg-[rgba(255,255,255,0.2)] rounded-[8px] border-[0.5px] border-solid border-white shadow-[0px_0px_8px_2px_rgba(255,255,255,0.3)]"
-      : "quant-panel";
+      ? "bg-[rgba(255,255,255,0.2)] rounded-[8px] border-[0.5px] border-solid border-white shadow-[0px_0px_8px_2px_rgba(255,255,255,0.3)]"
+      : "quant-panel relative";
 
   return <div className={`${baseStyle} ${className}`}>{children}</div>;
 }

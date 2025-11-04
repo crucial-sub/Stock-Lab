@@ -20952,3 +20952,309 @@ ValueError: [TypeError("'builtin_function_or_method' object is not iterable"), T
 2025-11-05 02:37:59,664 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.44ms)
 2025-11-05 02:37:59,666 - app.main - INFO - → GET /api/v1/themes/list
 2025-11-05 02:37:59,666 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.83ms)
+2025-11-05 02:47:50,924 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:47:50,928 - app.main - INFO - ← GET /api/v1/factors/list - 200 (5.80ms)
+2025-11-05 02:47:50,996 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:47:51,006 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (9.89ms)
+2025-11-05 02:47:51,007 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:47:51,014 - app.main - INFO - ← GET /api/v1/factors/list - 200 (7.00ms)
+2025-11-05 02:47:51,023 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:47:51,026 - app.main - INFO - ← GET /api/v1/themes/list - 200 (3.85ms)
+2025-11-05 02:47:51,030 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:47:51,036 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (5.85ms)
+2025-11-05 02:47:51,055 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:47:51,058 - app.main - INFO - ← GET /api/v1/themes/list - 200 (2.52ms)
+2025-11-05 02:47:51,101 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:47:51,102 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.42ms)
+2025-11-05 02:47:51,111 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:47:51,113 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (2.15ms)
+2025-11-05 02:47:51,126 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:47:51,129 - app.main - INFO - ← GET /api/v1/themes/list - 200 (2.47ms)
+2025-11-05 02:48:16,715 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:48:16,718 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.73ms)
+2025-11-05 02:48:16,720 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:48:16,721 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.44ms)
+2025-11-05 02:48:16,722 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:48:16,723 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.55ms)
+2025-11-05 02:49:28,893 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:49:28,898 - app.main - INFO - ← GET /api/v1/factors/list - 200 (4.87ms)
+2025-11-05 02:49:28,901 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:49:28,902 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.01ms)
+2025-11-05 02:49:28,905 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:49:28,906 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.69ms)
+2025-11-05 02:49:41,729 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 02:49:41,735 - app.core.database - INFO - Database connections closed
+2025-11-05 02:49:45,171 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 02:49:45,171 - app.main - INFO - Environment: Development
+2025-11-05 02:49:45,171 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 02:49:45,180 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 02:49:45,180 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 02:49:45,180 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 02:49:57,394 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:49:57,395 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.24ms)
+2025-11-05 02:49:57,400 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:49:57,400 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.66ms)
+2025-11-05 02:49:57,403 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:49:57,404 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.72ms)
+2025-11-05 02:51:17,425 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:51:17,433 - app.main - INFO - ← GET /api/v1/factors/list - 200 (7.75ms)
+2025-11-05 02:51:17,442 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:51:17,442 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.58ms)
+2025-11-05 02:51:17,445 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:51:17,445 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.76ms)
+2025-11-05 02:52:24,405 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:52:24,410 - app.main - INFO - ← GET /api/v1/factors/list - 200 (4.89ms)
+2025-11-05 02:52:24,418 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:52:24,427 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (8.62ms)
+2025-11-05 02:52:24,433 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:52:24,435 - app.main - INFO - ← GET /api/v1/themes/list - 200 (2.19ms)
+2025-11-05 02:52:37,052 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:52:37,060 - app.main - INFO - ← GET /api/v1/factors/list - 200 (8.60ms)
+2025-11-05 02:52:37,067 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:52:37,068 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.69ms)
+2025-11-05 02:52:37,071 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:52:37,072 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.73ms)
+2025-11-05 02:55:34,155 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:55:34,158 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.25ms)
+2025-11-05 02:55:34,162 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:55:34,162 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.65ms)
+2025-11-05 02:55:34,165 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:55:34,166 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.65ms)
+2025-11-05 02:59:49,800 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 02:59:49,803 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.89ms)
+2025-11-05 02:59:49,806 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 02:59:49,807 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.57ms)
+2025-11-05 02:59:49,809 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 02:59:49,810 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.71ms)
+2025-11-05 03:06:35,697 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-05 03:06:35,706 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-05 03:06:35,709 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (12.65ms)
+2025-11-05 03:06:35,712 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (5.77ms)
+2025-11-05 03:06:37,027 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:06:37,028 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.68ms)
+2025-11-05 03:06:37,033 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:06:37,034 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.88ms)
+2025-11-05 03:06:37,036 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:06:37,037 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.68ms)
+2025-11-05 03:10:09,835 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:10:09,840 - app.main - INFO - ← GET /api/v1/factors/list - 200 (6.01ms)
+2025-11-05 03:10:09,847 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:10:09,848 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.11ms)
+2025-11-05 03:10:09,852 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:10:09,855 - app.main - INFO - ← GET /api/v1/themes/list - 200 (3.34ms)
+2025-11-05 03:10:10,029 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:10:10,031 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.46ms)
+2025-11-05 03:10:10,052 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:10:10,053 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.18ms)
+2025-11-05 03:10:10,060 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:10:10,061 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.27ms)
+2025-11-05 03:10:26,491 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:10:26,492 - app.main - INFO - ← GET /api/v1/factors/list - 200 (0.99ms)
+2025-11-05 03:10:26,494 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:10:26,495 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.45ms)
+2025-11-05 03:10:26,499 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:10:26,499 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.66ms)
+2025-11-05 03:12:00,259 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:12:00,264 - app.main - INFO - ← GET /api/v1/factors/list - 200 (4.99ms)
+2025-11-05 03:12:00,269 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:12:00,271 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.74ms)
+2025-11-05 03:12:00,275 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:12:00,276 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.15ms)
+2025-11-05 03:12:05,945 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:12:05,947 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.84ms)
+2025-11-05 03:12:05,952 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:12:05,953 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.04ms)
+2025-11-05 03:12:05,957 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:12:05,958 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.51ms)
+2025-11-05 03:13:37,230 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:13:37,234 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.42ms)
+2025-11-05 03:13:37,239 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:13:37,240 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.37ms)
+2025-11-05 03:13:37,247 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:13:37,250 - app.main - INFO - ← GET /api/v1/themes/list - 200 (2.98ms)
+2025-11-05 03:14:43,650 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:14:43,654 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.49ms)
+2025-11-05 03:14:43,667 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:14:43,668 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.09ms)
+2025-11-05 03:14:43,671 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:14:43,672 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.77ms)
+2025-11-05 03:14:47,980 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:14:47,981 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.22ms)
+2025-11-05 03:14:47,988 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:14:47,990 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.58ms)
+2025-11-05 03:14:47,993 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:14:47,995 - app.main - INFO - ← GET /api/v1/themes/list - 200 (2.20ms)
+2025-11-05 03:15:27,583 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:15:27,586 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.75ms)
+2025-11-05 03:15:27,590 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:15:27,591 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.23ms)
+2025-11-05 03:15:27,594 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:15:27,595 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.82ms)
+2025-11-05 03:18:41,552 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:18:41,556 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.97ms)
+2025-11-05 03:18:41,561 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:18:41,562 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.85ms)
+2025-11-05 03:18:41,565 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:18:41,567 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.21ms)
+2025-11-05 03:21:29,979 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:21:29,982 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.42ms)
+2025-11-05 03:21:29,984 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:21:29,985 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.54ms)
+2025-11-05 03:21:29,987 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:21:29,988 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.63ms)
+2025-11-05 03:24:02,046 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:24:02,050 - app.main - INFO - ← GET /api/v1/factors/list - 200 (4.12ms)
+2025-11-05 03:24:02,053 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:24:02,054 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.61ms)
+2025-11-05 03:24:02,057 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:24:02,057 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.72ms)
+2025-11-05 03:25:03,213 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:25:03,235 - app.main - INFO - ← GET /api/v1/factors/list - 200 (22.48ms)
+2025-11-05 03:25:03,264 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:25:03,268 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (3.86ms)
+2025-11-05 03:25:03,273 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:25:03,275 - app.main - INFO - ← GET /api/v1/themes/list - 200 (2.00ms)
+2025-11-05 03:25:03,536 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:25:03,539 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.52ms)
+2025-11-05 03:25:03,561 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:25:03,562 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.19ms)
+2025-11-05 03:25:03,568 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:25:03,570 - app.main - INFO - ← GET /api/v1/themes/list - 200 (2.49ms)
+2025-11-05 03:25:18,000 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:25:18,000 - app.main - INFO - ← GET /api/v1/factors/list - 200 (0.76ms)
+2025-11-05 03:25:18,003 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:25:18,003 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.57ms)
+2025-11-05 03:25:18,006 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:25:18,006 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.72ms)
+2025-11-05 03:25:18,121 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:25:18,122 - app.main - INFO - ← GET /api/v1/factors/list - 200 (0.77ms)
+2025-11-05 03:25:18,134 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:25:18,135 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.69ms)
+2025-11-05 03:25:18,137 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:25:18,138 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.72ms)
+2025-11-05 03:26:44,427 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:26:44,431 - app.main - INFO - ← GET /api/v1/factors/list - 200 (4.10ms)
+2025-11-05 03:26:44,437 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:26:44,439 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.97ms)
+2025-11-05 03:26:44,442 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:26:44,444 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.74ms)
+2025-11-05 03:26:48,044 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:26:48,046 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.48ms)
+2025-11-05 03:26:48,049 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:26:48,050 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.17ms)
+2025-11-05 03:26:48,054 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:26:48,055 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.19ms)
+2025-11-05 03:28:03,010 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:28:03,012 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.54ms)
+2025-11-05 03:28:03,015 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:28:03,015 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.46ms)
+2025-11-05 03:28:03,017 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:28:03,018 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.59ms)
+2025-11-05 03:28:04,331 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:28:04,332 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.00ms)
+2025-11-05 03:28:04,364 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:28:04,365 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.81ms)
+2025-11-05 03:28:04,369 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:28:04,369 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.60ms)
+2025-11-05 03:28:04,502 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:28:04,503 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.32ms)
+2025-11-05 03:28:04,518 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:28:04,519 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.72ms)
+2025-11-05 03:28:04,521 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:28:04,522 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.94ms)
+2025-11-05 03:28:09,186 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:28:09,188 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.96ms)
+2025-11-05 03:28:09,223 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:28:09,223 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.55ms)
+2025-11-05 03:28:09,225 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:28:09,225 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.51ms)
+2025-11-05 03:31:13,162 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:31:13,165 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.14ms)
+2025-11-05 03:31:13,170 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:31:13,171 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.99ms)
+2025-11-05 03:31:13,175 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:31:13,176 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.36ms)
+2025-11-05 03:31:16,608 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:31:16,610 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.64ms)
+2025-11-05 03:31:16,613 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:31:16,614 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.80ms)
+2025-11-05 03:31:16,617 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:31:16,619 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.52ms)
+2025-11-05 03:32:08,282 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:32:08,284 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.16ms)
+2025-11-05 03:32:08,287 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:32:08,287 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.51ms)
+2025-11-05 03:32:08,289 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:32:08,290 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.58ms)
+2025-11-05 03:34:41,878 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:34:41,880 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.52ms)
+2025-11-05 03:34:41,884 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:34:41,885 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.04ms)
+2025-11-05 03:34:41,888 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:34:41,890 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.20ms)
+2025-11-05 03:36:14,658 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:36:14,661 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.87ms)
+2025-11-05 03:36:14,668 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:36:14,669 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.42ms)
+2025-11-05 03:36:14,673 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:36:14,674 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.98ms)
+2025-11-05 03:36:20,313 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:36:20,313 - app.main - INFO - ← GET /api/v1/factors/list - 200 (0.71ms)
+2025-11-05 03:36:20,316 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:36:20,316 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.60ms)
+2025-11-05 03:36:20,318 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:36:20,319 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.66ms)
+2025-11-05 03:37:25,192 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:37:25,195 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.57ms)
+2025-11-05 03:37:25,197 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:37:25,198 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.42ms)
+2025-11-05 03:37:25,199 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:37:25,200 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.56ms)
+2025-11-05 03:38:58,178 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:38:58,184 - app.main - INFO - ← GET /api/v1/factors/list - 200 (7.14ms)
+2025-11-05 03:38:58,190 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:38:58,191 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (1.09ms)
+2025-11-05 03:38:58,194 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:38:58,196 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.23ms)
+2025-11-05 03:39:27,949 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:39:27,950 - app.main - INFO - ← GET /api/v1/factors/list - 200 (1.16ms)
+2025-11-05 03:39:27,954 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:39:27,955 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.96ms)
+2025-11-05 03:39:27,959 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:39:27,960 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.41ms)
+2025-11-05 03:40:16,087 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:40:16,090 - app.main - INFO - ← GET /api/v1/factors/list - 200 (3.59ms)
+2025-11-05 03:40:16,094 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:40:16,095 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.90ms)
+2025-11-05 03:40:16,097 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:40:16,098 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.94ms)
+2025-11-05 03:40:26,462 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:40:26,463 - app.main - INFO - ← GET /api/v1/factors/list - 200 (0.83ms)
+2025-11-05 03:40:26,466 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:40:26,466 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.62ms)
+2025-11-05 03:40:26,469 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:40:26,469 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.66ms)
+2025-11-05 03:46:18,189 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:46:18,192 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.70ms)
+2025-11-05 03:46:18,194 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:46:18,195 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.48ms)
+2025-11-05 03:46:18,196 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:46:18,197 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.55ms)
+2025-11-05 03:46:30,802 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:46:30,802 - app.main - INFO - ← GET /api/v1/factors/list - 200 (0.69ms)
+2025-11-05 03:46:30,806 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:46:30,806 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.51ms)
+2025-11-05 03:46:30,808 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:46:30,809 - app.main - INFO - ← GET /api/v1/themes/list - 200 (1.01ms)
+2025-11-05 03:50:00,449 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:50:00,451 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.63ms)
+2025-11-05 03:50:00,455 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:50:00,456 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.68ms)
+2025-11-05 03:50:00,458 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:50:00,459 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.75ms)
+2025-11-05 03:53:08,084 - app.main - INFO - → GET /api/v1/factors/list
+2025-11-05 03:53:08,086 - app.main - INFO - ← GET /api/v1/factors/list - 200 (2.42ms)
+2025-11-05 03:53:08,089 - app.main - INFO - → GET /api/v1/sub-factors/list
+2025-11-05 03:53:08,090 - app.main - INFO - ← GET /api/v1/sub-factors/list - 200 (0.49ms)
+2025-11-05 03:53:08,092 - app.main - INFO - → GET /api/v1/themes/list
+2025-11-05 03:53:08,093 - app.main - INFO - ← GET /api/v1/themes/list - 200 (0.67ms)

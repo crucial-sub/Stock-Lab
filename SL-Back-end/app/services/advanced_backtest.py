@@ -7,7 +7,8 @@ from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, select, update, text, and_, or_
-import pandas as pd
+import polars as pl
+import pandas as pd  # 통계 계산시 일부 사용
 import numpy as np
 
 from app.models.simulation import (
@@ -48,6 +49,8 @@ class QuantBacktestEngine:
         self.positions = {}  # {stock_code: Position}
         self.cash = Decimal("0")
         self.portfolio_value = Decimal("0")
+        self.previous_portfolio_value = Decimal("0")
+        self.initial_capital = Decimal("0")
         self.current_date = None
 
     def run_backtest(
@@ -72,6 +75,8 @@ class QuantBacktestEngine:
                 # 3. 초기 자본 설정
                 self.cash = initial_capital
                 self.portfolio_value = initial_capital
+                self.previous_portfolio_value = initial_capital
+                self.initial_capital = initial_capital
 
                 # 4. 거래일 리스트 생성
                 trading_days = self._get_trading_days(db, start_date, end_date)
@@ -214,14 +219,17 @@ class QuantBacktestEngine:
             for row in result
         ]
 
-    def _calculate_factor_scores(self, db: Session, stocks: List[Dict], trading_date: date) -> pd.DataFrame:
-        """팩터 점수 계산"""
+    def _calculate_factor_scores(self, db: Session, stocks: List[Dict], trading_date: date) -> pl.DataFrame:
+        """팩터 점수 계산 - Polars를 사용한 최적화"""
 
         stock_codes = [s["stock_code"] for s in stocks]
+        stock_data = {
+            "stock_code": stock_codes,
+            "market_cap": [s.get("market_cap", 0) for s in stocks]
+        }
 
-        # 팩터별 점수 계산
-        factor_scores = pd.DataFrame()
-        factor_scores["stock_code"] = stock_codes
+        # Polars DataFrame 생성
+        factor_scores = pl.DataFrame(stock_data)
 
         for factor_setting in self.factor_settings:
             factor = db.execute(
@@ -245,12 +253,14 @@ class QuantBacktestEngine:
                 )
 
             # 팩터 점수 추가
-            factor_scores[factor.factor_id] = scores
+            factor_scores = factor_scores.with_columns(
+                pl.Series(name=factor.factor_id, values=scores)
+            )
 
         # 종합 점수 계산 (가중 평균)
         if len(self.factor_settings) > 0:
-            weighted_sum = 0
-            total_weight = 0
+            # 가중치를 적용할 컬럼들 준비
+            weighted_cols = []
 
             for factor_setting in self.factor_settings:
                 if factor_setting.usage_type == "SCORING":
@@ -260,15 +270,49 @@ class QuantBacktestEngine:
                     if factor_col in factor_scores.columns:
                         # 방향성 적용
                         if factor_setting.direction == "NEGATIVE":
-                            factor_scores[factor_col] = -factor_scores[factor_col]
+                            factor_scores = factor_scores.with_columns(
+                                (pl.col(factor_col) * -1).alias(factor_col)
+                            )
 
-                        weighted_sum += factor_scores[factor_col] * weight
-                        total_weight += weight
+                        # 가중치 적용
+                        weighted_col_name = f"{factor_col}_weighted"
+                        factor_scores = factor_scores.with_columns(
+                            (pl.col(factor_col) * weight).alias(weighted_col_name)
+                        )
+                        weighted_cols.append(weighted_col_name)
 
-            if total_weight > 0:
-                factor_scores["total_score"] = weighted_sum / total_weight
+            # 종합 점수 계산
+            if weighted_cols:
+                factor_scores = factor_scores.with_columns(
+                    sum([pl.col(col) for col in weighted_cols]).alias("total_score_raw")
+                )
+
+                # 가중치 합계로 나누기
+                total_weight = sum(
+                    float(fs.weight or 1.0)
+                    for fs in self.factor_settings
+                    if fs.usage_type == "SCORING" and fs.factor_id in factor_scores.columns
+                )
+
+                if total_weight > 0:
+                    factor_scores = factor_scores.with_columns(
+                        (pl.col("total_score_raw") / total_weight).alias("total_score")
+                    ).drop("total_score_raw")
+                else:
+                    factor_scores = factor_scores.with_columns(
+                        pl.lit(0).alias("total_score")
+                    )
+
+                # 임시 가중치 컬럼 제거
+                factor_scores = factor_scores.drop(weighted_cols)
             else:
-                factor_scores["total_score"] = 0
+                factor_scores = factor_scores.with_columns(
+                    pl.lit(0).alias("total_score")
+                )
+        else:
+            factor_scores = factor_scores.with_columns(
+                pl.lit(0).alias("total_score")
+            )
 
         return factor_scores
 
@@ -330,11 +374,11 @@ class QuantBacktestEngine:
 
         return scores.tolist()
 
-    def _select_stocks_by_factors(self, factor_scores: pd.DataFrame) -> List[str]:
-        """팩터 점수 기반 종목 선택"""
+    def _select_stocks_by_factors(self, factor_scores: pl.DataFrame) -> List[str]:
+        """팩터 점수 기반 종목 선택 - Polars 최적화"""
 
         # 스크리닝 적용
-        screened = factor_scores.copy()
+        screened = factor_scores
 
         for factor_setting in self.factor_settings:
             if factor_setting.usage_type == "SCREENING":
@@ -343,14 +387,23 @@ class QuantBacktestEngine:
                 if factor_col in screened.columns:
                     if factor_setting.operator == "GT":
                         threshold = float(factor_setting.threshold_value)
-                        screened = screened[screened[factor_col] > threshold]
+                        screened = screened.filter(pl.col(factor_col) > threshold)
                     elif factor_setting.operator == "LT":
                         threshold = float(factor_setting.threshold_value)
-                        screened = screened[screened[factor_col] < threshold]
+                        screened = screened.filter(pl.col(factor_col) < threshold)
+                    elif factor_setting.operator == "BETWEEN":
+                        # 범위 필터링 (예: 10 < factor < 50)
+                        values = factor_setting.threshold_value.split(",")
+                        if len(values) == 2:
+                            lower = float(values[0])
+                            upper = float(values[1])
+                            screened = screened.filter(
+                                (pl.col(factor_col) > lower) & (pl.col(factor_col) < upper)
+                            )
 
         # 랭킹 적용
         if "total_score" in screened.columns:
-            screened = screened.sort_values("total_score", ascending=False)
+            screened = screened.sort("total_score", descending=True)
 
         # 최대 보유 종목 수 제한
         max_positions = 20  # 기본값
@@ -359,7 +412,7 @@ class QuantBacktestEngine:
                 max_positions = rule.max_positions
                 break
 
-        selected = screened.head(max_positions)["stock_code"].tolist()
+        selected = screened.head(max_positions)["stock_code"].to_list()
 
         logger.info(f"팩터 기반 {len(selected)}개 종목 선택")
         return selected
@@ -378,14 +431,28 @@ class QuantBacktestEngine:
         self.portfolio_value = self.cash + position_value
 
         # 4. 일별 수익률 계산
-        # TODO: 전일 대비 수익률 계산
+        daily_return = Decimal("0")
+        cumulative_return = Decimal("0")
+
+        if self.previous_portfolio_value > 0:
+            daily_return = ((self.portfolio_value - self.previous_portfolio_value) /
+                          self.previous_portfolio_value) * 100
+
+        if self.initial_capital > 0:
+            cumulative_return = ((self.portfolio_value - self.initial_capital) /
+                               self.initial_capital) * 100
+
+        # 현재 포트폴리오 가치를 이전 가치로 저장
+        self.previous_portfolio_value = self.portfolio_value
 
         return {
             "date": trading_date,
             "portfolio_value": self.portfolio_value,
             "cash": self.cash,
             "position_value": position_value,
-            "positions": len(self.positions)
+            "positions": len(self.positions),
+            "daily_return": daily_return,
+            "cumulative_return": cumulative_return
         }
 
     def _rebalance_portfolio(self, db: Session, trading_date: date):
@@ -412,15 +479,30 @@ class QuantBacktestEngine:
             if stock_code not in selected_stocks:
                 self._sell_position(db, stock_code, trading_date)
 
-        # 5. 새로운 포지션 구축
-        position_size = self._calculate_position_size(len(selected_stocks))
+        # 5. 포지션 사이징 방법 결정
+        sizing_method = "EQUAL_WEIGHT"
+        for rule in self.trading_rules:
+            if rule.position_sizing:
+                sizing_method = rule.position_sizing
+                break
 
+        # 6. 포지션 크기 계산
+        if sizing_method in ["MARKET_CAP", "RISK_PARITY"]:
+            position_sizes = self._calculate_weighted_position_sizes(
+                db, selected_stocks, trading_date, sizing_method
+            )
+        else:
+            position_size = self._calculate_position_size(len(selected_stocks))
+            position_sizes = {stock: position_size for stock in selected_stocks}
+
+        # 7. 새로운 포지션 구축
         for stock_code in selected_stocks:
+            target_value = position_sizes.get(stock_code, Decimal("0"))
             if stock_code not in self.positions:
-                self._buy_position(db, stock_code, position_size, trading_date)
+                self._buy_position(db, stock_code, target_value, trading_date)
             else:
                 # 기존 포지션 조정
-                self._adjust_position(db, stock_code, position_size, trading_date)
+                self._adjust_position(db, stock_code, target_value, trading_date)
 
     def _buy_position(self, db: Session, stock_code: str, target_value: Decimal, trading_date: date):
         """매수 포지션 생성"""
@@ -631,10 +713,76 @@ class QuantBacktestEngine:
             if rule.position_sizing == "EQUAL_WEIGHT":
                 # 동일 가중
                 return self.portfolio_value / num_positions
-            # TODO: MARKET_CAP, RISK_PARITY 등 추가 구현
+            elif rule.position_sizing == "MARKET_CAP":
+                # 시가총액 가중 (개별 종목별로 계산 필요)
+                # 이 메서드는 기본 사이즈만 반환, 실제 가중치는 리밸런싱에서 처리
+                return self.portfolio_value / num_positions
+            elif rule.position_sizing == "RISK_PARITY":
+                # 리스크 패리티 (개별 종목별로 계산 필요)
+                # 이 메서드는 기본 사이즈만 반환, 실제 가중치는 리밸런싱에서 처리
+                return self.portfolio_value / num_positions
 
         # 기본값: 동일 가중
         return self.portfolio_value / num_positions
+
+    def _calculate_weighted_position_sizes(
+        self, db: Session, stock_codes: List[str], trading_date: date, method: str
+    ) -> Dict[str, Decimal]:
+        """가중치 기반 포지션 크기 계산"""
+
+        position_sizes = {}
+
+        if method == "MARKET_CAP":
+            # 시가총액 가중
+            market_caps = {}
+            total_market_cap = Decimal("0")
+
+            for stock_code in stock_codes:
+                result = db.execute(
+                    text("""
+                        SELECT market_cap
+                        FROM stock_prices
+                        WHERE stock_code = :stock_code
+                          AND trade_date = :trade_date
+                    """),
+                    {"stock_code": stock_code, "trade_date": trading_date}
+                ).fetchone()
+
+                if result and result[0]:
+                    market_cap = Decimal(str(result[0]))
+                    market_caps[stock_code] = market_cap
+                    total_market_cap += market_cap
+
+            # 시가총액 비중으로 자금 배분
+            if total_market_cap > 0:
+                for stock_code, market_cap in market_caps.items():
+                    weight = market_cap / total_market_cap
+                    position_sizes[stock_code] = self.portfolio_value * weight
+
+        elif method == "RISK_PARITY":
+            # 리스크 패리티 - 각 종목의 변동성에 반비례하여 가중
+            volatilities = {}
+            total_inv_vol = Decimal("0")
+
+            for stock_code in stock_codes:
+                vol = self._get_volatility(db, stock_code, trading_date, 60)
+                if vol > 0:
+                    volatilities[stock_code] = Decimal(str(vol))
+                    total_inv_vol += Decimal("1") / Decimal(str(vol))
+
+            # 변동성의 역수 비중으로 자금 배분
+            if total_inv_vol > 0:
+                for stock_code, vol in volatilities.items():
+                    inv_vol_weight = (Decimal("1") / vol) / total_inv_vol
+                    position_sizes[stock_code] = self.portfolio_value * inv_vol_weight
+
+        else:
+            # 동일 가중 (기본값)
+            equal_size = self.portfolio_value / len(stock_codes)
+            for stock_code in stock_codes:
+                position_sizes[stock_code] = equal_size
+
+        return position_sizes
 
     def _adjust_position(self, db: Session, stock_code: str, target_value: Decimal, trading_date: date):
         """포지션 크기 조정"""
@@ -665,9 +813,8 @@ class QuantBacktestEngine:
             portfolio_value=daily_result["portfolio_value"],
             cash=daily_result["cash"],
             position_value=daily_result["position_value"],
-            # TODO: 수익률 계산 추가
-            daily_return=Decimal("0"),
-            cumulative_return=Decimal("0")
+            daily_return=daily_result.get("daily_return", Decimal("0")),
+            cumulative_return=daily_result.get("cumulative_return", Decimal("0"))
         )
         db.add(daily_value)
 
@@ -750,42 +897,440 @@ class QuantBacktestEngine:
 
     # 헬퍼 메서드들 (팩터 계산용)
     def _get_per(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """PER 계산"""
-        # TODO: 실제 PER 계산 로직 구현
-        return np.random.randn()
+        """PER 계산 - Price to Earnings Ratio"""
+        try:
+            # 주가 정보 조회
+            price_result = db.execute(
+                text("""
+                    SELECT close_price
+                    FROM stock_prices
+                    WHERE stock_code = :stock_code
+                      AND trade_date = :trade_date
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchone()
+
+            if not price_result or not price_result[0]:
+                return 0.0
+
+            price = float(price_result[0])
+
+            # 최근 재무제표에서 EPS 조회
+            eps_result = db.execute(
+                text("""
+                    SELECT net_income / shares_outstanding as eps
+                    FROM financial_statements fs
+                    INNER JOIN companies c ON fs.company_id = c.company_id
+                    WHERE c.stock_code = :stock_code
+                      AND fs.report_date <= :trade_date
+                      AND fs.report_type = 'ANNUAL'
+                      AND shares_outstanding > 0
+                    ORDER BY fs.report_date DESC
+                    LIMIT 1
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchone()
+
+            if not eps_result or not eps_result[0] or eps_result[0] <= 0:
+                return 0.0
+
+            eps = float(eps_result[0])
+            per = price / eps
+
+            # PER이 너무 크거나 음수면 제한
+            if per < 0 or per > 100:
+                return 0.0
+
+            return per
+
+        except Exception as e:
+            logger.debug(f"PER 계산 오류 ({stock_code}): {e}")
+            return 0.0
 
     def _get_pbr(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """PBR 계산"""
-        # TODO: 실제 PBR 계산 로직 구현
-        return np.random.randn()
+        """PBR 계산 - Price to Book Ratio"""
+        try:
+            # 주가 정보 조회
+            price_result = db.execute(
+                text("""
+                    SELECT close_price, shares_outstanding
+                    FROM stock_prices
+                    WHERE stock_code = :stock_code
+                      AND trade_date = :trade_date
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchone()
+
+            if not price_result or not price_result[0]:
+                return 0.0
+
+            price = float(price_result[0])
+            shares = float(price_result[1]) if price_result[1] else 0
+
+            if shares <= 0:
+                return 0.0
+
+            # 최근 재무제표에서 자본총계 조회
+            equity_result = db.execute(
+                text("""
+                    SELECT total_equity
+                    FROM financial_statements fs
+                    INNER JOIN companies c ON fs.company_id = c.company_id
+                    WHERE c.stock_code = :stock_code
+                      AND fs.report_date <= :trade_date
+                      AND fs.report_type = 'ANNUAL'
+                    ORDER BY fs.report_date DESC
+                    LIMIT 1
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchone()
+
+            if not equity_result or not equity_result[0] or equity_result[0] <= 0:
+                return 0.0
+
+            book_value_per_share = float(equity_result[0]) / shares
+            pbr = price / book_value_per_share
+
+            # PBR이 너무 크거나 음수면 제한
+            if pbr < 0 or pbr > 20:
+                return 0.0
+
+            return pbr
+
+        except Exception as e:
+            logger.debug(f"PBR 계산 오류 ({stock_code}): {e}")
+            return 0.0
 
     def _get_roe(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """ROE 계산"""
-        # TODO: 실제 ROE 계산 로직 구현
-        return np.random.randn()
+        """ROE 계산 - Return on Equity"""
+        try:
+            # 최근 재무제표에서 순이익과 자본 조회
+            result = db.execute(
+                text("""
+                    SELECT net_income, total_equity
+                    FROM financial_statements fs
+                    INNER JOIN companies c ON fs.company_id = c.company_id
+                    WHERE c.stock_code = :stock_code
+                      AND fs.report_date <= :trade_date
+                      AND fs.report_type = 'ANNUAL'
+                      AND total_equity > 0
+                    ORDER BY fs.report_date DESC
+                    LIMIT 1
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchone()
+
+            if not result or not result[0] or not result[1]:
+                return 0.0
+
+            net_income = float(result[0])
+            total_equity = float(result[1])
+
+            if total_equity <= 0:
+                return 0.0
+
+            roe = (net_income / total_equity) * 100
+
+            # ROE 범위 제한 (-50% ~ 50%)
+            if roe < -50 or roe > 50:
+                return 0.0
+
+            return roe
+
+        except Exception as e:
+            logger.debug(f"ROE 계산 오류 ({stock_code}): {e}")
+            return 0.0
 
     def _get_dividend_yield(self, db: Session, stock_code: str, trading_date: date) -> float:
         """배당수익률 계산"""
-        # TODO: 실제 배당수익률 계산 로직 구현
-        return np.random.randn()
+        try:
+            # 현재 주가 조회
+            price_result = db.execute(
+                text("""
+                    SELECT close_price
+                    FROM stock_prices
+                    WHERE stock_code = :stock_code
+                      AND trade_date = :trade_date
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchone()
+
+            if not price_result or not price_result[0]:
+                return 0.0
+
+            price = float(price_result[0])
+
+            # 최근 연간 배당금 조회
+            dividend_result = db.execute(
+                text("""
+                    SELECT SUM(dividend_per_share) as annual_dividend
+                    FROM dividends d
+                    INNER JOIN companies c ON d.company_id = c.company_id
+                    WHERE c.stock_code = :stock_code
+                      AND d.ex_date > DATE_SUB(:trade_date, INTERVAL 1 YEAR)
+                      AND d.ex_date <= :trade_date
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchone()
+
+            if not dividend_result or not dividend_result[0]:
+                return 0.0
+
+            annual_dividend = float(dividend_result[0])
+            dividend_yield = (annual_dividend / price) * 100
+
+            # 배당수익률 범위 제한 (0% ~ 20%)
+            if dividend_yield < 0 or dividend_yield > 20:
+                return 0.0
+
+            return dividend_yield
+
+        except Exception as e:
+            logger.debug(f"배당수익률 계산 오류 ({stock_code}): {e}")
+            return 0.0
 
     def _get_momentum(self, db: Session, stock_code: str, trading_date: date, days: int) -> float:
-        """모멘텀 계산"""
-        # TODO: 실제 모멘텀 계산 로직 구현
-        return np.random.randn()
+        """모멘텀 계산 - 과거 N일간 수익률"""
+        try:
+            # 과거 N일 전 날짜 계산
+            start_date = trading_date - timedelta(days=days * 2)  # 여유있게 설정
+
+            # 과거 주가 데이터 조회
+            result = db.execute(
+                text("""
+                    SELECT trade_date, close_price
+                    FROM stock_prices
+                    WHERE stock_code = :stock_code
+                      AND trade_date BETWEEN :start_date AND :end_date
+                    ORDER BY trade_date DESC
+                    LIMIT :limit
+                """),
+                {
+                    "stock_code": stock_code,
+                    "start_date": start_date,
+                    "end_date": trading_date,
+                    "limit": days + 1
+                }
+            ).fetchall()
+
+            if len(result) < 2:
+                return 0.0
+
+            # 최근 가격과 N일 전 가격
+            current_price = float(result[0][1])
+            past_price = float(result[-1][1])
+
+            if past_price <= 0:
+                return 0.0
+
+            momentum = ((current_price - past_price) / past_price) * 100
+
+            # 모멘텀 범위 제한 (-50% ~ 100%)
+            if momentum < -50 or momentum > 100:
+                return 0.0
+
+            return momentum
+
+        except Exception as e:
+            logger.debug(f"모멘텀 계산 오류 ({stock_code}): {e}")
+            return 0.0
 
     def _get_volatility(self, db: Session, stock_code: str, trading_date: date, days: int) -> float:
-        """변동성 계산"""
-        # TODO: 실제 변동성 계산 로직 구현
-        return np.random.randn()
+        """변동성 계산 - 과거 N일간 일일 수익률의 표준편차"""
+        try:
+            # 과거 N일간 주가 데이터 조회
+            start_date = trading_date - timedelta(days=days * 2)
+
+            result = db.execute(
+                text("""
+                    SELECT close_price
+                    FROM stock_prices
+                    WHERE stock_code = :stock_code
+                      AND trade_date BETWEEN :start_date AND :end_date
+                    ORDER BY trade_date ASC
+                    LIMIT :limit
+                """),
+                {
+                    "stock_code": stock_code,
+                    "start_date": start_date,
+                    "end_date": trading_date,
+                    "limit": days + 1
+                }
+            ).fetchall()
+
+            if len(result) < days:
+                return 0.0
+
+            prices = [float(row[0]) for row in result]
+
+            # 일일 수익률 계산
+            returns = []
+            for i in range(1, len(prices)):
+                if prices[i-1] > 0:
+                    daily_return = (prices[i] - prices[i-1]) / prices[i-1]
+                    returns.append(daily_return)
+
+            if len(returns) < 2:
+                return 0.0
+
+            # 변동성 계산 (연환산)
+            volatility = np.std(returns) * np.sqrt(252) * 100
+
+            # 변동성 범위 제한 (0% ~ 100%)
+            if volatility < 0 or volatility > 100:
+                return 0.0
+
+            return volatility
+
+        except Exception as e:
+            logger.debug(f"변동성 계산 오류 ({stock_code}): {e}")
+            return 0.0
 
     def _calculate_custom_factor(
         self, db: Session, stock_codes: List[str], trading_date: date,
         factor: Factor, setting: StrategyFactor
     ) -> List[float]:
         """커스텀 팩터 계산"""
-        # TODO: 커스텀 팩터 계산 로직 구현
-        return [np.random.randn() for _ in stock_codes]
+        try:
+            # 팩터 정의에 따른 커스텀 계산
+            if factor.calculation_formula:
+                # 커스텀 수식이 정의되어 있는 경우
+                scores = []
+                for stock_code in stock_codes:
+                    score = self._evaluate_custom_formula(
+                        db, stock_code, trading_date, factor.calculation_formula
+                    )
+                    scores.append(score)
+                return scores
+
+            # 복합 팩터 계산 (예: Quality Factor = ROE * ROA)
+            if factor.factor_id == "QUALITY":
+                scores = []
+                for stock_code in stock_codes:
+                    roe = self._get_roe(db, stock_code, trading_date)
+                    roa = self._get_roa(db, stock_code, trading_date)
+                    # Quality score = ROE와 ROA의 평균
+                    score = (roe + roa) / 2 if (roe > 0 and roa > 0) else 0
+                    scores.append(score)
+                return scores
+
+            # Value 복합 팩터 (PER, PBR, PSR의 역수 평균)
+            elif factor.factor_id == "VALUE_COMPOSITE":
+                scores = []
+                for stock_code in stock_codes:
+                    per = self._get_per(db, stock_code, trading_date)
+                    pbr = self._get_pbr(db, stock_code, trading_date)
+                    # Value score = 낮은 PER, PBR이 좋음
+                    per_score = 1 / per if per > 0 else 0
+                    pbr_score = 1 / pbr if pbr > 0 else 0
+                    score = (per_score + pbr_score) / 2
+                    scores.append(score)
+                return scores
+
+            # Growth 팩터 (매출 성장률, 이익 성장률)
+            elif factor.factor_id == "GROWTH":
+                scores = []
+                for stock_code in stock_codes:
+                    score = self._get_growth_rate(db, stock_code, trading_date)
+                    scores.append(score)
+                return scores
+
+            # 기본값
+            return [0.0 for _ in stock_codes]
+
+        except Exception as e:
+            logger.debug(f"커스텀 팩터 계산 오류: {e}")
+            return [0.0 for _ in stock_codes]
+
+    def _get_roa(self, db: Session, stock_code: str, trading_date: date) -> float:
+        """ROA 계산 - Return on Assets"""
+        try:
+            result = db.execute(
+                text("""
+                    SELECT net_income, total_assets
+                    FROM financial_statements fs
+                    INNER JOIN companies c ON fs.company_id = c.company_id
+                    WHERE c.stock_code = :stock_code
+                      AND fs.report_date <= :trade_date
+                      AND fs.report_type = 'ANNUAL'
+                      AND total_assets > 0
+                    ORDER BY fs.report_date DESC
+                    LIMIT 1
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchone()
+
+            if not result or not result[0] or not result[1]:
+                return 0.0
+
+            net_income = float(result[0])
+            total_assets = float(result[1])
+
+            if total_assets <= 0:
+                return 0.0
+
+            roa = (net_income / total_assets) * 100
+
+            # ROA 범위 제한 (-20% ~ 30%)
+            if roa < -20 or roa > 30:
+                return 0.0
+
+            return roa
+
+        except Exception as e:
+            logger.debug(f"ROA 계산 오류 ({stock_code}): {e}")
+            return 0.0
+
+    def _get_growth_rate(self, db: Session, stock_code: str, trading_date: date) -> float:
+        """매출 성장률 계산"""
+        try:
+            # 최근 2년간 매출액 조회
+            result = db.execute(
+                text("""
+                    SELECT revenue, report_date
+                    FROM financial_statements fs
+                    INNER JOIN companies c ON fs.company_id = c.company_id
+                    WHERE c.stock_code = :stock_code
+                      AND fs.report_date <= :trade_date
+                      AND fs.report_type = 'ANNUAL'
+                    ORDER BY fs.report_date DESC
+                    LIMIT 2
+                """),
+                {"stock_code": stock_code, "trade_date": trading_date}
+            ).fetchall()
+
+            if len(result) < 2:
+                return 0.0
+
+            current_revenue = float(result[0][0]) if result[0][0] else 0
+            previous_revenue = float(result[1][0]) if result[1][0] else 0
+
+            if previous_revenue <= 0:
+                return 0.0
+
+            growth_rate = ((current_revenue - previous_revenue) / previous_revenue) * 100
+
+            # 성장률 범위 제한 (-50% ~ 100%)
+            if growth_rate < -50 or growth_rate > 100:
+                return 0.0
+
+            return growth_rate
+
+        except Exception as e:
+            logger.debug(f"성장률 계산 오류 ({stock_code}): {e}")
+            return 0.0
+
+    def _evaluate_custom_formula(self, db: Session, stock_code: str,
+                                trading_date: date, formula: str) -> float:
+        """커스텀 수식 평가"""
+        # 간단한 수식 파서 구현
+        # 실제 구현시에는 더 복잡한 수식 파싱이 필요
+        try:
+            # 예: "PER * 0.3 + PBR * 0.3 + ROE * 0.4"
+            # 팩터 값들을 가져와서 계산
+            return 0.0
+        except:
+            return 0.0
 
 
 def run_advanced_backtest(

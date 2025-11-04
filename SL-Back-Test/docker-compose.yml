@@ -1,0 +1,82 @@
+services:
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:15
+    container_name: sl_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      POSTGRES_DB: quant_investment_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # 초기 스키마 설정
+    networks:
+      - quant_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 캐싱
+  redis:
+    image: redis:7-alpine
+    container_name: sl_redis
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - quant_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI 애플리케이션
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sl_api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres123@host.docker.internal:5432/quant_investment_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ENABLE_CACHE: "true"
+      SECRET_KEY: "your-secret-key-here-change-in-production"
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - quant_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  # Redis Commander (웹 UI) - 개발용
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: sl_redis_commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - quant_network
+    depends_on:
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  quant_network:
+    driver: bridge

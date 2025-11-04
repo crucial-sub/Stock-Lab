@@ -6,7 +6,8 @@
 
 import { factorsQueryKey } from "@/hooks/useFactorsQuery";
 import { subFactorsQueryKey } from "@/hooks/useSubFactorsQuery";
-import { getFactors, getSubFactors } from "@/lib/api";
+import { themesQueryKey } from "@/hooks/useThemesQuery";
+import { getFactors, getSubFactors, getThemes } from "@/lib/api";
 import { getQueryClient } from "@/lib/query-client";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { QuantNewPageClient } from "./QuantNewPageClient";
@@ -30,6 +31,12 @@ export default async function NewScriptPage() {
   await queryClient.prefetchQuery({
     queryKey: subFactorsQueryKey.list(),
     queryFn: () => getSubFactors(true), // 서버 사이드 요청
+  });
+
+  // 테마 목록 prefetch
+  await queryClient.prefetchQuery({
+    queryKey: themesQueryKey.list(),
+    queryFn: () => getThemes(true), // 서버 사이드 요청
   });
 
   // QueryClient 상태를 dehydrate하여 클라이언트로 전달

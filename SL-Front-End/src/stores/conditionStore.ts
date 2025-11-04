@@ -91,11 +91,8 @@ const generateExpression = (condition: Condition): string => {
  * Zustand를 사용하여 전역 상태로 관리되므로 컴포넌트 간 공유가 용이하다.
  */
 export const useConditionStore = create<ConditionStore>((set, get) => ({
-  // 초기 매수 조건 (A, B)
-  buyConditions: [
-    createDefaultCondition("A"),
-    createDefaultCondition("B"),
-  ],
+  // 초기 매수 조건 (A)
+  buyConditions: [createDefaultCondition("A")],
 
   // 초기 매도 조건 (빈 배열)
   sellConditions: [],
@@ -178,10 +175,7 @@ export const useConditionStore = create<ConditionStore>((set, get) => ({
    */
   reset: () =>
     set({
-      buyConditions: [
-        createDefaultCondition("A"),
-        createDefaultCondition("B"),
-      ],
+      buyConditions: [createDefaultCondition("A")],
       sellConditions: [],
     }),
 }));

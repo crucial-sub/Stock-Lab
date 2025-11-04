@@ -11,6 +11,7 @@ import { SellConditionTab } from "@/components/quant/SellConditionTab";
 import { TargetSelectionTab } from "@/components/quant/TargetSelectionTab";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
+import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useState } from "react";
 
 type TabId = "buy" | "sell" | "target";
@@ -24,11 +25,12 @@ export function QuantNewPageClient() {
 
   // 서버에서 prefetch된 데이터를 자동으로 사용 (추가 요청 없음)
   const { data: factors, isLoading: isLoadingFactors } = useFactorsQuery();
-  const { data: functions, isLoading: isLoadingSubFactors } =
+  const { data: subFactors, isLoading: isLoadingSubFactors } =
     useSubFactorsQuery();
+  const { data: themes, isLoading: isLoadingThemes } = useThemesQuery();
 
   // 로딩 상태 표시
-  if (isLoadingFactors || isLoadingSubFactors) {
+  if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes) {
     return (
       <div className="min-h-screen bg-bg-app flex items-center justify-center">
         <div className="text-text-secondary">데이터를 불러오는 중...</div>
@@ -43,7 +45,7 @@ export function QuantNewPageClient() {
         {process.env.NODE_ENV === "development" && (
           <div className="text-xs text-text-tertiary">
             Factors: {factors?.length ?? 0} | SubFactors:{" "}
-            {functions?.length ?? 0}
+            {subFactors?.length ?? 0} | Themes: {themes?.length ?? 0}
           </div>
         )}
 

@@ -24,22 +24,16 @@ interface FactorSelectionModalProps {
    * @param factorId 선택된 팩터 ID
    * @param factorName 선택된 팩터 이름
    * @param subFactorId 선택된 함수 ID (기본값: "default")
-   * @param operator 선택된 부등호
-   * @param value 비교 값
    */
   onSelect: (
     factorId: string,
     factorName: string,
     subFactorId: string,
-    operator: ">=" | "<=" | ">" | "<" | "=" | "!=",
-    value: number,
   ) => void;
   /** 현재 조건 초기값 (편집 모드) */
   initialValues?: {
     factorId?: string;
     subFactorId?: string;
-    operator?: ">=" | "<=" | ">" | "<" | "=" | "!=";
-    value?: number;
   };
 }
 
@@ -77,16 +71,6 @@ export function FactorSelectionModal({
   /** 현재 선택된 함수 ID (기본값: "default") */
   const [selectedSubFactorId, setSelectedSubFactorId] = useState(
     initialValues?.subFactorId || "default",
-  );
-
-  /** 현재 선택된 부등호 (기본값: ">=") */
-  const [selectedOperator, setSelectedOperator] = useState<
-    ">=" | "<=" | ">" | "<" | "=" | "!="
-  >(initialValues?.operator || ">=");
-
-  /** 비교 값 (기본값: 0) */
-  const [comparisonValue, setComparisonValue] = useState<number>(
-    initialValues?.value ?? 0,
   );
 
   // ===== 검색 로직 및 자동 선택 =====
@@ -130,8 +114,6 @@ export function FactorSelectionModal({
       }
 
       setSelectedSubFactorId(initialValues?.subFactorId || "default");
-      setSelectedOperator(initialValues?.operator || ">=");
-      setComparisonValue(initialValues?.value ?? 0);
     }
   }, [isOpen, initialValues]);
 
@@ -155,7 +137,7 @@ export function FactorSelectionModal({
 
   /**
    * "입력" 버튼 클릭 핸들러
-   * 선택된 팩터, 함수, 부등호, 값을 부모 컴포넌트로 전달
+   * 선택된 팩터와 함수를 부모 컴포넌트로 전달
    */
   const handleSubmit = () => {
     if (!selectedFactor) return;
@@ -164,19 +146,8 @@ export function FactorSelectionModal({
       selectedFactor.id,
       selectedFactor.name,
       selectedSubFactorId,
-      selectedOperator,
-      comparisonValue,
     );
     onClose();
-  };
-
-  /**
-   * 조건식 미리보기 문자열 생성
-   * "{팩터이름} {부등호} {값}" 형식
-   */
-  const getPreviewExpression = (): string => {
-    if (!selectedFactor) return "조건식이 표시됩니다.";
-    return `${selectedFactor.name} ${selectedOperator} ${comparisonValue}`;
   };
 
   // ===== 데이터 준비 =====
@@ -209,7 +180,7 @@ export function FactorSelectionModal({
       />
 
       {/* 모달 본체 */}
-      <div className="relative z-10 w-[1000px] rounded-lg border border-border-default bg-[#1f1f1f] p-6 shadow-hard">
+      <div className="relative z-10 w-[1000px] h-[769px] rounded-lg border border-border-default bg-[#1f1f1f] p-6 shadow-hard flex flex-col">
         {/* ===== 헤더 ===== */}
         <div className="mb-6 flex items-center justify-between border-b border-border-default pb-4">
           <div className="flex items-center gap-2">
@@ -228,7 +199,7 @@ export function FactorSelectionModal({
         </div>
 
         {/* ===== 3분할 레이아웃 (검색/팩터 목록 | 팩터 정보 | 함수 목록) ===== */}
-        <div className="mb-6 grid grid-cols-[280px_1fr_240px] gap-4">
+        <div className="mb-6 grid grid-cols-[360px_1fr_360px] gap-4 flex-1 overflow-hidden">
           {/* ===== 왼쪽: 검색 + 팩터 목록 ===== */}
           <div className="flex flex-col">
             {/* 검색 입력 */}
@@ -308,61 +279,6 @@ export function FactorSelectionModal({
                   <p className="text-sm text-text-secondary">
                     {selectedFactor.category}
                   </p>
-                </div>
-
-                {/* 조건식 설정 */}
-                <div className="mb-4">
-                  <h3 className="mb-2 text-sm font-medium text-brand">
-                    조건식 설정
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    {/* 부등호 선택 */}
-                    <select
-                      value={selectedOperator}
-                      onChange={(e) =>
-                        setSelectedOperator(
-                          e.target.value as
-                            | ">="
-                            | "<="
-                            | ">"
-                            | "<"
-                            | "="
-                            | "!=",
-                        )
-                      }
-                      className="rounded border border-border-default bg-bg-surface px-3 py-1.5 text-sm text-text-primary focus:border-brand focus:outline-none"
-                    >
-                      <option value=">=">≥ (이상)</option>
-                      <option value="<=">≤ (이하)</option>
-                      <option value=">">{">"} (초과)</option>
-                      <option value="<">{"<"} (미만)</option>
-                      <option value="=">= (같음)</option>
-                      <option value="!=">≠ (다름)</option>
-                    </select>
-
-                    {/* 값 입력 */}
-                    <Input
-                      type="number"
-                      value={comparisonValue}
-                      onChange={(e) =>
-                        setComparisonValue(Number(e.target.value))
-                      }
-                      className="flex-1 text-sm"
-                      placeholder="값 입력"
-                    />
-                  </div>
-                </div>
-
-                {/* 조건식 미리보기 */}
-                <div className="mb-4">
-                  <h3 className="mb-2 text-sm font-medium text-brand">
-                    미리보기
-                  </h3>
-                  <div className="rounded border border-brand/30 bg-brand/5 p-3">
-                    <p className="text-sm font-medium text-brand">
-                      {getPreviewExpression()}
-                    </p>
-                  </div>
                 </div>
 
                 {/* 계산 공식 */}

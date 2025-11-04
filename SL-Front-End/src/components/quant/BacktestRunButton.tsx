@@ -6,10 +6,10 @@
  * - 실행 후 결과 페이지로 이동합니다.
  */
 
-import { useRouter } from "next/navigation";
-import { useRunBacktestMutation } from "@/hooks/useBacktestQuery";
 import { Button } from "@/components/common";
+import { useRunBacktestMutation } from "@/hooks/useBacktestQuery";
 import { useBacktestConfigStore } from "@/stores";
+import { useRouter } from "next/navigation";
 
 /**
  * 백테스트 실행 버튼
@@ -45,6 +45,7 @@ export function BacktestRunButton() {
         alert("최소 하나 이상의 매매 대상 종목을 선택해주세요.");
         return;
       }
+      console.table(backtestRequest)
 
       // 백테스트 실행
       const result = await runBacktestMutation.mutateAsync(backtestRequest);

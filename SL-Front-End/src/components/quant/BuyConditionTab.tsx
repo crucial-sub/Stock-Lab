@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, DatePickerField, Input, Panel, Toggle } from "@/components/common";
+import { DatePickerField, Panel } from "@/components/common";
+import { SVG_PATH } from "@/constants";
 import { useBuyCondition } from "@/hooks";
 import { useBacktestConfigStore, useConditionStore } from "@/stores";
 import { useEffect, useState } from "react";
@@ -161,12 +162,15 @@ export function BuyConditionTab() {
     <div className="space-y-6">
       {/* 기본 설정 (Basic Settings) */}
       <Panel className="p-6 space-y-4">
-        <h3 className="text-base font-semibold text-text-primary">기본 설정</h3>
+        <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[24px] text-nowrap text-white tracking-[-0.72px] mb-[35px]">
+          <p className="leading-[normal] whitespace-pre">기본 설정</p>
+        </div>
+
 
         {/* 백테스트 데이터 기준 */}
         <div className="space-y-2">
-          <div className="block text-sm text-text-secondary">
-            백테스트 데이터 기준
+          <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[19px]">
+            <p className="leading-[normal] whitespace-pre">백테스트 데이터 기준</p>
           </div>
           <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -177,7 +181,11 @@ export function BuyConditionTab() {
                 onChange={() => setIsDayOrMonth("daily")}
                 className="w-4 h-4 accent-white"
               />
-              <span className="text-sm text-text-primary">일봉</span>
+              <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap tracking-[-0.54px]">
+                <p className={`leading-[normal] whitespace-pre ${is_day_or_month === 'daily' ? 'text-white' : 'text-[#a0a0a0]'}`}>
+                  일봉
+                </p>
+              </div>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -187,27 +195,51 @@ export function BuyConditionTab() {
                 onChange={() => setIsDayOrMonth("monthly")}
                 className="w-4 h-4 accent-white"
               />
-              <span className="text-sm text-text-primary">월봉</span>
+              <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap tracking-[-0.54px]">
+                <p className={`leading-[normal] whitespace-pre ${is_day_or_month === 'monthly' ? 'text-white' : 'text-[#a0a0a0]'}`}>
+                  월봉
+                </p>
+              </div>
             </label>
           </div>
         </div>
 
+        {/* Divider */}
+        <div className="h-[1px] w-full mb-[30px]">
+          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1000 1">
+            <line stroke="url(#paint0_linear_divider2)" strokeOpacity="0.4" x2="1000" y1="0.5" y2="0.5" />
+            <defs>
+              <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_divider2" x1="0" x2="1000" y1="0.5" y2="0.5">
+                <stop stopColor="#282828" />
+                <stop offset="0.2" stopColor="#737373" />
+                <stop offset="0.8" stopColor="#737373" />
+                <stop offset="1" stopColor="#282828" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
         {/* Investment Fields */}
         <div className="grid grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">투자 금액</div>
-            <Input
-              type="number"
-              value={initial_investment}
-              onChange={(e) => setInitialInvestment(Number(e.target.value))}
-              suffix="만원"
-              className="w-full"
-            />
+          <div>
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[15px]">
+              <p className="leading-[normal] whitespace-pre">투자 금액</p>
+            </div>
+            <div className="relative h-[40px] border-b border-white">
+              <input
+                type="text"
+                value={initial_investment}
+                onChange={(e) => setInitialInvestment(Number(e.target.value))}
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-white tracking-[-0.6px] w-[80px]"
+              />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-white tracking-[-0.6px]">
+                <p className="leading-[normal] whitespace-pre">만원</p>
+              </div>
+            </div>
           </div>
-
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">
-              투자 시작일
+          <div>
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[15px]">
+              <p className="leading-[normal] whitespace-pre">투자 시작일</p>
             </div>
             <DatePickerField
               value={start_date}
@@ -217,9 +249,9 @@ export function BuyConditionTab() {
             />
           </div>
 
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">
-              투자 종료일
+          <div>
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[15px]">
+              <p className="leading-[normal] whitespace-pre">투자 종료일</p>
             </div>
             <DatePickerField
               value={end_date}
@@ -230,143 +262,196 @@ export function BuyConditionTab() {
             />
           </div>
 
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">수수료율</div>
-            <Input
-              type="number"
-              value={commission_rate}
-              onChange={(e) => setCommissionRate(Number(e.target.value))}
-              step={0.1}
-              suffix="%"
-              className="w-full"
-            />
+          <div>
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[15px]">
+              <p className="leading-[normal] whitespace-pre">수수료율</p>
+            </div>
+            <div className="relative h-[40px] border-b border-[#a0a0a0]">
+              <input
+                type="number"
+                value={commission_rate}
+                onChange={(e) => setCommissionRate(Number(e.target.value))}
+                step={0.1}
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-[90%]"
+              />
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-[#a0a0a0] tracking-[-0.6px]">
+                <p className="leading-[normal] whitespace-pre">%</p>
+              </div>
+            </div>
           </div>
         </div>
       </Panel>
 
       {/* 매수 조건 설정 */}
       <Panel className="p-6 space-y-4">
-        <h3 className="text-base font-semibold text-state-positive">
-          매수 조건 설정
-        </h3>
+        <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[24px] text-nowrap text-white tracking-[-0.72px] mb-[35px]">
+          <p className="leading-[normal] whitespace-pre">
+            <span className="text-[#ff6464]">매수</span>
+            <span>{` 조건 설정`}</span>
+          </p>
+        </div>
 
         <div className="space-y-2">
-          <div className="block text-sm text-text-secondary">
-            매수 조건식 설정
+          <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[19px]">
+            <p className="leading-[normal] whitespace-pre">매수 조건식 설정</p>
           </div>
 
           {/* 매수 조건 목록 */}
-          <div className="space-y-3">
+          <div className="space-y-[8px] mb-[20px]">
             {buyConditions.map((condition) => (
-              <div
-                key={condition.id}
-                className="flex items-center gap-3 p-4 rounded-lg border border-border-default"
-              >
-                {/* 조건 ID (A, B, C, ...) */}
-                <span className="text-sm font-medium text-text-primary w-6">
-                  {condition.id}
-                </span>
+              <div key={condition.id} className="flex items-center gap-[8px]">
+                {/* 조건식 표시 영역 */}
+                <div className="h-[60px] rounded-[12px] border border-neutral-500 flex-1">
+                  <div className="h-[60px] overflow-clip relative rounded-[inherit] w-full px-[23.5px] flex items-center gap-[16px]">
+                    {/* 조건 ID (A, B, C, ...) */}
+                    <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-center text-nowrap text-white tracking-[-0.6px]">
+                      <p className="leading-[normal] whitespace-pre">{condition.id}</p>
+                    </div>
 
-                {/* 팩터 선택 버튼 */}
-                <Button
-                  variant="ghost"
-                  onClick={() => openModal(condition.id)}
-                  className="text-sm px-4 py-2"
-                >
-                  {condition.factorName || "팩터 선택"}
-                </Button>
+                    <div className="h-[32px] w-[4px]">
+                      <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1 32">
+                        <line stroke="url(#paint0_linear_cond)" strokeLinecap="round" strokeWidth="0.2" x1="0.1" x2="0.1" y1="0" y2="32" />
+                        <defs>
+                          <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_cond" x1="0" x2="0" y1="0" y2="32">
+                            <stop stopColor="#282828" />
+                            <stop offset="0.2" stopColor="#737373" />
+                            <stop offset="0.8" stopColor="#737373" />
+                            <stop offset="1" stopColor="#282828" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    </div>
 
+                    {/* 조건식 미리보기 */}
+                    <div className="flex-1">
+                      <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[#a0a0a0] text-[20px] text-nowrap tracking-[-0.6px]">
+                        <p className="leading-[normal] whitespace-pre">{getConditionExpression(condition)}</p>
+                      </div>
+                    </div>
+
+                    {/* 팩터 선택 버튼 */}
+                    <button onClick={() => openModal(condition.id)}
+                      className="rounded-[8px] border border-solid border-white px-[24px] py-[8px]">
+                      <div className="flex flex-col font-bold justify-center leading-[0] not-italic text-xl text-center text-nowrap text-white tracking-[-0.6px]">
+                        <p className="leading-[normal] whitespace-pre">팩터 선택</p>
+                      </div>
+                    </button>
+
+                    {/* 삭제 버튼 */}
+                    <button
+                      onClick={() => removeBuyCondition(condition.id)}
+                      className="rounded-[8px] size-[40px] border border-[#ff6464] border-solid flex items-center justify-center"
+                    >
+                      <svg className="block size-[24px]" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
+                        <path d={SVG_PATH.pa683700} fill="#FF6464" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
                 {/* 부등호 선택 */}
-                <select
-                  value={condition.operator}
-                  onChange={(e) =>
-                    handleOperatorChange(
-                      condition.id,
-                      e.target.value as
+                <div className="relative h-[60px] w-[92px] border-b border-[#a0a0a0]">
+                  <select
+                    value={condition.operator}
+                    onChange={(e) =>
+                      handleOperatorChange(
+                        condition.id,
+                        e.target.value as
                         | ">="
                         | "<="
                         | ">"
                         | "<"
                         | "="
                         | "!=",
-                    )
-                  }
-                  className="quant-input px-3 py-2 w-24 text-sm"
-                >
-                  <option value=">=">≥</option>
-                  <option value="<=">≤</option>
-                  <option value=">">{">"}</option>
-                  <option value="<">{"<"}</option>
-                  <option value="=">=</option>
-                  <option value="!=">≠</option>
-                </select>
-
+                      )
+                    } className="absolute left-5 top-[45%] -translate-y-1/2 bg-transparent border-none outline-none font-bold text-[20px] tracking-[-0.6px] w-full appearance-none cursor-pointer"
+                  >
+                    <option value=">=">≥</option>
+                    <option value="<=">≤</option>
+                    <option value=">">{">"}</option>
+                    <option value="<">{"<"}</option>
+                    <option value="=">=</option>
+                    <option value="!=">≠</option>
+                  </select>
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 size-[32px] pointer-events-none">
+                    <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
+                      <path d={SVG_PATH.p2a094a00} fill="#A0A0A0" />
+                    </svg>
+                  </div>
+                </div>
                 {/* 값 입력 */}
-                <Input
-                  type="number"
-                  value={condition.value}
-                  onChange={(e) =>
-                    handleValueChange(condition.id, Number(e.target.value))
-                  }
-                  className="w-32 text-sm"
-                  placeholder="값"
-                />
-
-                {/* 조건식 미리보기 */}
-                <span className="flex-1 text-sm text-text-tertiary">
-                  {getConditionExpression(condition)}
-                </span>
-
-                {/* 삭제 버튼 */}
-                <button
-                  type="button"
-                  onClick={() => removeBuyCondition(condition.id)}
-                  className="w-8 h-8 flex items-center justify-center rounded bg-state-positive/20 text-state-positive hover:bg-state-positive/30"
-                >
-                  🗑
-                </button>
+                <div className="relative h-[60px] w-[92px] border-b border-[#a0a0a0]">
+                  <input
+                    type="number"
+                    value={condition.value}
+                    onChange={(e) =>
+                      handleValueChange(condition.id, Number(e.target.value))
+                    }
+                    className="absolute left-[55%] top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[#a0a0a0] text-[20px] tracking-[-0.6px] w-full text-center"
+                  />
+                </div>
               </div>
             ))}
           </div>
 
           {/* 조건식 추가 버튼 */}
-          <div className="flex justify-center py-2">
-            <Button variant="secondary" onClick={addBuyCondition}>
-              조건식 추가
-            </Button>
+          <div className="flex justify-center mb-[60px]">
+            <button
+              onClick={addBuyCondition}
+              className="backdrop-blur-[50px] backdrop-filter bg-[rgba(255,255,255,0.2)] rounded-[8px] border border-solid border-white shadow-[0px_0px_8px_2px_rgba(255,255,255,0.3)] px-[24px] py-[8px]"
+            >
+              <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-center text-nowrap text-white tracking-[-0.6px]">
+                <p className="leading-[normal] whitespace-pre">조건식 추가</p>
+              </div>
+            </button>
           </div>
+        </div>
+        {/* Divider */}
+        <div className="h-[1px] w-full mb-[30px]">
+          <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 1000 1">
+            <line stroke="url(#paint0_linear_divider2)" strokeOpacity="0.4" x2="1000" y1="0.5" y2="0.5" />
+            <defs>
+              <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_divider2" x1="0" x2="1000" y1="0.5" y2="0.5">
+                <stop stopColor="#282828" />
+                <stop offset="0.2" stopColor="#737373" />
+                <stop offset="0.8" stopColor="#737373" />
+                <stop offset="1" stopColor="#282828" />
+              </linearGradient>
+            </defs>
+          </svg>
         </div>
 
         {/* Bottom Fields */}
-        <div className="grid grid-cols-2 gap-4 pt-4">
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">
-              논리 조건식 작성
+        <div className="grid grid-cols-2 gap-11">
+          <div>
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-white tracking-[-0.54px] mb-[19px] w-[125px]">
+              <p className="leading-[normal]">논리 조건식 작성</p>
             </div>
-            <Input
-              type="text"
-              value={buy_logic}
-              onChange={(e) => setBuyLogic(e.target.value)}
-              placeholder="예: A and B"
-              className="w-full"
-            />
+            <div className="relative h-[40px] border-b border-[#a0a0a0]">
+              <input
+                type="text"
+                placeholder="A and B"
+                value={buy_logic}
+                onChange={(e) => setBuyLogic(e.target.value)}
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full"
+              />
+            </div>
           </div>
           <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">
-              매수 종목 선택 우선순위
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-white tracking-[-0.54px] mb-[19px] w-[179px]">
+              <p className="leading-[normal]">매수 종목 선택 우선순위</p>
             </div>
-            <div className="flex gap-2">
-              <Input
+            <div className="flex h-[40px] border-b border-[#a0a0a0]">
+              <input
                 type="text"
                 value={priority_factor}
                 onChange={(e) => setPriorityFactor(e.target.value)}
                 placeholder="예: {PBR}"
-                className="flex-1 min-w-0"
+                className="bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full"
               />
               <select
                 value={priority_order}
                 onChange={(e) => setPriorityOrder(e.target.value)}
-                className="quant-input px-3 w-32"
+                className="bg-transparent px-3 w-32"
               >
                 <option value="desc">내림차순</option>
                 <option value="asc">오름차순</option>
@@ -378,124 +463,165 @@ export function BuyConditionTab() {
 
       {/* 매수 비중 설정 */}
       <Panel className="relative p-6 space-y-4">
-        <h3 className="text-base font-semibold text-state-positive">
-          매수 비중 설정
-        </h3>
-
-        <div className="grid grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">
-              종목당 매수 비중
+        <div className="flex flex-col font-['Pretendard:Medium',sans-serif] justify-center leading-[0] not-italic text-[24px] text-nowrap text-white tracking-[-0.72px] mb-[35px]">
+          <p className="font-['Pretendard:Bold',sans-serif] leading-[normal] whitespace-pre">
+            <span className="text-[#ff6464]">매수</span>
+            <span>{` 비중 설정`}</span>
+          </p>
+        </div>
+        <div className="grid grid-cols-4 gap-8">
+          <div>
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[15px]">
+              <p className="leading-[normal] whitespace-pre">종목당 매수 비중</p>
             </div>
-            <Input
-              type="number"
-              value={per_stock_ratio}
-              onChange={(e) => setPerStockRatio(Number(e.target.value))}
-              suffix="%"
-              className="w-full"
-            />
+            <div className="relative h-[40px] border-b border-[#a0a0a0]">
+              <input
+                type="number"
+                value={per_stock_ratio}
+                onChange={(e) => setPerStockRatio(Number(e.target.value))}
+                step={1}
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-[90%]"
+              />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-[#a0a0a0] tracking-[-0.6px]">
+                <p className="leading-[normal] whitespace-pre">%</p>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">
-              최대 보유 종목 수
+          <div>
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[15px]">
+              <p className="leading-[normal] whitespace-pre">최대 보유 종목 수</p>
             </div>
-            <Input
-              type="number"
-              value={max_holdings}
-              onChange={(e) => setMaxHoldings(Number(e.target.value))}
-              suffix="종목"
-              className="w-full"
-            />
+            <div className="relative h-[40px] border-b border-[#a0a0a0]">
+              <input
+                type="number"
+                value={max_holdings}
+                onChange={(e) => setMaxHoldings(Number(e.target.value))}
+                step={1}
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-[80%]"
+              />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-[#a0a0a0] tracking-[-0.6px]">
+                <p className="leading-[normal] whitespace-pre">종목</p>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <span>종목당 최대 매수 금액</span>
-              <Toggle
-                enabled={toggles.maxPerStock}
-                onChange={() => {
-                  toggleState("maxPerStock");
+          <div>
+            <div className="flex items-center gap-[8px] mb-[15px]">
+              <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px]">
+                <p className="leading-[normal] whitespace-pre">종목당 최대 매수 금액</p>
+              </div>
+              <button
+                onClick={() => {
+                  toggleState("maxPerDay");
                   // 토글이 꺼지면 null로 설정
-                  if (toggles.maxPerStock) {
+                  if (toggles.maxPerDay) {
                     setMaxBuyValue(null);
                   } else {
                     setMaxBuyValue(0);
                   }
                 }}
-                label="종목당 최대 매수 금액"
-              />
+                className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.maxPerDay ? 'bg-[#d68c45]' : 'bg-[#a0a0a0]'
+                  }`}
+              >
+                <div className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.maxPerDay ? 'left-[15px]' : 'left-[2px]'
+                  }`} />
+              </button>
             </div>
-            <Input
-              type="number"
-              value={max_buy_value ?? 0}
-              onChange={(e) => setMaxBuyValue(Number(e.target.value))}
-              disabled={!toggles.maxPerStock}
-              suffix="만원"
-              className="w-full"
-            />
+            <div className="relative h-[40px] border-b border-[#a0a0a0]">
+              <input
+                type="text"
+                value={max_buy_value ?? 0}
+                onChange={(e) => setMaxBuyValue(Number(e.target.value))}
+                disabled={!toggles.maxPerDay}
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full disabled:opacity-50"
+              />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-[#a0a0a0] tracking-[-0.6px]">
+                <p className="leading-[normal] whitespace-pre">만원</p>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <span>1일 최대 매수 종목 수</span>
-              <Toggle
-                enabled={toggles.maxPerDay}
-                onChange={() => {
-                  toggleState("maxPerDay");
+          <div>
+            <div className="flex items-center gap-[8px] mb-[15px]">
+              <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px]">
+                <p className="leading-[normal] whitespace-pre">1일 최대 매수 종목 수</p>
+              </div>
+              <button
+                onClick={() => {
+                  toggleState("maxPerStock");
                   // 토글이 꺼지면 null로 설정
-                  if (toggles.maxPerDay) {
+                  if (toggles.maxPerStock) {
                     setMaxDailyStock(null);
                   } else {
                     setMaxDailyStock(0);
                   }
-                }}
-                label="1일 최대 매수 종목 수"
-              />
+                }} className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.maxPerStock ? 'bg-[#d68c45]' : 'bg-[#a0a0a0]'
+                  }`}
+              >
+                <div className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.maxPerStock ? 'left-[15px]' : 'left-[2px]'
+                  }`} />
+              </button>
             </div>
-            <Input
-              type="number"
-              value={max_daily_stock ?? 0}
-              onChange={(e) => setMaxDailyStock(Number(e.target.value))}
-              disabled={!toggles.maxPerDay}
-              suffix="종목"
-              className="w-full"
-            />
+            <div className="relative h-[40px] border-b border-[#a0a0a0]">
+              <input
+                type="text"
+                value={max_daily_stock ?? 0}
+                onChange={(e) => setMaxDailyStock(Number(e.target.value))}
+                disabled={!toggles.maxPerStock}
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full disabled:opacity-50"
+              />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-[#a0a0a0] tracking-[-0.6px]">
+                <p className="leading-[normal] whitespace-pre">종목</p>
+              </div>
+            </div>
           </div>
         </div>
       </Panel>
 
       {/* 매수 방법 선택 */}
-      <Panel className="relative p-6 space-y-4">
-        <h3 className="text-base font-semibold text-state-positive">
-          매수 방법 선택
-        </h3>
+      <Panel className="p-6 space-y-4">
+        <div className="flex flex-col font-['Pretendard:Medium',sans-serif] justify-center leading-[0] not-italic text-[24px] text-nowrap text-white tracking-[-0.72px] mb-[35px]">
+          <p className="font-['Pretendard:Bold',sans-serif] leading-[normal] whitespace-pre">
+            <span className="text-[#ff6464]">매수</span>
+            <span>{` 방법 선택`}</span>
+          </p>
+        </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">
-              매수 가격 기준
+        <div className="grid grid-cols-2 gap-[28px]">
+          <div>
+            <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap text-white tracking-[-0.54px] mb-[15px]">
+              <p className="leading-[normal] whitespace-pre">매수 가격 기준</p>
             </div>
-            <select
-              value={buyCostBasisSelect}
-              onChange={(e) => setBuyCostBasisSelect(e.target.value)}
-              className="quant-input w-full"
-            >
-              <option value="{전일 종가}">전일 종가</option>
-              <option value="{당일 시가}">당일 시가</option>
-            </select>
+            <div className="relative h-[40px] border-b border-[#a0a0a0]">
+              <select
+                value={buyCostBasisSelect}
+                onChange={(e) => setBuyCostBasisSelect(e.target.value)}
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full appearance-none cursor-pointer"
+              >
+                <option value="{전일 종가}">전일 종가</option>
+                <option value="{당일 시가}">당일 시가</option>
+              </select>
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 size-[32px] pointer-events-none">
+                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
+                  <path d={SVG_PATH.p2a094a00} fill="#A0A0A0" />
+                </svg>
+              </div>
+            </div>
           </div>
-          <div className="space-y-2">
-            <div className="block text-sm text-text-secondary">
-              가격 조정 비율
+
+          <div>
+            <div className="relative h-full border-b border-[#a0a0a0]">
+              <input
+                type="number"
+                value={buyCostBasisValue}
+                onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
+                className="absolute left-0 bottom-1 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-[95%]"
+              />
+              <div className="absolute right-1 bottom-2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-[#a0a0a0] tracking-[-0.6px]">
+                <p className="leading-[normal] whitespace-pre">%</p>
+              </div>
             </div>
-            <Input
-              type="number"
-              value={buyCostBasisValue}
-              onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
-              suffix="%"
-              className="w-full"
-            />
           </div>
         </div>
       </Panel>

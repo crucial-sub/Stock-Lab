@@ -33,24 +33,62 @@ router = APIRouter()
 
 
 # Request/Response Models
-class BacktestCondition(BaseModel):
-    """백테스트 조건"""
-    factor: str
-    operator: str  # GT, LT, EQ, TOP_N, BOTTOM_N
-    value: float
+class BuyCondition(BaseModel):
+    """매수 조건"""
+    name: str  # 조건식 이름 e.g. "A"
+    expression: str  # 조건식 e.g. "{PER} > 10"
+
+
+class TargetAndLoss(BaseModel):
+    """목표가/손절가"""
+    target_gain: Optional[float] = None
+    stop_loss: Optional[float] = None
+
+
+class HoldDays(BaseModel):
+    """보유 기간"""
+    min_hold_days: int
+    max_hold_days: int
+    sell_cost_basis: str
+
+
+class SellConditions(BaseModel):
+    """매도 조건"""
+    name: str
+    expression: str
+    sell_logic: str
+    sell_cost_basis: str
 
 
 class BacktestRequest(BaseModel):
-    """백테스트 실행 요청"""
-    buy_conditions: List[BacktestCondition]
-    sell_conditions: List[BacktestCondition]
-    start_date: date = Field(default=date(2020, 1, 1))
-    end_date: date = Field(default=date(2024, 12, 31))
-    initial_capital: float = Field(default=100000000, ge=1000000)  # 최소 100만원
-    rebalance_frequency: str = Field(default="MONTHLY")  # DAILY, WEEKLY, MONTHLY, QUARTERLY
-    max_positions: int = Field(default=20, ge=1, le=100)
-    position_sizing: str = Field(default="EQUAL_WEIGHT")  # EQUAL_WEIGHT, MARKET_CAP, RISK_PARITY
-    benchmark: str = Field(default="KOSPI")
+    """백테스트 실행 요청 - 프론트엔드 스키마에 맞춤"""
+    # 기본 설정
+    user_id: str
+    strategy_name: str
+    is_day_or_month: str  # "daily" or "monthly"
+    start_date: str  # YYYYMMDD
+    end_date: str  # YYYYMMDD
+    initial_investment: float  # 만원 단위
+    commission_rate: float  # %
+
+    # 매수 조건
+    buy_conditions: List[BuyCondition]
+    buy_logic: str
+    priority_factor: str
+    priority_order: str  # "asc" or "desc"
+    per_stock_ratio: float  # %
+    max_holdings: int
+    max_buy_value: Optional[float] = None  # 만원 단위
+    max_daily_stock: Optional[int] = None
+    buy_cost_basis: str
+
+    # 매도 조건
+    target_and_loss: Optional[TargetAndLoss] = None
+    hold_days: Optional[HoldDays] = None
+    sell_conditions: Optional[SellConditions] = None
+
+    # 매매 대상
+    target_stocks: List[str]  # 테마 이름 목록
 
 
 class BacktestResponse(BaseModel):
@@ -139,55 +177,63 @@ async def run_backtest(
         # 1. 세션 ID 생성
         session_id = str(uuid.uuid4())
 
-        # 2. 전략 생성 (임시)
+        # 2. 날짜 파싱 (YYYYMMDD -> date)
+        from datetime import datetime as dt
+        start_date = dt.strptime(request.start_date, "%Y%m%d").date()
+        end_date = dt.strptime(request.end_date, "%Y%m%d").date()
+
+        # 3. 투자 금액 변환 (만원 -> 원)
+        initial_capital = Decimal(str(request.initial_investment * 10000))
+
+        # 4. 전략 생성
         strategy_id = str(uuid.uuid4())
         strategy = PortfolioStrategy(
             strategy_id=strategy_id,
-            strategy_name=f"Backtest_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            description="API로 생성된 백테스트 전략",
+            strategy_name=request.strategy_name,
+            description=f"User: {request.user_id}, Target: {', '.join(request.target_stocks[:3])}{'...' if len(request.target_stocks) > 3 else ''}",
             strategy_type="FACTOR_BASED",
-            universe_type="ALL",
-            initial_capital=Decimal(str(request.initial_capital))
+            universe_type="THEME",  # 테마 기반 선택
+            initial_capital=initial_capital
         )
         db.add(strategy)
 
-        # 3. 매수 조건을 전략 팩터로 변환
-        for idx, condition in enumerate(request.buy_conditions):
-            factor = StrategyFactor(
-                strategy_id=strategy_id,
-                factor_id=condition.factor,
-                usage_type="SCREENING" if condition.operator in ["GT", "LT", "EQ"] else "RANKING",
-                operator=condition.operator,
-                threshold_value=Decimal(str(condition.value)),
-                weight=Decimal("1.0")
-            )
-            db.add(factor)
-
-        # 4. 거래 규칙 생성
+        # 5. 거래 규칙 생성 - 프론트엔드 설정 저장
         trading_rule = TradingRule(
             strategy_id=strategy_id,
-            rule_type="REBALANCE",
-            # condition_type 필드 제거 - 모델에 없음
-            rebalance_frequency=request.rebalance_frequency,
-            max_positions=request.max_positions,
-            position_sizing=request.position_sizing,
-            stop_loss_pct=Decimal("10"),  # 기본 10% 손절
-            commission_rate=Decimal("0.00015"),  # 0.015% 수수료
-            tax_rate=Decimal("0.0023"),  # 0.23% 세금
-            # 매수/매도 조건을 JSON으로 저장
-            buy_condition=[{"factor": c.factor, "operator": c.operator, "value": c.value} for c in request.buy_conditions],
-            sell_condition=[{"factor": c.factor, "operator": c.operator, "value": c.value} for c in request.sell_conditions]
+            rule_type="CONDITION_BASED",
+            rebalance_frequency=request.is_day_or_month.upper(),  # "DAILY" or "MONTHLY"
+            max_positions=request.max_holdings,
+            position_sizing="EQUAL_WEIGHT",  # per_stock_ratio 사용
+            stop_loss_pct=Decimal(str(request.target_and_loss.stop_loss)) if request.target_and_loss and request.target_and_loss.stop_loss else None,
+            commission_rate=Decimal(str(request.commission_rate / 100)),  # % -> decimal
+            tax_rate=Decimal("0.0023"),  # 0.23% 거래세
+            # 프론트엔드 조건식을 JSON으로 저장
+            buy_condition={
+                "conditions": [{"name": c.name, "expression": c.expression} for c in request.buy_conditions],
+                "logic": request.buy_logic,
+                "priority_factor": request.priority_factor,
+                "priority_order": request.priority_order,
+                "per_stock_ratio": request.per_stock_ratio,
+                "max_buy_value": request.max_buy_value,
+                "max_daily_stock": request.max_daily_stock,
+                "buy_cost_basis": request.buy_cost_basis
+            },
+            sell_condition={
+                "target_and_loss": request.target_and_loss.dict() if request.target_and_loss else None,
+                "hold_days": request.hold_days.dict() if request.hold_days else None,
+                "sell_conditions": request.sell_conditions.dict() if request.sell_conditions else None
+            }
         )
         db.add(trading_rule)
 
-        # 5. 세션 생성
+        # 6. 세션 생성
         session = SimulationSession(
             session_id=session_id,
             strategy_id=strategy_id,
-            start_date=request.start_date,
-            end_date=request.end_date,
-            initial_capital=Decimal(str(request.initial_capital)),
-            benchmark=request.benchmark,
+            start_date=start_date,
+            end_date=end_date,
+            initial_capital=initial_capital,
+            benchmark="KOSPI",
             status="PENDING",
             progress=0,
             created_at=datetime.now()
@@ -196,15 +242,16 @@ async def run_backtest(
 
         await db.commit()
 
-        # 6. 백그라운드에서 백테스트 실행 (asyncio.create_task 사용)
+        # 7. 백그라운드에서 백테스트 실행
+        logger.info(f"백테스트 시작 - Session: {session_id}, Strategy: {request.strategy_name}")
         asyncio.create_task(
             execute_backtest_wrapper(
                 session_id,
                 strategy_id,
-                request.start_date,
-                request.end_date,
-                request.initial_capital,
-                request.benchmark
+                start_date,
+                end_date,
+                initial_capital,
+                "KOSPI"
             )
         )
 
@@ -216,7 +263,7 @@ async def run_backtest(
         )
 
     except Exception as e:
-        logger.error(f"백테스트 실행 실패: {e}")
+        logger.error(f"백테스트 실행 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

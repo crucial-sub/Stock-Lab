@@ -13,7 +13,7 @@ import axios from "axios";
  * - baseURL은 환경변수에서 가져옵니다
  */
 export const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001",
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1",
   timeout: 30000, // 30초
   headers: {
     "Content-Type": "application/json",
@@ -91,7 +91,7 @@ axiosInstance.interceptors.response.use(
  * - 서버 내부 URL을 사용할 수 있습니다
  */
 export const axiosServerInstance = axios.create({
-  baseURL: process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001",
+  baseURL: process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1",
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",

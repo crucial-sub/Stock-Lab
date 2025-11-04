@@ -11,7 +11,7 @@ import {
   useState,
 } from "react";
 import { DayPicker, type Matcher } from "react-day-picker";
-import "react-day-picker/dist/style.css";
+import "react-day-picker/style.css";
 import { createPortal } from "react-dom";
 
 interface DatePickerFieldProps {

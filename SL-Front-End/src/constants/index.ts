@@ -33,17 +33,17 @@ export const BACKTEST_RESULT_TABS: Tab[] = [
   { id: "settings", label: "설정 조건" },
 ];
 
-// Form default values
-export const DEFAULT_INVESTMENT_AMOUNT = 5000;
-export const DEFAULT_DATE = "251231";
-export const DEFAULT_COMMISSION_RATE = 0.1;
-export const DEFAULT_POSITION_SIZE = 10;
-export const DEFAULT_MAX_POSITIONS = 10;
-export const DEFAULT_PROFIT_TARGET = 10;
-export const DEFAULT_STOP_LOSS = 10;
+// Form default values (백테스트 테스트 기준값)
+export const DEFAULT_INVESTMENT_AMOUNT = 5000; // 1000만원
+export const DEFAULT_DATE = "240131"; // 2024년 1월 31일
+export const DEFAULT_COMMISSION_RATE = 0.015; // 0.015%
+export const DEFAULT_POSITION_SIZE = 10; // 10%
+export const DEFAULT_MAX_POSITIONS = 10; // 최대 10종목
+export const DEFAULT_PROFIT_TARGET = 20; // 20% 목표수익
+export const DEFAULT_STOP_LOSS = 10; // 10% 손절
 
-// Initial condition states
+// Initial condition states (백테스트 테스트 기준값)
 export const INITIAL_BUY_CONDITIONS = [
-  { id: "A", expression: "조건식이 표시됩니다." },
-  { id: "B", expression: "조건식이 표시됩니다." },
+  { id: "A", expression: "{PER} < 15" },
+  { id: "B", expression: "{PBR} < 1.5" },
 ];

@@ -13,23 +13,23 @@ export function Header() {
   ];
 
   return (
-    <header className="border-border-default bg-bg-app px-[310px]">
-      <div className="quant-container flex h-16 items-center justify-between">
+    <header className="border-border-default">
+      <div className="quant-container flex h-[120px] pb-[8px] items-end justify-start">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <span className="text-xl font-bold text-brand">Stock Lab</span>
+          <span className="text-[1.8rem] font-bold text-brand mb-[-4px]">Stock Lab</span>
         </Link>
 
         {/* Navigation */}
-        <nav className="flex items-center gap-8">
+        <nav className="flex items-center gap-6 pl-[60px]">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`text-xl transition-colors ${
+              className={`text-[1.2rem] transition-colors ${
                 pathname === item.href
-                  ? "text-text-primary"
-                  : "text-text-quarternary hover:text-text-primary"
+                  ? "text-text-primary font-semibold hover:text-text-primary"
+                  : "text-text-quarternary hover:text-text-primary hover:font-semibold"
               }`}
             >
               {item.label}
@@ -38,7 +38,7 @@ export function Header() {
         </nav>
 
         {/* Login Button */}
-        <button type="button" className="text-sm text-text-primary">
+        <button type="button" className="ml-auto text-[1.2rem] font-medium text-text-primary">
           로그인
         </button>
       </div>

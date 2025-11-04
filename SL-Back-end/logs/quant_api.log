@@ -1509,3 +1509,557 @@ initial_capital
 2025-11-04 22:21:21,449 - app.main - INFO - → GET /api/v1/api/sub-factors
 2025-11-04 22:21:21,449 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.84ms)
 2025-11-04 22:21:21,449 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.55ms)
+2025-11-04 22:56:11,607 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 22:56:11,607 - app.main - INFO - Environment: Development
+2025-11-04 22:56:11,607 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 22:56:11,615 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 22:56:11,615 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 22:56:11,615 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 22:56:21,010 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:56:21,011 - app.main - INFO - ← GET /api/v1/api/factors - 404 (1.18ms)
+2025-11-04 22:56:22,021 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:56:22,022 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.92ms)
+2025-11-04 22:56:22,028 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:56:22,028 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.92ms)
+2025-11-04 22:56:23,035 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:56:23,036 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (1.07ms)
+2025-11-04 22:56:23,144 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:56:23,145 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:56:23,145 - app.main - INFO - ← GET /api/v1/api/factors - 404 (1.04ms)
+2025-11-04 22:56:23,145 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.71ms)
+2025-11-04 22:56:24,155 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 22:56:24,156 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 22:56:24,156 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (1.63ms)
+2025-11-04 22:56:24,157 - app.main - INFO - ← GET /api/v1/api/factors - 404 (1.16ms)
+2025-11-04 23:03:32,446 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:03:32,453 - app.core.database - INFO - Database connections closed
+2025-11-04 23:03:41,180 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:03:41,181 - app.main - INFO - Environment: Development
+2025-11-04 23:03:41,181 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:03:41,189 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:03:41,189 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:03:41,189 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:03:43,312 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:03:43,336 - app.core.database - INFO - Database connections closed
+2025-11-04 23:03:44,180 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:03:44,180 - app.main - INFO - Environment: Development
+2025-11-04 23:03:44,180 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:03:44,186 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:03:44,186 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:03:44,186 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:04:00,170 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:04:00,215 - app.core.database - INFO - Database connections closed
+2025-11-04 23:04:02,490 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:04:02,490 - app.main - INFO - Environment: Development
+2025-11-04 23:04:02,490 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:04:02,495 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:04:02,495 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:04:02,495 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:04:41,793 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:04:41,849 - app.core.database - INFO - Database connections closed
+2025-11-04 23:04:43,424 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:04:43,424 - app.main - INFO - Environment: Development
+2025-11-04 23:04:43,424 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:04:43,433 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:04:43,433 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:04:43,433 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:09:36,590 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 23:09:36,591 - app.main - INFO - ← GET /api/v1/api/factors - 404 (0.94ms)
+2025-11-04 23:09:37,599 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 23:09:37,601 - app.main - INFO - ← GET /api/v1/api/factors - 404 (1.18ms)
+2025-11-04 23:09:37,606 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 23:09:37,607 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.92ms)
+2025-11-04 23:09:38,616 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 23:09:38,618 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (1.25ms)
+2025-11-04 23:09:39,091 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 23:09:39,092 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 23:09:39,093 - app.main - INFO - ← GET /api/v1/api/factors - 404 (2.26ms)
+2025-11-04 23:09:39,093 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (0.87ms)
+2025-11-04 23:09:40,100 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 23:09:40,103 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 23:09:40,115 - app.main - INFO - ← GET /api/v1/api/factors - 404 (15.47ms)
+2025-11-04 23:09:40,116 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (12.54ms)
+2025-11-04 23:18:06,605 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:18:06,621 - app.core.database - INFO - Database connections closed
+2025-11-04 23:18:08,279 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:18:08,279 - app.main - INFO - Environment: Development
+2025-11-04 23:18:08,279 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:18:08,285 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:18:08,285 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:18:08,285 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:19:05,783 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:19:05,847 - app.core.database - INFO - Database connections closed
+2025-11-04 23:19:06,869 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:19:06,869 - app.main - INFO - Environment: Development
+2025-11-04 23:19:06,869 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:19:06,874 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:19:06,875 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:19:06,875 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:21:38,118 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:21:38,177 - app.core.database - INFO - Database connections closed
+2025-11-04 23:21:39,149 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:21:39,149 - app.main - INFO - Environment: Development
+2025-11-04 23:21:39,150 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:21:39,155 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:21:39,155 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:21:39,155 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:21:44,010 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:21:44,037 - app.core.database - INFO - Database connections closed
+2025-11-04 23:21:45,283 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:21:45,283 - app.main - INFO - Environment: Development
+2025-11-04 23:21:45,283 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:21:45,288 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:21:45,288 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:21:45,289 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:24:29,373 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 23:24:29,374 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 23:24:29,375 - app.main - INFO - ← GET /api/v1/api/factors - 404 (1.92ms)
+2025-11-04 23:24:29,376 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (1.57ms)
+2025-11-04 23:24:29,424 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:24:29,424 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.71ms)
+2025-11-04 23:24:29,450 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:24:29,450 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.69ms)
+2025-11-04 23:24:30,429 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:24:30,429 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.72ms)
+2025-11-04 23:24:30,433 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:24:30,434 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.46ms)
+2025-11-04 23:24:30,455 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:24:30,455 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.46ms)
+2025-11-04 23:24:30,457 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:24:30,458 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.34ms)
+2025-11-04 23:24:31,438 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:24:31,438 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.81ms)
+2025-11-04 23:24:31,461 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:24:31,462 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.75ms)
+2025-11-04 23:24:32,713 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:24:32,714 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.87ms)
+2025-11-04 23:24:33,721 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:24:33,721 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.80ms)
+2025-11-04 23:24:33,726 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:24:33,728 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.26ms)
+2025-11-04 23:24:34,735 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:24:34,735 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.80ms)
+2025-11-04 23:24:34,831 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:24:34,832 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:24:34,833 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.64ms)
+2025-11-04 23:24:34,834 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.42ms)
+2025-11-04 23:24:35,851 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:24:35,852 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:24:35,853 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.86ms)
+2025-11-04 23:24:35,854 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.41ms)
+2025-11-04 23:25:05,579 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:25:05,580 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:25:05,580 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.58ms)
+2025-11-04 23:25:05,581 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.07ms)
+2025-11-04 23:25:05,679 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:05,680 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (0.79ms)
+2025-11-04 23:25:06,587 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:06,588 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:25:06,588 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (1.02ms)
+2025-11-04 23:25:06,589 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.88ms)
+2025-11-04 23:25:06,686 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:06,686 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (0.75ms)
+2025-11-04 23:25:06,689 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:25:06,689 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.35ms)
+2025-11-04 23:25:07,692 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:25:07,693 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.46ms)
+2025-11-04 23:25:12,783 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:12,785 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:25:12,785 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (2.34ms)
+2025-11-04 23:25:12,786 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.97ms)
+2025-11-04 23:25:12,869 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:12,870 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (0.94ms)
+2025-11-04 23:25:13,793 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:13,793 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:25:13,794 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (1.12ms)
+2025-11-04 23:25:13,794 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.98ms)
+2025-11-04 23:25:13,876 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:13,876 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (0.46ms)
+2025-11-04 23:25:13,879 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:25:13,879 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.44ms)
+2025-11-04 23:25:14,883 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:25:14,883 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.49ms)
+2025-11-04 23:25:20,030 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:20,031 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (1.01ms)
+2025-11-04 23:25:21,033 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:21,034 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (0.76ms)
+2025-11-04 23:25:21,044 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:25:21,045 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.43ms)
+2025-11-04 23:25:22,050 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:25:22,051 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (1.29ms)
+2025-11-04 23:25:22,149 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:22,149 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:25:22,150 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (0.91ms)
+2025-11-04 23:25:22,150 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.60ms)
+2025-11-04 23:25:23,157 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:25:23,158 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:25:23,158 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (1.02ms)
+2025-11-04 23:25:23,159 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.85ms)
+2025-11-04 23:25:25,664 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-04 23:25:25,666 - app.core.database - INFO - Database connections closed
+2025-11-04 23:25:39,305 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-04 23:25:39,305 - app.main - INFO - Environment: Development
+2025-11-04 23:25:39,305 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-04 23:25:39,311 - app.core.cache - INFO - Redis connection established successfully
+2025-11-04 23:25:39,312 - app.main - INFO - Redis cache initialized successfully
+2025-11-04 23:25:39,312 - app.main - INFO - Database initialized (dev mode)
+2025-11-04 23:25:39,510 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:25:39,511 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.79ms)
+2025-11-04 23:26:08,935 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:26:08,941 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (6.73ms)
+2025-11-04 23:26:09,950 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:26:09,950 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (0.63ms)
+2025-11-04 23:26:09,955 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:26:09,955 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.51ms)
+2025-11-04 23:26:10,962 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:26:10,963 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.99ms)
+2025-11-04 23:26:11,065 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:26:11,066 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:26:11,066 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (0.96ms)
+2025-11-04 23:26:11,066 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.63ms)
+2025-11-04 23:26:12,092 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:26:12,093 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:26:12,093 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (1.14ms)
+2025-11-04 23:26:12,094 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (0.99ms)
+2025-11-04 23:34:40,522 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:34:40,524 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (2.25ms)
+2025-11-04 23:34:41,528 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:34:41,529 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.68ms)
+2025-11-04 23:34:41,533 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:34:41,533 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.62ms)
+2025-11-04 23:34:42,540 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:34:42,540 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.82ms)
+2025-11-04 23:34:42,546 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:34:42,548 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.51ms)
+2025-11-04 23:34:43,555 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:34:43,557 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (2.03ms)
+2025-11-04 23:34:43,655 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:34:43,659 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:34:43,660 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (5.03ms)
+2025-11-04 23:34:43,661 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (2.18ms)
+2025-11-04 23:34:44,667 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:34:44,668 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:34:44,669 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.78ms)
+2025-11-04 23:34:44,670 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (2.11ms)
+2025-11-04 23:35:41,900 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:35:41,903 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (3.05ms)
+2025-11-04 23:35:42,917 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:35:42,918 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.50ms)
+2025-11-04 23:35:42,920 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:35:42,921 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.48ms)
+2025-11-04 23:35:43,926 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:35:43,930 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (3.37ms)
+2025-11-04 23:35:43,941 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:35:43,943 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.68ms)
+2025-11-04 23:35:44,952 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:35:44,953 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.73ms)
+2025-11-04 23:35:52,259 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:35:52,260 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.60ms)
+2025-11-04 23:35:53,265 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:35:53,266 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.87ms)
+2025-11-04 23:35:53,272 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:35:53,273 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.00ms)
+2025-11-04 23:35:54,279 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:35:54,280 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.99ms)
+2025-11-04 23:35:54,286 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:35:54,287 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.14ms)
+2025-11-04 23:35:55,292 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:35:55,292 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.79ms)
+2025-11-04 23:35:55,389 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:35:55,389 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:35:55,390 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.29ms)
+2025-11-04 23:35:55,390 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.76ms)
+2025-11-04 23:35:56,397 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:35:56,398 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:35:56,398 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.55ms)
+2025-11-04 23:35:56,399 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.56ms)
+2025-11-04 23:36:19,176 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:36:19,178 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (2.92ms)
+2025-11-04 23:36:20,183 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:36:20,184 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.51ms)
+2025-11-04 23:36:20,186 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:36:20,186 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.41ms)
+2025-11-04 23:36:21,191 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:36:21,192 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.82ms)
+2025-11-04 23:36:21,196 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:36:21,199 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (2.52ms)
+2025-11-04 23:36:21,235 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:36:21,236 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.59ms)
+2025-11-04 23:36:22,204 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:36:22,205 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.90ms)
+2025-11-04 23:36:22,251 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:36:22,251 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.51ms)
+2025-11-04 23:36:22,255 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:36:22,256 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.47ms)
+2025-11-04 23:36:23,260 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:36:23,261 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.64ms)
+2025-11-04 23:36:23,264 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:36:23,264 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.62ms)
+2025-11-04 23:36:24,271 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:36:24,272 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.88ms)
+2025-11-04 23:36:26,617 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:36:26,617 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.65ms)
+2025-11-04 23:36:27,622 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:36:27,623 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.77ms)
+2025-11-04 23:36:27,628 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:36:27,629 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.76ms)
+2025-11-04 23:36:28,636 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:36:28,637 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.41ms)
+2025-11-04 23:36:28,643 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:36:28,644 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.85ms)
+2025-11-04 23:36:29,650 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:36:29,651 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.98ms)
+2025-11-04 23:36:29,746 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:36:29,746 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:36:29,747 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.46ms)
+2025-11-04 23:36:29,747 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.23ms)
+2025-11-04 23:36:30,755 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:36:30,756 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:36:30,757 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.29ms)
+2025-11-04 23:36:30,757 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.95ms)
+2025-11-04 23:43:19,899 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:43:19,901 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:43:19,902 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (3.06ms)
+2025-11-04 23:43:19,902 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.16ms)
+2025-11-04 23:43:20,031 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:43:20,031 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.44ms)
+2025-11-04 23:43:21,035 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:43:21,036 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.48ms)
+2025-11-04 23:43:21,038 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:43:21,039 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.44ms)
+2025-11-04 23:43:22,043 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:43:22,043 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.79ms)
+2025-11-04 23:43:22,047 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:43:22,047 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.60ms)
+2025-11-04 23:43:23,052 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:43:23,052 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.47ms)
+2025-11-04 23:43:23,437 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:43:23,455 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:43:23,456 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (18.20ms)
+2025-11-04 23:43:23,458 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (3.80ms)
+2025-11-04 23:49:43,200 - app.main - INFO - → GET /api/v1/api/factors
+2025-11-04 23:49:43,215 - app.main - INFO - → GET /api/v1/api/sub-factors
+2025-11-04 23:49:43,216 - app.main - INFO - ← GET /api/v1/api/factors - 404 (17.63ms)
+2025-11-04 23:49:43,218 - app.main - INFO - ← GET /api/v1/api/sub-factors - 404 (3.30ms)
+2025-11-04 23:49:43,354 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:43,354 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.85ms)
+2025-11-04 23:49:43,376 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:43,377 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.69ms)
+2025-11-04 23:49:43,398 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:43,399 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.83ms)
+2025-11-04 23:49:43,420 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:43,421 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.55ms)
+2025-11-04 23:49:43,793 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:43,794 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.69ms)
+2025-11-04 23:49:44,212 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:44,213 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.95ms)
+2025-11-04 23:49:44,224 - app.main - INFO - → GET /api/v1/api/facto/list
+2025-11-04 23:49:44,225 - app.main - INFO - → GET /api/v1/api/sub-facts/list
+2025-11-04 23:49:44,226 - app.main - INFO - ← GET /api/v1/api/facto/list - 404 (1.58ms)
+2025-11-04 23:49:44,226 - app.main - INFO - ← GET /api/v1/api/sub-facts/list - 404 (1.20ms)
+2025-11-04 23:49:44,357 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:44,358 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.43ms)
+2025-11-04 23:49:44,360 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:44,360 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.39ms)
+2025-11-04 23:49:44,380 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:44,381 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.52ms)
+2025-11-04 23:49:44,383 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:44,383 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.39ms)
+2025-11-04 23:49:44,401 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:44,401 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.46ms)
+2025-11-04 23:49:44,404 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:44,404 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.44ms)
+2025-11-04 23:49:44,424 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:44,425 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.45ms)
+2025-11-04 23:49:44,427 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:44,428 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.43ms)
+2025-11-04 23:49:44,838 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:44,839 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.75ms)
+2025-11-04 23:49:44,843 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:44,843 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.83ms)
+2025-11-04 23:49:45,232 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:45,232 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.52ms)
+2025-11-04 23:49:45,235 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:45,235 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.38ms)
+2025-11-04 23:49:45,363 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:45,364 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.74ms)
+2025-11-04 23:49:45,367 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:45,368 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.59ms)
+2025-11-04 23:49:45,386 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:45,387 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.58ms)
+2025-11-04 23:49:45,390 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:45,390 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.77ms)
+2025-11-04 23:49:45,456 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:45,459 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (3.04ms)
+2025-11-04 23:49:45,463 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:45,465 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:45,466 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (2.89ms)
+2025-11-04 23:49:45,467 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (2.70ms)
+2025-11-04 23:49:45,487 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:45,488 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.36ms)
+2025-11-04 23:49:45,850 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:45,851 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.75ms)
+2025-11-04 23:49:45,856 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:45,856 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.72ms)
+2025-11-04 23:49:46,239 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:46,240 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.82ms)
+2025-11-04 23:49:46,243 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:46,244 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.63ms)
+2025-11-04 23:49:46,374 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:46,374 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.76ms)
+2025-11-04 23:49:46,393 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:46,394 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.14ms)
+2025-11-04 23:49:46,488 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:46,489 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.76ms)
+2025-11-04 23:49:46,495 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:46,496 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.26ms)
+2025-11-04 23:49:46,864 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:46,864 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.94ms)
+2025-11-04 23:49:47,252 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:47,253 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.15ms)
+2025-11-04 23:49:47,576 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:47,577 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:47,578 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.71ms)
+2025-11-04 23:49:47,578 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.79ms)
+2025-11-04 23:49:48,587 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:49:48,587 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:48,589 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (2.02ms)
+2025-11-04 23:49:48,589 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.71ms)
+2025-11-04 23:49:49,297 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:49,297 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.57ms)
+2025-11-04 23:49:50,308 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:50,309 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.42ms)
+2025-11-04 23:49:50,318 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:50,318 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.68ms)
+2025-11-04 23:49:51,325 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:51,326 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.79ms)
+2025-11-04 23:49:51,333 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:51,334 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.73ms)
+2025-11-04 23:49:52,342 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:52,343 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.12ms)
+2025-11-04 23:49:52,354 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:52,355 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.74ms)
+2025-11-04 23:49:53,363 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:53,364 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.17ms)
+2025-11-04 23:49:53,374 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:53,375 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.77ms)
+2025-11-04 23:49:54,382 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:54,382 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.42ms)
+2025-11-04 23:49:54,390 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:54,391 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.42ms)
+2025-11-04 23:49:55,398 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:55,399 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.31ms)
+2025-11-04 23:49:55,411 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:55,411 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.82ms)
+2025-11-04 23:49:56,417 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:56,419 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.53ms)
+2025-11-04 23:49:56,428 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:56,429 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.50ms)
+2025-11-04 23:49:57,433 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:57,434 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.87ms)
+2025-11-04 23:49:57,443 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:57,443 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.87ms)
+2025-11-04 23:49:58,450 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:58,451 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.54ms)
+2025-11-04 23:49:58,459 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:58,460 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.58ms)
+2025-11-04 23:49:59,466 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:49:59,468 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.15ms)
+2025-11-04 23:49:59,477 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:49:59,479 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.35ms)
+2025-11-04 23:50:00,486 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:00,487 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.92ms)
+2025-11-04 23:50:00,497 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:00,498 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.15ms)
+2025-11-04 23:50:01,505 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:01,506 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.71ms)
+2025-11-04 23:50:01,516 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:01,517 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.07ms)
+2025-11-04 23:50:02,524 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:02,524 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.48ms)
+2025-11-04 23:50:02,533 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:02,534 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.71ms)
+2025-11-04 23:50:03,540 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:03,540 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.74ms)
+2025-11-04 23:50:03,550 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:03,550 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.85ms)
+2025-11-04 23:50:04,557 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:04,558 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.04ms)
+2025-11-04 23:50:04,568 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:04,569 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.74ms)
+2025-11-04 23:50:05,576 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:05,577 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.98ms)
+2025-11-04 23:50:05,588 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:05,588 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.75ms)
+2025-11-04 23:50:06,594 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:06,595 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.90ms)
+2025-11-04 23:50:06,606 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:06,607 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.07ms)
+2025-11-04 23:50:07,615 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:07,616 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.17ms)
+2025-11-04 23:50:07,626 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:07,627 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.42ms)
+2025-11-04 23:50:08,632 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:08,634 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.56ms)
+2025-11-04 23:50:08,641 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:08,642 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.83ms)
+2025-11-04 23:50:09,650 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:09,651 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.24ms)
+2025-11-04 23:50:09,662 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:09,663 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.91ms)
+2025-11-04 23:50:10,671 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:10,673 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (2.04ms)
+2025-11-04 23:50:10,684 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:10,685 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.82ms)
+2025-11-04 23:50:11,691 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:11,692 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.82ms)
+2025-11-04 23:50:11,701 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:11,702 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.00ms)
+2025-11-04 23:50:12,712 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:12,714 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.52ms)
+2025-11-04 23:50:12,724 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:12,730 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (5.70ms)
+2025-11-04 23:50:13,735 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:50:13,736 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.60ms)
+2025-11-04 23:50:13,742 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:50:13,743 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.52ms)
+2025-11-04 23:51:22,968 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:51:22,970 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (2.28ms)
+2025-11-04 23:51:23,977 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:51:23,978 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.80ms)
+2025-11-04 23:51:23,982 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:51:23,989 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (7.15ms)
+2025-11-04 23:51:24,995 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:51:24,997 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.13ms)
+2025-11-04 23:51:25,001 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:51:25,002 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.99ms)
+2025-11-04 23:51:26,008 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-04 23:51:26,010 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (1.15ms)
+2025-11-04 23:51:26,120 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:51:26,122 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:51:26,123 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (3.67ms)
+2025-11-04 23:51:26,124 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.88ms)
+2025-11-04 23:51:27,141 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-04 23:51:27,142 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-04 23:51:27,143 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (1.48ms)
+2025-11-04 23:51:27,144 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.32ms)
+2025-11-05 00:21:21,933 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-05 00:21:21,938 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (5.53ms)
+2025-11-05 00:21:22,943 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-05 00:21:22,943 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.55ms)
+2025-11-05 00:21:22,946 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-05 00:21:22,947 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.91ms)
+2025-11-05 00:21:23,952 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-05 00:21:23,953 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.75ms)
+2025-11-05 00:21:23,960 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-05 00:21:23,963 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (2.40ms)
+2025-11-05 00:21:24,967 - app.main - INFO - → GET /api/v1/api/themes/list
+2025-11-05 00:21:24,968 - app.main - INFO - ← GET /api/v1/api/themes/list - 404 (0.49ms)
+2025-11-05 00:21:25,046 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-05 00:21:25,047 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.76ms)
+2025-11-05 00:21:25,066 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-05 00:21:25,067 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (1.54ms)
+2025-11-05 00:21:26,070 - app.main - INFO - → GET /api/v1/api/factors/list
+2025-11-05 00:21:26,071 - app.main - INFO - ← GET /api/v1/api/factors/list - 404 (0.78ms)
+2025-11-05 00:21:26,073 - app.main - INFO - → GET /api/v1/api/sub-factors/list
+2025-11-05 00:21:26,074 - app.main - INFO - ← GET /api/v1/api/sub-factors/list - 404 (0.64ms)

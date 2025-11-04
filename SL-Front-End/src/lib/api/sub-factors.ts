@@ -8,7 +8,7 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 
 /**
  * 함수 목록 조회
- * - GET /api/sub-factors
+ * - GET /api/sub-factors/list
  * - 사용 가능한 모든 함수 목록을 반환합니다
  *
  * @param isServer - 서버 사이드 요청 여부 (SSR용)
@@ -17,7 +17,7 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 export async function getSubFactors(isServer = false): Promise<SubFactor[]> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<SubFactor[]>("/api/sub-factors");
+  const response = await axios.get<SubFactor[]>("/api/sub-factors/list");
   return response.data;
 }
 

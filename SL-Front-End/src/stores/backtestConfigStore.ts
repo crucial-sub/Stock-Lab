@@ -1,5 +1,5 @@
-import { create } from "zustand";
 import type { BacktestRunRequest } from "@/types/api";
+import { create } from "zustand";
 
 /**
  * 백테스트 설정 전역 상태 관리 스토어
@@ -30,7 +30,7 @@ interface BacktestConfigStore extends BacktestRunRequest {
   setTargetAndLoss: (value: BacktestRunRequest["target_and_loss"]) => void;
   setHoldDays: (value: BacktestRunRequest["hold_days"]) => void;
   setSellConditions: (value: BacktestRunRequest["sell_conditions"]) => void;
-  setTargetStocks: (stocks: string[]) => void;
+  // setTargetStocks: (stocks: string[]) => void;
 
   // 모든 설정 초기화
   reset: () => void;
@@ -107,7 +107,7 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
   setTargetAndLoss: (value) => set({ target_and_loss: value }),
   setHoldDays: (value) => set({ hold_days: value }),
   setSellConditions: (value) => set({ sell_conditions: value }),
-  setTargetStocks: (stocks) => set({ target_stocks: stocks }),
+  // setTargetStocks: (stocks) => set({ target_stocks: stocks }),
 
   // 초기화 함수
   reset: () => set(defaultConfig),

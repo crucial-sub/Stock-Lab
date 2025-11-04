@@ -377,7 +377,7 @@ export function BuyConditionTab() {
       </Panel>
 
       {/* 매수 비중 설정 */}
-      <Panel className="p-6 space-y-4">
+      <Panel className="relative p-6 space-y-4">
         <h3 className="text-base font-semibold text-state-positive">
           매수 비중 설정
         </h3>
@@ -466,7 +466,7 @@ export function BuyConditionTab() {
       </Panel>
 
       {/* 매수 방법 선택 */}
-      <Panel className="p-6 space-y-4">
+      <Panel className="relative p-6 space-y-4">
         <h3 className="text-base font-semibold text-state-positive">
           매수 방법 선택
         </h3>

@@ -25,7 +25,8 @@ export function DatePickerField({
   minDate,
   maxDate,
 }: DatePickerFieldProps) {
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLInputElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -78,24 +79,24 @@ export function DatePickerField({
   }, [isOpen, updatePosition]);
 
   return (
-    <div className={`relative ${className}`}>
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          if (!isOpen) updatePosition();
-          setIsOpen((prev) => !prev);
-        }}
-        className="w-full h-10 px-3 flex items-center justify-between text-left rounded border border-gray-600 bg-transparent hover:border-gray-400 transition-colors"
-        style={{
-          color: displayValue ? '#e5e5e5' : '#a3a3a3',
-          fontSize: '14px'
-        }}
-      >
-        <span>{displayValue || placeholder}</span>
-        <span style={{ color: '#a3a3a3' }}>📅</span>
-      </button>
+    <div className={`relative ${className}`} onClick={() => {
+      if (!isOpen) updatePosition();
+      setIsOpen((prev) => !prev);
+    }}>
+      <div className="relative h-[40px] border-b border-[#a0a0a0]">
+        <input
+          type="text"
+          onChange={() => { }}
+          ref={triggerRef}
+          value={displayValue}
+          disabled={disabled}
+          style={{
+            color: displayValue ? '#e5e5e5' : '#a3a3a3',
+          }}
+          className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] tracking-[-0.6px] w-[100px]"
+        />
+        <span className="absolute right-0 top-[20%] text-[#a3a3a3]">📅</span>
+      </div>
 
       {isOpen && position && createPortal(
         <div

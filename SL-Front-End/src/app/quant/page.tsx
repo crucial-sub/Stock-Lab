@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { MOCK_SCRIPTS } from "@/constants";
@@ -31,9 +32,9 @@ export default function QuantPage() {
   }, [sortDescending]);
 
   return (
-    <div className="quant-container py-8 space-y-6">
+    <div className="w-[1000px] quant-container pt-[40px] space-y-6">
       {/* Page Title */}
-      <h1 className="section-title">내가 만든 스크립트</h1>
+      <h1 className="section-title">내가 만든 전략</h1>
 
       {/* Actions and Search */}
       <div className="flex items-center justify-between">
@@ -43,7 +44,7 @@ export default function QuantPage() {
             href="/quant/new"
             className="quant-button-secondary inline-flex"
           >
-            스크립트 새로 만들기
+            전략 새로 만들기
           </Link>
           <button
             type="button"
@@ -51,7 +52,7 @@ export default function QuantPage() {
             onClick={handleDeleteSelected}
             disabled={selectedScripts.length === 0}
           >
-            선택 스크립트 삭제
+            선택 전략 삭제
           </button>
           <button
             type="button"
@@ -68,17 +69,24 @@ export default function QuantPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="스크립트 이름으로 검색"
-            className="search-input w-[200px]"
+            placeholder="전략 이름으로 검색"
+            className="search-input w-[180px] mr-[20px]"
           />
-          <button type="button" className="search-button">
-            <span className="text-text-primary">🔍</span>
+          <button type="button" className="search-button" aria-label="검색">
+            <Image src="/icons/search.svg" alt="" width={20} height={20} />
           </button>
         </div>
       </div>
+      <div className="px-[12px] pt-[24px] text-[0.9rem] text-text-tertiary">
+        <span className="text-text-tertiary">전략 이름</span>
+        <span className="text-text-tertiary ml-[312px]">일 평균 수익률</span>
+        <span className="text-text-tertiary ml-[88px]">누적 수익률</span>
+        <span className="text-text-tertiary ml-[112px]">최종 수정일</span>
+        <span className="text-text-tertiary ml-[124px]">생성일</span>
+      </div>
 
       {/* Script List */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         {sortedScripts.map((script) => {
           const isHovered = hoveredScript === script.id;
           const isSelected = selectedScripts.includes(script.id);
@@ -93,29 +101,28 @@ export default function QuantPage() {
               onClick={() => toggleScript(script.id)}
               aria-pressed={isSelected}
             >
-              <div className="grid grid-cols-[44px_1fr_120px_150px] gap-6 items-center w-full px-5">
-                {/* Checkbox and Divider */}
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`checkbox ${isSelected ? "is-checked" : ""}`}
-                    aria-hidden="true"
-                  />
-                  <div
-                    className="w-px h-8 bg-border-subtle"
+              <div className="flex w-full items-center gap-6 px-[0px] text-[1.1rem]">
+                {/* Checkbox */}
+                <div className="flex w-[60px] items-center justify-center">
+                  <Image
+                    src={isSelected ? "/icons/check_box.svg" : "/icons/check_box_outline_blank.svg"}
+                    alt=""
+                    width={24}
+                    height={24}
                     aria-hidden="true"
                   />
                 </div>
 
                 {/* Script Name */}
                 <div
-                  className={`text-base font-medium ${isHovered ? "text-hover" : "text-normal"}`}
+                  className={`flex w-[220px] text-[1.3rem] items-center font-medium ${isHovered ? "text-hover" : "text-normal"}`}
                 >
                   {script.name}
                 </div>
 
-                {/* Return Rate */}
+                {/* 일 평균 수익률 */}
                 <div
-                  className={`text-base font-medium text-right ${
+                  className={`flex flex-1 text-[1.3rem] items-center justify-end font-medium ${
                     script.avgReturn >= 0
                       ? isHovered
                         ? "value-positive"
@@ -129,9 +136,36 @@ export default function QuantPage() {
                   {script.avgReturn}%
                 </div>
 
-                {/* Date */}
+                {/* 누적 수익률 */}
                 <div
-                  className={`text-sm text-right ${isHovered ? "text-hover" : "text-normal"}`}
+                  className={`flex flex-1 text-[1.3rem] items-center justify-end font-medium ${
+                    script.totalReturn >= 0
+                      ? isHovered
+                        ? "value-positive"
+                        : "value-positive-normal"
+                      : isHovered
+                        ? "value-negative"
+                        : "value-negative-normal"
+                  }`}
+                >
+                  {script.totalReturn >= 0 ? "+" : ""}
+                  {script.totalReturn}%
+                </div>
+
+                {/* 최종 수정일 */}
+                <div
+                  className={`flex w-[150px] items-center justify-end text-[0.9rem] ${
+                    isHovered ? "text-hover" : "text-normal"
+                  }`}
+                >
+                  {script.editDate}
+                </div>
+
+                {/* 생성일 */}
+                <div
+                  className={`flex w-[150px] items-center justify-end text-[0.9rem] pr-[12px] ${
+                    isHovered ? "text-hover" : "text-normal"
+                  }`}
                 >
                   {script.createDate}
                 </div>

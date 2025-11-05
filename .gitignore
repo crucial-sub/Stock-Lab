@@ -47,3 +47,5 @@ next-env.d.ts
 /.serena
 /venv
 /logs
+__pycache__/
+.DS_Store

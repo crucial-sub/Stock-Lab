@@ -33,24 +33,62 @@ router = APIRouter()
 
 
 # Request/Response Models
-class BacktestCondition(BaseModel):
-    """백테스트 조건"""
-    factor: str
-    operator: str  # GT, LT, EQ, TOP_N, BOTTOM_N
-    value: float
+class BuyCondition(BaseModel):
+    """매수 조건"""
+    name: str  # 조건식 이름 e.g. "A"
+    expression: str  # 조건식 e.g. "{PER} > 10"
+
+
+class TargetAndLoss(BaseModel):
+    """목표가/손절가"""
+    target_gain: Optional[float] = None
+    stop_loss: Optional[float] = None
+
+
+class HoldDays(BaseModel):
+    """보유 기간"""
+    min_hold_days: int
+    max_hold_days: int
+    sell_cost_basis: str
+
+
+class SellConditions(BaseModel):
+    """매도 조건"""
+    name: str
+    expression: str
+    sell_logic: str
+    sell_cost_basis: str
 
 
 class BacktestRequest(BaseModel):
-    """백테스트 실행 요청"""
-    buy_conditions: List[BacktestCondition]
-    sell_conditions: List[BacktestCondition]
-    start_date: date = Field(default=date(2020, 1, 1))
-    end_date: date = Field(default=date(2024, 12, 31))
-    initial_capital: float = Field(default=100000000, ge=1000000)  # 최소 100만원
-    rebalance_frequency: str = Field(default="MONTHLY")  # DAILY, WEEKLY, MONTHLY, QUARTERLY
-    max_positions: int = Field(default=20, ge=1, le=100)
-    position_sizing: str = Field(default="EQUAL_WEIGHT")  # EQUAL_WEIGHT, MARKET_CAP, RISK_PARITY
-    benchmark: str = Field(default="KOSPI")
+    """백테스트 실행 요청 - 프론트엔드 스키마에 맞춤"""
+    # 기본 설정
+    user_id: str
+    strategy_name: str
+    is_day_or_month: str  # "daily" or "monthly"
+    start_date: str  # YYYYMMDD
+    end_date: str  # YYYYMMDD
+    initial_investment: float  # 만원 단위
+    commission_rate: float  # %
+
+    # 매수 조건
+    buy_conditions: List[BuyCondition]
+    buy_logic: str
+    priority_factor: str
+    priority_order: str  # "asc" or "desc"
+    per_stock_ratio: float  # %
+    max_holdings: int
+    max_buy_value: Optional[float] = None  # 만원 단위
+    max_daily_stock: Optional[int] = None
+    buy_cost_basis: str
+
+    # 매도 조건
+    target_and_loss: Optional[TargetAndLoss] = None
+    hold_days: Optional[HoldDays] = None
+    sell_conditions: Optional[SellConditions] = None
+
+    # 매매 대상
+    target_stocks: List[str]  # 테마 이름 목록
 
 
 class BacktestResponse(BaseModel):
@@ -86,8 +124,8 @@ class BacktestResultStatistics(BaseModel):
     total_trades: int = Field(..., serialization_alias="totalTrades")
     winning_trades: int = Field(..., serialization_alias="winningTrades")
     losing_trades: int = Field(..., serialization_alias="losingTrades")
-    initial_capital: float = Field(..., serialization_alias="initialCapital")
-    final_capital: float = Field(..., serialization_alias="finalCapital")
+    initial_capital: int = Field(..., serialization_alias="initialCapital")
+    final_capital: int = Field(..., serialization_alias="finalCapital")
 
 
 class BacktestTrade(BaseModel):
@@ -107,9 +145,16 @@ class BacktestTrade(BaseModel):
 
 
 class BacktestYieldPoint(BaseModel):
-    """백테스트 수익률 포인트"""
+    """백테스트 일별 포트폴리오 데이터"""
+    model_config = ConfigDict(populate_by_name=True)
+
     date: str
-    value: float
+    portfolio_value: int = Field(..., serialization_alias="portfolioValue")  # 포트폴리오 총 가치
+    cash: int  # 현금 잔고
+    position_value: int = Field(..., serialization_alias="positionValue")  # 보유 포지션 가치
+    daily_return: float = Field(..., serialization_alias="dailyReturn")  # 일간 수익률
+    cumulative_return: float = Field(..., serialization_alias="cumulativeReturn")  # 누적 수익률
+    value: float  # 차트용 (cumulative_return과 동일, 하위 호환성)
 
 
 class BacktestResultResponse(BaseModel):
@@ -139,55 +184,143 @@ async def run_backtest(
         # 1. 세션 ID 생성
         session_id = str(uuid.uuid4())
 
-        # 2. 전략 생성 (임시)
+        # 2. 날짜 파싱 (YYYYMMDD -> date)
+        from datetime import datetime as dt
+        start_date = dt.strptime(request.start_date, "%Y%m%d").date()
+        end_date = dt.strptime(request.end_date, "%Y%m%d").date()
+
+        # 3. 투자 금액 변환 (만원 -> 원)
+        initial_capital = Decimal(str(request.initial_investment * 10000))
+
+        # 4. 전략 생성
         strategy_id = str(uuid.uuid4())
         strategy = PortfolioStrategy(
             strategy_id=strategy_id,
-            strategy_name=f"Backtest_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            description="API로 생성된 백테스트 전략",
+            strategy_name=request.strategy_name,
+            description=f"User: {request.user_id}, Target: {', '.join(request.target_stocks[:3])}{'...' if len(request.target_stocks) > 3 else ''}",
             strategy_type="FACTOR_BASED",
-            universe_type="ALL",
-            initial_capital=Decimal(str(request.initial_capital))
+            universe_type="THEME",  # 테마 기반 선택
+            initial_capital=initial_capital
         )
         db.add(strategy)
 
-        # 3. 매수 조건을 전략 팩터로 변환
-        for idx, condition in enumerate(request.buy_conditions):
-            factor = StrategyFactor(
-                strategy_id=strategy_id,
-                factor_id=condition.factor,
-                usage_type="SCREENING" if condition.operator in ["GT", "LT", "EQ"] else "RANKING",
-                operator=condition.operator,
-                threshold_value=Decimal(str(condition.value)),
-                weight=Decimal("1.0")
-            )
-            db.add(factor)
-
-        # 4. 거래 규칙 생성
+        # 5. 거래 규칙 생성 - 프론트엔드 설정 저장
         trading_rule = TradingRule(
             strategy_id=strategy_id,
-            rule_type="REBALANCE",
-            # condition_type 필드 제거 - 모델에 없음
-            rebalance_frequency=request.rebalance_frequency,
-            max_positions=request.max_positions,
-            position_sizing=request.position_sizing,
-            stop_loss_pct=Decimal("10"),  # 기본 10% 손절
-            commission_rate=Decimal("0.00015"),  # 0.015% 수수료
-            tax_rate=Decimal("0.0023"),  # 0.23% 세금
-            # 매수/매도 조건을 JSON으로 저장
-            buy_condition=[{"factor": c.factor, "operator": c.operator, "value": c.value} for c in request.buy_conditions],
-            sell_condition=[{"factor": c.factor, "operator": c.operator, "value": c.value} for c in request.sell_conditions]
+            rule_type="CONDITION_BASED",
+            rebalance_frequency=request.is_day_or_month.upper(),  # "DAILY" or "MONTHLY"
+            max_positions=request.max_holdings,
+            position_sizing="EQUAL_WEIGHT",  # per_stock_ratio 사용
+            stop_loss_pct=Decimal(str(request.target_and_loss.stop_loss)) if request.target_and_loss and request.target_and_loss.stop_loss else None,
+            commission_rate=Decimal(str(request.commission_rate / 100)),  # % -> decimal
+            tax_rate=Decimal("0.0023"),  # 0.23% 거래세
+            # 프론트엔드 조건식을 JSON으로 저장
+            buy_condition={
+                "conditions": [{"name": c.name, "expression": c.expression} for c in request.buy_conditions],
+                "logic": request.buy_logic,
+                "priority_factor": request.priority_factor,
+                "priority_order": request.priority_order,
+                "per_stock_ratio": request.per_stock_ratio,
+                "max_buy_value": request.max_buy_value,
+                "max_daily_stock": request.max_daily_stock,
+                "buy_cost_basis": request.buy_cost_basis
+            },
+            sell_condition={
+                "target_and_loss": request.target_and_loss.dict() if request.target_and_loss else None,
+                "hold_days": request.hold_days.dict() if request.hold_days else None,
+                "sell_conditions": request.sell_conditions.dict() if request.sell_conditions else None
+            }
         )
         db.add(trading_rule)
 
-        # 5. 세션 생성
+        # 6. 매수 조건을 파싱하여 StrategyFactor로 저장
+        import re
+        logger.info(f"매수 조건 파싱 시작: {len(request.buy_conditions)}개 조건")
+        for condition in request.buy_conditions:
+            logger.info(f"조건 파싱 중: {condition.name} = {condition.expression}")
+            # expression 예: "{주가순자산률 (PBR)} >= 10" 또는 "{PER} < 30"
+            # 정규식으로 팩터 이름과 연산자, 값 추출
+            # 한글, 영문, 괄호 등을 포함한 팩터 이름 추출
+            match = re.match(r'\{([^}]+)\}\s*([<>=!]+)\s*([0-9.]+)', condition.expression)
+            if match:
+                full_factor_name = match.group(1)  # e.g., "주가순자산률 (PBR)" or "PER"
+                operator = match.group(2)  # e.g., "<", ">", "=="
+                threshold = match.group(3)  # e.g., "30"
+
+                # 괄호 안의 영문 코드 추출 (예: "주가순자산률 (PBR)" -> "PBR")
+                code_match = re.search(r'\(([A-Z_]+)\)', full_factor_name)
+                if code_match:
+                    factor_name = code_match.group(1)
+                else:
+                    # 괄호가 없으면 전체 이름 사용 (공백 제거)
+                    factor_name = full_factor_name.strip()
+
+                logger.info(f"추출된 팩터: {factor_name}, 연산자: {operator}, 임계값: {threshold}")
+
+                # Factor 테이블에서 factor_id 조회
+                from app.models.simulation import Factor
+                factor_query = select(Factor).where(Factor.factor_id == factor_name)
+                factor_result = await db.execute(factor_query)
+                factor = factor_result.scalar_one_or_none()
+
+                if not factor:
+                    # Factor가 없으면 생성 (기본 카테고리: value)
+                    factor = Factor(
+                        factor_id=factor_name,
+                        category_id="value",  # 기본값: 가치 팩터
+                        factor_name=factor_name,
+                        calculation_type="FUNDAMENTAL",
+                        description=f"Auto-created factor from user condition"
+                    )
+                    db.add(factor)
+                    await db.flush()  # factor_id를 얻기 위해 flush
+
+                # StrategyFactor 생성
+                strategy_factor = StrategyFactor(
+                    strategy_id=strategy_id,
+                    factor_id=factor_name,
+                    usage_type="SCREENING",  # 스크리닝용
+                    operator=operator.replace("<", "LT").replace(">", "GT").replace("==", "EQ"),
+                    threshold_value=threshold,
+                    weight=Decimal("1.0"),
+                    direction="POSITIVE"
+                )
+                db.add(strategy_factor)
+                logger.info(f"StrategyFactor 추가됨: {factor_name}")
+
+        # 우선순위 팩터도 추가 (정렬용)
+        if request.priority_factor and request.priority_factor != "없음":
+            priority_factor_query = select(Factor).where(Factor.factor_id == request.priority_factor)
+            priority_factor_result = await db.execute(priority_factor_query)
+            priority_factor = priority_factor_result.scalar_one_or_none()
+
+            if not priority_factor:
+                priority_factor = Factor(
+                    factor_id=request.priority_factor,
+                    factor_name=request.priority_factor,
+                    calculation_type="FUNDAMENTAL",
+                    description=f"Priority factor"
+                )
+                db.add(priority_factor)
+                await db.flush()
+
+            priority_strategy_factor = StrategyFactor(
+                strategy_id=strategy_id,
+                factor_id=request.priority_factor,
+                usage_type="SCORING",  # 점수 계산용
+                weight=Decimal("1.0"),
+                direction="POSITIVE" if request.priority_order == "desc" else "NEGATIVE"
+            )
+            db.add(priority_strategy_factor)
+
+        # 7. 세션 생성
         session = SimulationSession(
             session_id=session_id,
             strategy_id=strategy_id,
-            start_date=request.start_date,
-            end_date=request.end_date,
-            initial_capital=Decimal(str(request.initial_capital)),
-            benchmark=request.benchmark,
+            start_date=start_date,
+            end_date=end_date,
+            initial_capital=initial_capital,
+            benchmark="KOSPI",
             status="PENDING",
             progress=0,
             created_at=datetime.now()
@@ -196,15 +329,19 @@ async def run_backtest(
 
         await db.commit()
 
-        # 6. 백그라운드에서 백테스트 실행 (asyncio.create_task 사용)
+        # 7. 백그라운드에서 백테스트 실행
+        logger.info(f"백테스트 시작 - Session: {session_id}, Strategy: {request.strategy_name}")
+        logger.info(f"Start date: {start_date}, End date: {end_date}, Initial capital: {initial_capital}")
+        logger.info(f"Target stocks (테마): {request.target_stocks}")
         asyncio.create_task(
             execute_backtest_wrapper(
                 session_id,
                 strategy_id,
-                request.start_date,
-                request.end_date,
-                request.initial_capital,
-                request.benchmark
+                start_date,
+                end_date,
+                initial_capital,
+                "KOSPI",
+                request.target_stocks  # 테마 목록 전달
             )
         )
 
@@ -216,7 +353,7 @@ async def run_backtest(
         )
 
     except Exception as e:
-        logger.error(f"백테스트 실행 실패: {e}")
+        logger.error(f"백테스트 실행 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -273,6 +410,7 @@ async def get_backtest_result(
                 total_trades=0,
                 winning_trades=0,
                 losing_trades=0,
+                initial_capital=float(session.initial_capital),
                 final_capital=float(session.initial_capital)
             ),
             trades=[],
@@ -289,12 +427,11 @@ async def get_backtest_result(
     if not stats:
         raise HTTPException(status_code=404, detail="백테스트 통계를 찾을 수 없습니다")
 
-    # 3. 거래 내역 조회 (최대 100개)
+    # 3. 거래 내역 조회 (전체 조회 - FIFO 매칭을 위해 시간순 정렬)
     trades_query = (
         select(SimulationTrade)
         .where(SimulationTrade.session_id == backtest_id)
-        .order_by(SimulationTrade.trade_date.desc())
-        .limit(100)
+        .order_by(SimulationTrade.trade_date.asc(), SimulationTrade.trade_id.asc())
     )
     trades_result = await db.execute(trades_query)
     trades = trades_result.scalars().all()
@@ -317,19 +454,23 @@ async def get_backtest_result(
     # 종목 코드 → 종목명 매핑
     stock_name_map = {company.stock_code: company.company_name for company in companies}
 
-    # 6. 데이터 변환 - 매수/매도 거래를 매칭
+    # 6. 데이터 변환 - 매수/매도 거래를 매칭 (FIFO: 시간순으로 매칭)
     trade_list = []
-    buy_trades_by_stock = {}
+    buy_trades_by_stock = {}  # {stock_code: [list of BUY trades]}
 
-    # 먼저 모든 BUY 거래를 수집
+    # 먼저 모든 BUY 거래를 종목별로 수집 (시간순)
     for trade in trades:
         if trade.trade_type == "BUY":
-            buy_trades_by_stock[trade.stock_code] = trade
+            if trade.stock_code not in buy_trades_by_stock:
+                buy_trades_by_stock[trade.stock_code] = []
+            buy_trades_by_stock[trade.stock_code].append(trade)
 
-    # SELL 거래를 처리하며 대응하는 BUY 거래 찾기
+    # SELL 거래를 처리하며 대응하는 BUY 거래 찾기 (FIFO)
     for trade in trades:
         if trade.trade_type == "SELL" and trade.realized_pnl is not None:
-            buy_trade = buy_trades_by_stock.get(trade.stock_code)
+            # 해당 종목의 BUY 거래 큐에서 가장 오래된 것(첫 번째) 가져오기
+            buy_trades = buy_trades_by_stock.get(trade.stock_code, [])
+            buy_trade = buy_trades.pop(0) if buy_trades else None
 
             trade_list.append(BacktestTrade(
                 stock_name=stock_name_map.get(trade.stock_code, trade.stock_code),
@@ -347,7 +488,12 @@ async def get_backtest_result(
     yield_points = [
         BacktestYieldPoint(
             date=dv.date.isoformat(),
-            value=float(dv.cumulative_return) if dv.cumulative_return else 0
+            portfolio_value=int(dv.portfolio_value) if dv.portfolio_value else 0,
+            cash=int(dv.cash) if dv.cash else 0,
+            position_value=int(dv.position_value) if dv.position_value else 0,
+            daily_return=float(dv.daily_return) if dv.daily_return else 0,
+            cumulative_return=float(dv.cumulative_return) if dv.cumulative_return else 0,
+            value=float(dv.cumulative_return) if dv.cumulative_return else 0  # 차트용 (하위 호환성)
         )
         for dv in daily_values
     ]
@@ -356,18 +502,18 @@ async def get_backtest_result(
         id=backtest_id,
         status="completed",
         statistics=BacktestResultStatistics(
-            total_return=float(stats.total_return),
-            annualized_return=float(stats.annualized_return),
-            max_drawdown=float(stats.max_drawdown),
-            volatility=float(stats.volatility),
-            sharpe_ratio=float(stats.sharpe_ratio),
-            win_rate=float(stats.win_rate),
+            total_return=float(stats.total_return) if stats.total_return is not None else 0,
+            annualized_return=float(stats.annualized_return) if stats.annualized_return is not None else 0,
+            max_drawdown=float(stats.max_drawdown) if stats.max_drawdown is not None else 0,
+            volatility=float(stats.volatility) if stats.volatility is not None else 0,
+            sharpe_ratio=float(stats.sharpe_ratio) if stats.sharpe_ratio is not None else 0,
+            win_rate=float(stats.win_rate) if stats.win_rate is not None else 0,
             profit_factor=float(stats.profit_factor) if stats.profit_factor else 0,
-            total_trades=stats.total_trades,
-            winning_trades=stats.winning_trades,
-            losing_trades=stats.losing_trades,
-            initial_capital=float(session.initial_capital),
-            final_capital=float(stats.final_capital)
+            total_trades=stats.total_trades or 0,
+            winning_trades=stats.winning_trades or 0,
+            losing_trades=stats.losing_trades or 0,
+            initial_capital=int(session.initial_capital) if session.initial_capital is not None else 0,
+            final_capital=int(stats.final_capital) if stats.final_capital is not None else 0
         ),
         trades=trade_list,
         yield_points=yield_points,
@@ -395,41 +541,37 @@ async def get_backtest_trades(
     if not session:
         raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
 
-    # 2. 모든 BUY 거래를 먼저 조회 (매칭용)
-    buy_trades_query = select(SimulationTrade).where(
-        SimulationTrade.session_id == backtest_id,
-        SimulationTrade.trade_type == "BUY"
-    )
-    buy_trades_result = await db.execute(buy_trades_query)
-    all_buy_trades = buy_trades_result.scalars().all()
-
-    # BUY 거래를 종목 코드별로 매핑
-    buy_trades_by_stock = {}
-    for trade in all_buy_trades:
-        buy_trades_by_stock[trade.stock_code] = trade
-
-    # 3. 거래 내역 조회 (페이지네이션)
-    offset = (page - 1) * limit
-    trades_query = (
+    # 2. 모든 거래를 시간순으로 조회 (FIFO 매칭용)
+    all_trades_query = (
         select(SimulationTrade)
         .where(SimulationTrade.session_id == backtest_id)
-        .order_by(SimulationTrade.trade_date.desc())
-        .limit(limit)
-        .offset(offset)
+        .order_by(SimulationTrade.trade_date.asc(), SimulationTrade.trade_id.asc())
     )
-    trades_result = await db.execute(trades_query)
-    trades = trades_result.scalars().all()
+    all_trades_result = await db.execute(all_trades_query)
+    all_trades = all_trades_result.scalars().all()
 
-    # 4. 총 거래 수 조회
-    from sqlalchemy import func
-    count_query = select(func.count()).select_from(SimulationTrade).where(
-        SimulationTrade.session_id == backtest_id
-    )
-    count_result = await db.execute(count_query)
-    total_count = count_result.scalar() or 0
+    # BUY 거래를 종목 코드별로 리스트로 매핑 (FIFO)
+    buy_trades_by_stock = {}  # {stock_code: [list of BUY trades]}
+    sell_trades_list = []  # matched SELL trades
 
-    # 5. 종목 코드 목록 추출 및 종목명 조회
-    stock_codes = list(set([trade.stock_code for trade in trades]))
+    for trade in all_trades:
+        if trade.trade_type == "BUY":
+            if trade.stock_code not in buy_trades_by_stock:
+                buy_trades_by_stock[trade.stock_code] = []
+            buy_trades_by_stock[trade.stock_code].append(trade)
+        elif trade.trade_type == "SELL" and trade.realized_pnl is not None:
+            # FIFO: 가장 오래된 BUY 거래와 매칭
+            buy_trades = buy_trades_by_stock.get(trade.stock_code, [])
+            buy_trade = buy_trades.pop(0) if buy_trades else None
+            sell_trades_list.append((trade, buy_trade))
+
+    # 3. 페이지네이션 적용 (SELL 거래 기준)
+    total_count = len(sell_trades_list)
+    offset = (page - 1) * limit
+    paginated_trades = sell_trades_list[offset:offset + limit]
+
+    # 4. 종목 코드 목록 추출 및 종목명 조회
+    stock_codes = list(set([sell_trade.stock_code for sell_trade, _ in paginated_trades]))
     companies_query = select(Company).where(Company.stock_code.in_(stock_codes))
     companies_result = await db.execute(companies_query)
     companies = companies_result.scalars().all()
@@ -437,26 +579,21 @@ async def get_backtest_trades(
     # 종목 코드 → 종목명 매핑
     stock_name_map = {company.stock_code: company.company_name for company in companies}
 
-    # 6. 데이터 변환 - 매수/매도 거래를 매칭
+    # 5. 데이터 변환
     trade_list = []
-
-    # SELL 거래를 처리하며 대응하는 BUY 거래 찾기
-    for trade in trades:
-        if trade.trade_type == "SELL" and trade.realized_pnl is not None:
-            buy_trade = buy_trades_by_stock.get(trade.stock_code)
-
-            trade_list.append({
-                "stockName": stock_name_map.get(trade.stock_code, trade.stock_code),
-                "stockCode": trade.stock_code,
-                "buyPrice": float(buy_trade.price) if buy_trade else 0.0,
-                "sellPrice": float(trade.price),
-                "profit": float(trade.realized_pnl),
-                "profitRate": float(trade.return_pct) if trade.return_pct else 0.0,
-                "buyDate": buy_trade.trade_date.isoformat() if buy_trade else "",
-                "sellDate": trade.trade_date.isoformat(),
-                "weight": float(trade.amount / session.initial_capital * 100) if session.initial_capital else 0.0,
-                "valuation": float(trade.amount)
-            })
+    for sell_trade, buy_trade in paginated_trades:
+        trade_list.append({
+            "stockName": stock_name_map.get(sell_trade.stock_code, sell_trade.stock_code),
+            "stockCode": sell_trade.stock_code,
+            "buyPrice": float(buy_trade.price) if buy_trade else 0.0,
+            "sellPrice": float(sell_trade.price),
+            "profit": float(sell_trade.realized_pnl),
+            "profitRate": float(sell_trade.return_pct) if sell_trade.return_pct else 0.0,
+            "buyDate": buy_trade.trade_date.isoformat() if buy_trade else "",
+            "sellDate": sell_trade.trade_date.isoformat(),
+            "weight": float(sell_trade.amount / session.initial_capital * 100) if session.initial_capital else 0.0,
+            "valuation": float(sell_trade.amount)
+        })
 
     return {
         "data": trade_list,
@@ -505,12 +642,13 @@ async def execute_backtest_wrapper(
     start_date: date,
     end_date: date,
     initial_capital: float,
-    benchmark: str
+    benchmark: str,
+    target_stocks: List[str]  # 테마 목록 추가
 ):
-    """백테스트 비동기 실행 래퍼 (동기 버전 사용)"""
+    """백테스트 비동기 실행 래퍼 (고도화된 백테스트 사용)"""
     try:
-        # 동기 백테스트 실행 (greenlet 이슈 회피)
-        from app.services.simple_backtest import run_simple_backtest
+        # 고도화된 백테스트 실행
+        from app.services.advanced_backtest import run_advanced_backtest
 
         # 동기 함수를 별도 스레드에서 실행
         import asyncio
@@ -518,13 +656,14 @@ async def execute_backtest_wrapper(
 
         await loop.run_in_executor(
             None,
-            run_simple_backtest,
+            run_advanced_backtest,
             session_id,
             strategy_id,
             start_date,
             end_date,
             Decimal(str(initial_capital)),
-            benchmark
+            benchmark,
+            target_stocks
         )
 
         logger.info(f"백테스트 완료: {session_id}")
@@ -584,11 +723,11 @@ async def list_available_factors():
     }
 
 
-@router.get("/functions/list")
-async def list_available_functions():
+@router.get("/sub-factors/list")
+async def list_available_sub_factors():
     """사용 가능한 함수 목록"""
     return {
-        "functions": [
+        "sub_factors": [
             {"id": "AND", "name": "AND 조건", "description": "모든 조건이 참일 때"},
             {"id": "OR", "name": "OR 조건", "description": "하나 이상의 조건이 참일 때"},
             {"id": "NOT", "name": "NOT 조건", "description": "조건이 거짓일 때"},
@@ -601,3 +740,42 @@ async def list_available_functions():
             {"id": "COMPARE", "name": "비교", "description": "두 값을 비교"}
         ]
     }
+
+
+@router.get("/themes/list")
+async def list_available_themes():
+    """사용 가능한 테마 목록"""
+    return {
+        "sectors": [
+            {"id": "construction", "name": "건설"},
+            {"id": "metal", "name": "금속"},
+            {"id": "finance", "name": "금융"},
+            {"id": "machinery", "name": "기계 / 장비"},
+            {"id": "other-finance", "name": "기타 금융"},
+            {"id": "other-manufacturing", "name": "기타 제조"},
+            {"id": "other", "name": "기타"},
+            {"id": "agriculture", "name": "농업 / 임업 / 어업"},
+            {"id": "insurance", "name": "보험"},
+            {"id": "real-estate", "name": "부동산"},
+            {"id": "non-metal", "name": "비금속"},
+            {"id": "textile", "name": "섬유 / 의류"},
+            {"id": "entertainment", "name": "오락 / 문화"},
+            {"id": "transport", "name": "운송 / 창고"},
+            {"id": "transport-equipment", "name": "운송장비 / 부품"},
+            {"id": "distribution", "name": "유통"},
+            {"id": "bank", "name": "은행"},
+            {"id": "food", "name": "음식료 / 담배"},
+            {"id": "medical", "name": "의료 / 정밀기기"},
+            {"id": "service", "name": "일반 서비스"},
+            {"id": "utility", "name": "전기 / 가스 / 수도"},
+            {"id": "electronics", "name": "전기 / 전자"},
+            {"id": "pharma", "name": "제약"},
+            {"id": "paper", "name": "종이 / 목재"},
+            {"id": "securities", "name": "증권"},
+            {"id": "publishing", "name": "출판 / 매체 복제"},
+            {"id": "telecom", "name": "통신"},
+            {"id": "chemical", "name": "화학"},
+            {"id": "it-service", "name": "IT서비스"},
+        ]
+    }
+

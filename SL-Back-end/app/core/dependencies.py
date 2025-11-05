@@ -6,6 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
+from uuid import UUID
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
@@ -45,8 +46,13 @@ async def get_current_user(
     if payload is None:
         raise credentials_exception
 
-    user_id: Optional[int] = payload.get("user_id")
-    if user_id is None:
+    user_id_str: Optional[str] = payload.get("user_id")
+    if user_id_str is None:
+        raise credentials_exception
+
+    try:
+        user_id: UUID = UUID(user_id_str)
+    except (ValueError, AttributeError):
         raise credentials_exception
 
     # DB에서 유저 조회

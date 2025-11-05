@@ -71,10 +71,13 @@ SL-Back-end/
 ### User 모델 (`app/models/user.py`)
 
 ```python
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
+
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
     phone_number = Column(String(20), unique=True, index=True, nullable=False)
@@ -86,7 +89,7 @@ class User(Base):
 ```
 
 **필드 설명:**
-- `id`: 기본키, 자동 증가 (유니크)
+- `id`: 기본키, UUID 타입 (자동 생성, 유니크)
 - `name`: 사용자 이름 (일반 필드, 중복 허용)
 - `email`: 이메일 주소 (유니크, 인덱싱)
 - `phone_number`: 전화번호 (유니크, 인덱싱, 숫자만 허용)
@@ -99,6 +102,11 @@ class User(Base):
 **Unique 제약조건:**
 - `id`, `email`, `phone_number`만 unique 설정
 - `name`은 중복 허용
+
+**UUID 사용 이유:**
+- 보안성 향상: 순차적 ID보다 예측 불가능
+- 분산 시스템에서 ID 충돌 방지
+- 외부 노출 시 시스템 규모 추정 방지
 
 ---
 
@@ -134,7 +142,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
     JWT 액세스 토큰 생성
-    - 페이로드에 user_id, email 포함
+    - 페이로드에 user_id (문자열로 변환된 UUID), email 포함
     - 만료 시간 설정 (기본: 30분)
     - HS256 알고리즘 사용
     """
@@ -149,6 +157,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
     return encoded_jwt
+
+# 로그인 시 토큰 생성 예시
+access_token = create_access_token(
+    data={"user_id": str(user.id), "email": user.email}  # UUID를 문자열로 변환
+)
 ```
 
 #### 토큰 디코딩
@@ -173,6 +186,8 @@ security = HTTPBearer()
 
 #### 현재 유저 가져오기
 ```python
+from uuid import UUID
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
@@ -180,7 +195,7 @@ async def get_current_user(
     """
     Authorization 헤더에서 JWT 토큰 추출 및 검증
     1. 토큰 디코딩
-    2. user_id 추출
+    2. user_id (문자열) 추출 및 UUID로 변환
     3. DB에서 유저 조회
     4. 활성화 상태 확인
     """
@@ -190,7 +205,15 @@ async def get_current_user(
     if payload is None:
         raise HTTPException(status_code=401, detail="인증 정보를 확인할 수 없습니다")
 
-    user_id = payload.get("user_id")
+    user_id_str = payload.get("user_id")
+    if user_id_str is None:
+        raise HTTPException(status_code=401, detail="인증 정보를 확인할 수 없습니다")
+
+    try:
+        user_id = UUID(user_id_str)  # 문자열을 UUID로 변환
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=401, detail="인증 정보를 확인할 수 없습니다")
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
@@ -226,7 +249,7 @@ async def get_current_user(
 #### 응답 (201 Created)
 ```json
 {
-  "id": 1,
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "name": "홍길동",
   "email": "user@example.com",
   "phone_number": "01012345678",
@@ -274,7 +297,7 @@ Authorization: Bearer <access_token>
 #### 응답 (200 OK)
 ```json
 {
-  "id": 1,
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "name": "홍길동",
   "email": "user@example.com",
   "phone_number": "01012345678",
@@ -293,6 +316,9 @@ Authorization: Bearer <access_token>
 ### 4. 특정 유저 정보 조회
 **GET** `/api/v1/auth/users/{user_id}`
 
+#### 경로 파라미터
+- `user_id`: UUID 형식의 유저 ID (예: `550e8400-e29b-41d4-a716-446655440000`)
+
 #### 헤더
 ```
 Authorization: Bearer <access_token>
@@ -301,7 +327,7 @@ Authorization: Bearer <access_token>
 #### 응답 (200 OK)
 ```json
 {
-  "id": 1,
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "name": "홍길동",
   "email": "user@example.com",
   "phone_number": "01012345678",
@@ -365,7 +391,7 @@ sequenceDiagram
     API->>Security: verify_password(password, hashed_password)
     Security-->>API: True/False
     API->>API: is_active 확인
-    API->>Security: create_access_token({user_id, email})
+    API->>Security: create_access_token({user_id: str(UUID), email})
     Security-->>API: JWT token
     API-->>Client: Token (200)
 ```
@@ -375,7 +401,7 @@ sequenceDiagram
 2. DB에서 이메일로 유저 조회
 3. bcrypt로 비밀번호 검증
 4. 계정 활성화 상태 확인
-5. JWT 토큰 생성 (user_id, email 포함)
+5. JWT 토큰 생성 (user_id를 문자열로 변환, email 포함)
 6. 토큰 반환
 
 ---
@@ -393,8 +419,9 @@ sequenceDiagram
     Client->>API: GET /api/v1/auth/me (Bearer token)
     API->>Dependencies: get_current_user(token)
     Dependencies->>Security: decode_access_token(token)
-    Security-->>Dependencies: payload (user_id, email)
-    Dependencies->>DB: User 조회 (user_id)
+    Security-->>Dependencies: payload (user_id: str, email)
+    Dependencies->>Dependencies: UUID(user_id_str) 변환
+    Dependencies->>DB: User 조회 (UUID)
     DB-->>Dependencies: User
     Dependencies->>Dependencies: is_active 확인
     Dependencies-->>API: User
@@ -405,11 +432,12 @@ sequenceDiagram
 1. 클라이언트가 Authorization 헤더에 Bearer 토큰 포함하여 요청
 2. FastAPI 의존성 함수 (`get_current_user`) 실행
 3. JWT 토큰 디코딩 및 검증
-4. 토큰에서 user_id 추출
-5. DB에서 유저 조회
-6. 계정 활성화 상태 확인
-7. 유저 객체 반환
-8. 엔드포인트 로직 실행
+4. 토큰에서 user_id (문자열) 추출
+5. 문자열을 UUID로 변환
+6. DB에서 유저 조회
+7. 계정 활성화 상태 확인
+8. 유저 객체 반환
+9. 엔드포인트 로직 실행
 
 ---
 

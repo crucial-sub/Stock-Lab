@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from uuid import UUID
 
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
@@ -119,7 +120,7 @@ async def login(
 
     # JWT 토큰 생성
     access_token = create_access_token(
-        data={"user_id": user.id, "email": user.email}
+        data={"user_id": str(user.id), "email": user.email}
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
@@ -143,7 +144,7 @@ async def get_current_user_info(
 
 @router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user_by_id(
-    user_id: int,
+    user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -151,7 +152,7 @@ async def get_user_by_id(
     특정 유저 정보 조회
 
     Args:
-        user_id: 조회할 유저 ID
+        user_id: 조회할 유저 ID (UUID)
         db: 데이터베이스 세션
         current_user: 현재 로그인한 유저 (인증 필요)
 

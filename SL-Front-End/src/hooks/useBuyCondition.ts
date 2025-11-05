@@ -1,6 +1,7 @@
 import {
   DEFAULT_COMMISSION_RATE,
-  DEFAULT_DATE,
+  DEFAULT_START_DATE,
+  DEFAULT_END_DATE,
   DEFAULT_INVESTMENT_AMOUNT,
   DEFAULT_MAX_POSITIONS,
   DEFAULT_POSITION_SIZE,
@@ -52,7 +53,8 @@ export function useBuyCondition() {
     toggleState,
     defaults: {
       investmentAmount: DEFAULT_INVESTMENT_AMOUNT,
-      date: DEFAULT_DATE,
+      startDate: DEFAULT_START_DATE,
+      endDate: DEFAULT_END_DATE,
       commissionRate: DEFAULT_COMMISSION_RATE,
       positionSize: DEFAULT_POSITION_SIZE,
       maxPositions: DEFAULT_MAX_POSITIONS,

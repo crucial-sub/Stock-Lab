@@ -18,20 +18,20 @@ from app.api.routes import backtest, auth
 
 settings = get_settings()
 
-# # 로깅 설정
-# os.makedirs("logs", exist_ok=True)
-# logging.basicConfig(
-#     level=getattr(logging, settings.LOG_LEVEL),
-#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#     handlers=[
-#         RotatingFileHandler(
-#             settings.LOG_FILE,
-#             maxBytes=10*1024*1024,  # 10MB
-#             backupCount=5
-#         ),
-#         logging.StreamHandler()
-#     ]
-# )
+# 로깅 설정
+os.makedirs("logs", exist_ok=True)
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        RotatingFileHandler(
+            settings.LOG_FILE,
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5
+        ),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 
 

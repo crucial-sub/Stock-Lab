@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Users 테이블 생성
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     phone_number VARCHAR(20) UNIQUE NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- 인덱스 생성
-CREATE INDEX IF NOT EXISTS idx_users_id ON users(id);
+CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number);
 

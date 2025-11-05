@@ -57,7 +57,7 @@ http://localhost:8000/api/v1
 
 // 유저 정보
 export interface User {
-  id: string; // UUID
+  user_id: string; // UUID
   name: string;
   email: string;
   phone_number: string;

@@ -101,11 +101,13 @@ export function useBacktestListQuery(params?: PaginationParams) {
  *
  * @param backtestId - 백테스트 ID
  * @param limit - 페이지당 아이템 수
+ * @param enabled - 쿼리 활성화 여부 (기본값: true)
  * @returns 무한 스크롤 쿼리
  */
 export function useBacktestTradesInfiniteQuery(
   backtestId: string,
   limit = 50,
+  enabled = true,
 ) {
   return useInfiniteQuery<
     PaginatedResponse<BacktestResult["trades"][number]>,
@@ -119,7 +121,7 @@ export function useBacktestTradesInfiniteQuery(
       const { page, totalPages } = lastPage.pagination;
       return page < totalPages ? page + 1 : undefined;
     },
-    enabled: !!backtestId,
+    enabled: enabled && !!backtestId,
   });
 }
 

@@ -1,5 +1,5 @@
-import type { BacktestRunRequest } from "@/types/api";
 import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
+import type { BacktestRunRequest } from "@/types/api";
 import { create } from "zustand";
 
 /**
@@ -30,7 +30,9 @@ interface BacktestConfigStore extends BacktestRunRequest {
   // 매도 조건 업데이트
   setTargetAndLoss: (value: BacktestRunRequest["target_and_loss"]) => void;
   setHoldDays: (value: BacktestRunRequest["hold_days"]) => void;
-  setSellConditions: (value: BacktestRunRequest["sell_conditions"]) => void;
+  setConditionSell: (value: BacktestRunRequest["condition_sell"]) => void;
+
+
   // setTargetStocks: (stocks: string[]) => void;
 
   // 모든 설정 초기화
@@ -71,7 +73,7 @@ const defaultConfig: BacktestRunRequest = {
     stop_loss: 10, // 손절가 10%
   },
   hold_days: null, // 토글 off
-  sell_conditions: null, // 토글 off
+  condition_sell: null, // 토글 off
   target_stocks: [], // 빈 배열 (모든 체크박스 해제)
 };
 
@@ -112,7 +114,8 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
   // 매도 조건 업데이트 함수들
   setTargetAndLoss: (value) => set({ target_and_loss: value }),
   setHoldDays: (value) => set({ hold_days: value }),
-  setSellConditions: (value) => set({ sell_conditions: value }),
+  setConditionSell: (value) => set({ condition_sell: value }),
+
   // setTargetStocks: (stocks) => set({ target_stocks: stocks }),
 
   // 초기화 함수
@@ -140,7 +143,7 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
       buy_cost_basis: state.buy_cost_basis,
       target_and_loss: state.target_and_loss,
       hold_days: state.hold_days,
-      sell_conditions: state.sell_conditions,
+      condition_sell: state.condition_sell,
       target_stocks: state.target_stocks,
     };
   },

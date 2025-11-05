@@ -32,14 +32,14 @@ export function QuantNewPageClient() {
   // 로딩 상태 표시
   if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes) {
     return (
-      <div className="min-h-screen bg-bg-app flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-text-secondary">데이터를 불러오는 중...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-bg-app">
+    <div className="min-h-screen">
       <div className="quant-container py-8 space-y-6">
         {/* 데이터 로드 확인 (개발용) */}
         {process.env.NODE_ENV === "development" && (

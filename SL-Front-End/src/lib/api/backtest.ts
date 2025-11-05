@@ -46,7 +46,7 @@ export async function getBacktestResult(
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
   const response = await axios.get<BacktestResult>(
-    `/backtest/${backtestId}`,
+    `/backtest/${backtestId}/result`,
   );
   return response.data;
 }

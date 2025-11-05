@@ -48,3 +48,5 @@ next-env.d.ts
 
 __pycache__/
 .DS_Store
+SL-Back-end/logs/quant_api.log
+.venv/

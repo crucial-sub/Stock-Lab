@@ -224,28 +224,31 @@ export function QuantConfirmPageClient() {
           )}
 
           {/* 조건 매도 */}
-          {config.sell_conditions && (
+          {config.condition_sell && (
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-white">조건 매도</h3>
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-state-negative font-medium w-8">
-                    {config.sell_conditions.name}:
-                  </span>
-                  <span className="text-white">
-                    {config.sell_conditions.expression}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
+                {config.condition_sell.sell_conditions.map((condition) => (
+                  <div
+                    key={condition.name}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <span className="text-state-negative font-medium w-8">
+                      {condition.name}:
+                    </span>
+                    <span className="text-white">{condition.expression}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 text-sm mt-2">
                   <span className="text-text-secondary">논리 조건식:</span>
                   <span className="text-white font-medium">
-                    {config.sell_conditions.sell_logic || "없음"}
+                    {config.condition_sell.sell_logic || "없음"}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-text-secondary">매도 가격 기준:</span>
                   <span className="text-white font-medium">
-                    {config.sell_conditions.sell_cost_basis}
+                    {config.condition_sell.sell_cost_basis}
                   </span>
                 </div>
               </div>
@@ -254,7 +257,7 @@ export function QuantConfirmPageClient() {
 
           {!config.target_and_loss &&
             !config.hold_days &&
-            !config.sell_conditions && (
+            !config.condition_sell && (
               <div className="text-text-tertiary text-sm">
                 설정된 매도 조건이 없습니다
               </div>

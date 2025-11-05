@@ -29,7 +29,7 @@ class UserUpdate(BaseModel):
 
 class UserInDB(UserBase):
     """DB에 저장된 User 스키마"""
-    id: UUID
+    user_id: UUID
     is_active: bool
     is_superuser: bool
     created_at: datetime
@@ -40,7 +40,7 @@ class UserInDB(UserBase):
 
 class UserResponse(UserBase):
     """유저 정보 응답 스키마 (비밀번호 제외)"""
-    id: UUID
+    user_id: UUID
     is_active: bool
     is_superuser: bool
     created_at: datetime

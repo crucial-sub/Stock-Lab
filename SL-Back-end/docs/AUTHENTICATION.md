@@ -77,7 +77,7 @@ import uuid
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
     phone_number = Column(String(20), unique=True, index=True, nullable=False)
@@ -89,7 +89,7 @@ class User(Base):
 ```
 
 **필드 설명:**
-- `id`: 기본키, UUID 타입 (자동 생성, 유니크)
+- `user_id`: 기본키, UUID 타입 (자동 생성, 유니크)
 - `name`: 사용자 이름 (일반 필드, 중복 허용)
 - `email`: 이메일 주소 (유니크, 인덱싱)
 - `phone_number`: 전화번호 (유니크, 인덱싱, 숫자만 허용)
@@ -100,7 +100,7 @@ class User(Base):
 - `updated_at`: 수정 시각
 
 **Unique 제약조건:**
-- `id`, `email`, `phone_number`만 unique 설정
+- `user_id`, `email`, `phone_number`만 unique 설정
 - `name`은 중복 허용
 
 **UUID 사용 이유:**
@@ -160,7 +160,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 # 로그인 시 토큰 생성 예시
 access_token = create_access_token(
-    data={"user_id": str(user.id), "email": user.email}  # UUID를 문자열로 변환
+    data={"user_id": str(user.user_id), "email": user.email}  # UUID를 문자열로 변환
 )
 ```
 
@@ -214,7 +214,7 @@ async def get_current_user(
     except (ValueError, AttributeError):
         raise HTTPException(status_code=401, detail="인증 정보를 확인할 수 없습니다")
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.user_id == user_id))
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
@@ -249,7 +249,7 @@ async def get_current_user(
 #### 응답 (201 Created)
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
   "name": "홍길동",
   "email": "user@example.com",
   "phone_number": "01012345678",
@@ -297,7 +297,7 @@ Authorization: Bearer <access_token>
 #### 응답 (200 OK)
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
   "name": "홍길동",
   "email": "user@example.com",
   "phone_number": "01012345678",
@@ -327,7 +327,7 @@ Authorization: Bearer <access_token>
 #### 응답 (200 OK)
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
   "name": "홍길동",
   "email": "user@example.com",
   "phone_number": "01012345678",

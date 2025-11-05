@@ -120,7 +120,7 @@ async def login(
 
     # JWT 토큰 생성
     access_token = create_access_token(
-        data={"user_id": str(user.id), "email": user.email}
+        data={"user_id": str(user.user_id), "email": user.email}
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
@@ -162,7 +162,7 @@ async def get_user_by_id(
     Raises:
         HTTPException: 유저를 찾을 수 없는 경우
     """
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.user_id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:

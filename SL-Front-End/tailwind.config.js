@@ -40,6 +40,9 @@ module.exports = {
           "Segoe UI /* Windows system font */",
           "sans-serif /* generic fallback */",
         ],
+        circular: ["Circular Std", "sans-serif"],
+        jetbrains: ["JetBrains Mono", "monospace"],
+
       },
       colors: {
         bg: {

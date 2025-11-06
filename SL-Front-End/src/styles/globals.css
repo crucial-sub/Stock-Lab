@@ -12,66 +12,149 @@
   font-display: swap;
 }
 
-:root {
-  color-scheme: dark;
+@font-face {
+  font-family: "Circular Std";
+  src: url("/fonts/circular-std/CircularStd-Book.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
-  /* Background */
-  --bg-app: #000000;
-  --bg-ellipse: #2d2d2d;
-  --bg-surface: rgba(255, 255, 255, 0.2);
-  --bg-surface-elevated: rgba(255, 255, 255, 0.2);
-  --bg-overlay: rgba(0, 0, 0, 0.9);
-  --bg-shine: rgba(255, 255, 255, 0.2);
+@font-face {
+  font-family: "Circular Std";
+  src: url("/fonts/circular-std/CircularStd-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Circular Std";
+  src: url("/fonts/circular-std/CircularStd-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Figma base tokens */
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: #ffffff;
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #030213;
+  --primary-foreground: #ffffff;
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(3, 2, 19, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius-base: 0.625rem;
+
+  /* App-specific tokens */
+  --bg-app: var(--background);
+  --bg-ellipse: #f4f5f9;
+  --bg-surface: var(--card);
+  --bg-surface-elevated: var(--accent);
+  --bg-overlay: rgba(3, 2, 19, 0.65);
+  --bg-shine: rgba(3, 2, 19, 0.06);
 
   /* Text */
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0a0;
-  --text-tertiary: #737373;
-  --text-quarternary: #969696;
-  --text-disabled: #737373;
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-tertiary: rgba(3, 2, 19, 0.55);
+  --text-quarternary: rgba(3, 2, 19, 0.35);
+  --text-disabled: rgba(3, 2, 19, 0.28);
 
-  /* Brand (#E38832) */
-  --brand: #e38832;
-  --brand-strong: #e38832;
-  --brand-weak: rgba(227, 136, 50, 0.2);
-  --brand-ring: rgba(227, 136, 50, 0.3);
-  --brand-filter-selected: rgba(227, 136, 53, 0.3);
+  /* Brand */
+  --brand: var(--primary);
+  --brand-strong: var(--primary);
+  --brand-weak: rgba(3, 2, 19, 0.08);
+  --brand-ring: rgba(3, 2, 19, 0.12);
+  --brand-filter-selected: rgba(3, 2, 19, 0.07);
 
   /* State - Korean Stock Market (Rise=Red, Fall=Blue) */
-  --state-positive: #ff555e; /* 상승 hover */
-  --state-positive-normal: #6c2f30; /* 상승 normal */
-  --state-negative: #7878ff; /* 하락 hover */
-  --state-negative-normal: #3232d0; /* 하락 normal */
-  --state-warning: #f2b950;
-  --state-info: #4d78ff;
+  --state-positive: var(--chart-1);
+  --state-positive-normal: var(--chart-5);
+  --state-negative: var(--chart-3);
+  --state-negative-normal: var(--chart-2);
+  --state-warning: var(--chart-4);
+  --state-info: var(--chart-2);
 
   /* Border */
-  --border-default: rgba(255, 255, 255, 0.5);
-  --border-strong: rgba(255, 255, 255, 1);
-  --border-subtle: rgba(160, 160, 160, 0.5);
-  --border-highlight: rgba(227, 136, 50, 0.5);
+  --border-default: var(--border);
+  --border-strong: rgba(3, 2, 19, 0.18);
+  --border-subtle: rgba(3, 2, 19, 0.08);
+  --border-highlight: rgba(3, 2, 19, 0.16);
 
   /* Radius */
   --radius-xs: 4px;
-  --radius-filter: 5px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-2xl: 24px;
+  --radius-filter: calc(var(--radius-base) - 6px);
+  --radius-sm: calc(var(--radius-base) - 4px);
+  --radius-md: calc(var(--radius-base) - 2px);
+  --radius-lg: var(--radius-base);
+  --radius-xl: calc(var(--radius-base) + 4px);
+  --radius-2xl: calc(var(--radius-base) + 8px);
 
-  /* Shadows Glassmorphic */
-  --shadow-brand-glow: 0px 0px 8px 2px rgba(227, 136, 50, 0.3);
-  --shadow-white-glow: 0px 0px 8px 2px rgba(255, 255, 255, 0.3);
-  --shadow-white-subtle: 0px 0px 4px 1px rgba(255, 255, 255, 0.3);
-  --shadow-ring: 0 0 0 1px rgba(255, 255, 255, 0.05);
+  /* Shadows */
+  --shadow-brand-glow: 0px 24px 48px rgba(3, 2, 19, 0.14);
+  --shadow-white-glow: 0px 12px 24px rgba(3, 2, 19, 0.12);
+  --shadow-white-subtle: 0px 6px 20px rgba(3, 2, 19, 0.08);
+  --shadow-ring: 0 0 0 1px rgba(3, 2, 19, 0.06);
 
   /* Checkbox */
-  --checkbox-selected: #e38832;
-  --checkbox-unselected: #737373;
+  --checkbox-selected: var(--primary);
+  --checkbox-unselected: rgba(3, 2, 19, 0.2);
 }
 
 @layer base {
+  html {
+    font-size: var(--font-size);
+    background-color: var(--bg-app);
+  }
+
+  *,
+  *::before,
+  *::after {
+    border-color: var(--border-default);
+  }
+
   html,
   body {
     min-height: 100%;
@@ -86,7 +169,7 @@
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    scrollbar-color: rgba(3, 2, 19, 0.2) transparent;
   }
 
   *::-webkit-scrollbar {
@@ -96,17 +179,17 @@
 
   *::-webkit-scrollbar-thumb {
     border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(3, 2, 19, 0.2);
   }
 
   a {
-    color: var(--brand-strong);
+    color: var(--primary);
     text-decoration: none;
     transition: color 0.2s ease;
   }
 
   a:hover {
-    color: var(--brand);
+    color: rgba(3, 2, 19, 0.65);
   }
 }
 
@@ -121,11 +204,9 @@
   /* Panel */
   .quant-panel {
     border-radius: var(--radius-md);
-    border: 0.5px solid var(--border-strong);
+    border: 1px solid var(--border-default);
     background: var(--bg-surface);
     box-shadow: var(--shadow-white-subtle);
-    -webkit-backdrop-filter: blur(50px);
-    backdrop-filter: blur(50px);
   }
 
   /* Filter Group */
@@ -134,12 +215,10 @@
     flex-direction: row;
     align-items: center;
     gap: 0;
-    padding: 4;
+    padding: 4px;
     background: var(--bg-surface);
-    border: 0.5px solid var(--border-strong);
+    border: 1px solid var(--border-subtle);
     box-shadow: var(--shadow-white-subtle);
-    -webkit-backdrop-filter: blur(50px);
-    backdrop-filter: blur(100px);
     border-radius: var(--radius-sm);
   }
 
@@ -149,7 +228,7 @@
     font-weight: 500;
     font-size: 1.2rem;
     line-height: 20px;
-    color: rgba(160, 160, 160, 1);
+    color: var(--text-secondary);
     background: transparent;
     border: none;
     cursor: pointer;
@@ -159,17 +238,17 @@
   }
 
   .filter-item.is-active {
-    background: rgba(214, 140, 71, 0.3);
-    color: #ffffff;
+    background: var(--brand-filter-selected);
+    color: var(--text-primary);
   }
 
   .filter-item + .filter-item::before {
     content: "";
     position: absolute;
-    left: 0px;
+    left: 0;
     top: 4px;
     bottom: 4px;
-    width: 0.5px;
+    width: 1px;
     background: var(--border-subtle);
   }
 
@@ -181,26 +260,25 @@
     list-style: none;
     width: 100%;
     height: 100%;
-    padding: 12px 0px;
+    padding: 12px 0;
     background: transparent;
-    border: 0.5px solid transparent;
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
     transition: all 0.2s ease;
     cursor: pointer;
   }
 
   .list-item:hover {
-    background: var(--bg-surface);
-    border: 0.5px solid var(--border-strong);
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-default);
     box-shadow: var(--shadow-brand-glow);
-    -webkit-backdrop-filter: blur(50px);
-    backdrop-filter: blur(50px);
   }
 
   /* Checkbox */
   .checkbox {
     width: 18px;
     height: 18px;
+    border-radius: 4px;
     background: var(--checkbox-unselected);
     cursor: pointer;
   }
@@ -221,25 +299,23 @@
     font-size: 16px;
     font-weight: 500;
     line-height: 19px;
-    color: var(--text-primary);
+    color: var(--text-secondary);
     background: var(--bg-surface);
-    border: 0.5px solid var(--border-subtle);
+    border: 1px solid var(--border-subtle);
     box-shadow: var(--shadow-white-subtle);
-    -webkit-backdrop-filter: blur(50px);
-    backdrop-filter: blur(50px);
     transition: all 0.2s ease;
     cursor: pointer;
   }
 
   .quant-tab:disabled {
-    font-weight: 300;
-    color: var(--text-secondary);
+    font-weight: 400;
+    color: var(--text-disabled);
+    cursor: not-allowed;
   }
 
   .quant-tab.is-active {
     background: var(--brand-filter-selected);
-    -webkit-backdrop-filter: blur(5px);
-    backdrop-filter: blur(5px);
+    color: var(--text-primary);
   }
 
   /* Search Input */
@@ -250,14 +326,14 @@
     align-items: center;
     padding: 8px 0;
     width: 100%;
-    height: 33px;
+    height: 40px;
     background: transparent;
     border: none;
-    border-bottom: 0.5px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
     font-family: "Pretendard Variable", sans-serif;
     font-weight: 300;
     font-size: 14px;
-    line-height: 17px;
+    line-height: 20px;
     letter-spacing: -0.03em;
     color: var(--text-primary);
     transition: border-color 0.2s ease;
@@ -266,22 +342,6 @@
   .search-input:focus {
     outline: none;
     border-bottom-color: var(--border-strong);
-  }
-
-  .search-input::-webkit-input-placeholder {
-    color: var(--text-secondary);
-  }
-
-  .search-input::-moz-placeholder {
-    color: var(--text-secondary);
-  }
-
-  .search-input:-ms-input-placeholder {
-    color: var(--text-secondary);
-  }
-
-  .search-input::-ms-input-placeholder {
-    color: var(--text-secondary);
   }
 
   .search-input::placeholder {
@@ -299,10 +359,8 @@
     width: 36px;
     height: 36px;
     background: var(--bg-surface);
-    border: 0.5px solid var(--border-subtle);
+    border: 1px solid var(--border-subtle);
     box-shadow: var(--shadow-white-subtle);
-    -webkit-backdrop-filter: blur(50px);
-    backdrop-filter: blur(50px);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -318,25 +376,23 @@
     flex-direction: row;
     justify-content: center;
     align-items: center;
-    padding: 8px 20px;
+    padding: 12px 24px;
     gap: 4px;
-    background: var(--bg-surface);
-    border: 0.5px solid var(--border-strong);
+    background: var(--primary);
+    border: 1px solid transparent;
     box-shadow: var(--shadow-white-subtle);
-    -webkit-backdrop-filter: blur(50px);
-    backdrop-filter: blur(50px);
     border-radius: var(--radius-sm);
-    font-weight: 500;
-    font-size: 20px;
+    font-weight: 600;
+    font-size: 18px;
     line-height: 24px;
-    letter-spacing: -0.03em;
-    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    color: var(--primary-foreground);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .quant-button-primary:hover {
-    box-shadow: var(--shadow-white-glow);
+    box-shadow: var(--shadow-brand-glow);
   }
 
   .quant-button-secondary {
@@ -344,26 +400,25 @@
     flex-direction: row;
     justify-content: center;
     align-items: center;
-    padding: 8px 20px;
+    padding: 10px 24px;
     gap: 4px;
     background: var(--bg-surface);
-    border: 0.5px solid var(--border-subtle);
+    border: 1px solid var(--border-default);
     box-shadow: var(--shadow-white-subtle);
-    -webkit-backdrop-filter: blur(50px);
-    backdrop-filter: blur(50px);
     border-radius: var(--radius-sm);
     font-weight: 500;
     font-size: 16px;
-    line-height: 19px;
-    letter-spacing: -0.03em;
+    line-height: 20px;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .quant-button-secondary:disabled {
-    font-weight: 300;
-    color: var(--text-secondary);
+    font-weight: 400;
+    color: var(--text-disabled);
+    cursor: not-allowed;
   }
 
   .quant-button-secondary:hover:not(:disabled) {
@@ -371,11 +426,11 @@
   }
 
   .quant-button-ghost {
-    padding: 8px 16px;
+    padding: 10px 16px;
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     background: transparent;
-    border: 0.5px solid var(--border-subtle);
+    border: 1px solid var(--border-subtle);
     transition: all 0.2s ease;
     cursor: pointer;
   }
@@ -388,37 +443,22 @@
   /* Input */
   .quant-input {
     width: 100%;
-    height: 40px;
+    height: 44px;
     padding: 0 12px;
     border-radius: var(--radius-sm);
-    border: 0.5px solid var(--border-subtle);
-    background: transparent;
+    border: 1px solid var(--border-subtle);
+    background: var(--input-background);
     color: var(--text-primary);
     font-size: 14px;
     font-weight: 300;
     letter-spacing: -0.03em;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
   .quant-input:focus {
-    border-color: var(--border-strong);
+    border-color: var(--primary);
     outline: none;
-  }
-
-  .quant-input::-webkit-input-placeholder {
-    color: var(--text-secondary);
-  }
-
-  .quant-input::-moz-placeholder {
-    color: var(--text-secondary);
-  }
-
-  .quant-input:-ms-input-placeholder {
-    color: var(--text-secondary);
-  }
-
-  .quant-input::-ms-input-placeholder {
-    color: var(--text-secondary);
+    box-shadow: var(--shadow-ring);
   }
 
   .quant-input::placeholder {
@@ -431,8 +471,8 @@
     width: 48px;
     height: 24px;
     border-radius: 9999px;
-    background: var(--checkbox-unselected);
-    border: 0.5px solid var(--border-subtle);
+    background: var(--switch-background);
+    border: 1px solid var(--border-subtle);
     transition: all 0.2s ease;
     cursor: pointer;
   }
@@ -442,21 +482,22 @@
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 9999px;
-    background: var(--text-primary);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--bg-surface);
+    box-shadow: 0 2px 6px rgba(3, 2, 19, 0.2);
     transition: transform 0.2s ease;
   }
 
   .quant-toggle[data-state="on"] {
-    background: var(--checkbox-selected);
-    border-color: var(--checkbox-selected);
+    background: var(--primary);
+    border-color: var(--primary);
   }
 
   .quant-toggle[data-state="on"]::after {
     transform: translateX(24px);
-    background: #ffffff;
+    background: var(--primary-foreground);
   }
 
   /* Values - Korean Stock Market */
@@ -492,9 +533,9 @@
   /* Section Title */
   .section-title {
     font-size: 20px;
-    font-weight: 500;
-    line-height: 24px;
-    letter-spacing: -0.03em;
+    font-weight: 600;
+    line-height: 28px;
+    letter-spacing: -0.01em;
     color: var(--text-primary);
     margin-bottom: 16px;
   }
@@ -510,17 +551,15 @@
     font-size: 14px;
     font-weight: 500;
     border-radius: var(--radius-sm);
-    background: var(--bg-surface);
-    color: var(--text-secondary);
+    background: var(--accent);
+    color: var(--accent-foreground);
   }
 
   /* Modal/Dialog */
   .quant-dialog {
     border-radius: var(--radius-lg);
-    border: 0.5px solid var(--border-strong);
+    border: 1px solid var(--border-strong);
     background: var(--bg-surface);
-    -webkit-backdrop-filter: blur(50px);
-    backdrop-filter: blur(50px);
     box-shadow: var(--shadow-white-glow);
   }
 
@@ -541,15 +580,13 @@
   .bg-ellipse-2,
   .bg-ellipse-3 {
     position: absolute;
-    background: #2d2d2d;
+    background: var(--brand-weak);
     border-radius: 50%;
-    -webkit-filter: blur(180px);
-    filter: blur(200px);
+    filter: blur(180px);
     pointer-events: none;
   }
 
-  /* Ellipse 1: 빈 layer의 상단 중앙
-   */
+  /* Ellipse 1: 빈 layer의 상단 중앙 */
   .bg-ellipse-1 {
     width: calc(100% / 3); /* 748 / 2244 * 100 */
     aspect-ratio: 1;
@@ -557,8 +594,7 @@
     top: 0;
   }
 
-  /* Ellipse 2: 빈 layer의 하단 우측
-   */
+  /* Ellipse 2: 빈 layer의 하단 우측 */
   .bg-ellipse-2 {
     width: 24.955%; /* 560 / 2244 * 100 */
     aspect-ratio: 1;
@@ -566,8 +602,7 @@
     bottom: 0;
   }
 
-  /* Ellipse 3: 빈 layer의 하단 좌측
-   */
+  /* Ellipse 3: 빈 layer의 하단 좌측 */
   .bg-ellipse-3 {
     width: calc(100% / 3);
     aspect-ratio: 1;

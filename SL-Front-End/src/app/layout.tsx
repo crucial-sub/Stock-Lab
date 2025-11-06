@@ -1,4 +1,5 @@
 import { Header } from "@/components/Header";
+import { SideNav } from "@/components/SideNav";
 import "@/styles/globals.css";
 import type { Metadata } from "next";
 import { Providers } from "./providers";
@@ -15,14 +16,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="antialiased">
+      <body className="relative antialiased">
         <Providers>
-          <div className="bg-empty-layer">
-            <div className="bg-ellipse-1" />
-            <div className="bg-ellipse-2" />
-            <div className="bg-ellipse-3" />
-          </div>
           <Header />
+          <SideNav />
           <main className="relative">
             <div className="relative z-10">{children}</div>
           </main>

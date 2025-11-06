@@ -55,10 +55,10 @@ class BacktestRequest(BaseModel):
 
 class BacktestResponse(BaseModel):
     """백테스트 응답"""
-    backtestId: str  # Frontend 형식에 맞춤 (camelCase)
+    backtest_id: str
     status: str
     message: str
-    createdAt: datetime  # Frontend 형식에 맞춤 (camelCase)
+    created_at: datetime
 
 
 class BacktestStatusResponse(BaseModel):
@@ -74,34 +74,30 @@ class BacktestStatusResponse(BaseModel):
 
 class BacktestResultStatistics(BaseModel):
     """백테스트 결과 통계"""
-    model_config = ConfigDict(populate_by_name=True)
-
-    total_return: float = Field(..., serialization_alias="totalReturn")
-    annualized_return: float = Field(..., serialization_alias="annualizedReturn")
-    max_drawdown: float = Field(..., serialization_alias="maxDrawdown")
+    total_return: float
+    annualized_return: float
+    max_drawdown: float
     volatility: float
-    sharpe_ratio: float = Field(..., serialization_alias="sharpeRatio")
-    win_rate: float = Field(..., serialization_alias="winRate")
-    profit_factor: float = Field(..., serialization_alias="profitFactor")
-    total_trades: int = Field(..., serialization_alias="totalTrades")
-    winning_trades: int = Field(..., serialization_alias="winningTrades")
-    losing_trades: int = Field(..., serialization_alias="losingTrades")
-    initial_capital: float = Field(..., serialization_alias="initialCapital")
-    final_capital: float = Field(..., serialization_alias="finalCapital")
+    sharpe_ratio: float
+    win_rate: float
+    profit_factor: float
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    initial_capital: float
+    final_capital: float
 
 
 class BacktestTrade(BaseModel):
     """백테스트 거래 내역"""
-    model_config = ConfigDict(populate_by_name=True)
-
-    stock_name: str = Field(..., serialization_alias="stockName")
-    stock_code: str = Field(..., serialization_alias="stockCode")
-    buy_price: float = Field(..., serialization_alias="buyPrice")
-    sell_price: float = Field(..., serialization_alias="sellPrice")
+    stock_name: str
+    stock_code: str
+    buy_price: float
+    sell_price: float
     profit: float
-    profit_rate: float = Field(..., serialization_alias="profitRate")
-    buy_date: str = Field(..., serialization_alias="buyDate")
-    sell_date: str = Field(..., serialization_alias="sellDate")
+    profit_rate: float
+    buy_date: str
+    sell_date: str
     weight: float
     valuation: float
 
@@ -114,15 +110,13 @@ class BacktestYieldPoint(BaseModel):
 
 class BacktestResultResponse(BaseModel):
     """백테스트 결과 응답"""
-    model_config = ConfigDict(populate_by_name=True)
-
     id: str
     status: str
     statistics: BacktestResultStatistics
     trades: List[BacktestTrade]
-    yield_points: List[BacktestYieldPoint] = Field(..., serialization_alias="yieldPoints")
-    created_at: datetime = Field(..., serialization_alias="createdAt")
-    completed_at: Optional[datetime] = Field(None, serialization_alias="completedAt")
+    yield_points: List[BacktestYieldPoint]
+    created_at: datetime
+    completed_at: Optional[datetime]
 
 
 @router.post("/backtest/run", response_model=BacktestResponse)
@@ -209,10 +203,10 @@ async def run_backtest(
         )
 
         return BacktestResponse(
-            backtestId=session_id,
+            backtest_id=session_id,
             status="pending",
             message="백테스트가 시작되었습니다",
-            createdAt=datetime.now()
+            created_at=datetime.now()
         )
 
     except Exception as e:
@@ -273,6 +267,7 @@ async def get_backtest_result(
                 total_trades=0,
                 winning_trades=0,
                 losing_trades=0,
+                initial_capital=float(session.initial_capital),
                 final_capital=float(session.initial_capital)
             ),
             trades=[],
@@ -446,14 +441,14 @@ async def get_backtest_trades(
             buy_trade = buy_trades_by_stock.get(trade.stock_code)
 
             trade_list.append({
-                "stockName": stock_name_map.get(trade.stock_code, trade.stock_code),
-                "stockCode": trade.stock_code,
-                "buyPrice": float(buy_trade.price) if buy_trade else 0.0,
-                "sellPrice": float(trade.price),
+                "stock_name": stock_name_map.get(trade.stock_code, trade.stock_code),
+                "stock_code": trade.stock_code,
+                "buy_price": float(buy_trade.price) if buy_trade else 0.0,
+                "sell_price": float(trade.price),
                 "profit": float(trade.realized_pnl),
-                "profitRate": float(trade.return_pct) if trade.return_pct else 0.0,
-                "buyDate": buy_trade.trade_date.isoformat() if buy_trade else "",
-                "sellDate": trade.trade_date.isoformat(),
+                "profit_rate": float(trade.return_pct) if trade.return_pct else 0.0,
+                "buy_date": buy_trade.trade_date.isoformat() if buy_trade else "",
+                "sell_date": trade.trade_date.isoformat(),
                 "weight": float(trade.amount / session.initial_capital * 100) if session.initial_capital else 0.0,
                 "valuation": float(trade.amount)
             })
@@ -464,7 +459,7 @@ async def get_backtest_trades(
             "page": page,
             "limit": limit,
             "total": total_count,
-            "totalPages": (total_count + limit - 1) // limit
+            "total_pages": (total_count + limit - 1) // limit
         }
     }
 

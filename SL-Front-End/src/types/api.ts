@@ -121,6 +121,11 @@ export interface BacktestResult {
   yieldPoints: {
     date: string;
     value: number;
+    portfolioValue?: number;
+    cash?: number;
+    positionValue?: number;
+    dailyReturn?: number;
+    cumulativeReturn?: number;
   }[];
   /** 생성 시간 */
   createdAt: string;

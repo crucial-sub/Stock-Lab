@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Multi-stage build for production optimization
+FROM python:3.11-slim as builder
 
 # 작업 디렉토리 설정
 WORKDIR /app
@@ -13,16 +14,6 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# TA-Lib C 라이브러리 설치 (선택사항, 현재 사용 안함)
-# RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
-#     tar -xzf ta-lib-0.4.0-src.tar.gz && \
-#     cd ta-lib/ && \
-#     ./configure --prefix=/usr && \
-#     make && \
-#     make install && \
-#     cd .. && \
-#     rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
-
 # 의존성 파일 복사
 COPY requirements.txt .
 
@@ -30,21 +21,45 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Production stage
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 런타임 라이브러리만 설치
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# builder stage에서 설치된 패키지 복사
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
 # 애플리케이션 코드 복사
 COPY ./app ./app
+COPY ./scripts ./scripts
 
 # 로그 디렉토리 생성
-RUN mkdir -p /app/logs
+RUN mkdir -p /app/logs && \
+    chmod -R 755 /app/logs
+
+# 비루트 유저 생성 및 권한 설정
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
 
 # PYTHONPATH 설정
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1
 
 # 포트 노출
 EXPOSE 8000
 
 # 헬스체크
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
 # 애플리케이션 실행
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

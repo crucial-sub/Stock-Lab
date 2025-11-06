@@ -574,39 +574,4 @@
     z-index: 0;
     overflow: hidden;
   }
-
-  /* Ellipse 공통 스타일 */
-  .bg-ellipse-1,
-  .bg-ellipse-2,
-  .bg-ellipse-3 {
-    position: absolute;
-    background: var(--brand-weak);
-    border-radius: 50%;
-    filter: blur(180px);
-    pointer-events: none;
-  }
-
-  /* Ellipse 1: 빈 layer의 상단 중앙 */
-  .bg-ellipse-1 {
-    width: calc(100% / 3); /* 748 / 2244 * 100 */
-    aspect-ratio: 1;
-    left: calc(50% - (100% / 3 / 2));
-    top: 0;
-  }
-
-  /* Ellipse 2: 빈 layer의 하단 우측 */
-  .bg-ellipse-2 {
-    width: 24.955%; /* 560 / 2244 * 100 */
-    aspect-ratio: 1;
-    left: 0;
-    bottom: 0;
-  }
-
-  /* Ellipse 3: 빈 layer의 하단 좌측 */
-  .bg-ellipse-3 {
-    width: calc(100% / 3);
-    aspect-ratio: 1;
-    right: 0;
-    bottom: 0;
-  }
 }

@@ -1,5 +1,5 @@
 -- Migration: Add portfolio sharing and user ownership fields
--- Date: 2025-01-06
+-- Date: 2025-11-06
 -- Description: Adds user_id, is_public, is_anonymous, hide_strategy_details columns to portfolio_strategies table
 
 BEGIN;

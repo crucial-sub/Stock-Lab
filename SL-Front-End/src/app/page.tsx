@@ -3,7 +3,7 @@ import type { NextPage } from 'next';
 
 const HomePage: NextPage = () => {
     return (
-        <div className="w-full h-full relative bg-sky-50 overflow-hidden">
+        <div className="w-[1920px] h-[1200px] relative bg-sky-50 overflow-hidden">
             <div className="left-[312px] top-[199px] absolute inline-flex flex-col justify-start items-start gap-5">
                 <div className="self-stretch justify-start text-black text-3xl font-semibold font-['Pretendard']">에디터가 추천하는 수익률이 높은 전략</div>
                 <div className="self-stretch inline-flex justify-start items-center gap-10">

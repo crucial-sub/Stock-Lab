@@ -1,47 +1,50 @@
+import type { ReactNode } from "react";
+import { twMerge } from "tailwind-merge";
+
 interface ButtonProps {
-  children: React.ReactNode;
+  children: ReactNode;
   onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: "primary" | "secondary" | "tertiary" | "ghost";
+  size?: "sm" | "md" | "lg";
   className?: string;
   disabled?: boolean;
 }
 
+const VARIANT_STYLES: Record<NonNullable<ButtonProps["variant"]>, string> = {
+  primary: "bg-[#FF6464] text-white text-xl",
+  secondary: "bg-zinc-100 text-black text-xl",
+  tertiary: "bg-[#FFF6F6] text-[#FF6464] text-xl",
+  ghost: "bg-transparent text-black",
+};
+
+const SIZE_STYLES: Record<NonNullable<ButtonProps["size"]>, string> = {
+  sm: "py-[5px] text-[16px]",
+  md: "py-2 text-xl",
+  lg: "py-3 text-[16px]",
+};
+
 export function Button({
   children,
   onClick,
-  variant = 'primary',
-  size = 'md',
-  className = '',
-  disabled = false
+  variant = "primary",
+  size = "md",
+  className,
+  disabled = false,
 }: ButtonProps) {
-  const variantStyles = {
-    primary: "bg-red-400 text-white text-xl",
-    secondary: 'bg-zinc-100 text-black text-xl',
-    tertiary: "bg-pink-50 text-red-400 text-xl",
-    ghost: 'bg-transparent text-black'
-  };
-
-  const sizeStyles = {
-    sm: 'px-6 py-[5px] text-[16px]',
-    md: 'px-6 py-2 text-xl',
-    lg: 'px-[24px] py-[10px] text-[16px]',
-    xlg: "py-3 w-24 h-12"
-  };
-
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`
-        font-sans font-semibold rounded-lg 
-        flex items-center justify-center gap-1 overflow-hidden
-        ${variantStyles[variant]}
-        ${sizeStyles[size]}
-        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-        ${className}
-      `}
-    >   {children}
+      className={twMerge(
+        "flex items-center justify-center gap-1 overflow-hidden rounded-lg px-6 font-sans font-semibold",
+        VARIANT_STYLES[variant],
+        SIZE_STYLES[size],
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+        className,
+      )}
+    >
+      {children}
     </button>
   );
 }

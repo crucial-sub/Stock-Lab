@@ -20,7 +20,7 @@ export default function RootLayout({
         <Providers>
           <Header />
           <SideNav />
-          <main className="relative">
+          <main className="relative min-h-screen pt-24 pl-64">
             <div className="relative z-10">{children}</div>
           </main>
         </Providers>

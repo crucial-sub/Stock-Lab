@@ -26,8 +26,8 @@ export function Header({
         {/* Logo */}
         <Link href="/" className="font-circular">
           <div className="flex h-12 items-start">
-            <span className="text-3xl font-medium text-red-400">stock</span>
-            <span className="self-end text-3xl font-medium text-sky-500">
+            <span className="text-3xl font-medium text-[#FF6464]">stock</span>
+            <span className="self-end text-3xl font-medium text-[#007DFC]">
               lab
             </span>
           </div>

@@ -241,10 +241,7 @@ export function QuantResultPageClient({
               </tr>
             </thead>
             <tbody>
-              {console.log("[DEBUG] Rendering tbody, allTrades.length:", allTrades.length)}
-              {console.log("[DEBUG] First trade:", allTrades[0])}
               {allTrades.map((trade, index) => {
-                console.log(`[DEBUG] Rendering trade ${index}:`, trade);
                 return (
                   <tr
                     key={`${trade.stockCode}-${index}`}

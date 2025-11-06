@@ -36,6 +36,7 @@ export function QuantResultPageClient({
   const {
     data: backtestResult,
     isLoading: isLoadingResult,
+    refetch: refetchResult,
   } = useBacktestResultQuery(backtestId);
 
   // 백테스트 상태 폴링 (실행 중인 경우에만)
@@ -44,13 +45,24 @@ export function QuantResultPageClient({
     backtestResult?.status === "running" || backtestResult?.status === "pending",
   );
 
-  // 매매 내역 무한 스크롤
+  // status가 completed로 변경되면 result를 refetch
+  useEffect(() => {
+    if (statusData?.status === "completed" && backtestResult?.status !== "completed") {
+      refetchResult();
+    }
+  }, [statusData?.status, backtestResult?.status, refetchResult]);
+
+  // 매매 내역 무한 스크롤 (백테스트 완료 후에만 로드)
   const {
     data: tradesData,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useBacktestTradesInfiniteQuery(backtestId);
+  } = useBacktestTradesInfiniteQuery(
+    backtestId,
+    50,
+    backtestResult?.status === "completed"  // 백테스트 완료 시에만 활성화
+  );
 
   // 무한 스크롤을 위한 Intersection Observer
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -74,8 +86,15 @@ export function QuantResultPageClient({
 
   // 모든 페이지의 매매 내역을 합침
   const allTrades = useMemo(() => {
-    if (!tradesData) return [];
-    return tradesData.pages.flatMap((page) => page.data);
+    if (!tradesData) {
+      console.log("[DEBUG] tradesData is null/undefined");
+      return [];
+    }
+    console.log("[DEBUG] tradesData:", tradesData);
+    console.log("[DEBUG] tradesData.pages:", tradesData.pages);
+    const trades = tradesData.pages.flatMap((page) => page.data);
+    console.log("[DEBUG] allTrades count:", trades.length);
+    return trades;
   }, [tradesData]);
 
   // 통계 지표 (mock 데이터 대신 실제 데이터 사용)
@@ -201,6 +220,10 @@ export function QuantResultPageClient({
 
   /** 탭 전환 시 보여줄 본문 렌더 */
   const renderTabContent = () => {
+    console.log("[DEBUG] renderTabContent called, activeTab:", activeTab);
+    console.log("[DEBUG] activeTab === 'stocks':", activeTab === "stocks");
+    console.log("[DEBUG] allTrades in renderTabContent:", allTrades.length);
+
     if (activeTab === "stocks") {
       return (
         <div className="overflow-x-auto">
@@ -218,29 +241,31 @@ export function QuantResultPageClient({
               </tr>
             </thead>
             <tbody>
-              {allTrades.map((trade, index) => (
-                <tr
-                  key={`${trade.stockCode}-${index}`}
-                  className="border-b border-border-subtle/50 text-text-primary"
-                >
-                  <td className="py-3">{trade.stockName}</td>
-                  <td className="py-3">{trade.buyPrice.toLocaleString()}</td>
-                  <td className="py-3">{trade.profit.toLocaleString()}</td>
-                  <td
-                    className={`py-3 ${trade.profitRate >= 0 ? "text-state-positive" : "text-state-negative"}`}
+              {allTrades.map((trade, index) => {
+                return (
+                  <tr
+                    key={`${trade.stockCode}-${index}`}
+                    className="border-b border-border-subtle/50 text-text-primary"
                   >
-                    {trade.profitRate.toFixed(2)}%
-                  </td>
-                  <td className="py-3">
-                    {new Date(trade.buyDate).toLocaleDateString("ko-KR")}
-                  </td>
-                  <td className="py-3">
-                    {new Date(trade.sellDate).toLocaleDateString("ko-KR")}
-                  </td>
-                  <td className="py-3">{trade.weight.toFixed(2)}%</td>
-                  <td className="py-3">{trade.valuation.toLocaleString()}원</td>
-                </tr>
-              ))}
+                    <td className="py-3">{trade.stockName}</td>
+                    <td className="py-3">{trade.buyPrice.toLocaleString()}</td>
+                    <td className="py-3">{trade.profit.toLocaleString()}</td>
+                    <td
+                      className={`py-3 ${trade.profitRate >= 0 ? "text-state-positive" : "text-state-negative"}`}
+                    >
+                      {trade.profitRate.toFixed(2)}%
+                    </td>
+                    <td className="py-3">
+                      {new Date(trade.buyDate).toLocaleDateString("ko-KR")}
+                    </td>
+                    <td className="py-3">
+                      {new Date(trade.sellDate).toLocaleDateString("ko-KR")}
+                    </td>
+                    <td className="py-3">{trade.weight.toFixed(2)}%</td>
+                    <td className="py-3">{trade.valuation.toLocaleString()}원</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
@@ -259,8 +284,44 @@ export function QuantResultPageClient({
 
     if (activeTab === "yield") {
       return (
-        <div className="flex flex-col items-center justify-center py-8 text-sm text-text-tertiary">
-          <p>수익률 상세 분석 기능은 추후 제공될 예정입니다.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-text-secondary">
+              <tr className="border-b border-border-subtle">
+                <th className="py-3">날짜</th>
+                <th className="py-3">포트폴리오 가치(원)</th>
+                <th className="py-3">현금(원)</th>
+                <th className="py-3">포지션 가치(원)</th>
+                <th className="py-3">일간 수익률(%)</th>
+                <th className="py-3">누적 수익률(%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {backtestResult?.yieldPoints.map((point, index) => (
+                <tr
+                  key={`${point.date}-${index}`}
+                  className="border-b border-border-subtle/50 text-text-primary"
+                >
+                  <td className="py-3">
+                    {new Date(point.date).toLocaleDateString("ko-KR")}
+                  </td>
+                  <td className="py-3">{(point.portfolioValue ?? 0).toLocaleString()}원</td>
+                  <td className="py-3">{(point.cash ?? 0).toLocaleString()}원</td>
+                  <td className="py-3">{(point.positionValue ?? 0).toLocaleString()}원</td>
+                  <td
+                    className={`py-3 ${(point.dailyReturn ?? 0) >= 0 ? "text-state-positive" : "text-state-negative"}`}
+                  >
+                    {(point.dailyReturn ?? 0).toFixed(2)}%
+                  </td>
+                  <td
+                    className={`py-3 ${(point.cumulativeReturn ?? 0) >= 0 ? "text-state-positive" : "text-state-negative"}`}
+                  >
+                    {(point.cumulativeReturn ?? 0).toFixed(2)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       );
     }

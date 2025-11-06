@@ -1,13 +1,14 @@
-import { useState } from "react";
 import {
   DEFAULT_COMMISSION_RATE,
-  DEFAULT_DATE,
+  DEFAULT_START_DATE,
+  DEFAULT_END_DATE,
   DEFAULT_INVESTMENT_AMOUNT,
   DEFAULT_MAX_POSITIONS,
   DEFAULT_POSITION_SIZE,
   INITIAL_BUY_CONDITIONS,
 } from "@/constants";
 import type { BuyCondition, DataType } from "@/types";
+import { useState } from "react";
 
 export function useBuyCondition() {
   const [dataType, setDataType] = useState<DataType>("daily");
@@ -15,7 +16,7 @@ export function useBuyCondition() {
     INITIAL_BUY_CONDITIONS,
   );
   const [toggles, setToggles] = useState({
-    maxPerStock: true,
+    maxPerStock: false,
     maxPerDay: false,
   });
 
@@ -52,7 +53,8 @@ export function useBuyCondition() {
     toggleState,
     defaults: {
       investmentAmount: DEFAULT_INVESTMENT_AMOUNT,
-      date: DEFAULT_DATE,
+      startDate: DEFAULT_START_DATE,
+      endDate: DEFAULT_END_DATE,
       commissionRate: DEFAULT_COMMISSION_RATE,
       positionSize: DEFAULT_POSITION_SIZE,
       maxPositions: DEFAULT_MAX_POSITIONS,

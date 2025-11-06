@@ -14,7 +14,7 @@ import os
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest
+from app.api.routes import backtest, auth
 
 settings = get_settings()
 
@@ -139,6 +139,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # 라우터 등록
+app.include_router(
+    auth.router,
+    prefix=f"{settings.API_V1_PREFIX}/auth",
+    tags=["Authentication"]
+)
+
 app.include_router(
     backtest.router,
     prefix=settings.API_V1_PREFIX,

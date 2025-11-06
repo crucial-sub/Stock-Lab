@@ -3,6 +3,7 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
+email-validator==2.3.0  # Pydantic EmailStr 지원
 
 # Async Database (PostgreSQL)
 asyncpg==0.29.0  # PostgreSQL용 비동기 드라이버 - 매우 빠름
@@ -31,6 +32,7 @@ psycopg[binary]==3.1.18  # PostgreSQL 어댑터 (Python 3.13 호환)
 # API 유틸리티
 python-multipart==0.0.6  # 파일 업로드
 python-jose[cryptography]==3.3.0  # JWT 토큰
+bcrypt==4.0.1
 passlib[bcrypt]==1.7.4  # 비밀번호 해싱
 python-dotenv==1.0.0  # 환경변수 관리
 

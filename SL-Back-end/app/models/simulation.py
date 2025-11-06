@@ -70,6 +70,14 @@ class PortfolioStrategy(Base):
     strategy_type = Column(String(50), nullable=True, comment="전략 유형 (VALUE/GROWTH/MOMENTUM/MULTI)")
     description = Column(Text, nullable=True, comment="전략 설명")
 
+    # 소유자 정보
+    user_id = Column(String(36), nullable=True, index=True, comment="전략 생성자 ID (UUID)")
+
+    # 공개 설정
+    is_public = Column(Boolean, default=False, nullable=False, comment="공개 여부 (랭킹 집계)")
+    is_anonymous = Column(Boolean, default=False, nullable=False, comment="익명 여부")
+    hide_strategy_details = Column(Boolean, default=False, nullable=False, comment="전략 내용 숨김 여부")
+
     # 백테스팅 기간
     backtest_start_date = Column(Date, nullable=True, comment="백테스팅 시작일")
     backtest_end_date = Column(Date, nullable=True, comment="백테스팅 종료일")
@@ -93,6 +101,8 @@ class PortfolioStrategy(Base):
 
     __table_args__ = (
         Index('idx_portfolio_strategies_type', 'strategy_type'),
+        Index('idx_portfolio_strategies_user', 'user_id'),
+        Index('idx_portfolio_strategies_public', 'is_public', 'user_id'),
         {"comment": "포트폴리오 전략 테이블"}
     )
 

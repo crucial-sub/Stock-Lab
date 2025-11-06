@@ -90,6 +90,11 @@ class BacktestRequest(BaseModel):
     # 매매 대상
     target_stocks: List[str]  # 테마 이름 목록
 
+    # 공개 설정 (선택 사항)
+    is_public: Optional[bool] = False
+    is_anonymous: Optional[bool] = False
+    hide_strategy_details: Optional[bool] = False
+
 
 class BacktestResponse(BaseModel):
     """백테스트 응답"""
@@ -194,7 +199,11 @@ async def run_backtest(
             description=f"User: {request.user_id}, Target: {', '.join(request.target_stocks[:3])}{'...' if len(request.target_stocks) > 3 else ''}",
             strategy_type="FACTOR_BASED",
             universe_type="THEME",  # 테마 기반 선택
-            initial_capital=initial_capital
+            initial_capital=initial_capital,
+            user_id=request.user_id,
+            is_public=request.is_public or False,
+            is_anonymous=request.is_anonymous or False,
+            hide_strategy_details=request.hide_strategy_details or False
         )
         db.add(strategy)
 

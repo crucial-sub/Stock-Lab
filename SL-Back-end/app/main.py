@@ -153,7 +153,7 @@ app.include_router(
 
 app.include_router(
     strategy.router,
-    prefix=f"{settings.API_V1_PREFIX}/strategies",
+    prefix=settings.API_V1_PREFIX,
     tags=["Strategy"]
 )
 

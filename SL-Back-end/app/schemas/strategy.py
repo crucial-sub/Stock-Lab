@@ -1,132 +1,110 @@
 """
-투자전략 공유 및 관리 관련 스키마
+Strategy 스키마
+투자전략 관련 request/response 모델
 """
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
-from datetime import datetime
+from typing import Optional, List
+from datetime import datetime, date
+from decimal import Decimal
 
 
-class ShareSettingsUpdate(BaseModel):
-    """투자전략 공유 설정 업데이트"""
-    is_public: Optional[bool] = Field(None, description="공개 여부 (랭킹에 노출)")
-    is_anonymous: Optional[bool] = Field(None, description="익명 공개 여부 (이름 숨김)")
-    show_strategy: Optional[bool] = Field(None, description="전략 상세 공개 여부 (팩터 조건 공개)")
-    description: Optional[str] = Field(None, max_length=1000, description="투자전략 설명")
+class StrategySharingSettings(BaseModel):
+    """투자전략 공개 설정"""
+    is_public: bool = Field(default=False, description="공개 여부 (랭킹 집계)")
+    is_anonymous: bool = Field(default=False, description="익명 여부")
+    hide_strategy_details: bool = Field(default=False, description="전략 내용 숨김 여부")
 
 
-class ShareSettingsResponse(BaseModel):
-    """투자전략 공유 설정 응답"""
-    model_config = ConfigDict(from_attributes=True)
-
-    session_id: str
-    is_public: bool
-    is_anonymous: bool
-    show_strategy: bool
-    description: Optional[str]
-    share_url: Optional[str]
-    view_count: int
-    like_count: int
+class StrategySharingUpdate(BaseModel):
+    """투자전략 공개 설정 업데이트"""
+    is_public: Optional[bool] = None
+    is_anonymous: Optional[bool] = None
+    hide_strategy_details: Optional[bool] = None
 
 
-class MyStrategyItem(BaseModel):
-    """내 투자전략 목록 아이템"""
-    model_config = ConfigDict(from_attributes=True)
+class StrategyStatisticsSummary(BaseModel):
+    """투자전략 통계 요약 (목록용)"""
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
-    session_id: str
-    session_name: Optional[str]
-    description: Optional[str]
-
-    # 실행 정보
-    status: str
-    start_date: str
-    end_date: str
-    created_at: datetime
-
-    # 수익률 정보
-    total_return: Optional[float]
-    sharpe_ratio: Optional[float]
-    max_drawdown: Optional[float]
-
-    # 공유 설정
-    is_public: bool
-    is_anonymous: bool
-    view_count: int
-    like_count: int
+    total_return: Optional[float] = Field(None, serialization_alias="totalReturn")
+    annualized_return: Optional[float] = Field(None, serialization_alias="annualizedReturn")
+    max_drawdown: Optional[float] = Field(None, serialization_alias="maxDrawdown")
+    sharpe_ratio: Optional[float] = Field(None, serialization_alias="sharpeRatio")
+    win_rate: Optional[float] = Field(None, serialization_alias="winRate")
 
 
-class RankingStrategyItem(BaseModel):
-    """랭킹 투자전략 아이템"""
-    model_config = ConfigDict(from_attributes=True)
+class StrategyDetailItem(BaseModel):
+    """투자전략 상세 정보 (내 투자전략 목록용)"""
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
-    rank: int
-    session_id: str
-    session_name: Optional[str]
-    description: Optional[str]
+    strategy_id: str = Field(..., serialization_alias="strategyId")
+    strategy_name: str = Field(..., serialization_alias="strategyName")
+    strategy_type: Optional[str] = Field(None, serialization_alias="strategyType")
+    description: Optional[str] = None
 
-    # 작성자 정보 (익명 처리 가능)
-    author_name: str
-    is_anonymous: bool
+    # 공개 설정
+    is_public: bool = Field(..., serialization_alias="isPublic")
+    is_anonymous: bool = Field(..., serialization_alias="isAnonymous")
+    hide_strategy_details: bool = Field(..., serialization_alias="hideStrategyDetails")
 
-    # 수익률 정보
-    total_return: float
-    annualized_return: float
-    sharpe_ratio: float
-    max_drawdown: float
-    volatility: float
+    # 백테스트 정보
+    initial_capital: Optional[float] = Field(None, serialization_alias="initialCapital")
+    backtest_start_date: Optional[date] = Field(None, serialization_alias="backtestStartDate")
+    backtest_end_date: Optional[date] = Field(None, serialization_alias="backtestEndDate")
 
-    # 거래 정보
-    total_trades: int
-    win_rate: float
+    # 통계 (최신 시뮬레이션 기준)
+    statistics: Optional[StrategyStatisticsSummary] = None
 
-    # 전략 정보 (show_strategy=True일 때만)
-    show_strategy: bool
-    strategy_summary: Optional[str]
-
-    # 커뮤니티 정보
-    view_count: int
-    like_count: int
-    created_at: datetime
+    # 메타데이터
+    created_at: datetime = Field(..., serialization_alias="createdAt")
+    updated_at: datetime = Field(..., serialization_alias="updatedAt")
 
 
-class StrategyDetailResponse(BaseModel):
-    """투자전략 상세 조회 (공유 링크)"""
-    model_config = ConfigDict(from_attributes=True)
+class StrategyRankingItem(BaseModel):
+    """투자전략 랭킹 아이템 (공개 랭킹 페이지용)"""
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
-    session_id: str
-    session_name: Optional[str]
-    description: Optional[str]
+    strategy_id: str = Field(..., serialization_alias="strategyId")
+    strategy_name: str = Field(..., serialization_alias="strategyName")
 
-    # 작성자 정보
-    author_name: str
-    is_anonymous: bool
+    # 소유자 정보 (익명 설정에 따라 표시)
+    owner_name: Optional[str] = Field(None, serialization_alias="ownerName")
+    is_anonymous: bool = Field(..., serialization_alias="isAnonymous")
+
+    # 전략 정보 (숨김 설정에 따라 표시)
+    strategy_type: Optional[str] = Field(None, serialization_alias="strategyType")
+    description: Optional[str] = None
+    hide_strategy_details: bool = Field(..., serialization_alias="hideStrategyDetails")
 
     # 백테스트 기간
-    start_date: str
-    end_date: str
-    initial_capital: float
-    benchmark: Optional[str]
+    backtest_start_date: Optional[date] = Field(None, serialization_alias="backtestStartDate")
+    backtest_end_date: Optional[date] = Field(None, serialization_alias="backtestEndDate")
 
-    # 수익률 통계
-    total_return: float
-    annualized_return: float
-    sharpe_ratio: float
-    max_drawdown: float
-    volatility: float
-    win_rate: float
+    # 통계 (항상 공개)
+    total_return: float = Field(..., serialization_alias="totalReturn")
+    annualized_return: float = Field(..., serialization_alias="annualizedReturn")
+    max_drawdown: Optional[float] = Field(None, serialization_alias="maxDrawdown")
+    sharpe_ratio: Optional[float] = Field(None, serialization_alias="sharpeRatio")
+    volatility: Optional[float] = None
+    win_rate: Optional[float] = Field(None, serialization_alias="winRate")
 
-    # 전략 정보 (show_strategy=True일 때만 표시)
-    show_strategy: bool
-    buy_conditions: Optional[list]
-    sell_conditions: Optional[list]
+    # 거래 통계
+    total_trades: Optional[int] = Field(None, serialization_alias="totalTrades")
 
-    # 커뮤니티
-    view_count: int
-    like_count: int
-    created_at: datetime
+    # 메타데이터
+    created_at: datetime = Field(..., serialization_alias="createdAt")
 
 
-class LikeResponse(BaseModel):
-    """좋아요 응답"""
-    session_id: str
-    like_count: int
-    is_liked: bool
+class MyStrategiesResponse(BaseModel):
+    """내 투자전략 목록 응답"""
+    strategies: List[StrategyDetailItem]
+    total: int
+
+
+class StrategyRankingResponse(BaseModel):
+    """공개 투자전략 랭킹 응답"""
+    rankings: List[StrategyRankingItem]
+    total: int
+    page: int
+    limit: int
+    sort_by: str = Field(..., serialization_alias="sortBy")  # "total_return" or "annualized_return"

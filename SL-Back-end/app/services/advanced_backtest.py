@@ -1,16 +1,26 @@
 """
 고도화된 백테스트 엔진 - 실전 퀀트 투자 시뮬레이션
 """
-import logging
-from datetime import date, datetime, timedelta
-from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
-from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import create_engine, select, update, text, and_, or_
-import polars as pl
-import pandas as pd  # 통계 계산시 일부 사용
-import numpy as np
+# --------------------------------------------------------------------------------------
+# 이 모듈은 전략에 정의된 각종 팩터, 리스크 제약, 리밸런싱 규칙을 기반으로
+# 실제 매매 시나리오를 시뮬레이션하는 동기 백테스트 엔진을 제공합니다.
+# 백테스트는 다음 단계를 거칩니다.
+#   1. 전략/팩터/룰을 데이터베이스에서 불러와 엔진 상태를 초기화합니다.
+#   2. 거래일별로 포지션 가치 평가 → 손절/익절 → 리밸런싱 판단 → 거래 실행을 반복합니다.
+#   3. 거래 내역과 일별 포트폴리오 가치를 기록하고, 마지막에 통계를 집계합니다.
+# 각 함수/메서드에는 계산 흐름과 의도를 명확히 하기 위해 상세 주석이 추가되어 있습니다.
+# --------------------------------------------------------------------------------------
+import logging  # 전역 로깅 설정에 연결하기 위한 표준 로거
+from datetime import date, datetime, timedelta  # 날짜/시간 연산
+from decimal import Decimal  # 금융 계산 시 부동소수 오류 방지를 위한 정밀 수치 타입
+from typing import Dict, List, Optional, Tuple  # 타입 힌트를 통한 가독성/유효성 확보
+from sqlalchemy.orm import Session, selectinload  # 동기 세션 / eager-loading 도우미
+from sqlalchemy import create_engine, select, update, text, and_, or_  # SQLAlchemy 핵심 API
+import polars as pl  # 대용량 팩터 계산에 최적화된 DataFrame 엔진
+import pandas as pd  # 통계 집계 시 편의성 확보용 (연환산, pct_change 등)
+import numpy as np  # 벡터 연산, 표준편차, 루트 등을 빠르게 계산하기 위함
 
+# 백테스트 중 생성/업데이트되는 시뮬레이션 관련 ORM 모델
 from app.models.simulation import (
     SimulationSession,
     SimulationStatistics,
@@ -22,15 +32,16 @@ from app.models.simulation import (
     TradingRule,
     Factor
 )
-from app.models.company import Company
-from app.models.stock_price import StockPrice
-from app.models.financial_statement import FinancialStatement
-from app.core.config import get_settings
+from app.models.company import Company  # 종목 메타데이터 (시장, 업종 등)
+from app.models.stock_price import StockPrice  # 일별 시세 데이터
+from app.models.financial_statement import FinancialStatement  # 재무제표 메타 정보
+from app.core.config import get_settings  # 환경 변수 기반 설정 로더
 
-logger = logging.getLogger(__name__)
-settings = get_settings()
+logger = logging.getLogger(__name__)  # 모듈 전용 로거 (quant_api 로깅 정책 사용)
+settings = get_settings()  # DB, 로깅, 전략 관련 공통 설정 인스턴스
 
 # 동기 엔진 생성
+# 동기식 엔진은 백테스트에서만 사용되므로 async 전용 커넥션과 분리한다.
 sync_engine = create_engine(
     settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"),
     echo=False
@@ -41,24 +52,31 @@ class QuantBacktestEngine:
     """실전 퀀트 투자 백테스트 엔진"""
 
     def __init__(self, session_id: str, strategy_id: str, target_stocks: List[str] = None):
+        # 세션/전략 ID는 백테스트 결과를 식별하는 키가 되므로 즉시 보관한다.
         logger.info(f"[DEBUG __init__] Received target_stocks parameter: {target_stocks} (type: {type(target_stocks)})")
         self.session_id = session_id
         self.strategy_id = strategy_id
+
+        # 조회 후 채워질 전략/룰/팩터 설정 캐시
         self.strategy = None
         self.trading_rules = None
         self.factor_settings = None
+
+        # 런타임 중 지속적으로 변하는 포트폴리오 상태
         self.positions = {}  # {stock_code: Position}
         self.cash = Decimal("0")
         self.portfolio_value = Decimal("0")
         self.previous_portfolio_value = Decimal("0")
         self.initial_capital = Decimal("0")
         self.current_date = None
+
         # 테마/업종 이름 목록 - 'IT서비스' → 'IT 서비스' 변환
+        # 선택적인 타깃 종목 필터가 전달된 경우, DB 스키마와 맞추기 위해 문자열을 정제한다.
         self.target_stocks = []
         if target_stocks:
             logger.info(f"[DEBUG __init__] target_stocks is truthy, processing {len(target_stocks)} items...")
             for stock in target_stocks:
-                # 'IT서비스'를 'IT 서비스'로 변환 (DB에는 공백 있음)
+                # DB에는 'IT 서비스'처럼 공백이 포함되어 있으므로 미리 양식을 변환한다.
                 if stock == 'IT서비스':
                     logger.info(f"[DEBUG __init__] Converting 'IT서비스' -> 'IT 서비스'")
                     self.target_stocks.append('IT 서비스')
@@ -68,6 +86,8 @@ class QuantBacktestEngine:
         else:
             logger.warning(f"[DEBUG __init__] target_stocks is falsy or empty!")
         logger.info(f"[DEBUG __init__] Final self.target_stocks: {self.target_stocks}")
+
+        # 배당 정보 테이블 존재 여부는 최초 1회만 확인하고 캐싱한다.
         self._dividend_table_checked = False
         self._dividend_table_available = False
 
@@ -78,7 +98,14 @@ class QuantBacktestEngine:
         initial_capital: Decimal,
         benchmark: str = "KOSPI"
     ) -> Dict:
-        """백테스트 실행"""
+        """백테스트 실행
+
+        계산 원리/흐름:
+        - 기간 내 모든 거래일을 순회하면서 포지션 평가, 손절/익절 검사, 필요 시 리밸런싱을 수행한다.
+        - 리밸런싱은 전략에 정의된 빈도(주간/월간 등)에 따라 조건을 만족할 때만 실행된다.
+        - 각 거래일 종료 시 포트 가치와 수익률을 기록하여 통계 산출과 결과 시각화에 활용한다.
+        - 마지막에는 누적 수익률, 변동성, MDD, 샤프비율 등을 계산해 요약 통계를 반환한다.
+        """
 
         logger.info(f"고도화된 백테스트 시작: {self.session_id}")
 
@@ -192,7 +219,14 @@ class QuantBacktestEngine:
                 raise
 
     def _load_strategy_settings(self, db: Session):
-        """전략 설정 로드"""
+        """전략 설정 로드
+
+        계산 원리:
+        - PortfolioStrategy 테이블에서 전략 기본 정보를 가져온다 (시장, 업종 필터 등).
+        - TradingRule 목록을 불러 리밸런싱 주기, 손절/익절, 포지션 제약 등을 메모리에 캐시한다.
+        - StrategyFactor를 eager-loading으로 가져와, 팩터 메타 정보(Factor 테이블)까지 한번에 로딩한다.
+        - 팩터 리스트를 dict로 변환하여 나중에 계산 루프에서 JSON 시리얼화 없이 빠르게 접근한다.
+        """
 
         # 전략 정보 로드
         self.strategy = db.execute(
@@ -239,7 +273,12 @@ class QuantBacktestEngine:
             )
 
     def _get_trading_days(self, db: Session, start_date: date, end_date: date) -> List[date]:
-        """거래일 리스트 조회"""
+        """거래일 리스트 조회
+
+        계산 원리:
+        - stock_prices 테이블에 존재하는 trade_date를 기준으로 실제 시세가 있는 날짜만 추출한다.
+        - 중복을 제거하고 오름차순 정렬하여 시계열 순서가 보장된 거래일 배열을 만든다.
+        """
 
         result = db.execute(
             text("""
@@ -254,7 +293,15 @@ class QuantBacktestEngine:
         return [row[0] for row in result]
 
     def _get_universe_stocks(self, db: Session, trading_date: date) -> List[Dict]:
-        """유니버스 종목 조회 (전략 설정에 따른 필터링)"""
+        """유니버스 종목 조회 (전략 설정에 따른 필터링)
+
+        계산 원리:
+        - 기준 거래일의 종가가 존재하는 종목만 선택한다.
+        - 전략에 정의된 시장 구분(universe_type)과 업종(sector_filter), 시가총액 구간(market_cap_filter)을
+          SQL WHERE 조건으로 적용해 백테스트 대상 유니버스를 구성한다.
+        - 선택적 `self.target_stocks`가 존재하면 추가 필터를 적용할 수 있도록 훅을 남겨 두었다.
+        결과는 종목 메타 필드와 시가총액을 포함한 리스트이며, 이후 팩터 계산과 종목 선별의 입력이 된다.
+        """
 
         logger.debug(
             "유니버스 조회 시작 - date=%s, universe_type=%s, sector_filter=%s, market_cap_filter=%s, target_stocks=%s",
@@ -338,7 +385,16 @@ class QuantBacktestEngine:
         ]
 
     def _calculate_factor_scores(self, db: Session, stocks: List[Dict], trading_date: date) -> pl.DataFrame:
-        """팩터 점수 계산 - Polars를 사용한 최적화"""
+        """팩터 점수 계산 - Polars를 사용한 최적화
+
+        계산 원리:
+        - 입력: 종목별 메타 정보(시가총액 등)와 전략에 연결된 팩터 정의.
+        - 각 팩터별로 점수를 산출한 뒤, (필요 시) 방향을 뒤집고 가중치를 곱해 부분 점수로 변환한다.
+          예) weight=0.3, NEGATIVE 방향이면: score = -raw_score × 0.3.
+        - SCORING 용도로 지정된 팩터들의 가중 합을 구하고, 전체 가중치 합으로 나눠 평균화한다.
+        - 결과 DataFrame에는 `total_score`(최종 선별용)와 각 팩터 컬럼이 포함된다.
+        - SCREENING 용 팩터는 이후 `_select_stocks_by_factors` 단계에서 임계값 비교식으로 사용된다.
+        """
 
         stock_codes = [s["stock_code"] for s in stocks]
         stock_data = {
@@ -449,7 +505,16 @@ class QuantBacktestEngine:
         self, db: Session, stock_codes: List[str], trading_date: date,
         factor: Factor, setting: StrategyFactor
     ) -> List[float]:
-        """재무 팩터 계산"""
+        """재무 팩터 계산
+
+        계산 원리:
+        - PER: Price / Earnings per Share. `_get_per`는 종가를 EPS로 나눠 주가가 벌어들이는 이익 대비 얼마나 비싼지 측정한다.
+        - PBR: Price / Book Value per Share. `_get_pbr`는 종가와 자본총계로 계산한 주당 순자산가치를 비교해 자산 대비 가치 판단.
+        - ROE: Net Income / Total Equity × 100(%). `_get_roe`는 자기자본 대비 수익성을 측정.
+        - DIV_YIELD: Annual Dividend per Share / Price × 100(%). `_get_dividend_yield`가 산출.
+        산출된 모든 raw score는 numpy를 사용해 Z-score 정규화 [(x - mean)/std]하여 서로 다른 단위를 표준화한다.
+        표준편차가 0인 경우(모든 값 동일)에는 0으로 채워 스크리닝/스코어링에서 중립값으로 처리한다.
+        """
 
         logger.debug(
             "재무 팩터 계산 - factor=%s, 종목수=%d, date=%s",
@@ -486,7 +551,13 @@ class QuantBacktestEngine:
         self, db: Session, stock_codes: List[str], trading_date: date,
         factor: Factor, setting: StrategyFactor
     ) -> List[float]:
-        """기술적 팩터 계산"""
+        """기술적 팩터 계산
+
+        계산 원리:
+        - MOMENTUM_NM: (최근 종가 - N일전 종가) / N일전 종가 × 100으로 상승률을 측정.
+        - VOLATILITY: 최근 N일간 일별 수익률의 표준편차에 √252를 곱해 연율화한 변동성(%).
+        산출된 값 역시 numpy로 Z-score 정규화하여 서로 다른 스케일을 통일한다.
+        """
 
         logger.debug(
             "기술적 팩터 계산 - factor=%s, 종목수=%d, date=%s",
@@ -518,7 +589,15 @@ class QuantBacktestEngine:
         return scores.tolist()
 
     def _select_stocks_by_factors(self, factor_scores: pl.DataFrame) -> List[str]:
-        """팩터 점수 기반 종목 선택 - Polars 최적화"""
+        """팩터 점수 기반 종목 선택 - Polars 최적화
+
+        계산 원리:
+        1) SCREENING 용 팩터: 전략이 지정한 연산자(GT/LT/BETWEEN)에 따라 임계값을 넘는 종목만 남긴다.
+           예) PER < 15 → PER 컬럼이 15보다 작은 행만 유지.
+        2) total_score가 존재할 경우, 가중 평균 점수가 가장 높은 순으로 내림차순 정렬한다.
+        3) TradingRule.max_positions가 지정돼 있으면 그 개수만큼 상위 종목을 선택한다.
+        결과는 stock_code 문자열 목록이며, 이후 리밸런싱 단계에서 매수/매도 판단에 사용된다.
+        """
 
         # 스크리닝 적용
         screened = factor_scores
@@ -585,7 +664,16 @@ class QuantBacktestEngine:
         return selected
 
     def _process_trading_day(self, db: Session, trading_date: date) -> Dict:
-        """일별 거래 처리"""
+        """일별 거래 처리
+
+        계산 원리:
+        1) 매 거래일마다 보유 포지션의 종가를 불러와 시가총액 환산 가치(=가격×수량)를 갱신한다.
+        2) 갱신된 가치와 기준 가격을 이용해 손절/익절 조건(임계 수익률)을 평가한다.
+        3) 포트폴리오 가치 = 현금 + 모든 포지션의 시가 평가액.
+        4) 일간 수익률 = (오늘 포트 가치 - 어제 포트 가치) / 어제 포트 가치 × 100.
+        5) 누적 수익률 = (오늘 포트 가치 - 초기 자본) / 초기 자본 × 100.
+        각 수치는 Decimal을 사용해 부동소수 오차를 줄인 뒤, 이후 통계 집계 시 float로 변환한다.
+        """
 
         # 1. 현재 포지션 가치 평가
         self._update_position_values(db, trading_date)
@@ -598,6 +686,8 @@ class QuantBacktestEngine:
         self.portfolio_value = self.cash + position_value
 
         # 4. 일별 수익률 계산
+        #    daily_return = ((V_t - V_{t-1}) / V_{t-1}) × 100 (% 단위)
+        #    cumulative_return = ((V_t - V_0) / V_0) × 100 (% 단위)
         daily_return = Decimal("0")
         cumulative_return = Decimal("0")
 
@@ -623,7 +713,16 @@ class QuantBacktestEngine:
         }
 
     def _rebalance_portfolio(self, db: Session, trading_date: date):
-        """포트폴리오 리밸런싱"""
+        """포트폴리오 리밸런싱
+
+        계산 원리:
+        1) 유니버스 종목을 필터링하여 현재 전략 조건(시장, 업종, 시가총액 등)에 부합하는 기업 목록을 만든다.
+        2) 팩터 점수(재무/기술/커스텀)를 계산 후, 스코어링/스크리닝 규칙을 적용해 선별한다.
+        3) 기존 포지션 중 새로 선정되지 않은 종목은 매도하여 현금화한다.
+        4) 포지션 사이징 규칙(EQUAL_WEIGHT, MARKET_CAP, RISK_PARITY)에 따라 목표 투자 금액을 계산한다.
+        5) 목표 금액과 현재 포지션 가치 차이를 이용해 신규 매수 또는 조정 매수를 실행한다.
+        결과적으로 리밸런싱 시점마다 포트폴리오 구성이 전략 설정과 최신 시장 상황을 반영하도록 한다.
+        """
 
         logger.info(f"[{trading_date}] 포트폴리오 리밸런싱 시작")
 
@@ -711,7 +810,16 @@ class QuantBacktestEngine:
                     continue
 
     def _buy_position(self, db: Session, stock_code: str, target_value: Decimal, trading_date: date):
-        """매수 포지션 생성"""
+        """매수 포지션 생성
+
+        계산 원리:
+        - 목표 투자금(target_value)을 현재 종가로 나눠 매입 수량을 결정한다.
+          quantity = floor(target_value / price).
+        - 실제 매입 비용 = price × quantity + 수수료(0.015%).
+        - 현금이 부족하면 (현금×0.99)/price로 재계산하여 현금 유동성을 약간 남겨둔다.
+        - 매수 후 포지션 딕셔너리에 {수량, 평균단가, 평가금액, 진입일}을 저장하고 현금을 차감한다.
+        - 수수료, 세금 등 거래 비용은 SimulationTrade에 함께 기록되어 향후 성과 분석에 포함된다.
+        """
 
         logger.debug(
             "[%s] 매수 시도 - %s, 목표금액 %.2f, 현재현금 %.2f",
@@ -801,7 +909,15 @@ class QuantBacktestEngine:
         )
 
     def _sell_position(self, db: Session, stock_code: str, trading_date: date):
-        """매도 포지션 처리"""
+        """매도 포지션 처리
+
+        계산 원리:
+        - 매도 금액 = 종가 × 보유 수량.
+        - 순매도금액 = 금액 - 수수료(0.015%) - 거래세(0.23%).
+        - 실현 손익 = 순매도금액 - (평균매입가 × 수량).
+        - 실현 수익률 = 실현 손익 / (평균매입가 × 수량) × 100.
+        매도 후 포지션을 제거하고, 현금을 늘리며, 거래 이력을 SimulationTrade 테이블에 남긴다.
+        """
 
         if stock_code not in self.positions:
             return
@@ -873,7 +989,13 @@ class QuantBacktestEngine:
         )
 
     def _update_position_values(self, db: Session, trading_date: date):
-        """포지션 가치 업데이트"""
+        """포지션 가치 업데이트
+
+        계산 원리:
+        - 각 보유 종목의 당일 종가를 조회해 평가금액 = 종가 × 수량으로 갱신한다.
+        - 가격 데이터가 없으면 해당 포지션은 갱신되지 않으며, DEBUG 로그로 누락 상황을 기록한다.
+        - 갱신된 평가금액은 이후 손절/익절, 포트 가치 계산, 통계 산출의 기초 데이터가 된다.
+        """
 
         updated_count = 0
         for stock_code, position in self.positions.items():
@@ -907,7 +1029,14 @@ class QuantBacktestEngine:
             )
 
     def _check_stop_conditions(self, db: Session, trading_date: date):
-        """손절/익절 조건 체크"""
+        """손절/익절 조건 체크
+
+        계산 원리:
+        - 각 포지션에 대해 현재 수익률 r = (현재가 - 평균매입가) / 평균매입가 × 100을 계산한다.
+        - TradingRule에 stop_loss_pct(예: -10%) 혹은 take_profit_pct(예: +20%)가 정의되어 있으면
+          수익률이 임계값을 넘었을 때 즉시 매도 리스트에 추가한다.
+        - 매도는 `_sell_position`을 호출하여 수수료/세금을 반영한 실현 손익을 기록한다.
+        """
 
         for rule in self.trading_rules:
             if not rule.stop_loss_pct and not rule.take_profit_pct:
@@ -954,7 +1083,15 @@ class QuantBacktestEngine:
                     continue
 
     def _should_rebalance(self, trading_date: date) -> bool:
-        """리밸런싱 필요 여부 확인"""
+        """리밸런싱 필요 여부 확인
+
+        계산 원리:
+        - TradingRule에 설정된 rebalance_frequency에 따라 달력 기반 트리거를 평가한다.
+        - MONTHLY: 매월 첫 주(1~7일)에 한 번 리밸런싱.
+        - QUARTERLY: 1,4,7,10월 첫 주에 리밸런싱.
+        - WEEKLY: 매주 월요일(weekday=0)에 리밸런싱.
+        - 어느 조건도 충족하지 않으면 False를 반환해 포트 구성이 유지된다.
+        """
 
         for rule in self.trading_rules:
             logger.debug(
@@ -990,7 +1127,14 @@ class QuantBacktestEngine:
         return False
 
     def _calculate_position_size(self, num_positions: int) -> Decimal:
-        """포지션 크기 계산"""
+        """포지션 크기 계산
+
+        계산 원리:
+        - 동일 가중(EQUAL_WEIGHT): 현재 포트 가치(V_t)를 선택된 종목 수 N으로 나눈 값 = V_t / N.
+        - MARKET_CAP, RISK_PARITY 등 가중 방식은 `_calculate_weighted_position_sizes`에서 실제 비중을 산출하며,
+          이 메서드는 기본 분모(평균 투자 금액)를 제공한다.
+        - 선택된 종목이 없다면 0을 반환하여 매수 로직이 실행되지 않도록 한다.
+        """
 
         if num_positions == 0:
             logger.warning("포지션 사이징 요청이 왔지만 선택된 종목이 없습니다.")
@@ -1022,7 +1166,14 @@ class QuantBacktestEngine:
     def _calculate_weighted_position_sizes(
         self, db: Session, stock_codes: List[str], trading_date: date, method: str
     ) -> Dict[str, Decimal]:
-        """가중치 기반 포지션 크기 계산"""
+        """가중치 기반 포지션 크기 계산
+
+        계산 원리:
+        - MARKET_CAP: 각 종목의 시가총액(M_i)을 합산한 뒤, 비중 = M_i / ΣM. 투자금 = 포트 가치 × 비중.
+        - RISK_PARITY: 변동성 σ_i의 역수(1/σ_i)에 비례하도록 비중을 배분. Σ(1/σ). 투자금 = 포트 가치 × ( (1/σ_i) / Σ(1/σ) ).
+        - 기타 방식(기본값): 동일 가중으로 분배한다.
+        계산 결과는 {stock_code: Decimal(투자금)} 형태로 반환되어 이후 매수/조정 로직에서 사용된다.
+        """
 
         logger.debug(
             "[%s] 가중치 포지션 계산 - method=%s, 종목수=%d",
@@ -1111,7 +1262,14 @@ class QuantBacktestEngine:
                 pass
 
     def _save_daily_value(self, db: Session, trading_date: date, daily_result: Dict):
-        """일별 포트폴리오 가치 저장"""
+        """일별 포트폴리오 가치 저장
+
+        계산 원리:
+        - `daily_result`에는 `_process_trading_day`에서 계산한 포트 가치/현금/보유가치/수익률이 들어있다.
+        - 해당 값을 SimulationDailyValue 테이블에 그대로 저장함으로써, 프론트엔드에서 일별 곡선을 그릴 수 있고
+          통계 산출 시 시계열 데이터로 재사용된다.
+        - 모든 수치는 Decimal 기반으로 계산되지만, DB에는 NUMERIC 타입으로 저장되어 정밀도가 유지된다.
+        """
 
         daily_value = SimulationDailyValue(
             session_id=self.session_id,
@@ -1132,7 +1290,20 @@ class QuantBacktestEngine:
         )
 
     def _calculate_statistics(self, daily_results: List[Dict]) -> Dict:
-        """백테스트 통계 계산"""
+        """백테스트 통계 계산
+
+        계산 원리:
+        - total_return(누적 수익률): ((최종 포트 가치 - 초기 포트 가치) / 초기 포트 가치) × 100.
+          포트 가치는 일별 시리즈 중 첫 번째/마지막 값을 사용한다.
+        - 일별 수익률(daily_return): pandas `pct_change`로 V_t / V_{t-1} - 1을 계산.
+        - volatility(연환산 변동성): 일별 수익률 표준편차 σ × √252 × 100(%).
+          252는 1년 거래일 수로 가정한 값이다.
+        - max_drawdown(MDD): 누적 최고점 대비 하락폭 (V_t - 최고점) / 최고점 × 100, 최솟값(가장 큰 음수)을 선택.
+        - sharpe_ratio: (평균 초과 수익률 / 일별 표준편차) × √252.
+          초과 수익률 = daily_return - (무위험 수익률 2% / 252).
+        - final_capital: 마지막 포트 가치.
+        모든 통계는 float로 변환해 JSON 직렬화 시 깔끔하게 전달한다.
+        """
 
         if not daily_results:
             logger.warning("일별 결과가 비어 있어 통계를 계산할 수 없습니다.")
@@ -1201,7 +1372,13 @@ class QuantBacktestEngine:
     def _update_session_status(
         self, db: Session, status: str, progress: int = None, error_message: str = None
     ):
-        """세션 상태 업데이트"""
+        """세션 상태 업데이트
+
+        계산 원리:
+        - SimulationSession 테이블에 상태(Status), 진행률(progress %), 시작/완료 시각을 기록한다.
+        - RUNNING일 때는 started_at을, COMPLETED/FAILED에서는 completed_at을 갱신한다.
+        - 에러 메시지가 전달되면 error_message 칼럼에 저장하여 UI에서 확인할 수 있게 한다.
+        """
 
         update_values = {"status": status}
 
@@ -1224,7 +1401,12 @@ class QuantBacktestEngine:
         db.commit()
 
     def _has_dividend_table(self, db: Session) -> bool:
-        """dividend_info 테이블 존재 여부 캐시"""
+        """dividend_info 테이블 존재 여부 캐시
+
+        계산 원리:
+        - PostgreSQL의 `to_regclass` 함수를 사용해 `public.dividend_info` 테이블 존재 여부를 확인한다.
+        - 최초 한 번만 쿼리하고 결과를 캐시하여 매 거래일 반복 호출 시 불필요한 메타데이터 조회를 방지한다.
+        """
         if not self._dividend_table_checked:
             result = db.execute(
                 text("SELECT to_regclass('public.dividend_info')")
@@ -1239,7 +1421,15 @@ class QuantBacktestEngine:
 
     # 헬퍼 메서드들 (팩터 계산용)
     def _get_per(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """PER 계산 - Price to Earnings Ratio"""
+        """PER 계산 - Price to Earnings Ratio
+
+        계산 원리:
+        - PER = 주가 / 주당순이익(EPS).
+        - EPS = 당기순이익(Net Income) / 발행주식수.
+        - 여기서는 최근 사업보고서(11011) 당기순이익과 같은 날짜의 시가총액/종가를 이용해 EPS를 역산한다.
+          시가총액 = 종가 × 상장주식수 → EPS = Net Income / (MarketCap / Price).
+        - EPS≤0인 경우 가치 투자의 관점에서 의미가 희미하므로 0을 반환하여 스크리닝에서 제외한다.
+        """
         try:
             # 주가 정보 조회
             price_result = db.execute(
@@ -1328,7 +1518,14 @@ class QuantBacktestEngine:
             return 0.0
 
     def _get_pbr(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """PBR 계산 - Price to Book Ratio"""
+        """PBR 계산 - Price to Book Ratio
+
+        계산 원리:
+        - PBR = 주가 / 주당 순자산가치(BPS).
+        - BPS = 자본총계(Total Equity) / 발행주식수.
+        - 재무제표에서 자본총계를 가져오고, 시가총액/종가로 발행주식수를 역산해 BPS를 구한다.
+        - PBR이 너무 크거나 음수면 이상치로 간주해 0을 반환한다.
+        """
         try:
             # 주가 정보 조회
             price_result = db.execute(
@@ -1417,7 +1614,13 @@ class QuantBacktestEngine:
             return 0.0
 
     def _get_roe(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """ROE 계산 - Return on Equity"""
+        """ROE 계산 - Return on Equity
+
+        계산 원리:
+        - ROE = 당기순이익 / 자본총계 × 100.
+        - 100을 곱해 % 단위로 변환한다. 자본총계가 0 이하이면 정의되지 않으므로 0 반환.
+        - 전략에서 ROE가 높을수록 수익성이 좋은 기업으로 판단한다.
+        """
         try:
             # 당기순이익 조회 (report_date가 NULL이므로 bsns_year로 필터)
             net_income_result = db.execute(
@@ -1485,7 +1688,12 @@ class QuantBacktestEngine:
             return 0.0
 
     def _get_dividend_yield(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """배당수익률 계산"""
+        """배당수익률 계산
+
+        계산 원리:
+        - Dividend Yield = 최근 1년간 주당 현금배당 합계 / 현재 주가 × 100.
+        - 배당정보 테이블이 없거나 값이 0이면 배당 전략에서 제외하도록 0을 반환한다.
+        """
         try:
             # 현재 주가 조회
             price_result = db.execute(
@@ -1545,7 +1753,13 @@ class QuantBacktestEngine:
             return 0.0
 
     def _get_momentum(self, db: Session, stock_code: str, trading_date: date, days: int) -> float:
-        """모멘텀 계산 - 과거 N일간 수익률"""
+        """모멘텀 계산 - 과거 N일간 수익률
+
+        계산 원리:
+        - Momentum_N = (현재가 - N일 전 가격) / N일 전 가격 × 100.
+        - 상승 추세를 포착하기 위해 최근 종가와 과거 종가를 비교한다.
+        - 과거 가격 데이터가 충분하지 않으면 0으로 돌려보내어 팩터 점수에 영향을 주지 않는다.
+        """
         try:
             # 과거 N일 전 날짜 계산
             start_date = trading_date - timedelta(days=days * 2)  # 여유있게 설정
@@ -1593,7 +1807,14 @@ class QuantBacktestEngine:
             return 0.0
 
     def _get_volatility(self, db: Session, stock_code: str, trading_date: date, days: int) -> float:
-        """변동성 계산 - 과거 N일간 일일 수익률의 표준편차"""
+        """변동성 계산 - 과거 N일간 일일 수익률의 표준편차
+
+        계산 원리:
+        - 먼저 N일간 종가 시퀀스를 수집한 뒤, 일별 수익률 r_t = (P_t - P_{t-1}) / P_{t-1}을 계산한다.
+        - 표준편차 σ = std(r_t).
+        - 연환산 변동성 = σ × √252 × 100 (%). 252는 1년 평균 거래일 수.
+        - 변동성이 높을수록 위험이 큰 종목으로 간주한다.
+        """
         try:
             # 과거 N일간 주가 데이터 조회
             start_date = trading_date - timedelta(days=days * 2)
@@ -1649,7 +1870,14 @@ class QuantBacktestEngine:
         self, db: Session, stock_codes: List[str], trading_date: date,
         factor: Factor, setting: StrategyFactor
     ) -> List[float]:
-        """커스텀 팩터 계산"""
+        """커스텀 팩터 계산
+
+        계산 원리:
+        - Factor 정의에 커스텀 수식이 있으면, 필요한 서브 팩터 값을 가져와 수식을 평가한다.
+        - 사전에 정의된 복합 팩터(ex. VALUE_COMPOSITE, QUALITY, GROWTH)는 여러 팩터를 조합해 점수를 만든다.
+          예) VALUE_COMPOSITE = (1/PER + 1/PBR) / 2.
+        - 계산 실패 시 0으로 채워 전략 로직이 안전하게 계속되도록 한다.
+        """
         try:
             # 팩터 정의에 따른 커스텀 계산
             if factor.calculation_formula:
@@ -1703,7 +1931,13 @@ class QuantBacktestEngine:
             return [0.0 for _ in stock_codes]
 
     def _get_roa(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """ROA 계산 - Return on Assets"""
+        """ROA 계산 - Return on Assets
+
+        계산 원리:
+        - ROA = 당기순이익 / 자산총계 × 100.
+        - 기업이 보유한 총자산 대비 수익 창출 효율을 측정하며, 자산총계가 0이면 정의되지 않는다.
+        - ROA 범위를 -20%~30%로 제한해 이상치를 제거한다.
+        """
         try:
             # 당기순이익 조회 (report_date가 NULL이므로 bsns_year로 필터)
             net_income_result = db.execute(
@@ -1771,7 +2005,13 @@ class QuantBacktestEngine:
             return 0.0
 
     def _get_growth_rate(self, db: Session, stock_code: str, trading_date: date) -> float:
-        """매출 성장률 계산"""
+        """매출 성장률 계산
+
+        계산 원리:
+        - Revenue Growth = (금년도 매출 - 전년도 매출) / 전년도 매출 × 100.
+        - 재무제표에는 다양한 계정명이 존재하므로, '매출' 혹은 'revenue'가 포함된 항목 중 최신 2개를 선택한다.
+        - 전년도 매출이 0 이하이면 성장률이 정의되지 않으므로 0으로 처리한다.
+        """
         try:
             # 최근 2년간 매출액 조회 (report_date가 NULL이므로 bsns_year로 필터)
             result = db.execute(

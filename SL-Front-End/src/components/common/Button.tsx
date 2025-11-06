@@ -37,7 +37,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       className={twMerge(
-        "flex items-center justify-center gap-1 overflow-hidden rounded-lg px-6 font-sans font-semibold",
+        "flex items-center justify-center gap-1 overflow-hidden rounded-sm px-6 font-sans font-semibold",
         VARIANT_STYLES[variant],
         SIZE_STYLES[size],
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",

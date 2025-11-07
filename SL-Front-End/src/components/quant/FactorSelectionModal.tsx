@@ -1,14 +1,16 @@
 "use client";
 
-import type { Factor } from "@/constants";
 import {
-  FACTORS,
-  getFactorsByCategory,
-  searchFactors,
-  SUB_FACTORS,
-} from "@/constants";
+  compareFactorCategoryOrder,
+  getFactorCategoryLabel,
+} from "@/constants/factorCategories";
 import { useDebounce } from "@/hooks";
+import { useFactorsQuery } from "@/hooks/useFactorsQuery";
+import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
+import type { Factor, SubFactor } from "@/types/api";
 import { useEffect, useMemo, useState } from "react";
+
+type ModalFactor = Factor & { formula?: string };
 
 /**
  * 팩터 선택 모달 Props 인터페이스
@@ -88,13 +90,49 @@ export function FactorSelectionModal({
   onSelect,
   initialValues,
 }: FactorSelectionModalProps) {
-  const defaultSubFactorId = SUB_FACTORS[0]?.id ?? "default";
-  const factorsByCategory = useMemo(() => getFactorsByCategory(), []);
+  const {
+    data: fetchedFactors = [],
+    isLoading: isLoadingFactors,
+  } = useFactorsQuery();
+  const factors = fetchedFactors as ModalFactor[];
+
+  const {
+    data: fetchedSubFactors = [],
+    isLoading: isLoadingSubFactors,
+  } = useSubFactorsQuery();
+  const subFactors = fetchedSubFactors as SubFactor[];
+
+  const factorsByCategory = useMemo(() => {
+    if (!factors.length) {
+      return {};
+    }
+
+    const grouped = factors.reduce((acc, factor) => {
+      const categoryKey = getFactorCategoryLabel(factor.category);
+      if (!acc[categoryKey]) {
+        acc[categoryKey] = [];
+      }
+      acc[categoryKey].push(factor);
+      return acc;
+    }, {} as Record<string, ModalFactor[]>);
+
+    return Object.keys(grouped)
+      .sort(compareFactorCategoryOrder)
+      .reduce((acc, key) => {
+        acc[key] = grouped[key];
+        return acc;
+      }, {} as Record<string, ModalFactor[]>);
+  }, [factors]);
+
   const categoryKeys = useMemo(
     () => Object.keys(factorsByCategory),
     [factorsByCategory],
   );
-  const defaultFactor = useMemo(() => FACTORS[0] ?? null, []);
+  const defaultFactor = useMemo(() => factors[0] ?? null, [factors]);
+  const defaultSubFactorId = useMemo(
+    () => subFactors[0]?.id ?? "default",
+    [subFactors],
+  );
 
   // ===== 상태 관리 =====
 
@@ -106,7 +144,7 @@ export function FactorSelectionModal({
   const trimmedQuery = debouncedQuery.trim();
 
   /** 현재 선택된 팩터 */
-  const [selectedFactor, setSelectedFactor] = useState<Factor | null>(
+  const [selectedFactor, setSelectedFactor] = useState<ModalFactor | null>(
     defaultFactor,
   );
 
@@ -149,10 +187,16 @@ export function FactorSelectionModal({
 
   // ===== 검색 로직 및 자동 선택 =====
 
-  const searchResults = useMemo(
-    () => (trimmedQuery === "" ? [] : searchFactors(trimmedQuery)),
-    [trimmedQuery],
-  );
+  const searchResults = useMemo(() => {
+    if (trimmedQuery === "" || !factors.length) {
+      return [];
+    }
+
+    const lowerQuery = trimmedQuery.toLowerCase();
+    return factors.filter((factor) =>
+      factor.name.toLowerCase().includes(lowerQuery),
+    );
+  }, [factors, trimmedQuery]);
 
   /**
    * 디바운스된 검색어가 변경될 때 자동으로 첫 번째 결과 선택
@@ -194,7 +238,7 @@ export function FactorSelectionModal({
     setSearchQuery("");
 
     const factorFromInitial = initialValues?.factorId
-      ? FACTORS.find((f) => f.id === initialValues.factorId) || null
+      ? factors.find((f) => f.id === initialValues.factorId) || null
       : null;
     setSelectedFactor(factorFromInitial ?? defaultFactor);
 
@@ -210,6 +254,7 @@ export function FactorSelectionModal({
     defaultSubFactorId,
     initialValues,
     isOpen,
+    factors,
   ]);
 
   // ===== 이벤트 핸들러 =====
@@ -217,7 +262,7 @@ export function FactorSelectionModal({
   /**
    * 팩터 선택 핸들러
    */
-  const handleFactorSelect = (factor: Factor) => {
+  const handleFactorSelect = (factor: ModalFactor) => {
     setSelectedFactor(factor);
   };
 
@@ -233,11 +278,15 @@ export function FactorSelectionModal({
    */
   const handleSubmit = () => {
     if (!selectedFactor) return;
+    const resolvedSubFactorId =
+      subFactors.find((sf) => sf.id === selectedSubFactorId)?.id ??
+      defaultSubFactorId ??
+      "default";
 
     onSelect(
       selectedFactor.id,
       selectedFactor.name,
-      selectedSubFactorId,
+      resolvedSubFactorId,
       selectedOperator,
       comparisonValue,
     );
@@ -269,7 +318,9 @@ export function FactorSelectionModal({
   );
 
   /** 선택된 함수 정보 */
-  const selectedSubFactor = SUB_FACTORS.find((sf) => sf.id === selectedSubFactorId);
+  const selectedSubFactor =
+    subFactors.find((sf) => sf.id === selectedSubFactorId) ??
+    subFactors.find((sf) => sf.id === defaultSubFactorId);
 
   // ===== 렌더링 =====
 
@@ -331,74 +382,93 @@ export function FactorSelectionModal({
               <div className="flex-1 flex gap-[12px] px-[16px] pb-[16px] overflow-hidden min-h-0">
                 {/* Factor List - 39% of panel width */}
                 <div className="w-[43%] border border-white rounded-[8px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent p-[12px]">
-                  {Object.entries(displayFactors).map(([category, factors], categoryIndex) => (
-                    <div key={category} className="mb-[24px] last:mb-0">
-                      {/* Category Header */}
-                      <button
-                        onClick={() => toggleCategory(category)}
-                        className="flex flex-col font-['Pretendard',sans-serif] font-medium justify-center text-[18px] text-white tracking-[-0.54px] cursor-pointer hover:text-[#d68c45] transition-colors mb-[8px] w-full text-left"
-                        type="button"
-                      >
-                        <p className="leading-[normal] whitespace-pre">{category}</p>
-                      </button>
-
-                      {/* Factor Items */}
-                      {expandedCategories.includes(category) && (
-                        <div className="space-y-[4px]">
-                          {factors.map((factor) => (
-                            <button
-                              key={factor.id}
-                              onClick={() => handleFactorSelect(factor)}
-                              className={`flex items-center text-[16px] tracking-[-0.48px] cursor-pointer transition-colors w-full text-left ${selectedFactor?.id === factor.id
-                                ? "text-[#d68c45] font-['Pretendard',sans-serif] font-bold"
-                                : "text-[#c8c8c8] font-['Pretendard',sans-serif] font-normal hover:text-white"
-                                }`}
-                              type="button"
-                            >
-                              <span className="mr-[8px]">•</span>
-                              <span className="leading-[normal]">{factor.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Category Divider */}
-                      {categoryIndex < Object.keys(displayFactors).length - 1 && (
-                        <div className="mt-[16px] h-[1px]">
-                          <svg className="block w-full h-full" fill="none" preserveAspectRatio="none" viewBox="0 0 200 1">
-                            <line stroke="url(#paint0_linear_divider)" strokeOpacity="0.4" x2="200" y1="0.5" y2="0.5" />
-                            <defs>
-                              <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_divider" x1="0" x2="200" y1="1.5" y2="1.5">
-                                <stop stopColor="#282828" />
-                                <stop offset="0.2" stopColor="#737373" />
-                                <stop offset="0.8" stopColor="#737373" />
-                                <stop offset="1" stopColor="#282828" />
-                              </linearGradient>
-                            </defs>
-                          </svg>
-                        </div>
-                      )}
+                  {isLoadingFactors ? (
+                    <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                      팩터 데이터를 불러오는 중입니다...
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      {Object.entries(displayFactors).map(([category, factors], categoryIndex) => (
+                        <div key={category} className="mb-[24px] last:mb-0">
+                          {/* Category Header */}
+                          <button
+                            onClick={() => toggleCategory(category)}
+                            className="flex flex-col font-['Pretendard',sans-serif] font-medium justify-center text-[18px] text-white tracking-[-0.54px] cursor-pointer hover:text-[#d68c45] transition-colors mb-[8px] w-full text-left"
+                            type="button"
+                          >
+                            <p className="leading-[normal] whitespace-pre">{category}</p>
+                          </button>
 
-                  {/* 검색 결과 없음 */}
-                  {debouncedQuery.trim() !== "" &&
-                    Object.values(displayFactors).every((factors) => factors.length === 0) && (
-                      <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
-                        검색 결과가 없습니다
-                      </div>
-                    )}
+                          {/* Factor Items */}
+                          {expandedCategories.includes(category) && (
+                            <div className="space-y-[4px]">
+                              {factors.map((factor) => (
+                                <button
+                                  key={factor.id}
+                                  onClick={() => handleFactorSelect(factor)}
+                                  className={`flex items-center text-[16px] tracking-[-0.48px] cursor-pointer transition-colors w-full text-left ${selectedFactor?.id === factor.id
+                                    ? "text-[#d68c45] font-['Pretendard',sans-serif] font-bold"
+                                    : "text-[#c8c8c8] font-['Pretendard',sans-serif] font-normal hover:text-white"
+                                    }`}
+                                  type="button"
+                                >
+                                  <span className="mr-[8px]">•</span>
+                                  <span className="leading-[normal]">{factor.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Category Divider */}
+                          {categoryIndex < Object.keys(displayFactors).length - 1 && (
+                            <div className="mt-[16px] h-[1px]">
+                              <svg className="block w-full h-full" fill="none" preserveAspectRatio="none" viewBox="0 0 200 1">
+                                <line stroke="url(#paint0_linear_divider)" strokeOpacity="0.4" x2="200" y1="0.5" y2="0.5" />
+                                <defs>
+                                  <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_divider" x1="0" x2="200" y1="1.5" y2="1.5">
+                                    <stop stopColor="#282828" />
+                                    <stop offset="0.2" stopColor="#737373" />
+                                    <stop offset="0.8" stopColor="#737373" />
+                                    <stop offset="1" stopColor="#282828" />
+                                  </linearGradient>
+                                </defs>
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* 검색 결과 없음 */}
+                      {trimmedQuery !== "" &&
+                        Object.values(displayFactors).every((factors) => factors.length === 0) && (
+                          <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                            검색 결과가 없습니다
+                          </div>
+                        )}
+
+                      {/* 전체 데이터 없음 */}
+                      {trimmedQuery === "" && categoryKeys.length === 0 && (
+                        <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                          사용할 수 있는 팩터가 없습니다
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {/* Factor Info Panel - 61% of panel width */}
                 <div className="flex-1 border border-white rounded-[8px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent p-[12px]">
-                  {selectedFactor ? (
+                  {isLoadingFactors ? (
+                    <div className="flex h-full items-center justify-center text-sm text-[#c8c8c8]">
+                      팩터 정보를 불러오는 중입니다...
+                    </div>
+                  ) : selectedFactor ? (
                     <>
                       <div className="flex flex-col font-['Pretendard',sans-serif] font-bold justify-center text-[18px] tracking-[-0.54px] mb-[18.5px]">
                         <p className="leading-[normal] text-white whitespace-pre">{selectedFactor.name}</p>
                       </div>
                       <div className="font-['Pretendard',sans-serif] font-normal leading-[normal] text-[16px] tracking-[-0.48px] whitespace-pre-wrap text-white">
-                        <p>{selectedFactor.formula}</p>
+                        <p>{selectedFactor.description ?? selectedFactor.formula ?? "설명이 제공되지 않았습니다."}</p>
                       </div>
                     </>
                   ) : (
@@ -420,33 +490,47 @@ export function FactorSelectionModal({
                   </div>
 
                   {/* Function Items */}
-                  <div className="space-y-[4px]">
-                    {SUB_FACTORS.map((func) => (
-                      <button
-                        key={func.id}
-                        onClick={() => handleSubFactorSelect(func.id)}
-                        className={`flex items-center text-[16px] tracking-[-0.48px] cursor-pointer transition-colors w-full text-left ${selectedSubFactorId === func.id
-                          ? "text-white font-['Pretendard',sans-serif] font-bold"
-                          : "text-[#c8c8c8] font-['Pretendard',sans-serif] font-normal hover:text-white"
-                          }`}
-                        type="button"
-                      >
-                        <span className="mr-[8px]">•</span>
-                        <span className="leading-[normal]">{func.name}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {isLoadingSubFactors ? (
+                    <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                      함수 데이터를 불러오는 중입니다...
+                    </div>
+                  ) : subFactors.length === 0 ? (
+                    <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                      사용할 수 있는 함수가 없습니다
+                    </div>
+                  ) : (
+                    <div className="space-y-[4px]">
+                      {subFactors.map((func) => (
+                        <button
+                          key={func.id}
+                          onClick={() => handleSubFactorSelect(func.id)}
+                          className={`flex items-center text-[16px] tracking-[-0.48px] cursor-pointer transition-colors w-full text-left ${selectedSubFactorId === func.id
+                            ? "text-white font-['Pretendard',sans-serif] font-bold"
+                            : "text-[#c8c8c8] font-['Pretendard',sans-serif] font-normal hover:text-white"
+                            }`}
+                          type="button"
+                        >
+                          <span className="mr-[8px]">•</span>
+                          <span className="leading-[normal]">{func.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Function Info Panel - 67% of panel */}
                 <div className="flex-1 border border-white rounded-[8px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent p-[12px]">
-                  {selectedSubFactor ? (
+                  {isLoadingSubFactors ? (
+                    <div className="flex h-full items-center justify-center text-sm text-[#c8c8c8]">
+                      함수 정보를 불러오는 중입니다...
+                    </div>
+                  ) : selectedSubFactor ? (
                     <>
                       <div className="flex flex-col font-['Pretendard',sans-serif] font-bold justify-center text-[18px] tracking-[-0.54px] mb-[18.5px]">
                         <p className="leading-[normal] text-white whitespace-pre">{selectedSubFactor.name}</p>
                       </div>
                       <div className="font-['Pretendard',sans-serif] font-normal leading-[normal] text-[16px] tracking-[-0.48px] text-white">
-                        <p>{selectedSubFactor.description}</p>
+                        <p>{selectedSubFactor.description ?? "설명이 제공되지 않았습니다."}</p>
                       </div>
                     </>
                   ) : (

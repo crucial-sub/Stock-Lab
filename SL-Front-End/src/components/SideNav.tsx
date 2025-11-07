@@ -15,7 +15,7 @@ export function SideNav({ }: SideNavProps) {
     const navItems = [
         { href: "/", label: "홈", icon: "/icons/home.svg" },
         { href: "/quant", label: "퀀트 투자", icon: "/icons/function.svg" },
-        { href: "/market", label: "시세", icon: "/icons/bar-chart.svg" },
+        { href: "/market-price", label: "시세", icon: "/icons/bar-chart.svg" },
         { href: "/news", label: "뉴스", icon: "/icons/news.svg" },
         { href: "/mypage", label: "마이페이지", icon: "/icons/account-circle.svg" },
     ];

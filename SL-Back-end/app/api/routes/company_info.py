@@ -43,6 +43,8 @@ class CompanyBasicInfo(BaseModel):
     listed_shares: Optional[int] = Field(None, serialization_alias="listedShares")
     listed_date: Optional[str] = Field(None, serialization_alias="listedDate")
     industry: Optional[str] = None
+    momentum_score: Optional[float] = Field(None, serialization_alias="momentumScore")
+    fundamental_score: Optional[float] = Field(None, serialization_alias="fundamentalScore")
 
 
 class InvestmentIndicators(BaseModel):
@@ -438,7 +440,9 @@ async def get_company_info(
                 ceo_name=company.ceo_name,
                 listed_shares=latest_price.listed_shares if latest_price else None,
                 listed_date=company.listed_date.isoformat() if company.listed_date else None,
-                industry=company.industry
+                industry=company.industry,
+                momentum_score=company.momentum_score,
+                fundamental_score=company.fundamental_score
             ),
             investment_indicators=InvestmentIndicators(
                 per=per,

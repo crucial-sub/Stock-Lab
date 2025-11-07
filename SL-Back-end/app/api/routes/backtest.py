@@ -89,6 +89,22 @@ class BacktestRequest(BaseModel):
 
     # 매매 대상
     target_stocks: List[str]  # 테마 이름 목록
+    min_momentum_score: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        alias="minMomentumScore",
+        serialization_alias="minMomentumScore",
+        description="필터에 사용할 최소 모멘텀 점수"
+    )
+    min_fundamental_score: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        alias="minFundamentalScore",
+        serialization_alias="minFundamentalScore",
+        description="필터에 사용할 최소 펀더멘털 점수"
+    )
 
 
 class BacktestResponse(BaseModel):
@@ -341,7 +357,9 @@ async def run_backtest(
                 end_date,
                 initial_capital,
                 "KOSPI",
-                request.target_stocks  # 테마 목록 전달
+                request.target_stocks,  # 테마 목록 전달
+                request.min_momentum_score,
+                request.min_fundamental_score
             )
         )
 
@@ -643,14 +661,14 @@ async def execute_backtest_wrapper(
     end_date: date,
     initial_capital: float,
     benchmark: str,
-    target_stocks: List[str]  # 테마 목록 추가
+    target_stocks: List[str],
+    min_momentum_score: Optional[float] = None,
+    min_fundamental_score: Optional[float] = None
 ):
-    """백테스트 비동기 실행 래퍼 (고도화된 백테스트 사용)"""
+    """백테스트 비동기 실행 래퍼 (고도화된 백테스트 용)"""
     try:
-        # 고도화된 백테스트 실행
         from app.services.advanced_backtest import run_advanced_backtest
 
-        # 동기 함수를 별도 스레드에서 실행
         import asyncio
         loop = asyncio.get_event_loop()
 
@@ -663,7 +681,9 @@ async def execute_backtest_wrapper(
             end_date,
             Decimal(str(initial_capital)),
             benchmark,
-            target_stocks
+            target_stocks,
+            min_momentum_score,
+            min_fundamental_score
         )
 
         logger.info(f"백테스트 완료: {session_id}")
@@ -707,6 +727,8 @@ async def list_available_factors():
             {"id": "EARNINGS_GROWTH", "name": "이익성장률", "category": "growth", "description": "Earnings Growth Rate"},
             {"id": "DEBT_RATIO", "name": "부채비율", "category": "stability", "description": "Debt to Equity Ratio"},
             {"id": "CURRENT_RATIO", "name": "유동비율", "category": "stability", "description": "Current Ratio"},
+            {"id": "MOMENTUM_SCORE", "name": "모멘텀 점수", "category": "momentum", "description": "Composite momentum score (0~100)"},
+            {"id": "FUNDAMENTAL_SCORE", "name": "펀더멘털 점수", "category": "value", "description": "Composite fundamental score (0~100)"},
             {"id": "MOMENTUM_1M", "name": "1개월 모멘텀", "category": "momentum", "description": "1 Month Price Momentum"},
             {"id": "MOMENTUM_3M", "name": "3개월 모멘텀", "category": "momentum", "description": "3 Month Price Momentum"},
             {"id": "MOMENTUM_6M", "name": "6개월 모멘텀", "category": "momentum", "description": "6 Month Price Momentum"},

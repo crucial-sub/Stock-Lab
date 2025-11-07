@@ -166,6 +166,8 @@ async def create_tables():
                           calculation_type="TECHNICAL", description="6 Month Price Momentum"),
                     Factor(factor_id="MOMENTUM_12M", category_id="momentum", factor_name="12개월 모멘텀",
                           calculation_type="TECHNICAL", description="12 Month Price Momentum"),
+                    Factor(factor_id="MOMENTUM_SCORE", category_id="momentum", factor_name="모멘텀 점수",
+                          calculation_type="CUSTOM", description="Composite momentum score (0~100)"),
 
                     # Stability factors
                     Factor(factor_id="DEBT_RATIO", category_id="stability", factor_name="부채비율",
@@ -186,6 +188,8 @@ async def create_tables():
                     # Size factors
                     Factor(factor_id="MARKET_CAP", category_id="size", factor_name="시가총액",
                           calculation_type="FUNDAMENTAL", description="Market Capitalization"),
+                    Factor(factor_id="FUNDAMENTAL_SCORE", category_id="value", factor_name="펀더멘털 점수",
+                          calculation_type="CUSTOM", description="Composite fundamental score (0~100)"),
 
                     # Technical factors
                     Factor(factor_id="RSI", category_id="technical", factor_name="RSI",

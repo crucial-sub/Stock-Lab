@@ -149,11 +149,20 @@ const columnTemplate = "grid grid-cols-[2.6fr,1fr,1fr,1fr,1fr,1fr] gap-4";
 
 export default function MarketPricePage() {
   const [selectedTab, setSelectedTab] = useState(marketTabs[0]);
+  const [rows, setRows] = useState(mockMarketRows);
   const todayLabel = new Date().toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
+
+  const handleToggleFavorite = (rank: number) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.rank === rank ? { ...row, isFavorite: !row.isFavorite } : row,
+      ),
+    );
+  };
 
   return (
     <section className="flex flex-col gap-4">
@@ -195,7 +204,7 @@ export default function MarketPricePage() {
         </div>
 
         <div className="pt-[1rem] overflow-hidden">
-          <div className="flex flex-col gap-3 px-2 py-2">
+          <div className="flex flex-col gap-3 px-1">
             <div
               className={`${columnTemplate} items-center py-[0.7rem] text-[1rem] font-normal text-tag-neutral`}
             >
@@ -212,13 +221,17 @@ export default function MarketPricePage() {
               <div className="text-right">시가총액</div>
             </div>
 
-            {mockMarketRows.map((row) => (
+            {rows.map((row) => (
               <div
                 key={row.rank}
-                className={`${columnTemplate} py-[1rem] items-center text-text-body transition hover:bg-white hover:shadow-card`}
+                className={`${columnTemplate} py-[1rem] items-center rounded-[8px] text-text-body transition hover:bg-white hover:shadow-card`}
               >
                 <div className="flex">
-                  <button type="button" className="px-[0.5rem] py-[0rem]">
+                  <button
+                    type="button"
+                    className="px-[0.5rem]"
+                    onClick={() => handleToggleFavorite(row.rank)}
+                  >
                     <Icon
                       src={row.isFavorite ? "/icons/star_selected.svg" : "/icons/star.svg"}
                       alt="즐겨찾기"

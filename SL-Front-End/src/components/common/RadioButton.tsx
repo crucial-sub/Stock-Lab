@@ -51,7 +51,7 @@ export function RadioButton({
         {...inputProps}
       />
       <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[18px] text-nowrap tracking-[-0.54px]">
-        <p className={`leading-[normal] whitespace-pre ${checked ? 'text-white' : 'text-[#a0a0a0]'}`}>
+        <p className={`leading-[normal] whitespace-pre ${checked ? "text-white" : "text-text-muted"}`}>
           {label}
         </p>
       </div>

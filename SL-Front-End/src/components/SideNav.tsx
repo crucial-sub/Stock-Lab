@@ -21,25 +21,29 @@ export function SideNav({ }: SideNavProps) {
     ];
 
     return (
-        <aside className="fixed left-0 top-0 z-40 flex h-full w-64 flex-col overflow-hidden border-r border-[#C8C8C8] bg-white">
+        <aside className="fixed left-0 top-0 z-40 flex h-full w-64 flex-col overflow-hidden border-r border-border-default bg-white">
             <div className="flex flex-col pt-40 pb-8 h-full justify-between">
                 <nav className="flex flex-1 flex-col gap-3 px-6">
                     {navItems.map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
-                            className={`relative flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${pathname === item.href ? "bg-[#EFF5FF]" : "hover:bg-slate-50"
+                            className={`relative flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${pathname === item.href ? "bg-bg-muted" : "hover:bg-slate-50"
                                 }`}
                         >
                             <Icon
                                 src={item.icon}
-                                color={pathname === item.href ? "#007DFC" : "#C8C8C8"}
+                                color={
+                                    pathname === item.href
+                                        ? "var(--color-accent-primary)"
+                                        : "var(--color-border-default)"
+                                }
                                 size={20}
                             />
                             <span
                                 className={`text-xl font-sans ${pathname === item.href
-                                    ? "font-semibold text-[#007DFC]"
-                                    : "font-light text-[#C8C8C8]"
+                                    ? "font-semibold text-accent-primary"
+                                    : "font-light text-tag-neutral"
                                     }`}
                             >
                                 {item.label}

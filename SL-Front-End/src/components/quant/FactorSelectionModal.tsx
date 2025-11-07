@@ -367,7 +367,7 @@ export function FactorSelectionModal({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="조건 검색"
-                    className="flex-1 h-[36px] bg-transparent border-b border-[#a0a0a0] text-white font-['Pretendard',sans-serif] font-medium text-[14px] tracking-[-0.42px] px-0 outline-none placeholder:text-[#a0a0a0]"
+                    className="flex-1 h-[36px] bg-transparent border-b border-text-muted text-white font-['Pretendard',sans-serif] font-medium text-[14px] tracking-[-0.42px] px-0 outline-none placeholder:text-text-muted"
                   />
                   <button
                     className="backdrop-blur-[50px] backdrop-filter bg-[rgba(255,255,255,0.2)] rounded-[8px] p-[8px] border-[0.5px] border-white shadow-[0px_0px_4px_1px_rgba(255,255,255,0.3)] hover:bg-[rgba(255,255,255,0.3)] transition-colors flex-shrink-0"
@@ -383,7 +383,7 @@ export function FactorSelectionModal({
                 {/* Factor List - 39% of panel width */}
                 <div className="w-[43%] border border-white rounded-[8px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent p-[12px]">
                   {isLoadingFactors ? (
-                    <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                    <div className="text-center text-sm text-tag-neutral py-[40px]">
                       팩터 데이터를 불러오는 중입니다...
                     </div>
                   ) : (
@@ -408,7 +408,7 @@ export function FactorSelectionModal({
                                   onClick={() => handleFactorSelect(factor)}
                                   className={`flex items-center text-[16px] tracking-[-0.48px] cursor-pointer transition-colors w-full text-left ${selectedFactor?.id === factor.id
                                     ? "text-[#d68c45] font-['Pretendard',sans-serif] font-bold"
-                                    : "text-[#c8c8c8] font-['Pretendard',sans-serif] font-normal hover:text-white"
+                                    : "text-tag-neutral font-['Pretendard',sans-serif] font-normal hover:text-white"
                                     }`}
                                   type="button"
                                 >
@@ -441,14 +441,14 @@ export function FactorSelectionModal({
                       {/* 검색 결과 없음 */}
                       {trimmedQuery !== "" &&
                         Object.values(displayFactors).every((factors) => factors.length === 0) && (
-                          <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                          <div className="text-center text-sm text-tag-neutral py-[40px]">
                             검색 결과가 없습니다
                           </div>
                         )}
 
                       {/* 전체 데이터 없음 */}
                       {trimmedQuery === "" && categoryKeys.length === 0 && (
-                        <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                        <div className="text-center text-sm text-tag-neutral py-[40px]">
                           사용할 수 있는 팩터가 없습니다
                         </div>
                       )}
@@ -459,7 +459,7 @@ export function FactorSelectionModal({
                 {/* Factor Info Panel - 61% of panel width */}
                 <div className="flex-1 border border-white rounded-[8px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent p-[12px]">
                   {isLoadingFactors ? (
-                    <div className="flex h-full items-center justify-center text-sm text-[#c8c8c8]">
+                    <div className="flex h-full items-center justify-center text-sm text-tag-neutral">
                       팩터 정보를 불러오는 중입니다...
                     </div>
                   ) : selectedFactor ? (
@@ -472,7 +472,7 @@ export function FactorSelectionModal({
                       </div>
                     </>
                   ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-[#c8c8c8]">
+                    <div className="flex h-full items-center justify-center text-sm text-tag-neutral">
                       팩터를 선택해주세요
                     </div>
                   )}
@@ -491,11 +491,11 @@ export function FactorSelectionModal({
 
                   {/* Function Items */}
                   {isLoadingSubFactors ? (
-                    <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                    <div className="text-center text-sm text-tag-neutral py-[40px]">
                       함수 데이터를 불러오는 중입니다...
                     </div>
                   ) : subFactors.length === 0 ? (
-                    <div className="text-center text-sm text-[#c8c8c8] py-[40px]">
+                    <div className="text-center text-sm text-tag-neutral py-[40px]">
                       사용할 수 있는 함수가 없습니다
                     </div>
                   ) : (
@@ -506,7 +506,7 @@ export function FactorSelectionModal({
                           onClick={() => handleSubFactorSelect(func.id)}
                           className={`flex items-center text-[16px] tracking-[-0.48px] cursor-pointer transition-colors w-full text-left ${selectedSubFactorId === func.id
                             ? "text-white font-['Pretendard',sans-serif] font-bold"
-                            : "text-[#c8c8c8] font-['Pretendard',sans-serif] font-normal hover:text-white"
+                            : "text-tag-neutral font-['Pretendard',sans-serif] font-normal hover:text-white"
                             }`}
                           type="button"
                         >
@@ -521,7 +521,7 @@ export function FactorSelectionModal({
                 {/* Function Info Panel - 67% of panel */}
                 <div className="flex-1 border border-white rounded-[8px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent p-[12px]">
                   {isLoadingSubFactors ? (
-                    <div className="flex h-full items-center justify-center text-sm text-[#c8c8c8]">
+                    <div className="flex h-full items-center justify-center text-sm text-tag-neutral">
                       함수 정보를 불러오는 중입니다...
                     </div>
                   ) : selectedSubFactor ? (
@@ -534,7 +534,7 @@ export function FactorSelectionModal({
                       </div>
                     </>
                   ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-[#c8c8c8]">
+                    <div className="flex h-full items-center justify-center text-sm text-tag-neutral">
                       함수를 선택해주세요
                     </div>
                   )}

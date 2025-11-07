@@ -11,9 +11,9 @@ interface ButtonProps {
 }
 
 const VARIANT_STYLES: Record<NonNullable<ButtonProps["variant"]>, string> = {
-  primary: "bg-[#FF6464] text-white text-xl",
+  primary: "bg-brand-primary text-white text-xl",
   secondary: "bg-zinc-100 text-black text-xl",
-  tertiary: "bg-[#FFF6F6] text-[#FF6464] text-xl",
+  tertiary: "bg-bg-positive text-brand-primary text-xl",
   ghost: "bg-transparent text-black",
 };
 

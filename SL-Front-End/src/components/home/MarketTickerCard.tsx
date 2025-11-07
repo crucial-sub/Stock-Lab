@@ -24,11 +24,12 @@ export function MarketTickerCard({
   logoAlt = "",
   graph = ""
 }: MarketTickerCardProps) {
-  const changeColor = trend === "up" ? "text-[#FF6464]" : "text-[#4C7CFF]";
+  const changeColor =
+    trend === "up" ? "text-brand-primary" : "text-accent-primary";
 
   return (
     <article
-      className={`flex w-full items-center gap-6 rounded-sm px-5 py-3 shadow-[0px_0px_8px_rgba(0,0,0,0.1)] ${trend === "up" ? "bg-[#FFF6F6]" : "bg-[#EFF6FF]"}`}
+      className={`flex w-full items-center gap-6 rounded-sm px-5 py-3 shadow-card ${trend === "up" ? "bg-bg-positive" : "bg-bg-muted"}`}
     >
       <div className="flex flex-shrink-0 gap-3">
         <Image src={logoSrc} alt={logoAlt} width={60} height={60} />
@@ -40,7 +41,9 @@ export function MarketTickerCard({
       <Image src={graph} alt={""} width={70} height={16} className="flex" />
       <div className="flex flex-shrink-0 items-center justify-end gap-6">
         <div className="flex flex-col items-end gap-1">
-          <span className="text-xl font-semibold text-[#111827]">{price}</span>
+          <span className="text-xl font-semibold text-text-strong">
+            {price}
+          </span>
           <span className={`text-sm font-medium ${changeColor}`}>{change}</span>
         </div>
       </div>

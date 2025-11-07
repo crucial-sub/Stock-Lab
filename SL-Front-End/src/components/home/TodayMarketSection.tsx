@@ -65,7 +65,7 @@ export function TodayMarketSection({
         </Link>
       </div>
 
-      <div className="rounded-lg bg-white px-5 py-[1.125rem] shadow-[0px_0px_8px_rgba(0,0,0,0.08)]">
+      <div className="rounded-lg bg-white px-5 py-[1.125rem] shadow-card-muted">
         <div
           ref={containerRef}
           className="flex flex-nowrap rounded-lg gap-5 overflow-hidden"

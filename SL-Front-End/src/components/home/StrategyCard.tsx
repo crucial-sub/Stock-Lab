@@ -17,9 +17,9 @@ export interface StrategyCardProps {
 }
 
 const toneClass: Record<NonNullable<StrategyMetric["tone"]>, string> = {
-  default: "text-[#505050]",
-  positive: "text-[#FF6464]",
-  muted: "text-[#4B5563]",
+  default: "text-text-body",
+  positive: "text-brand-primary",
+  muted: "text-text-body",
 };
 
 export function StrategyCard({
@@ -33,7 +33,7 @@ export function StrategyCard({
 }: StrategyCardProps) {
   return (
     <article
-      className={`flex w-full flex-col rounded-sm bg-white px-6 py-6 shadow-[0px_0px_8px_rgba(0,0,0,0.1)] ${className}`}
+      className={`flex w-full flex-col rounded-sm bg-white px-6 py-6 shadow-card ${className}`}
     >
       <header className="flex flex-col gap-1 mb-2">
         <div className="flex items-end gap-1">
@@ -66,7 +66,7 @@ export function StrategyCard({
           <div key={`${metric.label}-${metric.value}`} className="flex flex-col gap-1">
             <span className="text-sm font-extralight font-sans">{metric.label}</span>
             <span
-              className={`text-xl font-semibold font-sans ${toneClass[metric.tone ?? "positive"]}`}
+              className={`text-xl font-semibold font-sans ${toneClass[metric.tone ?? "default"]}`}
             >
               {metric.value}
             </span>

@@ -21,13 +21,13 @@ export function Header({
   };
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 h-24 w-full bg-white shadow-[0px_4px_16px_0px_rgba(150,150,150,0.10)]">
+    <header className="fixed inset-x-0 top-0 z-50 h-24 w-full bg-white shadow-header">
       <div className="relative flex h-full items-center px-12 py-6">
         {/* Logo */}
         <Link href="/" className="font-circular">
           <div className="flex h-12 items-start">
-            <span className="text-3xl font-medium text-[#FF6464]">stock</span>
-            <span className="self-end text-3xl font-medium text-[#007DFC]">
+            <span className="text-3xl font-medium text-brand-primary">stock</span>
+            <span className="self-end text-3xl font-medium text-accent-primary">
               lab
             </span>
           </div>

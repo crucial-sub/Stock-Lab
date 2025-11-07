@@ -14,17 +14,16 @@ const marketTabs = [
 
 const mockMarketRows = [
   {
-    rank: 1,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    asOfDate: "2025.12.31",
-    isFavorite: true,
+    rank: 1,  // 순위
+    name: "크래프톤",  // 종목 명
+    code: "KRAFTON",  // 종목 코드
+    price: "263,500원", // 전일 종가
+    change: "+5.55%", // 전일 등락률
+    trend: "up" as const, // +, - 여부
+    volume: "304,016주",  // 전일 체결량
+    tradingValue: "439억원",  // 전일 거래대금
+    marketCap: "439억원", // 시총
+    isFavorite: false // 즐겨찾기 여부
   },
   {
     rank: 2,
@@ -36,7 +35,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: true,
   },
   {
@@ -49,7 +47,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: false,
   },
   {
@@ -62,7 +59,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: false,
   },
   {
@@ -75,7 +71,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: false,
   },
   {
@@ -88,7 +83,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: false,
   },
   {
@@ -101,7 +95,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: false,
   },
   {
@@ -114,7 +107,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: false,
   },
   {
@@ -127,7 +119,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: false,
   },
   {
@@ -140,7 +131,6 @@ const mockMarketRows = [
     volume: "304,016주",
     tradingValue: "439억원",
     marketCap: "439억원",
-    asOfDate: "2025.12.31",
     isFavorite: false,
   },
 ];

@@ -4,24 +4,27 @@
 
 /** 팩터 타입 */
 export interface Factor {
-  id: string;
-  name: string;
+  id: number; // DB 기본키용 정수 ID
+  name: string; // 비즈니스 로직용 이름 (예: "per", "pbr")
+  display_name: string; // UI 표시용 한글 이름 (예: "주가수익비율")
   category: string;
   description?: string;
 }
 
 /** 함수 타입 */
 export interface SubFactor {
-  id: string;
-  name: string;
+  id: number; // DB 기본키용 정수 ID
+  name: string; // 비즈니스 로직용 이름 (예: "and", "or")
+  display_name: string; // UI 표시용 한글 이름 (예: "AND 조건")
   description?: string;
   parameters?: string[];
 }
 
 /** 테마 타입 */
 export interface Themes {
-  id: string;
-  name: string;
+  id: number; // DB 기본키용 정수 ID
+  name: string; // 비즈니스 로직용 이름 (예: "construction", "finance")
+  display_name: string; // UI 표시용 한글 이름 (예: "건설", "금융")
 }
 
 /** 백테스트 실행 요청 타입 */

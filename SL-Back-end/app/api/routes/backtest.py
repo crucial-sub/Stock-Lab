@@ -699,46 +699,73 @@ async def list_available_factors():
     """사용 가능한 팩터 목록"""
     return {
         "factors": [
-            {"id": "PER", "name": "주가수익비율", "category": "value", "description": "Price to Earnings Ratio"},
-            {"id": "PBR", "name": "주가순자산비율", "category": "value", "description": "Price to Book Ratio"},
-            {"id": "ROE", "name": "자기자본이익률", "category": "profitability", "description": "Return on Equity"},
-            {"id": "ROA", "name": "총자산이익률", "category": "profitability", "description": "Return on Assets"},
-            {"id": "REVENUE_GROWTH", "name": "매출성장률", "category": "growth", "description": "Revenue Growth Rate"},
-            {"id": "EARNINGS_GROWTH", "name": "이익성장률", "category": "growth", "description": "Earnings Growth Rate"},
-            {"id": "DEBT_RATIO", "name": "부채비율", "category": "stability", "description": "Debt to Equity Ratio"},
-            {"id": "CURRENT_RATIO", "name": "유동비율", "category": "stability", "description": "Current Ratio"},
-            {"id": "MOMENTUM_1M", "name": "1개월 모멘텀", "category": "momentum", "description": "1 Month Price Momentum"},
-            {"id": "MOMENTUM_3M", "name": "3개월 모멘텀", "category": "momentum", "description": "3 Month Price Momentum"},
-            {"id": "MOMENTUM_6M", "name": "6개월 모멘텀", "category": "momentum", "description": "6 Month Price Momentum"},
-            {"id": "MOMENTUM_12M", "name": "12개월 모멘텀", "category": "momentum", "description": "12 Month Price Momentum"},
-            {"id": "VOLATILITY", "name": "변동성", "category": "risk", "description": "Price Volatility"},
-            {"id": "TRADING_VOLUME", "name": "거래량", "category": "liquidity", "description": "Trading Volume"},
-            {"id": "MARKET_CAP", "name": "시가총액", "category": "size", "description": "Market Capitalization"},
-            {"id": "DIV_YIELD", "name": "배당수익률", "category": "value", "description": "Dividend Yield"},
-            {"id": "EV_EBITDA", "name": "EV/EBITDA", "category": "value", "description": "Enterprise Value to EBITDA"},
-            {"id": "GP_A", "name": "매출총이익률", "category": "quality", "description": "Gross Profitability"},
-            {"id": "BETA", "name": "베타", "category": "risk", "description": "Market Beta"},
-            {"id": "RSI", "name": "RSI", "category": "technical", "description": "Relative Strength Index"}
+            # 예시: {"id": 1, "name": "per", "display_name": "주가수익비율", "category": "value", "description": "Price to Earnings Ratio"}
+            {"id": 1, "name": "per", "display_name": "주가수익비율", "category": "value", "description": "Price to Earnings Ratio"},
+            {"id": 2, "name": "pbr", "display_name": "주가순자산비율", "category": "value", "description": "Price to Book Ratio"},
+            {"id": 3, "name": "roe", "display_name": "자기자본이익률", "category": "profitability", "description": "Return on Equity"},
+            {"id": 4, "name": "roa", "display_name": "총자산이익률", "category": "profitability", "description": "Return on Assets"},
+            {"id": 5, "name": "revenue_growth", "display_name": "매출성장률", "category": "growth", "description": "Revenue Growth Rate"},
+            {"id": 6, "name": "earnings_growth", "display_name": "이익성장률", "category": "growth", "description": "Earnings Growth Rate"},
+            {"id": 7, "name": "debt_ratio", "display_name": "부채비율", "category": "stability", "description": "Debt to Equity Ratio"},
+            {"id": 8, "name": "current_ratio", "display_name": "유동비율", "category": "stability", "description": "Current Ratio"},
+            {"id": 9, "name": "momentum_1m", "display_name": "1개월 모멘텀", "category": "momentum", "description": "1 Month Price Momentum"},
+            {"id": 10, "name": "momentum_3m", "display_name": "3개월 모멘텀", "category": "momentum", "description": "3 Month Price Momentum"},
+            {"id": 11, "name": "momentum_6m", "display_name": "6개월 모멘텀", "category": "momentum", "description": "6 Month Price Momentum"},
+            {"id": 12, "name": "momentum_12m", "display_name": "12개월 모멘텀", "category": "momentum", "description": "12 Month Price Momentum"},
+            {"id": 13, "name": "volatility", "display_name": "변동성", "category": "risk", "description": "Price Volatility"},
+            {"id": 14, "name": "trading_volume", "display_name": "거래량", "category": "liquidity", "description": "Trading Volume"},
+            {"id": 15, "name": "market_cap", "display_name": "시가총액", "category": "size", "description": "Market Capitalization"},
+            {"id": 16, "name": "div_yield", "display_name": "배당수익률", "category": "value", "description": "Dividend Yield"},
+            {"id": 17, "name": "ev_ebitda", "display_name": "EV/EBITDA", "category": "value", "description": "Enterprise Value to EBITDA"},
+            {"id": 18, "name": "gp_a", "display_name": "매출총이익률", "category": "quality", "description": "Gross Profitability"},
+            {"id": 19, "name": "beta", "display_name": "베타", "category": "risk", "description": "Market Beta"},
+            {"id": 20, "name": "rsi", "display_name": "RSI", "category": "technical", "description": "Relative Strength Index"}
         ]
     }
 
 
 @router.get("/sub-factors/list")
 async def list_available_sub_factors():
-    """사용 가능한 함수 목록"""
+    """사용 가능한 서브 팩터(함수) 목록"""
     return {
         "sub_factors": [
-            {"id": "AND", "name": "AND 조건", "description": "모든 조건이 참일 때"},
-            {"id": "OR", "name": "OR 조건", "description": "하나 이상의 조건이 참일 때"},
-            {"id": "NOT", "name": "NOT 조건", "description": "조건이 거짓일 때"},
-            {"id": "CROSS_UP", "name": "상향 돌파", "description": "값이 기준선을 상향 돌파할 때"},
-            {"id": "CROSS_DOWN", "name": "하향 돌파", "description": "값이 기준선을 하향 돌파할 때"},
-            {"id": "RANK", "name": "순위", "description": "지정된 범위 내 순위"},
-            {"id": "PERCENTILE", "name": "백분위", "description": "백분위 순위"},
-            {"id": "Z_SCORE", "name": "Z-Score", "description": "표준화 점수"},
-            {"id": "MOVING_AVG", "name": "이동평균", "description": "N일 이동평균"},
-            {"id": "COMPARE", "name": "비교", "description": "두 값을 비교"}
+            # 예시: {"id": 1, "name": "and", "display_name": "AND 조건", "description": "모든 조건이 참일 때"}
+            {"id": 1, "name": "and", "display_name": "AND 조건", "description": "모든 조건이 참일 때"},
+            {"id": 2, "name": "or", "display_name": "OR 조건", "description": "하나 이상의 조건이 참일 때"},
+            {"id": 3, "name": "not", "display_name": "NOT 조건", "description": "조건이 거짓일 때"},
+            {"id": 4, "name": "cross_up", "display_name": "상향 돌파", "description": "값이 기준선을 상향 돌파할 때"},
+            {"id": 5, "name": "cross_down", "display_name": "하향 돌파", "description": "값이 기준선을 하향 돌파할 때"},
+            {"id": 6, "name": "rank", "display_name": "순위", "description": "지정된 범위 내 순위"},
+            {"id": 7, "name": "percentile", "display_name": "백분위", "description": "백분위 순위"},
+            {"id": 8, "name": "z_score", "display_name": "Z-Score", "description": "표준화 점수"},
+            {"id": 9, "name": "moving_avg", "display_name": "이동평균", "description": "N일 이동평균"},
+            {"id": 10, "name": "compare", "display_name": "비교", "description": "두 값을 비교"}
         ]
+    }
+
+
+@router.get("/initialize")
+async def get_backtest_init_data():
+    """
+    백테스트 초기화 데이터 통합 조회
+    - 팩터, 서브팩터, 테마 목록을 한 번에 반환
+    - 3번의 HTTP 요청을 1번으로 최적화
+    - asyncio.gather()로 병렬 처리하여 성능 최적화 (순차 실행 대비 3배 빠름)
+
+    Returns:
+        dict: factors, sub_factors, themes 목록을 포함한 딕셔너리
+    """
+    # 3개의 API를 병렬로 동시 실행 (asyncio.gather 사용)
+    factors_response, sub_factors_response, themes_response = await asyncio.gather(
+        list_available_factors(),
+        list_available_sub_factors(),
+        list_available_themes()
+    )
+
+    return {
+        "factors": factors_response["factors"],
+        "sub_factors": sub_factors_response["sub_factors"],
+        "themes": themes_response["themes"]
     }
 
 
@@ -746,36 +773,37 @@ async def list_available_sub_factors():
 async def list_available_themes():
     """사용 가능한 테마 목록"""
     return {
-        "sectors": [
-            {"id": "construction", "name": "건설"},
-            {"id": "metal", "name": "금속"},
-            {"id": "finance", "name": "금융"},
-            {"id": "machinery", "name": "기계 / 장비"},
-            {"id": "other-finance", "name": "기타 금융"},
-            {"id": "other-manufacturing", "name": "기타 제조"},
-            {"id": "other", "name": "기타"},
-            {"id": "agriculture", "name": "농업 / 임업 / 어업"},
-            {"id": "insurance", "name": "보험"},
-            {"id": "real-estate", "name": "부동산"},
-            {"id": "non-metal", "name": "비금속"},
-            {"id": "textile", "name": "섬유 / 의류"},
-            {"id": "entertainment", "name": "오락 / 문화"},
-            {"id": "transport", "name": "운송 / 창고"},
-            {"id": "transport-equipment", "name": "운송장비 / 부품"},
-            {"id": "distribution", "name": "유통"},
-            {"id": "bank", "name": "은행"},
-            {"id": "food", "name": "음식료 / 담배"},
-            {"id": "medical", "name": "의료 / 정밀기기"},
-            {"id": "service", "name": "일반 서비스"},
-            {"id": "utility", "name": "전기 / 가스 / 수도"},
-            {"id": "electronics", "name": "전기 / 전자"},
-            {"id": "pharma", "name": "제약"},
-            {"id": "paper", "name": "종이 / 목재"},
-            {"id": "securities", "name": "증권"},
-            {"id": "publishing", "name": "출판 / 매체 복제"},
-            {"id": "telecom", "name": "통신"},
-            {"id": "chemical", "name": "화학"},
-            {"id": "it-service", "name": "IT서비스"},
+        "themes": [
+            # 예시: {"id": 1, "name": "construction", "display_name": "건설"}
+            {"id": 1, "name": "construction", "display_name": "건설"},
+            {"id": 2, "name": "metal", "display_name": "금속"},
+            {"id": 3, "name": "finance", "display_name": "금융"},
+            {"id": 4, "name": "machinery", "display_name": "기계 / 장비"},
+            {"id": 5, "name": "other_finance", "display_name": "기타 금융"},
+            {"id": 6, "name": "other_manufacturing", "display_name": "기타 제조"},
+            {"id": 7, "name": "other", "display_name": "기타"},
+            {"id": 8, "name": "agriculture", "display_name": "농업 / 임업 / 어업"},
+            {"id": 9, "name": "insurance", "display_name": "보험"},
+            {"id": 10, "name": "real_estate", "display_name": "부동산"},
+            {"id": 11, "name": "non_metal", "display_name": "비금속"},
+            {"id": 12, "name": "textile", "display_name": "섬유 / 의류"},
+            {"id": 13, "name": "entertainment", "display_name": "오락 / 문화"},
+            {"id": 14, "name": "transport", "display_name": "운송 / 창고"},
+            {"id": 15, "name": "transport_equipment", "display_name": "운송장비 / 부품"},
+            {"id": 16, "name": "distribution", "display_name": "유통"},
+            {"id": 17, "name": "bank", "display_name": "은행"},
+            {"id": 18, "name": "food", "display_name": "음식료 / 담배"},
+            {"id": 19, "name": "medical", "display_name": "의료 / 정밀기기"},
+            {"id": 20, "name": "service", "display_name": "일반 서비스"},
+            {"id": 21, "name": "utility", "display_name": "전기 / 가스 / 수도"},
+            {"id": 22, "name": "electronics", "display_name": "전기 / 전자"},
+            {"id": 23, "name": "pharma", "display_name": "제약"},
+            {"id": 24, "name": "paper", "display_name": "종이 / 목재"},
+            {"id": 25, "name": "securities", "display_name": "증권"},
+            {"id": 26, "name": "publishing", "display_name": "출판 / 매체 복제"},
+            {"id": 27, "name": "telecom", "display_name": "통신"},
+            {"id": 28, "name": "chemical", "display_name": "화학"},
+            {"id": 29, "name": "it_service", "display_name": "IT서비스"},
         ]
     }
 

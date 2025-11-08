@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/quant_api.log"
 
+    # External APIs
+    DART_API_KEY: str = ""  # OpenDart API Key
+
     class Config:
         env_file = ".env"
         case_sensitive = True

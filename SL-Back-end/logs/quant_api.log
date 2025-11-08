@@ -250,3 +250,9 @@
 2025-11-06 11:55:13,310 - app.main - INFO - Database initialized (dev mode)
 2025-11-06 12:02:10,779 - app.main - INFO - === Quant Investment API 종료 ===
 2025-11-06 12:02:10,791 - app.core.database - INFO - Database connections closed
+2025-11-06 12:07:17,915 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-06 12:07:17,916 - app.main - INFO - Environment: Development
+2025-11-06 12:07:17,916 - app.main - INFO - Database: postgres:5432/quant_investment_db
+2025-11-06 12:07:17,921 - app.core.cache - INFO - Redis connection established successfully
+2025-11-06 12:07:17,921 - app.main - INFO - Redis cache initialized successfully
+2025-11-06 12:07:17,921 - app.main - INFO - Database initialized (dev mode)

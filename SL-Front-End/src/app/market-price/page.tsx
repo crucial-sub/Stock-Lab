@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Icon } from "@/components/common/Icon";
+import { StockInfoCard } from "@/components/market-price/StockInfoCard";
 
 const marketTabs = [
   "최근 본 주식",
@@ -16,7 +17,7 @@ const mockMarketRows = [
   {
     rank: 1,  // 순위
     name: "크래프톤",  // 종목 명
-    code: "KRAFTON",  // 종목 코드
+    code: "002200",  // 종목 코드
     price: "263,500원", // 전일 종가
     change: "+5.55%", // 전일 등락률
     trend: "up" as const, // +, - 여부
@@ -140,6 +141,8 @@ const columnTemplate = "grid grid-cols-[2.6fr,1fr,1fr,1fr,1fr,1fr] gap-4";
 export default function MarketPricePage() {
   const [selectedTab, setSelectedTab] = useState(marketTabs[0]);
   const [rows, setRows] = useState(mockMarketRows);
+  const [selectedRow, setSelectedRow] =
+    useState<(typeof mockMarketRows)[number] | null>(null);
   const todayLabel = new Date().toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
@@ -155,6 +158,7 @@ export default function MarketPricePage() {
   };
 
   return (
+    <>
     <section className="flex flex-col gap-4">
       <h1 className="text-[1.8rem] font-semibold text-text-strong">국내 주식 시세</h1>
       <div className="rounded-[8px] bg-white p-6 shadow-card">
@@ -214,13 +218,17 @@ export default function MarketPricePage() {
             {rows.map((row) => (
               <div
                 key={row.rank}
-                className={`${columnTemplate} py-[1rem] items-center rounded-[8px] text-text-body transition hover:bg-white hover:shadow-card`}
+                className={`${columnTemplate} py-[1rem] items-center rounded-[8px] text-text-body transition hover:bg-white hover:shadow-card cursor-pointer`}
+                onClick={() => setSelectedRow(row)}
               >
                 <div className="flex">
                   <button
                     type="button"
                     className="px-[0.5rem]"
-                    onClick={() => handleToggleFavorite(row.rank)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleToggleFavorite(row.rank);
+                    }}
                   >
                     <Icon
                       src={row.isFavorite ? "/icons/star_selected.svg" : "/icons/star.svg"}
@@ -266,5 +274,31 @@ export default function MarketPricePage() {
         </div>
       </div>
     </section>
+
+    {selectedRow && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        onClick={() => setSelectedRow(null)}
+      >
+        <div
+          className="relative rounded-[8px] max-h-[70vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="relative flex items-center shadow-header bg-white px-[0.5rem] py-[0.8rem]">
+            <h2 className="absolute left-1/2 -translate-x-1/2 text-[0.9rem] font-normal text-text-strong">
+              {selectedRow.name} 종목 정보
+            </h2>
+            <button
+              type="button"
+              className="mr-[0.25rem] ml-auto flex h-[0.7rem] w-[0.7rem] rounded-full bg-[#FF6464]"
+              aria-label="닫기"
+              onClick={() => setSelectedRow(null)}
+            />
+          </div>
+          <StockInfoCard name={selectedRow.name} code={selectedRow.code} />
+        </div>
+      </div>
+    )}
+    </>
   );
 }

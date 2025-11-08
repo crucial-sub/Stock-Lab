@@ -1,34 +1,20 @@
 "use client";
 
-import {
-  CustomSelect,
-  GradientDivider,
-  Panel,
-  Title,
-  UnderlineInput,
-} from "@/components/common";
-import { SVG_PATH } from "@/constants";
-import { useSellCondition } from "@/hooks";
 import { useBacktestConfigStore, useConditionStore } from "@/stores";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { FactorSelectionModal } from "./FactorSelectionModal";
 
 /**
- * 매도 조건 설정 탭 컴포넌트
+ * 매도 조건 설정 탭 - 새 디자인
  *
- * 주요 기능:
- * 1. 목표가/손절가 설정 (토글 가능, target_and_loss)
- * 2. 보유 기간 설정 (토글 가능, hold_days)
- * 3. 조건 매도 설정 (토글 가능, condition_sell)
- *    - 매수 조건과 동일한 UI: 팩터 선택, 부등호, 값 입력
- *
- * 모든 설정값은 useBacktestConfigStore에 저장되며
- * BacktestRunRequest 형식과 완벽하게 일치합니다.
+ * ThreeColumnLayout을 사용한 완전히 새로운 구현:
+ * - 왼쪽: 네비게이션 사이드바
+ * - 중앙: 매도 조건 설정 폼
+ * - 오른쪽: 설정 요약 패널
  */
-export function SellConditionTab() {
-  const { toggles, toggleState } = useSellCondition();
-
-  // 전역 백테스트 설정 스토어
+export default function SellConditionTab() {
+  // Zustand stores
   const {
     target_and_loss,
     setTargetAndLoss,
@@ -38,7 +24,6 @@ export function SellConditionTab() {
     setConditionSell,
   } = useBacktestConfigStore();
 
-  // Zustand 스토어에서 매도 조건 가져오기
   const {
     sellConditions,
     updateSellCondition,
@@ -47,69 +32,74 @@ export function SellConditionTab() {
     getConditionExpression,
   } = useConditionStore();
 
-  // 목표가/손절가 입력값 (내부 상태)
-  const [targetGain, setTargetGainValue] = useState<number>(
-    target_and_loss?.target_gain ?? 10,
-  );
-  const [stopLoss, setStopLossValue] = useState<number>(
-    target_and_loss?.stop_loss ?? 10,
-  );
+  // 사이드바 상태
+  const [activeSection, setActiveSection] = useState("목표가 / 손절가");
+  const sidebarItems = [
+    "매수 조건",
+    "매도 조건",
+    "  목표가 / 손절가",
+    "  보유 기간",
+    "  조건 매도",
+    "매매 대상 설정",
+  ];
 
-  // 보유 기간 입력값 (내부 상태)
-  const [minHoldDays, setMinHoldDays] = useState<number>(
-    hold_days?.min_hold_days ?? 0,
-  );
-  const [maxHoldDays, setMaxHoldDays] = useState<number>(
-    hold_days?.max_hold_days ?? 0,
-  );
+  // 섹션 토글 상태
+  const [targetLossOpen, setTargetLossOpen] = useState(false);
+  const [holdPeriodOpen, setHoldPeriodOpen] = useState(false);
+  const [conditionalSellOpen, setConditionalSellOpen] = useState(false);
+
+  // 목표가/손절가 개별 토글
+  const [profitTargetEnabled, setProfitTargetEnabled] = useState(false);
+  const [stopLossEnabled, setStopLossEnabled] = useState(false);
+
+  // 목표가/손절가 값
+  const [targetGain, setTargetGain] = useState<number>(10);
+  const [stopLoss, setStopLoss] = useState<number>(10);
+
+  // 보유 기간 값
+  const [minHoldDays, setMinHoldDays] = useState<number>(10);
+  const [maxHoldDays, setMaxHoldDays] = useState<number>(10);
   const [holdSellCostBasisSelect, setHoldSellCostBasisSelect] =
-    useState<string>("{전일 종가}");
+    useState<string>("전일 종가");
   const [holdSellCostBasisValue, setHoldSellCostBasisValue] =
-    useState<number>(0);
+    useState<number>(10);
 
-  // 조건 매도 - 논리 조건식 및 가격 기준 (내부 상태)
-  const [sellLogic, setSellLogicValue] = useState<string>(
-    condition_sell?.sell_logic ?? "",
-  );
+  // 조건 매도 값
+  const [sellLogic, setSellLogic] = useState<string>("A and B");
   const [condSellCostBasisSelect, setCondSellCostBasisSelect] =
-    useState<string>("{전일 종가}");
+    useState<string>("전일 종가");
   const [condSellCostBasisValue, setCondSellCostBasisValue] =
-    useState<number>(0);
+    useState<number>(10);
 
-  // 모달 상태 관리
+  // 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentConditionId, setCurrentConditionId] = useState<string | null>(
-    null,
+    null
   );
 
-  /**
-   * 목표가/손절가 토글 및 값 변경 시 전역 스토어 업데이트
-   * 전체 토글이 OFF면 null, ON이면 개별 토글 상태에 따라 값 설정
-   */
+  // 목표가/손절가 전역 스토어 업데이트
   useEffect(() => {
-    if (toggles.targetAndLoss) {
+    if (targetLossOpen) {
       setTargetAndLoss({
-        target_gain: toggles.profitTarget ? targetGain : null,
-        stop_loss: toggles.stopLoss ? stopLoss : null,
+        target_gain: profitTargetEnabled ? targetGain : null,
+        stop_loss: stopLossEnabled ? stopLoss : null,
       });
     } else {
       setTargetAndLoss(null);
     }
   }, [
-    toggles.targetAndLoss,
-    toggles.profitTarget,
-    toggles.stopLoss,
+    targetLossOpen,
+    profitTargetEnabled,
+    stopLossEnabled,
     targetGain,
     stopLoss,
     setTargetAndLoss,
   ]);
 
-  /**
-   * 보유 기간 토글 및 값 변경 시 전역 스토어 업데이트
-   */
+  // 보유 기간 전역 스토어 업데이트
   useEffect(() => {
-    if (toggles.holdingPeriod) {
-      const sellBasis = `${holdSellCostBasisSelect} ${holdSellCostBasisValue}`;
+    if (holdPeriodOpen) {
+      const sellBasis = `${holdSellCostBasisSelect} ${holdSellCostBasisValue}%`;
       setHoldDays({
         min_hold_days: minHoldDays,
         max_hold_days: maxHoldDays,
@@ -119,7 +109,7 @@ export function SellConditionTab() {
       setHoldDays(null);
     }
   }, [
-    toggles.holdingPeriod,
+    holdPeriodOpen,
     minHoldDays,
     maxHoldDays,
     holdSellCostBasisSelect,
@@ -127,29 +117,24 @@ export function SellConditionTab() {
     setHoldDays,
   ]);
 
-  /**
-   * 조건 매도 토글이 ON될 때 초기 조건 하나 자동 추가
-   */
+  // 조건 매도 토글 시 초기 조건 추가
   useEffect(() => {
-    if (toggles.conditionalSell && sellConditions.length === 0) {
+    if (conditionalSellOpen && sellConditions.length === 0) {
+      addSellCondition();
       addSellCondition();
     }
-  }, [toggles.conditionalSell]); // sellConditions를 의존성에 포함하지 않음 (무한 루프 방지)
+  }, [conditionalSellOpen]);
 
-  /**
-   * 조건 매도 토글 및 값 변경 시 전역 스토어 업데이트
-   * sellConditions가 변경될 때마다 condition_sell 업데이트
-   */
+  // 조건 매도 전역 스토어 업데이트
   useEffect(() => {
-    if (toggles.conditionalSell) {
-      const sellBasis = `${condSellCostBasisSelect} ${condSellCostBasisValue}`;
+    if (conditionalSellOpen) {
+      const sellBasis = `${condSellCostBasisSelect} ${condSellCostBasisValue}%`;
 
-      // Condition[] 타입을 BacktestRunRequest의 condition_sell 형식으로 변환
       const formattedConditions = sellConditions
-        .filter((c) => c.factorName !== null) // 팩터가 선택된 조건만
+        .filter((c) => c.factorName !== null)
         .map((c) => ({
-          name: c.id, // 조건 이름 (A, B, C, ...)
-          expression: `{${c.factorName}} ${c.operator} ${c.value}`, // 조건식 (예: "{PER} > 10")
+          name: c.id,
+          expression: `{${c.factorName}} ${c.operator} ${c.value}`,
         }));
 
       setConditionSell({
@@ -161,7 +146,7 @@ export function SellConditionTab() {
       setConditionSell(null);
     }
   }, [
-    toggles.conditionalSell,
+    conditionalSellOpen,
     sellConditions,
     sellLogic,
     condSellCostBasisSelect,
@@ -169,23 +154,16 @@ export function SellConditionTab() {
     setConditionSell,
   ]);
 
-  /**
-   * 팩터 선택 모달 열기
-   * @param id 조건 ID (A, B, C, ...)
-   */
+  // 팩터 선택 모달
   const openModal = (id: string) => {
     setCurrentConditionId(id);
     setIsModalOpen(true);
   };
 
-  /**
-   * 팩터 선택 완료 핸들러
-   * 선택된 팩터와 함수를 조건에 반영
-   */
   const handleFactorSelect = (
     factorId: string,
     factorName: string,
-    subFactorId: string,
+    subFactorId: string
   ) => {
     if (currentConditionId) {
       updateSellCondition(currentConditionId, {
@@ -198,468 +176,423 @@ export function SellConditionTab() {
     setCurrentConditionId(null);
   };
 
-  /**
-   * 현재 조건의 초기값을 가져오기 (편집 모드)
-   */
   const getCurrentCondition = () => {
     if (!currentConditionId) return undefined;
-
     const condition = sellConditions.find((c) => c.id === currentConditionId);
     if (!condition || !condition.factorId) return undefined;
-
     return {
       factorId: condition.factorId,
       subFactorId: condition.subFactorId,
     };
   };
 
-  /**
-   * 조건의 부등호 변경 핸들러
-   */
   const handleOperatorChange = (
     id: string,
-    operator: ">=" | "<=" | ">" | "<" | "=" | "!=",
+    operator: ">=" | "<=" | ">" | "<" | "=" | "!="
   ) => {
     updateSellCondition(id, { operator });
   };
 
-  /**
-   * 조건의 값 변경 핸들러
-   */
   const handleValueChange = (id: string, value: number) => {
     updateSellCondition(id, { value });
   };
 
-  return (
-    <div className="space-y-6">
-      {/* 목표가/손절가 */}
-      <Panel className="p-6 space-y-4">
-        {/* 전체 토글 - 필드명 왼쪽, 토글 오른쪽 */}
-        <div className="flex items-center justify-between">
-          <Title size="lg" marginBottom="mb-0">
-            목표가/손절가
-          </Title>
+  // 메인 컨텐츠
+  const mainContent = (
+    <div className="space-y-4">
+      {/* 목표가 / 손절가 섹션 */}
+      <div className="bg-bg-surface rounded-lg shadow-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-bold text-text-strong">
+              목표가 / 손절가
+            </h3>
+            <p className="text-sm text-text-body">
+              설사리 감사에 따라 목표 기준에서의 매수가 / 손절가에 도달 시 매도
+              주문을 합니다.
+            </p>
+          </div>
           <button
-            onClick={() => {
-              toggleState("targetAndLoss");
-              if (!toggles.targetAndLoss) {
-                // 토글 켜질 때 기본값 설정
-                setTargetGainValue(10);
-                setStopLossValue(10);
-              }
+            onClick={() => setTargetLossOpen(!targetLossOpen)}
+            className="relative w-[50px] h-[28px] rounded-full transition-colors"
+            style={{
+              backgroundColor: targetLossOpen ? "#0066FF" : "#6B7280",
             }}
-            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.targetAndLoss ? "bg-[#d68c45]" : "bg-text-muted"
-              }`}
           >
             <div
-              className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.targetAndLoss ? "left-[15px]" : "left-[2px]"
+              className={`absolute w-[22px] h-[22px] bg-white rounded-full top-[3px] transition-all ${targetLossOpen ? "left-[25px]" : "left-[3px]"
                 }`}
             />
           </button>
         </div>
 
-        {/* 토글 ON시 펼쳐지는 컨텐츠 - 부드러운 애니메이션 */}
-        <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${toggles.targetAndLoss ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
-            }`}
-        >
-          {/* 목표가와 손절가 가로 배치 */}
-          <div className="grid grid-cols-2 gap-4 pt-2">
-            {/* 목표가 - 한 줄에 배치 */}
-            <div className="flex flex-col">
-              <div className="flex items-center gap-[8px] mb-[15px]">
-                <Title size="sm" marginBottom="mb-0">
-                  목표가
-                </Title>
-                <button
-                  onClick={() => {
-                    toggleState("profitTarget");
-                    if (toggles.profitTarget) {
-                      setTargetGainValue(0);
-                    } else {
-                      setTargetGainValue(10);
-                    }
-                  }}
-                  disabled={!toggles.targetAndLoss}
-                  className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.profitTarget ? "bg-[#d68c45]" : "bg-text-muted"
-                    } disabled:opacity-50`}
-                >
-                  <div
-                    className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.profitTarget ? "left-[15px]" : "left-[2px]"
-                      }`}
-                  />
-                </button>
-              </div>
-              <div className="flex items-center gap-[8px]">
-                <span className="text-white text-[14px] font-['Pretendard',sans-serif] tracking-[-0.42px] whitespace-nowrap">
-                  매수가 대비
-                </span>
-                <UnderlineInput
-                  type="number"
-                  value={targetGain}
-                  onChange={(e) => setTargetGainValue(Number(e.target.value))}
-                  disabled={!toggles.targetAndLoss || !toggles.profitTarget}
-                  suffix="%"
-                  className="disabled:opacity-50 w-[120px]"
-                />
-                <span className="text-white text-[14px] font-['Pretendard',sans-serif] tracking-[-0.42px] whitespace-nowrap">
-                  상승 시 매도 주문
-                </span>
-              </div>
+        {targetLossOpen && (
+          <div className="pt-4 border-t border-border-subtle">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => {
+                  setTargetLossOpen(false);
+                  document
+                    .getElementById("target-loss-detail")
+                    ?.classList.toggle("hidden");
+                }}
+                className="px-4 py-2 bg-brand-primary text-white rounded-sm text-sm font-medium hover:opacity-90"
+              >
+                조건 항목열람하기
+              </button>
             </div>
 
-            {/* 손절가 - 한 줄에 배치 */}
-            <div className="flex flex-col">
-              <div className="flex items-center gap-[8px] mb-[15px]">
-                <Title size="sm" marginBottom="mb-0">
-                  손절가
-                </Title>
-                <button
-                  onClick={() => {
-                    toggleState("stopLoss");
-                    if (toggles.stopLoss) {
-                      setStopLossValue(0);
-                    } else {
-                      setStopLossValue(10);
-                    }
-                  }}
-                  disabled={!toggles.targetAndLoss}
-                  className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.stopLoss ? "bg-[#d68c45]" : "bg-text-muted"
-                    } disabled:opacity-50`}
-                >
-                  <div
-                    className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.stopLoss ? "left-[15px]" : "left-[2px]"
-                      }`}
+            <div id="target-loss-detail" className="grid grid-cols-2 gap-6">
+              {/* 목표가 */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <h4 className="text-base font-semibold text-text-strong">
+                    목표가
+                  </h4>
+                  <button
+                    onClick={() => setProfitTargetEnabled(!profitTargetEnabled)}
+                    className="relative w-[50px] h-[28px] rounded-full transition-colors"
+                    style={{
+                      backgroundColor: profitTargetEnabled ? "#0066FF" : "#6B7280",
+                    }}
+                  >
+                    <div
+                      className={`absolute w-[22px] h-[22px] bg-white rounded-full top-[3px] transition-all ${profitTargetEnabled ? "left-[25px]" : "left-[3px]"
+                        }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-text-body">매수가 대비</span>
+                  <input
+                    type="number"
+                    value={targetGain}
+                    onChange={(e) => setTargetGain(Number(e.target.value))}
+                    disabled={!profitTargetEnabled}
+                    className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong disabled:opacity-50"
                   />
-                </button>
+                  <span className="text-sm text-text-body">% 상승 시 매도 주문</span>
+                </div>
               </div>
-              <div className="flex items-center gap-[8px]">
-                <span className="text-white text-[14px] font-['Pretendard',sans-serif] tracking-[-0.42px] whitespace-nowrap">
-                  매수가 대비
-                </span>
-                <UnderlineInput
-                  type="number"
-                  value={stopLoss}
-                  onChange={(e) => setStopLossValue(Number(e.target.value))}
-                  disabled={!toggles.targetAndLoss || !toggles.stopLoss}
-                  suffix="%"
-                  className="disabled:opacity-50 w-[120px]"
-                />
-                <span className="text-white text-[14px] font-['Pretendard',sans-serif] tracking-[-0.42px] whitespace-nowrap">
-                  하락 시 매도 주문
-                </span>
+
+              {/* 손절가 */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <h4 className="text-base font-semibold text-text-strong">
+                    손절가
+                  </h4>
+                  <button
+                    onClick={() => setStopLossEnabled(!stopLossEnabled)}
+                    className="relative w-[50px] h-[28px] rounded-full transition-colors"
+                    style={{
+                      backgroundColor: stopLossEnabled ? "#0066FF" : "#6B7280",
+                    }}
+                  >
+                    <div
+                      className={`absolute w-[22px] h-[22px] bg-white rounded-full top-[3px] transition-all ${stopLossEnabled ? "left-[25px]" : "left-[3px]"
+                        }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-text-body">매수가 대비</span>
+                  <input
+                    type="number"
+                    value={stopLoss}
+                    onChange={(e) => setStopLoss(Number(e.target.value))}
+                    disabled={!stopLossEnabled}
+                    className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong disabled:opacity-50"
+                  />
+                  <span className="text-sm text-text-body">% 하락 시 매도 주문</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </Panel>
+        )}
+      </div>
 
-      {/* 보유 기간 */}
-      <Panel className="p-6 space-y-4">
-        {/* 전체 토글 - 필드명 왼쪽, 토글 오른쪽 */}
-        <div className="flex items-center justify-between">
-          <Title size="lg" marginBottom="mb-0">
-            <span>{`보유 `}</span>
-            <span className="text-accent-primary">기간</span>
-          </Title>
+      {/* 보유 기간 섹션 */}
+      <div className="bg-bg-surface rounded-lg shadow-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-bold text-text-strong">보유 기간</h3>
+            <p className="text-sm text-text-body">
+              최소 보유일 만큼 시 매수 후 일정 기간 이상 매매 어떤 상황에도
+              매도되지 않습니다. 최대 보유일 경과 시 매매 주 후에도 주문을 합니다.
+            </p>
+          </div>
           <button
-            onClick={() => {
-              toggleState("holdingPeriod");
-              if (!toggles.holdingPeriod) {
-                setMinHoldDays(0);
-                setMaxHoldDays(0);
-              }
+            onClick={() => setHoldPeriodOpen(!holdPeriodOpen)}
+            className="relative w-[50px] h-[28px] rounded-full transition-colors"
+            style={{
+              backgroundColor: holdPeriodOpen ? "#0066FF" : "#6B7280",
             }}
-            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.holdingPeriod ? "bg-[#d68c45]" : "bg-text-muted"
-              }`}
           >
             <div
-              className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.holdingPeriod ? "left-[15px]" : "left-[2px]"
+              className={`absolute w-[22px] h-[22px] bg-white rounded-full top-[3px] transition-all ${holdPeriodOpen ? "left-[25px]" : "left-[3px]"
                 }`}
             />
           </button>
         </div>
 
-        {/* 토글 ON시 펼쳐지는 컨텐츠 - 부드러운 애니메이션 */}
-        <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${toggles.holdingPeriod ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
-            }`}
-        >
-          {/* 한 줄에 3가지 항목 모두 배치 - justify-between */}
-          <div className="flex items-center justify-between pt-2">
-            {/* 최소 종목 보유일 */}
-            <div className="flex items-center gap-[8px]">
-              <Title size="sm" marginBottom="mb-0">
-                최소 종목 보유일
-              </Title>
-              <UnderlineInput
-                type="number"
-                value={minHoldDays}
-                onChange={(e) => setMinHoldDays(Number(e.target.value))}
-                disabled={!toggles.holdingPeriod}
-                suffix="일"
-                className="disabled:opacity-50 w-[100px]"
-              />
+        {holdPeriodOpen && (
+          <div className="pt-4 border-t border-border-subtle">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("hold-period-detail")
+                    ?.classList.toggle("hidden")
+                }
+                className="px-4 py-2 bg-brand-primary text-white rounded-sm text-sm font-medium hover:opacity-90"
+              >
+                조건 항목열람하기
+              </button>
             </div>
 
-            {/* 최대 종목 보유일 */}
-            <div className="flex items-center gap-[8px]">
-              <Title size="sm" marginBottom="mb-0">
-                최대 종목 보유일
-              </Title>
-              <UnderlineInput
-                type="number"
-                value={maxHoldDays}
-                onChange={(e) => setMaxHoldDays(Number(e.target.value))}
-                disabled={!toggles.holdingPeriod}
-                suffix="일"
-                className="disabled:opacity-50 w-[100px]"
-              />
-            </div>
+            <div id="hold-period-detail" className="flex items-center gap-6">
+              {/* 최소 종목 보유일 */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+                  최소 종목 보유일
+                </span>
+                <input
+                  type="number"
+                  value={minHoldDays}
+                  onChange={(e) => setMinHoldDays(Number(e.target.value))}
+                  className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong"
+                />
+                <span className="text-sm text-text-body">일</span>
+              </div>
 
-            {/* 매도 가격 기준 */}
-            <div className="flex items-center gap-[8px]">
-              <Title size="sm" marginBottom="mb-0">
-                매도 가격 기준
-              </Title>
-              <div className="relative h-[40px] border-b border-text-muted w-[150px]">
+              {/* 최대 종목 보유일 */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+                  최대 종목 보유일
+                </span>
+                <input
+                  type="number"
+                  value={maxHoldDays}
+                  onChange={(e) => setMaxHoldDays(Number(e.target.value))}
+                  className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong"
+                />
+                <span className="text-sm text-text-body">일</span>
+              </div>
+
+              {/* 매도 가격 기준 */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+                  매도 가격 기준
+                </span>
                 <select
                   value={holdSellCostBasisSelect}
                   onChange={(e) => setHoldSellCostBasisSelect(e.target.value)}
-                  disabled={!toggles.holdingPeriod}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-full appearance-none cursor-pointer disabled:opacity-50"
+                  className="px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong appearance-none cursor-pointer"
                 >
-                  <option value="{전일 종가}">전일 종가</option>
-                  <option value="{당일 시가}">당일 시가</option>
+                  <option value="전일 종가">전일 종가</option>
+                  <option value="당일 시가">당일 시가</option>
                 </select>
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 size-[32px] pointer-events-none">
-                  <svg
-                    className="block size-full"
-                    fill="none"
-                    preserveAspectRatio="none"
-                    viewBox="0 0 32 32"
-                  >
-                    <path d={SVG_PATH.p2a094a00} fill="var(--color-text-muted)" />
-                  </svg>
-                </div>
+                <input
+                  type="number"
+                  value={holdSellCostBasisValue}
+                  onChange={(e) =>
+                    setHoldSellCostBasisValue(Number(e.target.value))
+                  }
+                  className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong"
+                />
+                <span className="text-sm text-text-body">%</span>
               </div>
-              <UnderlineInput
-                type="number"
-                value={holdSellCostBasisValue}
-                onChange={(e) =>
-                  setHoldSellCostBasisValue(Number(e.target.value))
-                }
-                disabled={!toggles.holdingPeriod}
-                suffix="%"
-                className="disabled:opacity-50 w-[100px]"
-              />
             </div>
           </div>
-        </div>
-      </Panel>
+        )}
+      </div>
 
-      {/* 조건 매도 */}
-      <Panel className="p-6 space-y-4">
-        {/* 전체 토글 - 필드명 왼쪽, 토글 오른쪽 */}
-        <div className="flex items-center justify-between">
-          <Title size="lg" marginBottom="mb-0">
-            <span>{`조건 `}</span>
-            <span className="text-accent-primary">매도</span>
-          </Title>
+      {/* 조건 매도 섹션 */}
+      <div className="bg-bg-surface rounded-lg shadow-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-bold text-text-strong">조건 매도</h3>
+            <p className="text-sm text-text-body">
+              변경된 상영한 조건식을 충족했을 때도 주문을 합니다.
+            </p>
+          </div>
           <button
-            onClick={() => toggleState("conditionalSell")}
-            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.conditionalSell ? "bg-[#d68c45]" : "bg-text-muted"
-              }`}
+            onClick={() => setConditionalSellOpen(!conditionalSellOpen)}
+            className="relative w-[50px] h-[28px] rounded-full transition-colors"
+            style={{
+              backgroundColor: conditionalSellOpen ? "#0066FF" : "#6B7280",
+            }}
           >
             <div
-              className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.conditionalSell ? "left-[15px]" : "left-[2px]"
+              className={`absolute w-[22px] h-[22px] bg-white rounded-full top-[3px] transition-all ${conditionalSellOpen ? "left-[25px]" : "left-[3px]"
                 }`}
             />
           </button>
         </div>
 
-        {/* 토글 ON시 펼쳐지는 컨텐츠 - 부드러운 애니메이션 */}
-        <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${toggles.conditionalSell ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"
-            }`}
-        >
-          <div className="space-y-2 pt-2">
-            <Title size="md">매도 조건식 설정</Title>
+        {conditionalSellOpen && (
+          <div className="pt-4 border-t border-border-subtle">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("conditional-sell-detail")
+                    ?.classList.toggle("hidden")
+                }
+                className="px-4 py-2 bg-brand-primary text-white rounded-sm text-sm font-medium hover:opacity-90"
+              >
+                조건 항목열람하기
+              </button>
+            </div>
 
-            {/* 매도 조건 목록 */}
-            <div className="space-y-[8px] mb-[20px]">
-              {sellConditions.map((condition) => (
-                <div key={condition.id} className="flex items-center gap-[8px]">
-                  {/* 조건식 표시 영역 */}
-                  <div className="h-[60px] rounded-[12px] border border-neutral-500 flex-1">
-                    <div className="h-[60px] overflow-clip relative rounded-[inherit] w-full px-[23.5px] flex items-center gap-[16px]">
-                      {/* 조건 ID (A, B, C, ...) */}
-                      <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-center text-nowrap text-white tracking-[-0.6px]">
-                        <p className="leading-[normal] whitespace-pre">
-                          {condition.id}
-                        </p>
+            <div id="conditional-sell-detail" className="space-y-4">
+              {/* 매도 조건식 설정 */}
+              <div>
+                <h4 className="text-base font-semibold text-text-strong mb-3">
+                  매도 조건식 설정
+                </h4>
+                <div className="space-y-3">
+                  {sellConditions.map((condition) => (
+                    <div
+                      key={condition.id}
+                      className="flex items-center gap-3 p-4 bg-bg-app rounded-lg border border-border-default"
+                    >
+                      {/* 조건 ID */}
+                      <div className="flex items-center justify-center w-10 h-10 bg-brand-primary text-white rounded-md font-bold text-lg">
+                        {condition.id}
                       </div>
 
-                      <GradientDivider
-                        direction="vertical"
-                        gradientId={`paint0_linear_sell_cond_${condition.id}`}
-                        className="h-[32px] w-[4px]"
-                      />
+                      <div className="h-8 w-px bg-border-default" />
 
-                      {/* 조건식 미리보기 */}
-                      <div className="flex-1">
-                        <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-text-muted text-[20px] text-nowrap tracking-[-0.6px]">
-                          <p className="leading-[normal] whitespace-pre">
-                            {getConditionExpression(condition)}
-                          </p>
-                        </div>
+                      {/* 조건 표현식 */}
+                      <div className="flex-1 text-text-body">
+                        {condition.factorName
+                          ? `조건식이 다음과 같이 들어갑니다.`
+                          : "조건식을 추가하려면 클릭하세요."}
                       </div>
 
                       {/* 팩터 선택 버튼 */}
                       <button
                         onClick={() => openModal(condition.id)}
-                        disabled={!toggles.conditionalSell}
-                        className="rounded-[8px] border border-solid border-white px-[24px] py-[8px] disabled:opacity-50"
+                        className="px-4 py-2 border border-white rounded-md text-white text-sm font-medium hover:bg-white hover:text-bg-app transition-colors"
                       >
-                        <div className="flex flex-col font-bold justify-center leading-[0] not-italic text-xl text-center text-nowrap text-white tracking-[-0.6px]">
-                          <p className="leading-[normal] whitespace-pre">
-                            팩터 선택
-                          </p>
-                        </div>
+                        팩터 선택
                       </button>
+
+                      {/* 부등호 */}
+                      <select
+                        value={condition.operator}
+                        onChange={(e) =>
+                          handleOperatorChange(
+                            condition.id,
+                            e.target.value as
+                            | ">="
+                            | "<="
+                            | ">"
+                            | "<"
+                            | "="
+                            | "!="
+                          )
+                        }
+                        className="w-20 px-2 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong text-center"
+                      >
+                        <option value=">=">≥</option>
+                        <option value="<=">≤</option>
+                        <option value=">">{">"}</option>
+                        <option value="<">{"<"}</option>
+                        <option value="=">=</option>
+                        <option value="!=">≠</option>
+                      </select>
+
+                      {/* 값 입력 */}
+                      <input
+                        type="number"
+                        value={condition.value}
+                        onChange={(e) =>
+                          handleValueChange(condition.id, Number(e.target.value))
+                        }
+                        className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong text-center"
+                      />
 
                       {/* 삭제 버튼 */}
                       <button
                         onClick={() => removeSellCondition(condition.id)}
-                        disabled={!toggles.conditionalSell}
-                        className="rounded-[8px] size-[40px] border border-brand-primary border-solid flex items-center justify-center disabled:opacity-50"
+                        className="p-2 border border-accent-primary rounded-md hover:bg-accent-primary transition-colors"
                       >
-                        <svg
-                          className="block size-[24px]"
-                          fill="none"
-                          preserveAspectRatio="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d={SVG_PATH.pa683700} fill="var(--color-brand-primary)" />
-                        </svg>
+                        <Image
+                          src="/icons/trash.svg"
+                          alt="삭제"
+                          width={20}
+                          height={20}
+                        />
                       </button>
                     </div>
-                  </div>
-                  {/* 부등호 선택 */}
-                  <CustomSelect
-                    value={condition.operator}
-                    onChange={(e) =>
-                      handleOperatorChange(
-                        condition.id,
-                        e.target.value as
-                        | ">="
-                        | "<="
-                        | ">"
-                        | "<"
-                        | "="
-                        | "!=",
-                      )
-                    }
-                    width="w-[92px]"
-                    disabled={!toggles.conditionalSell}
-                    className="disabled:opacity-50"
+                  ))}
+
+                  {/* 조건식 추가 버튼 */}
+                  <button
+                    onClick={addSellCondition}
+                    className="w-full py-3 border border-white rounded-md text-white text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors"
                   >
-                    <option value=">=">≥</option>
-                    <option value="<=">≤</option>
-                    <option value=">">{">"}</option>
-                    <option value="<">{"<"}</option>
-                    <option value="=">=</option>
-                    <option value="!=">≠</option>
-                  </CustomSelect>
-                  {/* 값 입력 */}
-                  <div className="relative h-[60px] w-[92px] border-b border-text-muted">
-                    <input
-                      type="number"
-                      value={condition.value}
-                      onChange={(e) =>
-                        handleValueChange(condition.id, Number(e.target.value))
-                      }
-                      disabled={!toggles.conditionalSell}
-                      className="absolute left-[55%] top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-text-muted text-[20px] tracking-[-0.6px] w-full text-center disabled:opacity-50"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* 조건식 추가 버튼 */}
-            <div className="flex justify-center mb-[60px]">
-              <button
-                onClick={addSellCondition}
-                disabled={!toggles.conditionalSell}
-                className="backdrop-blur-[50px] backdrop-filter bg-[rgba(255,255,255,0.2)] rounded-[8px] border border-solid border-white shadow-[0px_0px_8px_2px_rgba(255,255,255,0.3)] px-[24px] py-[8px] disabled:opacity-50"
-              >
-                <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-center text-nowrap text-white tracking-[-0.6px]">
-                  <p className="leading-[normal] whitespace-pre">조건식 추가</p>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <GradientDivider gradientId="paint0_linear_divider_sell" />
-
-          {/* 한 줄에 논리 조건식과 매도 가격 기준 배치 - justify-between */}
-          <div className="flex items-center justify-between">
-            {/* 논리 조건식 작성 */}
-            <div className="flex items-center gap-[8px]">
-              <Title size="md" marginBottom="mb-0">
-                논리 조건식 작성
-              </Title>
-              <UnderlineInput
-                type="text"
-                placeholder="A and B"
-                value={sellLogic}
-                onChange={(e) => setSellLogicValue(e.target.value)}
-                disabled={!toggles.conditionalSell}
-                className="disabled:opacity-50 w-[250px]"
-              />
-            </div>
-
-            {/* 매도 가격 기준 */}
-            <div className="flex items-center gap-[8px]">
-              <Title size="md" marginBottom="mb-0">
-                매도 가격 기준
-              </Title>
-              <div className="relative h-[40px] border-b border-text-muted w-[150px]">
-                <select
-                  value={condSellCostBasisSelect}
-                  onChange={(e) => setCondSellCostBasisSelect(e.target.value)}
-                  disabled={!toggles.conditionalSell}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-full appearance-none cursor-pointer disabled:opacity-50"
-                >
-                  <option value="{전일 종가}">전일 종가</option>
-                  <option value="{당일 시가}">당일 시가</option>
-                </select>
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 size-[32px] pointer-events-none">
-                  <svg
-                    className="block size-full"
-                    fill="none"
-                    preserveAspectRatio="none"
-                    viewBox="0 0 32 32"
-                  >
-                    <path d={SVG_PATH.p2a094a00} fill="var(--color-text-muted)" />
-                  </svg>
+                    조건식을 추가하려면 클릭하세요.
+                  </button>
                 </div>
               </div>
-              <UnderlineInput
-                type="number"
-                value={condSellCostBasisValue}
-                onChange={(e) =>
-                  setCondSellCostBasisValue(Number(e.target.value))
-                }
-                disabled={!toggles.conditionalSell}
-                suffix="%"
-                className="disabled:opacity-50 w-[100px]"
-              />
+
+              {/* 논리 조건식 & 매도 가격 기준 */}
+              <div className="border-t border-border-subtle pt-4">
+                <div className="flex items-center justify-between">
+                  {/* 논리 조건식 */}
+                  <div className="flex items-center gap-3">
+                    <h4 className="text-base font-semibold text-text-strong">
+                      논리 조건식
+                    </h4>
+                    <input
+                      type="text"
+                      placeholder="논리 조건식을 입력해주세요."
+                      value={sellLogic}
+                      onChange={(e) => setSellLogic(e.target.value)}
+                      className="w-64 px-3 py-2 bg-bg-app border-b border-text-muted text-text-strong placeholder:text-text-muted"
+                    />
+                  </div>
+
+                  {/* 매도 가격 기준 */}
+                  <div className="flex items-center gap-3">
+                    <h4 className="text-base font-semibold text-text-strong">
+                      매도 가격 기준
+                    </h4>
+                    <select
+                      value={condSellCostBasisSelect}
+                      onChange={(e) =>
+                        setCondSellCostBasisSelect(e.target.value)
+                      }
+                      className="px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong appearance-none cursor-pointer"
+                    >
+                      <option value="전일 종가">전일 종가</option>
+                      <option value="당일 시가">당일 시가</option>
+                    </select>
+                    <input
+                      type="number"
+                      value={condSellCostBasisValue}
+                      onChange={(e) =>
+                        setCondSellCostBasisValue(Number(e.target.value))
+                      }
+                      className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong"
+                    />
+                    <span className="text-sm text-text-body">%</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </Panel>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {mainContent}
 
       {/* Factor Selection Modal */}
       <FactorSelectionModal
@@ -671,6 +604,6 @@ export function SellConditionTab() {
         onSelect={handleFactorSelect}
         initialValues={getCurrentCondition()}
       />
-    </div>
+    </>
   );
 }

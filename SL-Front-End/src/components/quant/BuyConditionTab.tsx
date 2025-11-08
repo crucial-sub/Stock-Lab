@@ -1,37 +1,25 @@
 "use client";
 
-import {
-  CustomSelect,
-  DatePickerField,
-  GradientDivider,
-  Panel,
-  RadioButton,
-  Title,
-  UnderlineInput,
-} from "@/components/common";
-import { SVG_PATH } from "@/constants";
-import { useBuyCondition } from "@/hooks";
+/**
+ * 매수 조건 탭 - Figma 디자인 완전 재구현
+ *
+ * 레이아웃:
+ * - 좌측: 사이드바 네비게이션 (일반 조건 설정, 매수 조건 설정, 매수 비중 설정, 매수 방법 선택)
+ * - 중앙: 메인 컨텐츠
+ * - 우측: 요약 패널
+ */
+
 import { useBacktestConfigStore, useConditionStore } from "@/stores";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { FactorSelectionModal } from "./FactorSelectionModal";
 
-/**
- * 매수 조건 설정 탭 컴포넌트
- *
- * 주요 기능:
- * 1. 백테스트 기본 설정 (데이터 기준, 투자 금액 등)
- * 2. 매수 조건식 설정 (팩터 선택을 통한 조건 생성)
- * 3. 매수 비중 설정
- * 4. 매수 방법 선택
- *
- * 모든 설정값은 useBacktestConfigStore에 저장되며
- * BacktestRunRequest 형식과 완벽하게 일치합니다.
- */
-export function BuyConditionTab() {
-  // 기존 useBuyCondition 훅은 기본값과 토글 상태 관리용
-  const { toggles, toggleState } = useBuyCondition();
+export default function BuyConditionTab() {
+  const [activeSection, setActiveSection] = useState("일반 조건 설정");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentConditionId, setCurrentConditionId] = useState<string | null>(null);
 
-  // 전역 백테스트 설정 스토어
+  // Zustand stores
   const {
     is_day_or_month,
     setIsDayOrMonth,
@@ -61,7 +49,6 @@ export function BuyConditionTab() {
     setBuyConditions,
   } = useBacktestConfigStore();
 
-  // Zustand 스토어에서 매수 조건 가져오기
   const {
     buyConditions,
     updateBuyCondition,
@@ -70,54 +57,35 @@ export function BuyConditionTab() {
     getConditionExpression,
   } = useConditionStore();
 
-  // 모달 상태 관리
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentConditionId, setCurrentConditionId] = useState<string | null>(
-    null,
-  );
-
-  // 매수 가격 기준 선택값 (내부 상태)
-  const [buyCostBasisSelect, setBuyCostBasisSelect] =
-    useState<string>("{전일 종가}");
+  // Local state
+  const [buyCostBasisSelect, setBuyCostBasisSelect] = useState<string>("{전일 종가}");
   const [buyCostBasisValue, setBuyCostBasisValue] = useState<number>(0);
+  const [enableMaxBuyValue, setEnableMaxBuyValue] = useState(false);
+  const [enableMaxDailyStock, setEnableMaxDailyStock] = useState(false);
 
-  /**
-   * buyConditions가 변경될 때마다 전역 스토어에 반영
-   * conditionStore → backtestConfigStore 동기화
-   */
+  // Sync buyConditions to global store
   useEffect(() => {
-    // Condition[] 타입을 BacktestRunRequest의 buy_conditions 형식으로 변환
     const formattedConditions = buyConditions
-      .filter((c) => c.factorName !== null) // 팩터가 선택된 조건만
+      .filter((c) => c.factorName !== null)
       .map((c) => ({
-        name: c.id, // 조건 이름 (A, B, C, ...)
-        expression: `{${c.factorName}} ${c.operator} ${c.value}`, // 조건식 (예: "{PER} > 10")
+        name: c.id,
+        expression: `{${c.factorName}} ${c.operator} ${c.value}`,
       }));
-
     setBuyConditions(formattedConditions);
   }, [buyConditions, setBuyConditions]);
 
-  /**
-   * 매수 가격 기준 업데이트 (선택값 + 퍼센트 값 결합)
-   */
+  // Sync buy cost basis
   useEffect(() => {
     const basis = `${buyCostBasisSelect} ${buyCostBasisValue}`;
     setBuyCostBasis(basis);
   }, [buyCostBasisSelect, buyCostBasisValue, setBuyCostBasis]);
 
-  /**
-   * 팩터 선택 모달 열기
-   * @param id 조건 ID (A, B, C, ...)
-   */
+  // Factor selection handlers
   const openModal = (id: string) => {
     setCurrentConditionId(id);
     setIsModalOpen(true);
   };
 
-  /**
-   * 팩터 선택 완료 핸들러
-   * 선택된 팩터와 함수를 조건에 반영
-   */
   const handleFactorSelect = (
     factorId: string,
     factorName: string,
@@ -134,24 +102,16 @@ export function BuyConditionTab() {
     setCurrentConditionId(null);
   };
 
-  /**
-   * 현재 조건의 초기값을 가져오기 (편집 모드)
-   */
   const getCurrentCondition = () => {
     if (!currentConditionId) return undefined;
-
     const condition = buyConditions.find((c) => c.id === currentConditionId);
     if (!condition || !condition.factorId) return undefined;
-
     return {
       factorId: condition.factorId,
       subFactorId: condition.subFactorId,
     };
   };
 
-  /**
-   * 조건의 부등호 변경 핸들러
-   */
   const handleOperatorChange = (
     id: string,
     operator: ">=" | "<=" | ">" | "<" | "=" | "!=",
@@ -159,359 +119,417 @@ export function BuyConditionTab() {
     updateBuyCondition(id, { operator });
   };
 
-  /**
-   * 조건의 값 변경 핸들러
-   */
   const handleValueChange = (id: string, value: number) => {
     updateBuyCondition(id, { value });
   };
 
+  const scrollToSection = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* 기본 설정 (Basic Settings) */}
-      <Panel className="p-6 space-y-4">
-        <Title size="lg">기본 설정</Title>
+    <>
+      {/* Main Content */}
+      <div className="space-y-6 pb-12">
+        {/* 일반 조건 설정 */}
+        <div id="일반 조건 설정" className="bg-bg-surface rounded-lg shadow-card p-8">
+          <h2 className="text-2xl font-bold text-text-strong mb-6">
+            일반 조건 설정
+          </h2>
 
-        {/* 백테스트 데이터 기준 */}
-        <div className="space-y-2">
-          <Title size="md">백테스트 데이터 기준</Title>
-          <div className="flex items-center gap-6">
-            <RadioButton
-              name="dataType"
-              checked={is_day_or_month === "daily"}
-              onChange={() => setIsDayOrMonth("daily")}
-              label="일봉"
-            />
-            <RadioButton
-              name="dataType"
-              checked={is_day_or_month === "monthly"}
-              onChange={() => setIsDayOrMonth("monthly")}
-              label="월봉"
-            />
+          {/* 백테스트 데이터 기준 */}
+          <div className="mb-8">
+            <label className="block text-base font-medium text-text-strong mb-3">
+              백테스트 데이터 기준
+            </label>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="dataType"
+                  checked={is_day_or_month === "daily"}
+                  onChange={() => setIsDayOrMonth("daily")}
+                  className="w-5 h-5 accent-accent-primary"
+                />
+                <span className="text-text-body">일봉</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="dataType"
+                  checked={is_day_or_month === "monthly"}
+                  onChange={() => setIsDayOrMonth("monthly")}
+                  className="w-5 h-5 accent-accent-primary"
+                />
+                <span className="text-text-body">월봉</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="h-px bg-border-subtle mb-8" />
+
+          {/* 투자 설정 */}
+          <div className="grid grid-cols-4 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                투자 금액
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={initial_investment}
+                  onChange={(e) => setInitialInvestment(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                  만원
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                투자 시작일
+              </label>
+              <input
+                type="date"
+                value={
+                  start_date
+                    ? `${start_date.slice(0, 4)}-${start_date.slice(4, 6)}-${start_date.slice(6, 8)}`
+                    : ""
+                }
+                onChange={(e) => {
+                  const date = e.target.value.replace(/-/g, "");
+                  setStartDate(date);
+                }}
+                className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                투자 종료일
+              </label>
+              <input
+                type="date"
+                value={
+                  end_date
+                    ? `${end_date.slice(0, 4)}-${end_date.slice(4, 6)}-${end_date.slice(6, 8)}`
+                    : ""
+                }
+                onChange={(e) => {
+                  const date = e.target.value.replace(/-/g, "");
+                  setEndDate(date);
+                }}
+                className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                수수료율
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={commission_rate}
+                  onChange={(e) => setCommissionRate(Number(e.target.value))}
+                  step={0.1}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                  %
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <GradientDivider gradientId="paint0_linear_divider2" />
+        {/* 매수 조건 설정 */}
+        <div id="매수 조건 설정" className="bg-bg-surface rounded-lg shadow-card p-8">
+          <h2 className="text-2xl font-bold mb-6">
+            <span className="text-brand-primary">매수</span>
+            <span className="text-text-strong"> 조건 설정</span>
+          </h2>
 
-        {/* Investment Fields */}
-        <div className="grid grid-cols-4 gap-4">
-          <div>
-            <Title size="sm">투자 금액</Title>
-            <UnderlineInput
-              type="text"
-              value={initial_investment}
-              onChange={(e) => setInitialInvestment(Number(e.target.value))}
-              inputWidth="w-[80px]"
-              suffix="만원"
-              borderColor="white"
-              textColor="white"
-            />
-          </div>
-          <div>
-            <Title size="sm">투자 시작일</Title>
-            <DatePickerField
-              value={start_date}
-              onChange={setStartDate}
-              placeholder="투자 시작일 선택"
-              className="w-full"
-            />
-          </div>
+          <div className="space-y-6">
+            {/* 매수 조건식 설정 */}
+            <div>
+              <label className="block text-base font-medium text-text-strong mb-4">
+                매수 조건식 설정
+              </label>
 
-          <div>
-            <Title size="sm">투자 종료일</Title>
-            <DatePickerField
-              value={end_date}
-              onChange={setEndDate}
-              placeholder="투자 종료일 선택"
-              className="w-full"
-              minDate={start_date ? new Date(parseInt(start_date.slice(0, 4)), parseInt(start_date.slice(4, 6)) - 1, parseInt(start_date.slice(6, 8))) : undefined}
-            />
-          </div>
-
-          <div>
-            <Title size="sm">수수료율</Title>
-            <UnderlineInput
-              type="number"
-              value={commission_rate}
-              onChange={(e) => setCommissionRate(Number(e.target.value))}
-              step={0.1}
-              suffix="%"
-            />
-          </div>
-        </div>
-      </Panel>
-
-      {/* 매수 조건 설정 */}
-      <Panel className="p-6 space-y-4">
-        <Title size="lg">
-          <span className="text-brand-primary">매수</span>
-          <span>{` 조건 설정`}</span>
-        </Title>
-
-        <div className="space-y-2">
-          <Title size="md">매수 조건식 설정</Title>
-
-          {/* 매수 조건 목록 */}
-          <div className="space-y-[8px] mb-[20px]">
-            {buyConditions.map((condition) => (
-              <div key={condition.id} className="flex items-center gap-[8px]">
-                {/* 조건식 표시 영역 */}
-                <div className="h-[60px] rounded-[12px] border border-neutral-500 flex-1">
-                  <div className="h-[60px] overflow-clip relative rounded-[inherit] w-full px-[23.5px] flex items-center gap-[16px]">
-                    {/* 조건 ID (A, B, C, ...) */}
-                    <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-center text-nowrap text-white tracking-[-0.6px]">
-                      <p className="leading-[normal] whitespace-pre">{condition.id}</p>
+              {/* 조건 목록 */}
+              <div className="space-y-3 mb-4">
+                {buyConditions.map((condition) => (
+                  <div
+                    key={condition.id}
+                    className="flex items-center gap-3 p-4 border border-border-default rounded-lg hover:border-accent-primary transition-colors"
+                  >
+                    {/* 조건 ID */}
+                    <div className="w-12 h-12 flex items-center justify-center bg-brand-primary text-white font-bold text-lg rounded-md flex-shrink-0">
+                      {condition.id}
                     </div>
 
-                    <GradientDivider direction="vertical" gradientId="paint0_linear_cond" className="h-[32px] w-[4px]" />
-
-                    {/* 조건식 미리보기 */}
-                    <div className="flex-1">
-                      <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-text-muted text-[20px] text-nowrap tracking-[-0.6px]">
-                        <p className="leading-[normal] whitespace-pre">{getConditionExpression(condition)}</p>
-                      </div>
+                    {/* 조건 표시 */}
+                    <div className="flex-1 text-text-body font-medium">
+                      {getConditionExpression(condition)}
                     </div>
 
                     {/* 팩터 선택 버튼 */}
-                    <button onClick={() => openModal(condition.id)}
-                      className="rounded-[8px] border border-solid border-white px-[24px] py-[8px]">
-                      <div className="flex flex-col font-bold justify-center leading-[0] not-italic text-xl text-center text-nowrap text-white tracking-[-0.6px]">
-                        <p className="leading-[normal] whitespace-pre">팩터 선택</p>
-                      </div>
+                    <button
+                      onClick={() => openModal(condition.id)}
+                      className="px-4 py-2 border border-accent-primary text-accent-primary rounded-sm hover:bg-accent-primary hover:text-white transition-colors text-sm font-medium flex items-center gap-2"
+                    >
+                      <Image src="/icons/search.svg" alt="" width={16} height={16} />
+                      팩터 선택
                     </button>
+
+                    {/* 부등호 선택 */}
+                    <select
+                      value={condition.operator}
+                      onChange={(e) =>
+                        handleOperatorChange(
+                          condition.id,
+                          e.target.value as ">=" | "<=" | ">" | "<" | "=" | "!=",
+                        )
+                      }
+                      className="w-20 px-2 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                    >
+                      <option value=">=">≥</option>
+                      <option value="<=">≤</option>
+                      <option value=">">{">"}</option>
+                      <option value="<">{"<"}</option>
+                      <option value="=">=</option>
+                      <option value="!=">≠</option>
+                    </select>
+
+                    {/* 값 입력 */}
+                    <input
+                      type="number"
+                      value={condition.value}
+                      onChange={(e) =>
+                        handleValueChange(condition.id, Number(e.target.value))
+                      }
+                      className="w-24 px-3 py-2 border border-border-default rounded-sm text-text-body text-center focus:outline-none focus:border-accent-primary"
+                    />
 
                     {/* 삭제 버튼 */}
                     <button
                       onClick={() => removeBuyCondition(condition.id)}
-                      className="rounded-[8px] size-[40px] border border-brand-primary border-solid flex items-center justify-center"
+                      className="w-10 h-10 flex items-center justify-center border border-brand-primary text-brand-primary rounded-sm hover:bg-brand-primary hover:text-white transition-colors"
                     >
-                      <svg className="block size-[24px]" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                        <path d={SVG_PATH.pa683700} fill="var(--color-brand-primary)" />
-                      </svg>
+                      <Image src="/icons/trash.svg" alt="삭제" width={20} height={20} />
                     </button>
                   </div>
-                </div>
-                {/* 부등호 선택 */}
-                <CustomSelect
-                  value={condition.operator}
-                  onChange={(e) =>
-                    handleOperatorChange(
-                      condition.id,
-                      e.target.value as
-                      | ">="
-                      | "<="
-                      | ">"
-                      | "<"
-                      | "="
-                      | "!=",
-                    )
-                  }
-                  width="w-[92px]"
+                ))}
+              </div>
+
+              {/* 조건 추가 버튼 */}
+              <div className="flex justify-center">
+                <button
+                  onClick={addBuyCondition}
+                  className="px-6 py-2 border-2 border-dashed border-border-default text-text-muted rounded-lg hover:border-accent-primary hover:text-accent-primary transition-colors font-medium"
                 >
-                  <option value=">=">≥</option>
-                  <option value="<=">≤</option>
-                  <option value=">">{">"}</option>
-                  <option value="<">{"<"}</option>
-                  <option value="=">=</option>
-                  <option value="!=">≠</option>
-                </CustomSelect>
-                {/* 값 입력 */}
-                <div className="relative h-[60px] w-[92px] border-b border-text-muted">
+                  + 조건식 추가
+                </button>
+              </div>
+            </div>
+
+            <div className="h-px bg-border-subtle" />
+
+            {/* 논리 조건식 & 우선순위 */}
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-text-strong mb-2">
+                  논리 조건식 작성
+                </label>
+                <input
+                  type="text"
+                  placeholder="A and B"
+                  value={buy_logic}
+                  onChange={(e) => setBuyLogic(e.target.value)}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-strong mb-2">
+                  매수 종목 선택 우선순위
+                </label>
+                <div className="flex gap-2">
                   <input
-                    type="number"
-                    value={condition.value}
-                    onChange={(e) =>
-                      handleValueChange(condition.id, Number(e.target.value))
-                    }
-                    className="absolute left-[55%] top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-text-muted text-[20px] tracking-[-0.6px] w-full text-center"
+                    type="text"
+                    value={priority_factor}
+                    onChange={(e) => setPriorityFactor(e.target.value)}
+                    placeholder="예: {PBR}"
+                    className="flex-1 px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
                   />
+                  <select
+                    value={priority_order}
+                    onChange={(e) => setPriorityOrder(e.target.value)}
+                    className="px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                  >
+                    <option value="desc">내림차순</option>
+                    <option value="asc">오름차순</option>
+                  </select>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
+        </div>
 
-          {/* 조건식 추가 버튼 */}
-          <div className="flex justify-center mb-[60px]">
-            <button
-              onClick={addBuyCondition}
-              className="backdrop-blur-[50px] backdrop-filter bg-[rgba(255,255,255,0.2)] rounded-[8px] border border-solid border-white shadow-[0px_0px_8px_2px_rgba(255,255,255,0.3)] px-[24px] py-[8px]"
-            >
-              <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-center text-nowrap text-white tracking-[-0.6px]">
-                <p className="leading-[normal] whitespace-pre">조건식 추가</p>
+        {/* 매수 비중 설정 */}
+        <div id="매수 비중 설정" className="bg-bg-surface rounded-lg shadow-card p-8">
+          <h2 className="text-2xl font-bold mb-6">
+            <span className="text-brand-primary">매수</span>
+            <span className="text-text-strong"> 비중 설정</span>
+          </h2>
+
+          <div className="grid grid-cols-4 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                종목당 매수 비중
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={per_stock_ratio}
+                  onChange={(e) => setPerStockRatio(Number(e.target.value))}
+                  step={1}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                  %
+                </span>
               </div>
-            </button>
-          </div>
-        </div>
+            </div>
 
-        <GradientDivider gradientId="paint0_linear_divider3" />
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                최대 보유 종목 수
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={max_holdings}
+                  onChange={(e) => setMaxHoldings(Number(e.target.value))}
+                  step={1}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                  종목
+                </span>
+              </div>
+            </div>
 
-        {/* Bottom Fields */}
-        <div className="grid grid-cols-2 gap-11">
-          <div>
-            <Title size="md" className="w-[125px]">논리 조건식 작성</Title>
-            <UnderlineInput
-              type="text"
-              placeholder="A and B"
-              value={buy_logic}
-              onChange={(e) => setBuyLogic(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Title size="md" className="w-[179px]">매수 종목 선택 우선순위</Title>
-            <div className="flex h-[40px] border-b border-text-muted">
-              <input
-                type="text"
-                value={priority_factor}
-                onChange={(e) => setPriorityFactor(e.target.value)}
-                placeholder="예: {PBR}"
-                className="bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-full"
-              />
-              <select
-                value={priority_order}
-                onChange={(e) => setPriorityOrder(e.target.value)}
-                className="bg-transparent px-3 w-32"
-              >
-                <option value="desc">내림차순</option>
-                <option value="asc">오름차순</option>
-              </select>
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-sm font-medium text-text-strong">
+                  종목당 최대 매수 금액
+                </label>
+                <input
+                  type="checkbox"
+                  checked={enableMaxBuyValue}
+                  onChange={(e) => {
+                    setEnableMaxBuyValue(e.target.checked);
+                    if (!e.target.checked) setMaxBuyValue(null);
+                    else setMaxBuyValue(0);
+                  }}
+                  className="w-5 h-5 accent-brand-primary"
+                />
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={max_buy_value ?? 0}
+                  onChange={(e) => setMaxBuyValue(Number(e.target.value))}
+                  disabled={!enableMaxBuyValue}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary disabled:bg-bg-muted disabled:opacity-50"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                  만원
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-sm font-medium text-text-strong">
+                  1일 최대 매수 종목 수
+                </label>
+                <input
+                  type="checkbox"
+                  checked={enableMaxDailyStock}
+                  onChange={(e) => {
+                    setEnableMaxDailyStock(e.target.checked);
+                    if (!e.target.checked) setMaxDailyStock(null);
+                    else setMaxDailyStock(0);
+                  }}
+                  className="w-5 h-5 accent-brand-primary"
+                />
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={max_daily_stock ?? 0}
+                  onChange={(e) => setMaxDailyStock(Number(e.target.value))}
+                  disabled={!enableMaxDailyStock}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary disabled:bg-bg-muted disabled:opacity-50"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                  종목
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </Panel>
 
-      {/* 매수 비중 설정 */}
-      <Panel className="relative p-6 space-y-4">
-        <Title size="lg">
-          <span className="text-brand-primary">매수</span>
-          <span>{` 비중 설정`}</span>
-        </Title>
-        <div className="grid grid-cols-4 gap-8">
-          <div>
-            <Title size="sm">종목당 매수 비중</Title>
-            <UnderlineInput
-              type="number"
-              value={per_stock_ratio}
-              onChange={(e) => setPerStockRatio(Number(e.target.value))}
-              step={1}
-              suffix="%"
-            />
-          </div>
+        {/* 매수 방법 선택 */}
+        <div id="매수 방법 선택" className="bg-bg-surface rounded-lg shadow-card p-8">
+          <h2 className="text-2xl font-bold mb-6">
+            <span className="text-brand-primary">매수</span>
+            <span className="text-text-strong"> 방법 선택</span>
+          </h2>
 
-          <div>
-            <Title size="sm">최대 보유 종목 수</Title>
-            <UnderlineInput
-              type="number"
-              value={max_holdings}
-              onChange={(e) => setMaxHoldings(Number(e.target.value))}
-              step={1}
-              inputWidth="w-[80%]"
-              suffix="종목"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center gap-[8px] mb-[15px]">
-              <Title size="sm" marginBottom="mb-0">종목당 최대 매수 금액</Title>
-              <button
-                onClick={() => {
-                  toggleState("maxPerDay");
-                  // 토글이 꺼지면 null로 설정
-                  if (toggles.maxPerDay) {
-                    setMaxBuyValue(null);
-                  } else {
-                    setMaxBuyValue(0);
-                  }
-                }}
-                className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.maxPerDay ? 'bg-[#d68c45]' : 'bg-text-muted'
-                  }`}
-              >
-                <div className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.maxPerDay ? 'left-[15px]' : 'left-[2px]'
-                  }`} />
-              </button>
-            </div>
-            <UnderlineInput
-              type="text"
-              value={max_buy_value ?? 0}
-              onChange={(e) => setMaxBuyValue(Number(e.target.value))}
-              disabled={!toggles.maxPerDay}
-              suffix="만원"
-              className="disabled:opacity-50"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center gap-[8px] mb-[15px]">
-              <Title size="sm" marginBottom="mb-0">1일 최대 매수 종목 수</Title>
-              <button
-                onClick={() => {
-                  toggleState("maxPerStock");
-                  // 토글이 꺼지면 null로 설정
-                  if (toggles.maxPerStock) {
-                    setMaxDailyStock(null);
-                  } else {
-                    setMaxDailyStock(0);
-                  }
-                }} className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.maxPerStock ? 'bg-[#d68c45]' : 'bg-text-muted'
-                  }`}
-              >
-                <div className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.maxPerStock ? 'left-[15px]' : 'left-[2px]'
-                  }`} />
-              </button>
-            </div>
-            <UnderlineInput
-              type="text"
-              value={max_daily_stock ?? 0}
-              onChange={(e) => setMaxDailyStock(Number(e.target.value))}
-              disabled={!toggles.maxPerStock}
-              suffix="종목"
-              className="disabled:opacity-50"
-            />
-          </div>
-        </div>
-      </Panel>
-
-      {/* 매수 방법 선택 */}
-      <Panel className="p-6 space-y-4">
-        <Title size="lg">
-          <span className="text-brand-primary">매수</span>
-          <span>{` 방법 선택`}</span>
-        </Title>
-
-        <div className="grid grid-cols-2 gap-[28px]">
-          <div>
-            <Title size="sm">매수 가격 기준</Title>
-            <div className="relative h-[40px] border-b border-text-muted">
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                매수 가격 기준
+              </label>
               <select
                 value={buyCostBasisSelect}
                 onChange={(e) => setBuyCostBasisSelect(e.target.value)}
-                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-full appearance-none cursor-pointer"
+                className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
               >
                 <option value="{전일 종가}">전일 종가</option>
                 <option value="{당일 시가}">당일 시가</option>
               </select>
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 size-[32px] pointer-events-none">
-                <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                  <path d={SVG_PATH.p2a094a00} fill="var(--color-text-muted)" />
-                </svg>
-              </div>
             </div>
-          </div>
 
-          <div>
-            <div className="relative h-full border-b border-text-muted">
-              <input
-                type="number"
-                value={buyCostBasisValue}
-                onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
-                className="absolute left-0 bottom-1 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-[95%]"
-              />
-              <div className="absolute right-1 bottom-2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-text-muted tracking-[-0.6px]">
-                <p className="leading-[normal] whitespace-pre">%</p>
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                가격 조정
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={buyCostBasisValue}
+                  onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                  %
+                </span>
               </div>
             </div>
           </div>
         </div>
-      </Panel>
+      </div>
 
       {/* Factor Selection Modal */}
       <FactorSelectionModal
@@ -523,6 +541,6 @@ export function BuyConditionTab() {
         onSelect={handleFactorSelect}
         initialValues={getCurrentCondition()}
       />
-    </div>
+    </>
   );
 }

@@ -5,7 +5,7 @@
 /**
  * Design token playground for the refreshed UI.
  * - 값만 조정해도 전체 UI에 즉시 반영할 수 있도록 CSS 변수로 정의합니다.
- * - Tailwind 확장은 new_tailwind.config.js에서 이 토큰을 그대로 참조합니다.
+ * - Tailwind 확장은 tailwind.config.js에서 이 토큰을 그대로 참조합니다.
  */
 
 :root {
@@ -62,7 +62,7 @@
 
 @layer base {
   body {
-    background-color: var(--color-bg-app);
+    background-color: var(--color-surface);
     color: var(--color-text-body);
     font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont,
       "Segoe UI", sans-serif;

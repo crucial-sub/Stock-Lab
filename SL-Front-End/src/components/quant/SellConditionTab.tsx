@@ -1,6 +1,7 @@
 "use client";
 
 import { useBacktestConfigStore, useConditionStore } from "@/stores";
+import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { FactorSelectionModal } from "./FactorSelectionModal";
@@ -14,6 +15,9 @@ import { FactorSelectionModal } from "./FactorSelectionModal";
  * - 오른쪽: 설정 요약 패널
  */
 export default function SellConditionTab() {
+  // Server data
+  const { data: subFactors = [] } = useSubFactorsQuery();
+
   // Zustand stores
   const {
     target_and_loss,
@@ -163,13 +167,22 @@ export default function SellConditionTab() {
   const handleFactorSelect = (
     factorId: string,
     factorName: string,
-    subFactorId: string
+    subFactorId: string,
+    argument?: string,
   ) => {
     if (currentConditionId) {
+      // subFactorId로 subFactorName 찾기
+      const subFactor = subFactors.find(
+        (sf) => String(sf.id) === subFactorId
+      );
+      const subFactorName = subFactor?.display_name;
+
       updateSellCondition(currentConditionId, {
         factorId,
         factorName,
         subFactorId,
+        subFactorName,
+        argument,
       });
     }
     setIsModalOpen(false);
@@ -201,7 +214,7 @@ export default function SellConditionTab() {
   const mainContent = (
     <div className="space-y-4">
       {/* 목표가 / 손절가 섹션 */}
-      <div className="bg-bg-surface rounded-lg shadow-card p-6">
+      <div id="목표가-/-손절가" className="bg-bg-surface rounded-lg shadow-card p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-bold text-text-strong">
@@ -228,21 +241,7 @@ export default function SellConditionTab() {
 
         {targetLossOpen && (
           <div className="pt-4 border-t border-border-subtle">
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => {
-                  setTargetLossOpen(false);
-                  document
-                    .getElementById("target-loss-detail")
-                    ?.classList.toggle("hidden");
-                }}
-                className="px-4 py-2 bg-brand-primary text-white rounded-sm text-sm font-medium hover:opacity-90"
-              >
-                조건 항목열람하기
-              </button>
-            </div>
-
-            <div id="target-loss-detail" className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-6">
               {/* 목표가 */}
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
@@ -312,7 +311,7 @@ export default function SellConditionTab() {
       </div>
 
       {/* 보유 기간 섹션 */}
-      <div className="bg-bg-surface rounded-lg shadow-card p-6">
+      <div id="보유-기간" className="bg-bg-surface rounded-lg shadow-card p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-bold text-text-strong">보유 기간</h3>
@@ -337,20 +336,7 @@ export default function SellConditionTab() {
 
         {holdPeriodOpen && (
           <div className="pt-4 border-t border-border-subtle">
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() =>
-                  document
-                    .getElementById("hold-period-detail")
-                    ?.classList.toggle("hidden")
-                }
-                className="px-4 py-2 bg-brand-primary text-white rounded-sm text-sm font-medium hover:opacity-90"
-              >
-                조건 항목열람하기
-              </button>
-            </div>
-
-            <div id="hold-period-detail" className="flex items-center gap-6">
+            <div className="flex items-center gap-6">
               {/* 최소 종목 보유일 */}
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
@@ -408,7 +394,7 @@ export default function SellConditionTab() {
       </div>
 
       {/* 조건 매도 섹션 */}
-      <div className="bg-bg-surface rounded-lg shadow-card p-6">
+      <div id="조건-매도" className="bg-bg-surface rounded-lg shadow-card p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-bold text-text-strong">조건 매도</h3>
@@ -432,20 +418,7 @@ export default function SellConditionTab() {
 
         {conditionalSellOpen && (
           <div className="pt-4 border-t border-border-subtle">
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() =>
-                  document
-                    .getElementById("conditional-sell-detail")
-                    ?.classList.toggle("hidden")
-                }
-                className="px-4 py-2 bg-brand-primary text-white rounded-sm text-sm font-medium hover:opacity-90"
-              >
-                조건 항목열람하기
-              </button>
-            </div>
-
-            <div id="conditional-sell-detail" className="space-y-4">
+            <div className="space-y-4">
               {/* 매도 조건식 설정 */}
               <div>
                 <h4 className="text-base font-semibold text-text-strong mb-3">

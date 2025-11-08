@@ -9,12 +9,21 @@ interface QuantStrategySummaryPanelProps {
   setIsOpen: (isOpen: boolean) => void;
 }
 
+interface SummaryTabsType {
+  tabName: "buy" | "sell" | "target",
+  tabDisplayName: string,
+  items: {
+    [key: string]: string
+  }[]
+}
+
 /**
  * 퀀트 전략 생성 페이지의 우측 요약 패널
  * - 설정한 조건들의 요약 표시
  * - 화살표 버튼으로 열기/닫기 가능
  * - 닫혀도 완전히 사라지지 않고 화살표만 표시
  */
+
 export default function QuantStrategySummaryPanel({
   activeTab,
   isOpen,
@@ -33,24 +42,35 @@ export default function QuantStrategySummaryPanel({
       {/* 화살표 버튼 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="absolute left-3 top-6 z-10 hover:opacity-70 transition-opacity"
+        className={`absolute ${isOpen ? "left-5 top-5" : "right-2 left-2 top-5"} top-5 z-10 hover:opacity-70 transition-opacity`}
         aria-label={isOpen ? "요약 패널 닫기" : "요약 패널 열기"}
       >
         <Image
           src={isOpen ? "/icons/arrow_right.svg" : "/icons/arrow_left.svg"}
           alt={isOpen ? "닫기" : "열기"}
-          width={20}
-          height={20}
+          width={24}
+          height={24}
         />
       </button>
 
       {/* 요약 패널 컨텐츠 - 열린 상태에서만 표시 */}
       {isOpen && (
-        <div className="pt-16 px-6">
-          {/* 요약보기 제목 */}
-          <h2 className="text-lg font-semibold text-accent-primary mb-4">
-            요약보기
-          </h2>
+        <div className="">
+          {/* 요약보기 / AI 헬퍼 탭 */}
+          <div className="h-16 border-b border-tag-neutral">
+            <div className="flex pl-16">
+              <div className="flex w-[44.5rem] border-b-2 border-brand-primary h-16 justify-center items-center">
+                <h2 className="text-xl font-semibold text-brand-primary">
+                  요약보기
+                </h2>
+              </div>
+              <div className="flex w-[44.5rem] h-16 justify-center items-center">
+                <h2 className="text-xl font-normal text-tag-neutral">
+                  AI 헬퍼
+                </h2>
+              </div>
+            </div>
+          </div>
 
           {/* 탭 버튼 */}
           <div className="flex gap-2 mb-6">

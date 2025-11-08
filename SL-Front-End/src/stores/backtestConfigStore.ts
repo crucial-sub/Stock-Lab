@@ -25,7 +25,8 @@ interface BacktestConfigStore extends BacktestRunRequest {
   setMaxHoldings: (max: number) => void;
   setMaxBuyValue: (value: number | null) => void;
   setMaxDailyStock: (max: number | null) => void;
-  setBuyCostBasis: (basis: string) => void;
+  setBuyPriceBasis: (basis: string) => void;
+  setBuyPriceOffset: (offset: number) => void;
 
   // 매도 조건 업데이트
   setTargetAndLoss: (value: BacktestRunRequest["target_and_loss"]) => void;
@@ -65,7 +66,8 @@ const defaultConfig: BacktestRunRequest = {
   max_holdings: 10, // 10종목
   max_buy_value: null, // null (토글 off)
   max_daily_stock: null, // null (토글 off)
-  buy_cost_basis: "{전일 종가} 0", // 전일 종가, 0%
+  buy_price_basis: "전일 종가", // 매수 가격 기준
+  buy_price_offset: 0, // 기준가 대비 증감값(%)
 
   // 매도 조건 기본값
   target_and_loss: {

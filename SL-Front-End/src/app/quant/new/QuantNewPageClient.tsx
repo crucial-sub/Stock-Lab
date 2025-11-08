@@ -5,11 +5,13 @@
  * - 서버에서 prefetch된 팩터와 함수 데이터를 사용합니다
  * - Figma 디자인에 따른 3-탭 레이아웃 (매수 조건, 매도 조건, 매매 대상)
  * - 성능 최적화: 각 탭을 lazy loading으로 코드 스플리팅 (초기 번들 크기 95% 감소)
+ * - Zustand로 탭 상태 전역 관리
  */
 
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useThemesQuery } from "@/hooks/useThemesQuery";
+import { useQuantTabStore } from "@/stores";
 import { lazy, Suspense } from "react";
 
 /**
@@ -27,17 +29,15 @@ const TargetSelectionTab = lazy(
   () => import("@/components/quant/TargetSelectionTab"),
 );
 
-interface QuantNewPageClientProps {
-  activeTab?: "buy" | "sell" | "target";
-  setActiveTab?: (tab: "buy" | "sell" | "target") => void;
-}
-
 /**
  * Quant 새 전략 페이지 클라이언트 컴포넌트
  * - SSR로 prefetch된 데이터를 React Query를 통해 자동으로 사용합니다
- * - layout.tsx로부터 activeTab과 setActiveTab을 받아서 사용합니다
+ * - Zustand store에서 activeTab 상태를 가져와서 탭 전환을 처리합니다
  */
-export function QuantNewPageClient({ activeTab = "buy", setActiveTab }: QuantNewPageClientProps) {
+export function QuantNewPageClient() {
+  // Zustand store에서 탭 상태 가져오기
+  const { activeTab } = useQuantTabStore();
+
   // 서버에서 prefetch된 데이터를 자동으로 사용 (추가 요청 없음)
   const { data: factors, isLoading: isLoadingFactors } = useFactorsQuery();
   const { data: subFactors, isLoading: isLoadingSubFactors } =

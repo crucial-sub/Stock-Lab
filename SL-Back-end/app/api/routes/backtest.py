@@ -729,18 +729,70 @@ async def list_available_sub_factors():
     """사용 가능한 서브 팩터(함수) 목록"""
     return {
         "sub_factors": [
-            # 예시: {"id": 1, "name": "and", "display_name": "AND 조건", "description": "모든 조건이 참일 때"}
-            {"id": 1, "name": "and", "display_name": "AND 조건", "description": "모든 조건이 참일 때"},
-            {"id": 2, "name": "or", "display_name": "OR 조건", "description": "하나 이상의 조건이 참일 때"},
-            {"id": 3, "name": "not", "display_name": "NOT 조건", "description": "조건이 거짓일 때"},
-            {"id": 4, "name": "cross_up", "display_name": "상향 돌파", "description": "값이 기준선을 상향 돌파할 때"},
-            {"id": 5, "name": "cross_down", "display_name": "하향 돌파", "description": "값이 기준선을 하향 돌파할 때"},
-            {"id": 6, "name": "rank", "display_name": "순위", "description": "지정된 범위 내 순위"},
-            {"id": 7, "name": "percentile", "display_name": "백분위", "description": "백분위 순위"},
-            {"id": 8, "name": "z_score", "display_name": "Z-Score", "description": "표준화 점수"},
-            {"id": 9, "name": "moving_avg", "display_name": "이동평균", "description": "N일 이동평균"},
-            {"id": 10, "name": "compare", "display_name": "비교", "description": "두 값을 비교"}
-        ]
+  {
+    "id": 1,
+    "name": "default_val",
+    "display_name": "기본값",
+    "arguments": [],
+    "description": "입력한 팩터 값을 가공 없이 그대로 사용합니다."
+  },
+  {
+    "id": 2,
+    "name": "past_val",
+    "display_name": "과거값",
+    "arguments": ["1일", "2일", "3일", "5일", "1주", "1월", "1년"],
+    "description": "N일/주/월/년 이전의 팩터 값을 사용합니다."
+  },
+  {
+    "id": 3,
+    "name": "moving_avg_val",
+    "display_name": "이동평균",
+    "arguments": ["5일", "10일", "20일", "25일",],
+    "description": "특정 기간 동안의 팩터값의 평균을 계산합니다."
+  },
+  {
+    "id": 4,
+    "name": "ratio_val",
+    "display_name": "비율",
+    "arguments": ["내림차순", "오름차순"],
+    "description": "팩터에 속한 종목에 0~100 사이의 비율을 부여합니다."
+  },
+  {
+    "id": 5,
+    "name": "rank_val",
+    "display_name": "순위",
+    "arguments": ["내림차순", "오름차순"],
+    "description": "팩터에 속한 종목들에 등수를 부여합니다. (1 ~ 등수)"
+  },
+  {
+    "id": 6,
+    "name": "max_val_period",
+    "display_name": "최고값",
+    "arguments": ["5일", "10일", "20일", "25일",],
+    "description": "N일 이내 팩터의 최고값을 활용합니다."
+  },
+  {
+    "id": 7,
+    "name": "min_val_period",
+    "display_name": "최저값",
+    "arguments": ["5일", "10일", "20일", "25일",],
+    "description": "N일 이내 팩터의 최저값을 활용합니다."
+  },
+  {
+    "id": 8,
+    "name": "change_amount_period",
+    "display_name": "변화량_기간",
+    "arguments": ["1일", "2일", "3일", "5일", "1주", "1월", "1년"],
+    "description": "N일 전 대비 변화량을 측정합니다."
+  },
+  {
+    "id": 9,
+    "name": "change_rate_period",
+    "display_name": "변화율_기간",
+    "arguments": ["1일", "2일", "3일", "5일", "1주", "1월", "1년"],
+    "description": "N일 전 대비 변화율을 측정합니다."
+  }
+]
     }
 
 

@@ -10,6 +10,7 @@
  */
 
 import { useBacktestConfigStore, useConditionStore } from "@/stores";
+import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { FactorSelectionModal } from "./FactorSelectionModal";
@@ -18,6 +19,9 @@ export default function BuyConditionTab() {
   const [activeSection, setActiveSection] = useState("일반 조건 설정");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentConditionId, setCurrentConditionId] = useState<string | null>(null);
+
+  // Server data
+  const { data: subFactors = [] } = useSubFactorsQuery();
 
   // Zustand stores
   const {
@@ -90,12 +94,21 @@ export default function BuyConditionTab() {
     factorId: string,
     factorName: string,
     subFactorId: string,
+    argument?: string,
   ) => {
     if (currentConditionId) {
+      // subFactorId로 subFactorName 찾기
+      const subFactor = subFactors.find(
+        (sf) => String(sf.id) === subFactorId
+      );
+      const subFactorName = subFactor?.display_name;
+
       updateBuyCondition(currentConditionId, {
         factorId,
         factorName,
         subFactorId,
+        subFactorName,
+        argument,
       });
     }
     setIsModalOpen(false);

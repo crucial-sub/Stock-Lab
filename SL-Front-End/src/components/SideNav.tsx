@@ -11,11 +11,13 @@ interface SideNavProps {
 
 export function SideNav({ }: SideNavProps) {
     const pathname = usePathname();
+    const segments = pathname.split("/").filter(Boolean);
+    const rootSegment = "/" + (segments[0] ?? "");
 
     const navItems = [
         { href: "/", label: "홈", icon: "/icons/home.svg" },
         { href: "/quant", label: "퀀트 투자", icon: "/icons/function.svg" },
-        { href: "/market", label: "시세", icon: "/icons/bar-chart.svg" },
+        { href: "/market-price", label: "시세", icon: "/icons/bar-chart.svg" },
         { href: "/news", label: "뉴스", icon: "/icons/news.svg" },
         { href: "/mypage", label: "마이페이지", icon: "/icons/account-circle.svg" },
     ];
@@ -28,20 +30,20 @@ export function SideNav({ }: SideNavProps) {
                         <Link
                             key={item.href}
                             href={item.href}
-                            className={`relative flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${pathname === item.href ? "bg-bg-muted" : "hover:bg-slate-50"
+                            className={`relative flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${rootSegment == item.href ? "bg-bg-muted" : "hover:bg-slate-50"
                                 }`}
                         >
                             <Icon
                                 src={item.icon}
                                 color={
-                                    pathname === item.href
+                                    rootSegment == item.href
                                         ? "var(--color-accent-primary)"
                                         : "var(--color-border-default)"
                                 }
                                 size={20}
                             />
                             <span
-                                className={`text-xl font-sans ${pathname === item.href
+                                className={`text-xl font-sans ${rootSegment == item.href
                                     ? "font-semibold text-accent-primary"
                                     : "font-light text-tag-neutral"
                                     }`}

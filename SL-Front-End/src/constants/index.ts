@@ -3,7 +3,6 @@ import type { Tab } from "@/types";
 
 export * from "./factors";
 export * from "./mockData";
-export * from "./subFactors";
 
 // Tab configurations
 export const HOME_SORT_TABS: Tab[] = [

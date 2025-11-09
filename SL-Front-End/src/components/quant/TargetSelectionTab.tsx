@@ -4,6 +4,8 @@ import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { runBacktest } from "@/lib/api/backtest";
+import { useRouter } from "next/navigation";
 
 /**
  * 매매 대상 선택 탭 - 새 디자인
@@ -18,7 +20,14 @@ export default function TargetSelectionTab() {
   const { data: themes, isLoading: isLoadingThemes } = useThemesQuery();
 
   // Zustand store
-  const { trade_targets, setTradeTargets } = useBacktestConfigStore();
+  const { trade_targets, setTradeTargets, getBacktestRequest } = useBacktestConfigStore();
+
+  // 라우터
+  const router = useRouter();
+
+  // 백테스트 실행 상태
+  const [isRunning, setIsRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // 사이드바 상태
   const [activeSection, setActiveSection] = useState("매매 대상 설정");
@@ -178,6 +187,43 @@ export default function TargetSelectionTab() {
       selected_stocks: [], // 개별 종목 선택은 추후 구현
     });
   }, [selectedIndustries, selectedThemes, isAllIndustriesSelected, isAllThemesSelected, setTradeTargets]);
+
+  // 백테스트 시작 핸들러
+  const handleStartBacktest = async () => {
+    try {
+      setIsRunning(true);
+      setError(null);
+
+      // 전역 스토어에서 백테스트 요청 데이터 가져오기
+      const request = getBacktestRequest();
+
+      // 서버로 전송되는 데이터 확인
+      console.log("=== 백테스트 요청 데이터 ===");
+      console.log(JSON.stringify(request, null, 2));
+      console.log("========================");
+
+      // 백테스트 실행 API 호출
+      const response = await runBacktest(request);
+
+      console.log("=== 백테스트 응답 데이터 ===");
+      console.log(JSON.stringify(response, null, 2));
+      console.log("========================");
+
+      // 성공 시 결과 페이지로 이동
+      router.push(`/quant/${response.backtestId}`);
+    } catch (err: any) {
+      console.error("=== 백테스트 실행 실패 ===");
+      console.error("Error:", err);
+      console.error("Response data:", err.response?.data);
+      console.error("Response status:", err.response?.status);
+      console.error("========================");
+
+      const errorMessage = err.response?.data?.message || err.message || "백테스트 실행 중 오류가 발생했습니다.";
+      setError(errorMessage);
+    } finally {
+      setIsRunning(false);
+    }
+  };
 
   // 메인 컨텐츠
   const mainContent = (
@@ -407,10 +453,25 @@ export default function TargetSelectionTab() {
         </div>
       </div>
 
+      {/* 에러 메시지 */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
       {/* 백테스트 시작하기 버튼 */}
       <div className="flex justify-center pt-6">
-        <button className="px-12 py-4 bg-accent-primary text-white rounded-lg text-lg font-bold hover:opacity-90 transition-opacity">
-          백테스트 시작하기
+        <button
+          onClick={handleStartBacktest}
+          disabled={isRunning}
+          className={`px-12 py-4 rounded-lg text-lg font-bold transition-opacity ${
+            isRunning
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-accent-primary text-white hover:opacity-90"
+          }`}
+        >
+          {isRunning ? "백테스트 실행 중..." : "백테스트 시작하기"}
         </button>
       </div>
     </div>

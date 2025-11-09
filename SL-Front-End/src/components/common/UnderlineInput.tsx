@@ -55,8 +55,10 @@ export function UnderlineInput({
   className = "",
   ...inputProps
 }: UnderlineInputProps) {
-  const borderColorClass = borderColor === "white" ? "border-white" : "border-[#a0a0a0]";
-  const textColorClass = textColor === "white" ? "text-white" : "text-[#a0a0a0]";
+  const borderColorClass =
+    borderColor === "white" ? "border-white" : "border-text-muted";
+  const textColorClass =
+    textColor === "white" ? "text-white" : "text-text-muted";
 
   return (
     <div className={`relative h-[40px] border-b ${borderColorClass} ${className}`}>

@@ -1,0 +1,65 @@
+# Production Docker Compose Configuration
+# This file is for EC2 deployment with external RDS and ElastiCache
+
+services:
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./SL-Back-end
+      dockerfile: Dockerfile
+    container_name: sl_backend_prod
+    restart: always
+    env_file:
+      - ./SL-Back-end/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./SL-Back-end/logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app_network
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./SL-Front-End
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    container_name: sl_frontend_prod
+    restart: always
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge

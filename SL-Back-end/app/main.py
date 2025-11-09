@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
 from app.api.routes import backtest, auth, company_info, strategy
+from app.api.v1.endpoints import backtest_genport
 
 settings = get_settings()
 
@@ -149,6 +150,12 @@ app.include_router(
     backtest.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Backtest"]
+)
+
+app.include_router(
+    backtest_genport.router,
+    prefix=f"{settings.API_V1_PREFIX}/backtest",
+    tags=["Stock-Lab Backtest"]
 )
 
 app.include_router(

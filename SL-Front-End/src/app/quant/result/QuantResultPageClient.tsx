@@ -7,6 +7,7 @@ import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
 import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
 import { SettingsTab } from "@/components/quant/result/SettingsTab";
 import type { BacktestRunRequest } from "@/types/api";
+import { mockBacktestResult } from "@/mocks/backtestResult";
 
 /**
  * 백테스트 결과 페이지 - 클라이언트 컴포넌트 (최신 디자인)
@@ -29,11 +30,20 @@ export function QuantResultPageClient({
 }: QuantResultPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("history");
 
+  // Mock 모드 체크 (backtestId가 "mock"으로 시작하면 Mock 데이터 사용)
+  const isMockMode = backtestId.startsWith("mock");
+
   // React Query로 백테스트 결과 조회
-  const { data: result, isLoading, error } = useBacktestResultQuery(backtestId);
+  const { data: result, isLoading, error } = useBacktestResultQuery(
+    backtestId,
+    !isMockMode // Mock 모드면 API 호출 비활성화
+  );
+
+  // Mock 데이터 또는 실제 데이터 사용
+  const finalResult = isMockMode ? mockBacktestResult : result;
 
   // 로딩 상태
-  if (isLoading) {
+  if (isLoading && !isMockMode) {
     return (
       <div className="min-h-screen bg-bg-app flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -44,8 +54,8 @@ export function QuantResultPageClient({
     );
   }
 
-  // 에러 상태
-  if (error || !result) {
+  // 에러 상태 (Mock 모드가 아닐 때만)
+  if (!isMockMode && (error || !result)) {
     return (
       <div className="min-h-screen bg-bg-app flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -60,8 +70,13 @@ export function QuantResultPageClient({
     );
   }
 
+  // finalResult가 없으면 리턴 (타입 가드)
+  if (!finalResult) {
+    return null;
+  }
+
   // 통계 데이터 계산
-  const stats = result.statistics;
+  const stats = finalResult.statistics;
   const initialCapital = 50000000; // 5천만원 (설정값에서 가져와야 함)
   const totalProfit = initialCapital * (stats.totalReturn / 100);
   const finalAssets = initialCapital + totalProfit;
@@ -216,9 +231,9 @@ export function QuantResultPageClient({
         </div>
 
         {/* 탭 컨텐츠 */}
-        {activeTab === "history" && <TradingHistoryTab trades={result.trades} />}
-        {activeTab === "returns" && <ReturnsTab yieldPoints={result.yieldPoints} />}
-        {activeTab === "statistics" && <StatisticsTabWrapper statistics={result.statistics} />}
+        {activeTab === "history" && <TradingHistoryTab trades={finalResult.trades} />}
+        {activeTab === "returns" && <ReturnsTab yieldPoints={finalResult.yieldPoints} />}
+        {activeTab === "statistics" && <StatisticsTabWrapper statistics={finalResult.statistics} />}
         {activeTab === "settings" && (
           <SettingsTab
             settings={

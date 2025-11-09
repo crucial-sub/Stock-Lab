@@ -35,6 +35,8 @@ export default function BuyConditionTab() {
     setEndDate,
     commission_rate,
     setCommissionRate,
+    slippage,
+    setSlippage,
     buy_logic,
     setBuyLogic,
     priority_factor,
@@ -49,7 +51,10 @@ export default function BuyConditionTab() {
     setMaxBuyValue,
     max_daily_stock,
     setMaxDailyStock,
-    setBuyCostBasis,
+    buy_price_basis,
+    buy_price_offset,
+    setBuyPriceBasis,
+    setBuyPriceOffset,
     setBuyConditions,
   } = useBacktestConfigStore();
 
@@ -62,27 +67,43 @@ export default function BuyConditionTab() {
   } = useConditionStore();
 
   // Local state
-  const [buyCostBasisSelect, setBuyCostBasisSelect] = useState<string>("{전일 종가}");
-  const [buyCostBasisValue, setBuyCostBasisValue] = useState<number>(0);
-  const [enableMaxBuyValue, setEnableMaxBuyValue] = useState(false);
-  const [enableMaxDailyStock, setEnableMaxDailyStock] = useState(false);
+  const [buyCostBasisSelect, setBuyCostBasisSelect] = useState<string>(buy_price_basis || "전일 종가");
+  const [buyCostBasisValue, setBuyCostBasisValue] = useState<number>(buy_price_offset || 0);
+  const [enableMaxBuyValue, setEnableMaxBuyValue] = useState(max_buy_value !== null);
+  const [enableMaxDailyStock, setEnableMaxDailyStock] = useState(max_daily_stock !== null);
 
   // Sync buyConditions to global store
   useEffect(() => {
     const formattedConditions = buyConditions
       .filter((c) => c.factorName !== null)
-      .map((c) => ({
-        name: c.id,
-        expression: `{${c.factorName}} ${c.operator} ${c.value}`,
-      }));
+      .map((c) => {
+        // exp_left_side 생성: 서브팩터가 있으면 "서브팩터({팩터},{인자})", 없으면 "{팩터}"
+        let expLeftSide = "";
+        if (c.subFactorName) {
+          if (c.argument) {
+            expLeftSide = `${c.subFactorName}({${c.factorName}},{${c.argument}})`;
+          } else {
+            expLeftSide = `${c.subFactorName}({${c.factorName}})`;
+          }
+        } else {
+          expLeftSide = `{${c.factorName}}`;
+        }
+
+        return {
+          name: c.id,
+          exp_left_side: expLeftSide,
+          inequality: c.operator,
+          exp_right_side: c.value,
+        };
+      });
     setBuyConditions(formattedConditions);
   }, [buyConditions, setBuyConditions]);
 
-  // Sync buy cost basis
+  // Sync buy price basis and offset
   useEffect(() => {
-    const basis = `${buyCostBasisSelect} ${buyCostBasisValue}`;
-    setBuyCostBasis(basis);
-  }, [buyCostBasisSelect, buyCostBasisValue, setBuyCostBasis]);
+    setBuyPriceBasis(buyCostBasisSelect);
+    setBuyPriceOffset(buyCostBasisValue);
+  }, [buyCostBasisSelect, buyCostBasisValue, setBuyPriceBasis, setBuyPriceOffset]);
 
   // Factor selection handlers
   const openModal = (id: string) => {
@@ -251,6 +272,24 @@ export default function BuyConditionTab() {
                   type="number"
                   value={commission_rate}
                   onChange={(e) => setCommissionRate(Number(e.target.value))}
+                  step={0.1}
+                  className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">
+                  %
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text-strong mb-2">
+                슬리피지
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={slippage}
+                  onChange={(e) => setSlippage(Number(e.target.value))}
                   step={0.1}
                   className="w-full px-3 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
                 />

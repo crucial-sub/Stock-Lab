@@ -103,11 +103,11 @@ export default function SellConditionTab() {
   // 보유 기간 전역 스토어 업데이트
   useEffect(() => {
     if (holdPeriodOpen) {
-      const sellBasis = `${holdSellCostBasisSelect} ${holdSellCostBasisValue}%`;
       setHoldDays({
         min_hold_days: minHoldDays,
         max_hold_days: maxHoldDays,
-        sell_cost_basis: sellBasis,
+        sell_price_basis: holdSellCostBasisSelect,
+        sell_price_offset: holdSellCostBasisValue,
       });
     } else {
       setHoldDays(null);
@@ -132,19 +132,33 @@ export default function SellConditionTab() {
   // 조건 매도 전역 스토어 업데이트
   useEffect(() => {
     if (conditionalSellOpen) {
-      const sellBasis = `${condSellCostBasisSelect} ${condSellCostBasisValue}%`;
-
       const formattedConditions = sellConditions
         .filter((c) => c.factorName !== null)
-        .map((c) => ({
-          name: c.id,
-          expression: `{${c.factorName}} ${c.operator} ${c.value}`,
-        }));
+        .map((c) => {
+          let expLeftSide = "";
+          if (c.subFactorName) {
+            if (c.argument) {
+              expLeftSide = `${c.subFactorName}({${c.factorName}},{${c.argument}})`;
+            } else {
+              expLeftSide = `${c.subFactorName}({${c.factorName}})`;
+            }
+          } else {
+            expLeftSide = `{${c.factorName}}`;
+          }
+
+          return {
+            name: c.id,
+            exp_left_side: expLeftSide,
+            inequality: c.operator,
+            exp_right_side: c.value,
+          };
+        });
 
       setConditionSell({
         sell_conditions: formattedConditions,
         sell_logic: sellLogic,
-        sell_cost_basis: sellBasis,
+        sell_price_basis: condSellCostBasisSelect,
+        sell_price_offset: condSellCostBasisValue,
       });
     } else {
       setConditionSell(null);
@@ -212,10 +226,11 @@ export default function SellConditionTab() {
 
   // 메인 컨텐츠
   const mainContent = (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* 목표가 / 손절가 섹션 */}
-      <div id="목표가-/-손절가" className="bg-bg-surface rounded-lg shadow-card p-6">
-        <div className="flex items-center justify-between mb-4">
+      <div id="목표가-/-손절가" className="space-y-3">
+        {/* 제목과 설명을 패널 외부로 이동 */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-bold text-text-strong">
               목표가 / 손절가
@@ -239,8 +254,9 @@ export default function SellConditionTab() {
           </button>
         </div>
 
+        {/* 패널에 파란색 좌측 border 추가 */}
         {targetLossOpen && (
-          <div className="pt-4 border-t border-border-subtle">
+          <div className="bg-bg-surface rounded-lg shadow-card p-6 border-l-4 border-accent-secondary">
             <div className="grid grid-cols-2 gap-6">
               {/* 목표가 */}
               <div className="space-y-3">
@@ -311,8 +327,9 @@ export default function SellConditionTab() {
       </div>
 
       {/* 보유 기간 섹션 */}
-      <div id="보유-기간" className="bg-bg-surface rounded-lg shadow-card p-6">
-        <div className="flex items-center justify-between mb-4">
+      <div id="보유-기간" className="space-y-3">
+        {/* 제목과 설명을 패널 외부로 이동 */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-bold text-text-strong">보유 기간</h3>
             <p className="text-sm text-text-body">
@@ -334,8 +351,9 @@ export default function SellConditionTab() {
           </button>
         </div>
 
+        {/* 패널에 파란색 좌측 border 추가 */}
         {holdPeriodOpen && (
-          <div className="pt-4 border-t border-border-subtle">
+          <div className="bg-bg-surface rounded-lg shadow-card p-6 border-l-4 border-accent-secondary">
             <div className="flex items-center gap-6">
               {/* 최소 종목 보유일 */}
               <div className="flex items-center gap-2">
@@ -394,8 +412,9 @@ export default function SellConditionTab() {
       </div>
 
       {/* 조건 매도 섹션 */}
-      <div id="조건-매도" className="bg-bg-surface rounded-lg shadow-card p-6">
-        <div className="flex items-center justify-between mb-4">
+      <div id="조건-매도" className="space-y-3">
+        {/* 제목과 설명을 패널 외부로 이동 */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-bold text-text-strong">조건 매도</h3>
             <p className="text-sm text-text-body">
@@ -416,9 +435,10 @@ export default function SellConditionTab() {
           </button>
         </div>
 
+        {/* 패널에 파란색 좌측 border 추가 */}
         {conditionalSellOpen && (
-          <div className="pt-4 border-t border-border-subtle">
-            <div className="space-y-4">
+          <div className="bg-bg-surface rounded-lg shadow-card p-6 border-l-4 border-accent-secondary">
+            <div className="space-y-6">
               {/* 매도 조건식 설정 */}
               <div>
                 <h4 className="text-base font-semibold text-text-strong mb-3">
@@ -512,49 +532,46 @@ export default function SellConditionTab() {
                 </div>
               </div>
 
-              {/* 논리 조건식 & 매도 가격 기준 */}
+              {/* 논리 조건식 - 별도 행으로 분리 */}
               <div className="border-t border-border-subtle pt-4">
-                <div className="flex items-center justify-between">
-                  {/* 논리 조건식 */}
-                  <div className="flex items-center gap-3">
-                    <h4 className="text-base font-semibold text-text-strong">
-                      논리 조건식
-                    </h4>
-                    <input
-                      type="text"
-                      placeholder="논리 조건식을 입력해주세요."
-                      value={sellLogic}
-                      onChange={(e) => setSellLogic(e.target.value)}
-                      className="w-64 px-3 py-2 bg-bg-app border-b border-text-muted text-text-strong placeholder:text-text-muted"
-                    />
-                  </div>
-
-                  {/* 매도 가격 기준 */}
-                  <div className="flex items-center gap-3">
-                    <h4 className="text-base font-semibold text-text-strong">
-                      매도 가격 기준
-                    </h4>
-                    <select
-                      value={condSellCostBasisSelect}
-                      onChange={(e) =>
-                        setCondSellCostBasisSelect(e.target.value)
-                      }
-                      className="px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong appearance-none cursor-pointer"
-                    >
-                      <option value="전일 종가">전일 종가</option>
-                      <option value="당일 시가">당일 시가</option>
-                    </select>
-                    <input
-                      type="number"
-                      value={condSellCostBasisValue}
-                      onChange={(e) =>
-                        setCondSellCostBasisValue(Number(e.target.value))
-                      }
-                      className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong"
-                    />
-                    <span className="text-sm text-text-body">%</span>
-                  </div>
+                <div className="flex items-center gap-3">
+                  <h4 className="text-base font-semibold text-text-strong">
+                    논리 조건식
+                  </h4>
+                  <input
+                    type="text"
+                    placeholder="논리 조건식을 입력해주세요."
+                    value={sellLogic}
+                    onChange={(e) => setSellLogic(e.target.value)}
+                    className="w-64 px-3 py-2 bg-bg-app border-b border-text-muted text-text-strong placeholder:text-text-muted"
+                  />
                 </div>
+              </div>
+
+              {/* 매도 가격 기준 - 별도 행으로 분리 */}
+              <div className="flex items-center gap-3">
+                <h4 className="text-base font-semibold text-text-strong">
+                  매도 가격 기준
+                </h4>
+                <select
+                  value={condSellCostBasisSelect}
+                  onChange={(e) =>
+                    setCondSellCostBasisSelect(e.target.value)
+                  }
+                  className="px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong appearance-none cursor-pointer"
+                >
+                  <option value="전일 종가">전일 종가</option>
+                  <option value="당일 시가">당일 시가</option>
+                </select>
+                <input
+                  type="number"
+                  value={condSellCostBasisValue}
+                  onChange={(e) =>
+                    setCondSellCostBasisValue(Number(e.target.value))
+                  }
+                  className="w-24 px-3 py-2 bg-bg-app border border-border-default rounded-sm text-text-strong"
+                />
+                <span className="text-sm text-text-body">%</span>
               </div>
             </div>
           </div>

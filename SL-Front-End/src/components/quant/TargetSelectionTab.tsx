@@ -18,7 +18,7 @@ export default function TargetSelectionTab() {
   const { data: themes, isLoading: isLoadingThemes } = useThemesQuery();
 
   // Zustand store
-  const { target_stocks } = useBacktestConfigStore();
+  const { trade_targets, setTradeTargets } = useBacktestConfigStore();
 
   // 사이드바 상태
   const [activeSection, setActiveSection] = useState("매매 대상 설정");
@@ -31,20 +31,8 @@ export default function TargetSelectionTab() {
     "매매 대상 설정",
   ];
 
-  // 선택된 산업 및 테마
-  const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(
-    new Set(["전체선택"])
-  );
-  const [selectedThemes, setSelectedThemes] = useState<Set<string>>(
-    new Set(["전체선택"])
-  );
-
-  // 검색어
-  const [searchQuery, setSearchQuery] = useState("");
-
   // 산업 목록 (하드코딩 - Figma 디자인 기준)
   const industries = [
-    "전체선택",
     "코스피 대형",
     "코스피 중대형",
     "코스피 중형",
@@ -55,7 +43,6 @@ export default function TargetSelectionTab() {
 
   // 테마 목록 (하드코딩 - Figma 디자인 기준)
   const themeOptions = [
-    { id: "전체선택", name: "전체선택" },
     { id: "건설", name: "건설" },
     { id: "금융", name: "금융" },
     { id: "기계 / 장비", name: "기계 / 장비" },
@@ -80,6 +67,17 @@ export default function TargetSelectionTab() {
     { id: "제약", name: "제약" },
     { id: "화학", name: "화학" },
   ];
+
+  // 선택된 산업 및 테마 (초기에는 모두 선택됨)
+  const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(
+    new Set(industries)
+  );
+  const [selectedThemes, setSelectedThemes] = useState<Set<string>>(
+    new Set(themeOptions.map(t => t.id))
+  );
+
+  // 검색어
+  const [searchQuery, setSearchQuery] = useState("");
 
   // 모의 주식 데이터
   const mockStocks = [
@@ -120,23 +118,39 @@ export default function TargetSelectionTab() {
     },
   ];
 
+  // 전체선택 여부 확인
+  const isAllIndustriesSelected = industries.every(ind => selectedIndustries.has(ind));
+  const isAllThemesSelected = themeOptions.every(theme => selectedThemes.has(theme.id));
+
+  // 유니버스 전체선택 토글
+  const toggleAllIndustries = () => {
+    if (isAllIndustriesSelected) {
+      // 모두 선택되어 있으면 전체 해제
+      setSelectedIndustries(new Set());
+    } else {
+      // 하나라도 해제되어 있으면 전체 선택
+      setSelectedIndustries(new Set(industries));
+    }
+  };
+
+  // 테마 전체선택 토글
+  const toggleAllThemes = () => {
+    if (isAllThemesSelected) {
+      // 모두 선택되어 있으면 전체 해제
+      setSelectedThemes(new Set());
+    } else {
+      // 하나라도 해제되어 있으면 전체 선택
+      setSelectedThemes(new Set(themeOptions.map(t => t.id)));
+    }
+  };
+
   // 산업 토글
   const toggleIndustry = (industry: string) => {
     const newSelected = new Set(selectedIndustries);
-    if (industry === "전체선택") {
-      if (newSelected.has("전체선택")) {
-        newSelected.clear();
-      } else {
-        newSelected.clear();
-        newSelected.add("전체선택");
-      }
+    if (newSelected.has(industry)) {
+      newSelected.delete(industry);
     } else {
-      newSelected.delete("전체선택");
-      if (newSelected.has(industry)) {
-        newSelected.delete(industry);
-      } else {
-        newSelected.add(industry);
-      }
+      newSelected.add(industry);
     }
     setSelectedIndustries(newSelected);
   };
@@ -144,29 +158,26 @@ export default function TargetSelectionTab() {
   // 테마 토글
   const toggleTheme = (themeId: string) => {
     const newSelected = new Set(selectedThemes);
-    if (themeId === "전체선택") {
-      if (newSelected.has("전체선택")) {
-        newSelected.clear();
-      } else {
-        newSelected.clear();
-        newSelected.add("전체선택");
-      }
+    if (newSelected.has(themeId)) {
+      newSelected.delete(themeId);
     } else {
-      newSelected.delete("전체선택");
-      if (newSelected.has(themeId)) {
-        newSelected.delete(themeId);
-      } else {
-        newSelected.add(themeId);
-      }
+      newSelected.add(themeId);
     }
     setSelectedThemes(newSelected);
   };
 
-  // 선택된 테마를 전역 스토어에 업데이트
+  // 선택된 유니버스와 테마를 전역 스토어에 업데이트
   useEffect(() => {
-    const themeNames = Array.from(selectedThemes);
-    useBacktestConfigStore.setState({ target_stocks: themeNames });
-  }, [selectedThemes]);
+    const universes = Array.from(selectedIndustries);
+    const themes = Array.from(selectedThemes);
+
+    setTradeTargets({
+      use_all_stocks: isAllIndustriesSelected && isAllThemesSelected,
+      selected_universes: universes,
+      selected_themes: themes,
+      selected_stocks: [], // 개별 종목 선택은 추후 구현
+    });
+  }, [selectedIndustries, selectedThemes, isAllIndustriesSelected, isAllThemesSelected, setTradeTargets]);
 
   // 메인 컨텐츠
   const mainContent = (
@@ -201,16 +212,16 @@ export default function TargetSelectionTab() {
               주식 유니버스 선택
             </h4>
             <button
-              onClick={() => toggleIndustry("전체선택")}
+              onClick={toggleAllIndustries}
               className="flex items-center gap-2"
             >
               <div
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center ${selectedIndustries.has("전체선택")
+                className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isAllIndustriesSelected
                   ? "bg-accent-primary border-accent-primary"
                   : "border-border-default"
                   }`}
               >
-                {selectedIndustries.has("전체선택") && (
+                {isAllIndustriesSelected && (
                   <Image
                     src="/icons/check_box.svg"
                     alt=""
@@ -224,7 +235,7 @@ export default function TargetSelectionTab() {
           </div>
 
           <div className="grid grid-cols-6 gap-3">
-            {industries.slice(1).map((industry) => (
+            {industries.map((industry) => (
               <button
                 key={industry}
                 onClick={() => toggleIndustry(industry)}
@@ -258,16 +269,16 @@ export default function TargetSelectionTab() {
               주식 테마 선택
             </h4>
             <button
-              onClick={() => toggleTheme("전체선택")}
+              onClick={toggleAllThemes}
               className="flex items-center gap-2"
             >
               <div
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center ${selectedThemes.has("전체선택")
+                className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isAllThemesSelected
                   ? "bg-accent-primary border-accent-primary"
                   : "border-border-default"
                   }`}
               >
-                {selectedThemes.has("전체선택") && (
+                {isAllThemesSelected && (
                   <Image
                     src="/icons/check_box.svg"
                     alt=""
@@ -281,7 +292,7 @@ export default function TargetSelectionTab() {
           </div>
 
           <div className="grid grid-cols-6 gap-3">
-            {themeOptions.slice(1).map((theme) => (
+            {themeOptions.map((theme) => (
               <button
                 key={theme.id}
                 onClick={() => toggleTheme(theme.id)}

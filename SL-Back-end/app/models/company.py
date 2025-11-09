@@ -1,7 +1,7 @@
 """
 기업 마스터 테이블 모델
 """
-from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Index
+from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Index, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -43,6 +43,10 @@ class Company(Base):
     ceo_name = Column(String(100), nullable=True, comment="대표이사명")
     listed_date = Column(Date, nullable=True, comment="상장일")
     is_active = Column(Integer, default=1, comment="활성 상태 (1:상장중, 0:상장폐지)")
+
+    # 모멘텀 점수(매일 업데이트), 펀더멘탈 점수(분기별 업데이트)
+    momentum_score = Column(Float, nullable=True, comment="0~100 모멘텀 점수")
+    fundamental_score = Column(Float, nullable=True, comment="0~100 펀더멘털 점수")
 
     # Timestamps
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False, comment="생성일시")

@@ -14,7 +14,7 @@ import os
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, strategy
+from app.api.routes import backtest, auth, company_info, strategy
 
 settings = get_settings()
 
@@ -157,6 +157,11 @@ app.include_router(
     tags=["Strategy"]
 )
 
+app.include_router(
+    company_info.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Company Info"]
+)
 
 # Root 엔드포인트
 @app.get("/", tags=["Root"])

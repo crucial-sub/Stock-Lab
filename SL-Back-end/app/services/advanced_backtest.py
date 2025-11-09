@@ -49,47 +49,57 @@ sync_engine = create_engine(
 
 
 class QuantBacktestEngine:
-    """실전 퀀트 투자 백테스트 엔진"""
+    """고도화된 백테스트 엔진"""
 
-    def __init__(self, session_id: str, strategy_id: str, target_stocks: List[str] = None):
-        # 세션/전략 ID는 백테스트 결과를 식별하는 키가 되므로 즉시 보관한다.
-        logger.info(f"[DEBUG __init__] Received target_stocks parameter: {target_stocks} (type: {type(target_stocks)})")
+    def __init__(
+        self,
+        session_id: str,
+        strategy_id: str,
+        target_stocks: List[str] = None,
+        min_momentum_score: Optional[float] = None,
+        min_fundamental_score: Optional[float] = None
+    ):
+        logger.info(
+            f"[DEBUG __init__] Received target_stocks parameter: {target_stocks} (type: {type(target_stocks)})"
+        )
         self.session_id = session_id
         self.strategy_id = strategy_id
-
-        # 조회 후 채워질 전략/룰/팩터 설정 캐시
         self.strategy = None
         self.trading_rules = None
         self.factor_settings = None
-
-        # 런타임 중 지속적으로 변하는 포트폴리오 상태
-        self.positions = {}  # {stock_code: Position}
+        self.positions = {}
         self.cash = Decimal("0")
         self.portfolio_value = Decimal("0")
         self.previous_portfolio_value = Decimal("0")
         self.initial_capital = Decimal("0")
         self.current_date = None
 
-        # 테마/업종 이름 목록 - 'IT서비스' → 'IT 서비스' 변환
-        # 선택적인 타깃 종목 필터가 전달된 경우, DB 스키마와 맞추기 위해 문자열을 정제한다.
         self.target_stocks = []
         if target_stocks:
             logger.info(f"[DEBUG __init__] target_stocks is truthy, processing {len(target_stocks)} items...")
             for stock in target_stocks:
-                # DB에는 'IT 서비스'처럼 공백이 포함되어 있으므로 미리 양식을 변환한다.
                 if stock == 'IT서비스':
-                    logger.info(f"[DEBUG __init__] Converting 'IT서비스' -> 'IT 서비스'")
+                    logger.info("[DEBUG __init__] Converting 'IT서비스' -> 'IT 서비스'")
                     self.target_stocks.append('IT 서비스')
                 else:
                     logger.info(f"[DEBUG __init__] Keeping stock as is: {stock}")
                     self.target_stocks.append(stock)
         else:
-            logger.warning(f"[DEBUG __init__] target_stocks is falsy or empty!")
+            logger.warning("[DEBUG __init__] target_stocks is falsy or empty!")
         logger.info(f"[DEBUG __init__] Final self.target_stocks: {self.target_stocks}")
 
-        # 배당 정보 테이블 존재 여부는 최초 1회만 확인하고 캐싱한다.
+        self.min_momentum_score = min_momentum_score
+        self.min_fundamental_score = min_fundamental_score
+        logger.info(
+            "[DEBUG __init__] Score filters - min_momentum_score=%s, min_fundamental_score=%s",
+            self.min_momentum_score,
+            self.min_fundamental_score
+        )
+
+        # 배당 데이터 존재 여부는 최초 1회만 확인하고 캐싱한다.
         self._dividend_table_checked = False
         self._dividend_table_available = False
+
 
     def run_backtest(
         self,
@@ -314,7 +324,8 @@ class QuantBacktestEngine:
 
         query = """
             SELECT DISTINCT c.company_id, c.stock_code, c.company_name,
-                   c.market_type, c.industry, sp.market_cap
+                   c.market_type, c.industry, sp.market_cap,
+                   c.momentum_score, c.fundamental_score
             FROM companies c
             INNER JOIN stock_prices sp ON c.company_id = sp.company_id
             WHERE c.is_active = 1
@@ -344,6 +355,15 @@ class QuantBacktestEngine:
                 query += " AND sp.market_cap BETWEEN 1000000000000 AND 10000000000000"  # 1조~10조
             elif self.strategy.market_cap_filter == "SMALL":
                 query += " AND sp.market_cap < 1000000000000"  # 1조 미만
+
+        if self.min_momentum_score is not None:
+            query += " AND COALESCE(c.momentum_score, 0) >= :min_momentum_score"
+            params["min_momentum_score"] = self.min_momentum_score
+
+        if self.min_fundamental_score is not None:
+            query += " AND COALESCE(c.fundamental_score, 0) >= :min_fundamental_score"
+            params["min_fundamental_score"] = self.min_fundamental_score
+
 
         # 테마/업종 필터 (target_stocks)
         logger.info(f"[DEBUG _get_universe_stocks] Checking self.target_stocks: {self.target_stocks} (type: {type(self.target_stocks)})")
@@ -379,7 +399,9 @@ class QuantBacktestEngine:
                 "company_name": row[2],
                 "market_type": row[3],
                 "industry": row[4],
-                "market_cap": row[5]
+                "market_cap": row[5],
+                "momentum_score": row[6],
+                "fundamental_score": row[7]
             }
             for row in result
         ]
@@ -1922,6 +1944,12 @@ class QuantBacktestEngine:
                     scores.append(score)
                 return scores
 
+            elif factor.factor_id == "MOMENTUM_SCORE":
+                return self._get_company_metric(db, stock_codes, "momentum_score")
+
+            elif factor.factor_id == "FUNDAMENTAL_SCORE":
+                return self._get_company_metric(db, stock_codes, "fundamental_score")
+
             # 기본값
             return [0.0 for _ in stock_codes]
 
@@ -1929,6 +1957,45 @@ class QuantBacktestEngine:
             logger.error(f"커스텀 팩터 계산 오류: {e}")
             db.rollback()
             return [0.0 for _ in stock_codes]
+
+    def _get_company_metric(
+        self,
+        db: Session,
+        stock_codes: List[str],
+        column_name: str
+    ) -> List[float]:
+        """companies 테이블에 저장된 점수(모멘텀/펀더멘털 등)를 가져와 표준화."""
+        if not stock_codes:
+            return []
+
+        column_attr = getattr(Company, column_name, None)
+        if column_attr is None:
+            logger.warning("회사 메트릭 %s 컬럼을 찾을 수 없습니다.", column_name)
+            return [0.0 for _ in stock_codes]
+
+        result = db.execute(
+            select(Company.stock_code, column_attr).where(Company.stock_code.in_(stock_codes))
+        ).fetchall()
+
+        value_map = {row[0]: row[1] for row in result}
+        values: List[float] = []
+        for code in stock_codes:
+            value = value_map.get(code)
+            try:
+                values.append(float(value) if value is not None else 0.0)
+            except (TypeError, ValueError):
+                values.append(0.0)
+
+        scores = np.array(values, dtype=float)
+        if scores.size == 0:
+            return []
+
+        if scores.std() > 0:
+            scores = (scores - scores.mean()) / scores.std()
+        else:
+            scores = np.zeros_like(scores)
+
+        return scores.tolist()
 
     def _get_roa(self, db: Session, stock_code: str, trading_date: date) -> float:
         """ROA 계산 - Return on Assets
@@ -2073,9 +2140,17 @@ def run_advanced_backtest(
     end_date: date,
     initial_capital: Decimal,
     benchmark: str = "KOSPI",
-    target_stocks: List[str] = None  # 테마 이름 목록
+    target_stocks: List[str] = None,
+    min_momentum_score: Optional[float] = None,
+    min_fundamental_score: Optional[float] = None
 ) -> Dict:
-    """백테스트 실행 (외부 호출용)"""
+    """백테스트 실행 (외부 호출)"""
 
-    engine = QuantBacktestEngine(session_id, strategy_id, target_stocks)
+    engine = QuantBacktestEngine(
+        session_id,
+        strategy_id,
+        target_stocks,
+        min_momentum_score,
+        min_fundamental_score
+    )
     return engine.run_backtest(start_date, end_date, initial_capital, benchmark)

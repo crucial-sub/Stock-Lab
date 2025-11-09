@@ -9,6 +9,8 @@ export interface Condition {
   factorId: string | null; // 선택된 팩터 ID
   factorName: string | null; // 선택된 팩터 이름
   subFactorId: string; // 선택된 함수 ID (기본값: "default")
+  subFactorName?: string; // 선택된 함수 표시 이름 (예: "이동평균")
+  argument?: string; // 선택된 인자 (예: "20일")
   operator: ">=" | "<=" | ">" | "<" | "=" | "!="; // 부등호
   value: number; // 비교 값
 }
@@ -62,7 +64,8 @@ const createDefaultCondition = (id: string): Condition => ({
 
 /**
  * 조건식 문자열 생성 함수
- * "{팩터 이름} {부등호} {값}" 형식으로 반환
+ * - argument가 있으면: "함수명({팩터명}, 인자) {부등호} {값}"
+ * - argument가 없으면: "{팩터명} {부등호} {값}"
  *
  * 부등호 표시를 더 명확하게 하기 위해 공백 추가 및 유니코드 심볼 사용
  */
@@ -81,7 +84,15 @@ const generateExpression = (condition: Condition): string => {
     "!=": "≠",
   };
 
-  return `${condition.factorName} ${operatorSymbol[condition.operator]} ${condition.value}`;
+  // 좌변 생성: argument가 있으면 함수 형식, 없으면 팩터명만
+  let leftSide = condition.factorName;
+  if (condition.subFactorName && condition.argument) {
+    leftSide = `${condition.subFactorName}({${condition.factorName}}, ${condition.argument})`;
+  } else if (condition.subFactorName) {
+    leftSide = `${condition.subFactorName}({${condition.factorName}})`;
+  }
+
+  return `${leftSide} ${operatorSymbol[condition.operator]} ${condition.value}`;
 };
 
 /**

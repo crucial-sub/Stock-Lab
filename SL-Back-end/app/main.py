@@ -14,25 +14,25 @@ import os
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth
+from app.api.routes import backtest, auth, company_info, strategy
 from app.api.v1.endpoints import backtest_genport
 
 settings = get_settings()
 
-# 로깅 설정
-os.makedirs("logs", exist_ok=True)
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        RotatingFileHandler(
-            settings.LOG_FILE,
-            maxBytes=10*1024*1024,  # 10MB
-            backupCount=5
-        ),
-        logging.StreamHandler()
-    ]
-)
+# # 로깅 설정
+# os.makedirs("logs", exist_ok=True)
+# logging.basicConfig(
+#     level=getattr(logging, settings.LOG_LEVEL),
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     handlers=[
+#         RotatingFileHandler(
+#             settings.LOG_FILE,
+#             maxBytes=10*1024*1024,  # 10MB
+#             backupCount=5
+#         ),
+#         logging.StreamHandler()
+#     ]
+# )
 logger = logging.getLogger(__name__)
 
 
@@ -152,13 +152,23 @@ app.include_router(
     tags=["Backtest"]
 )
 
-# 백테스트 라우터 추가
 app.include_router(
     backtest_genport.router,
     prefix=f"{settings.API_V1_PREFIX}/backtest",
     tags=["Stock-Lab Backtest"]
 )
 
+app.include_router(
+    strategy.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Strategy"]
+)
+
+app.include_router(
+    company_info.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Company Info"]
+)
 
 # Root 엔드포인트
 @app.get("/", tags=["Root"])

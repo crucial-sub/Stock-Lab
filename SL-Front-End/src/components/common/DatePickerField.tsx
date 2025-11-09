@@ -83,7 +83,7 @@ export function DatePickerField({
       if (!isOpen) updatePosition();
       setIsOpen((prev) => !prev);
     }}>
-      <div className="relative h-[40px] border-b border-[#a0a0a0]">
+      <div className="relative h-[40px] border-b border-text-muted">
         <input
           type="text"
           onChange={() => { }}

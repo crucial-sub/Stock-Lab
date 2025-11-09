@@ -60,7 +60,7 @@ export function TodayMarketSection({
     <section className={`flex flex-col gap-5 ${className}`}>
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-semibold">오늘의 주식 시장</h2>
-        <Link href={'/market'} className="text-xl font-light transition">
+        <Link href={'/market-price'} className="text-xl font-light transition">
           더보기
         </Link>
       </div>

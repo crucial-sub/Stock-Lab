@@ -11,7 +11,7 @@ import {
 import { getQueryClient } from "@/lib/query-client";
 import { getBacktestResult } from "@/lib/api";
 import { backtestQueryKey } from "@/hooks/useBacktestQuery";
-import { QuantResultPageClient } from "./QuantResultPageClient";
+import { QuantResultPageClientNew } from "./QuantResultPageClientNew";
 
 /**
  * 백테스트 결과 페이지 Props
@@ -66,7 +66,7 @@ export default async function QuantResultPage({
 
     return (
       <HydrationBoundary state={dehydratedState}>
-        <QuantResultPageClient backtestId={backtestId} />
+        <QuantResultPageClientNew backtestId={backtestId} />
       </HydrationBoundary>
     );
   } catch (error) {

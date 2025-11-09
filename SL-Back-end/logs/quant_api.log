@@ -1,0 +1,258 @@
+2025-11-05 19:29:25,163 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:29:25,198 - app.core.database - INFO - Database connections closed
+2025-11-05 19:29:26,327 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:29:26,327 - app.main - INFO - Environment: Development
+2025-11-05 19:29:26,328 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:29:26,335 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:29:26,335 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:29:26,335 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:29:31,788 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:29:31,789 - app.core.database - INFO - Database connections closed
+2025-11-05 19:29:32,594 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:29:32,594 - app.main - INFO - Environment: Development
+2025-11-05 19:29:32,594 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:29:32,600 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:29:32,600 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:29:32,600 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:29:37,561 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:29:37,561 - app.core.database - INFO - Database connections closed
+2025-11-05 19:29:38,207 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:29:38,207 - app.main - INFO - Environment: Development
+2025-11-05 19:29:38,207 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:29:38,217 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:29:38,217 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:29:38,217 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:29:43,779 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:29:43,780 - app.core.database - INFO - Database connections closed
+2025-11-05 19:29:44,449 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:29:44,449 - app.main - INFO - Environment: Development
+2025-11-05 19:29:44,450 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:29:44,458 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:29:44,459 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:29:44,459 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:29:48,942 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:29:48,944 - app.core.database - INFO - Database connections closed
+2025-11-05 19:29:49,563 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:29:49,563 - app.main - INFO - Environment: Development
+2025-11-05 19:29:49,563 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:29:49,571 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:29:49,571 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:29:49,571 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:30:07,690 - app.main - INFO - → GET /api/v1/backtest/5b7f9581-6f3b-42d2-a41f-9e11e90d5b90/trades
+2025-11-05 19:30:08,350 - app.main - INFO - ← GET /api/v1/backtest/5b7f9581-6f3b-42d2-a41f-9e11e90d5b90/trades - 200 (660.11ms)
+2025-11-05 19:30:16,942 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:30:16,948 - app.core.database - INFO - Database connections closed
+2025-11-05 19:30:17,885 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:30:17,885 - app.main - INFO - Environment: Development
+2025-11-05 19:30:17,885 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:30:17,893 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:30:17,893 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:30:17,893 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:31:09,766 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:31:09,768 - app.core.database - INFO - Database connections closed
+2025-11-05 19:31:10,722 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:31:10,722 - app.main - INFO - Environment: Development
+2025-11-05 19:31:10,722 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:31:10,758 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:31:10,758 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:31:10,758 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:31:17,237 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:31:17,238 - app.core.database - INFO - Database connections closed
+2025-11-05 19:31:18,023 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:31:18,023 - app.main - INFO - Environment: Development
+2025-11-05 19:31:18,023 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:31:18,032 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:31:18,032 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:31:18,032 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:31:25,525 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:31:25,526 - app.core.database - INFO - Database connections closed
+2025-11-05 19:31:26,294 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:31:26,294 - app.main - INFO - Environment: Development
+2025-11-05 19:31:26,294 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:31:26,301 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:31:26,301 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:31:26,301 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:31:32,478 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:31:32,479 - app.core.database - INFO - Database connections closed
+2025-11-05 19:31:33,164 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:31:33,164 - app.main - INFO - Environment: Development
+2025-11-05 19:31:33,164 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:31:33,172 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:31:33,172 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:31:33,172 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:31:46,672 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:31:46,673 - app.core.database - INFO - Database connections closed
+2025-11-05 19:31:47,492 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:31:47,492 - app.main - INFO - Environment: Development
+2025-11-05 19:31:47,492 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:31:47,503 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:31:47,503 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:31:47,503 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:31:55,286 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:31:55,287 - app.core.database - INFO - Database connections closed
+2025-11-05 19:31:56,049 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:31:56,049 - app.main - INFO - Environment: Development
+2025-11-05 19:31:56,050 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:31:56,055 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:31:56,055 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:31:56,055 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:32:02,059 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:32:02,060 - app.core.database - INFO - Database connections closed
+2025-11-05 19:32:02,862 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:32:02,862 - app.main - INFO - Environment: Development
+2025-11-05 19:32:02,862 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:32:02,876 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:32:02,876 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:32:02,876 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:32:09,054 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:32:09,055 - app.core.database - INFO - Database connections closed
+2025-11-05 19:32:09,803 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:32:09,803 - app.main - INFO - Environment: Development
+2025-11-05 19:32:09,804 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:32:09,813 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:32:09,813 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:32:09,813 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:32:16,392 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:32:16,393 - app.core.database - INFO - Database connections closed
+2025-11-05 19:32:17,260 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:32:17,260 - app.main - INFO - Environment: Development
+2025-11-05 19:32:17,260 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:32:17,267 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:32:17,267 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:32:17,267 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:32:31,232 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:32:31,237 - app.core.database - INFO - Database connections closed
+2025-11-05 19:32:32,062 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:32:32,062 - app.main - INFO - Environment: Development
+2025-11-05 19:32:32,062 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:32:32,070 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:32:32,071 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:32:32,071 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:32:39,053 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:32:39,058 - app.core.database - INFO - Database connections closed
+2025-11-05 19:32:39,844 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:32:39,844 - app.main - INFO - Environment: Development
+2025-11-05 19:32:39,845 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:32:39,854 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:32:39,854 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:32:39,854 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:32:45,332 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:32:45,333 - app.core.database - INFO - Database connections closed
+2025-11-05 19:32:46,078 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:32:46,079 - app.main - INFO - Environment: Development
+2025-11-05 19:32:46,079 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:32:46,088 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:32:46,088 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:32:46,089 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:32:51,047 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:32:51,048 - app.core.database - INFO - Database connections closed
+2025-11-05 19:32:51,882 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:32:51,882 - app.main - INFO - Environment: Development
+2025-11-05 19:32:51,882 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:32:51,889 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:32:51,889 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:32:51,889 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:32:58,154 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:32:58,156 - app.core.database - INFO - Database connections closed
+2025-11-05 19:32:58,968 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:32:58,969 - app.main - INFO - Environment: Development
+2025-11-05 19:32:58,969 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:32:58,976 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:32:58,976 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:32:58,976 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:05,482 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:05,483 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:06,257 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:06,260 - app.main - INFO - Environment: Development
+2025-11-05 19:33:06,260 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:06,265 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:06,265 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:06,265 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:12,228 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:12,229 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:12,978 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:12,978 - app.main - INFO - Environment: Development
+2025-11-05 19:33:12,978 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:12,988 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:12,988 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:12,988 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:18,961 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:18,962 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:19,705 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:19,705 - app.main - INFO - Environment: Development
+2025-11-05 19:33:19,705 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:19,715 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:19,715 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:19,715 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:25,203 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:25,204 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:26,039 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:26,039 - app.main - INFO - Environment: Development
+2025-11-05 19:33:26,039 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:26,044 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:26,044 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:26,044 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:31,525 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:31,525 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:32,130 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:32,130 - app.main - INFO - Environment: Development
+2025-11-05 19:33:32,130 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:32,139 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:32,139 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:32,139 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:38,110 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:38,111 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:38,738 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:38,738 - app.main - INFO - Environment: Development
+2025-11-05 19:33:38,738 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:38,749 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:38,749 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:38,749 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:43,807 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:43,808 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:44,456 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:44,456 - app.main - INFO - Environment: Development
+2025-11-05 19:33:44,456 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:44,460 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:44,460 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:44,460 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:49,519 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:49,519 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:50,224 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:50,225 - app.main - INFO - Environment: Development
+2025-11-05 19:33:50,225 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:50,234 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:50,234 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:50,234 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:33:56,201 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:33:56,203 - app.core.database - INFO - Database connections closed
+2025-11-05 19:33:56,873 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:33:56,873 - app.main - INFO - Environment: Development
+2025-11-05 19:33:56,873 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:33:56,884 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:33:56,884 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:33:56,884 - app.main - INFO - Database initialized (dev mode)
+2025-11-05 19:34:01,949 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-05 19:34:01,950 - app.core.database - INFO - Database connections closed
+2025-11-05 19:34:02,603 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-05 19:34:02,603 - app.main - INFO - Environment: Development
+2025-11-05 19:34:02,604 - app.main - INFO - Database: localhost:5432/quant_investment_db
+2025-11-05 19:34:02,609 - app.core.cache - INFO - Redis connection established successfully
+2025-11-05 19:34:02,609 - app.main - INFO - Redis cache initialized successfully
+2025-11-05 19:34:02,609 - app.main - INFO - Database initialized (dev mode)
+2025-11-06 20:45:42,648 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-06 20:45:42,689 - app.core.database - INFO - Database connections closed
+2025-11-06 11:55:13,303 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-06 11:55:13,303 - app.main - INFO - Environment: Development
+2025-11-06 11:55:13,304 - app.main - INFO - Database: postgres:5432/quant_investment_db
+2025-11-06 11:55:13,310 - app.core.cache - INFO - Redis connection established successfully
+2025-11-06 11:55:13,310 - app.main - INFO - Redis cache initialized successfully
+2025-11-06 11:55:13,310 - app.main - INFO - Database initialized (dev mode)
+2025-11-06 12:02:10,779 - app.main - INFO - === Quant Investment API 종료 ===
+2025-11-06 12:02:10,791 - app.core.database - INFO - Database connections closed
+2025-11-06 12:07:17,915 - app.main - INFO - === Quant Investment API 시작 ===
+2025-11-06 12:07:17,916 - app.main - INFO - Environment: Development
+2025-11-06 12:07:17,916 - app.main - INFO - Database: postgres:5432/quant_investment_db
+2025-11-06 12:07:17,921 - app.core.cache - INFO - Redis connection established successfully
+2025-11-06 12:07:17,921 - app.main - INFO - Redis cache initialized successfully
+2025-11-06 12:07:17,921 - app.main - INFO - Database initialized (dev mode)

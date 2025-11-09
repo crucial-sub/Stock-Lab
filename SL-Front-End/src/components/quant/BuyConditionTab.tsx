@@ -244,7 +244,7 @@ export function BuyConditionTab() {
       {/* 매수 조건 설정 */}
       <Panel className="p-6 space-y-4">
         <Title size="lg">
-          <span className="text-[#ff6464]">매수</span>
+          <span className="text-brand-primary">매수</span>
           <span>{` 조건 설정`}</span>
         </Title>
 
@@ -267,7 +267,7 @@ export function BuyConditionTab() {
 
                     {/* 조건식 미리보기 */}
                     <div className="flex-1">
-                      <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[#a0a0a0] text-[20px] text-nowrap tracking-[-0.6px]">
+                      <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-text-muted text-[20px] text-nowrap tracking-[-0.6px]">
                         <p className="leading-[normal] whitespace-pre">{getConditionExpression(condition)}</p>
                       </div>
                     </div>
@@ -283,10 +283,10 @@ export function BuyConditionTab() {
                     {/* 삭제 버튼 */}
                     <button
                       onClick={() => removeBuyCondition(condition.id)}
-                      className="rounded-[8px] size-[40px] border border-[#ff6464] border-solid flex items-center justify-center"
+                      className="rounded-[8px] size-[40px] border border-brand-primary border-solid flex items-center justify-center"
                     >
                       <svg className="block size-[24px]" fill="none" preserveAspectRatio="none" viewBox="0 0 24 24">
-                        <path d={SVG_PATH.pa683700} fill="#FF6464" />
+                        <path d={SVG_PATH.pa683700} fill="var(--color-brand-primary)" />
                       </svg>
                     </button>
                   </div>
@@ -316,14 +316,14 @@ export function BuyConditionTab() {
                   <option value="!=">≠</option>
                 </CustomSelect>
                 {/* 값 입력 */}
-                <div className="relative h-[60px] w-[92px] border-b border-[#a0a0a0]">
+                <div className="relative h-[60px] w-[92px] border-b border-text-muted">
                   <input
                     type="number"
                     value={condition.value}
                     onChange={(e) =>
                       handleValueChange(condition.id, Number(e.target.value))
                     }
-                    className="absolute left-[55%] top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[#a0a0a0] text-[20px] tracking-[-0.6px] w-full text-center"
+                    className="absolute left-[55%] top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-text-muted text-[20px] tracking-[-0.6px] w-full text-center"
                   />
                 </div>
               </div>
@@ -358,13 +358,13 @@ export function BuyConditionTab() {
           </div>
           <div className="space-y-2">
             <Title size="md" className="w-[179px]">매수 종목 선택 우선순위</Title>
-            <div className="flex h-[40px] border-b border-[#a0a0a0]">
+            <div className="flex h-[40px] border-b border-text-muted">
               <input
                 type="text"
                 value={priority_factor}
                 onChange={(e) => setPriorityFactor(e.target.value)}
                 placeholder="예: {PBR}"
-                className="bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full"
+                className="bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-full"
               />
               <select
                 value={priority_order}
@@ -382,7 +382,7 @@ export function BuyConditionTab() {
       {/* 매수 비중 설정 */}
       <Panel className="relative p-6 space-y-4">
         <Title size="lg">
-          <span className="text-[#ff6464]">매수</span>
+          <span className="text-brand-primary">매수</span>
           <span>{` 비중 설정`}</span>
         </Title>
         <div className="grid grid-cols-4 gap-8">
@@ -422,7 +422,7 @@ export function BuyConditionTab() {
                     setMaxBuyValue(0);
                   }
                 }}
-                className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.maxPerDay ? 'bg-[#d68c45]' : 'bg-[#a0a0a0]'
+                className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.maxPerDay ? 'bg-[#d68c45]' : 'bg-text-muted'
                   }`}
               >
                 <div className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.maxPerDay ? 'left-[15px]' : 'left-[2px]'
@@ -451,7 +451,7 @@ export function BuyConditionTab() {
                   } else {
                     setMaxDailyStock(0);
                   }
-                }} className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.maxPerStock ? 'bg-[#d68c45]' : 'bg-[#a0a0a0]'
+                }} className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.maxPerStock ? 'bg-[#d68c45]' : 'bg-text-muted'
                   }`}
               >
                 <div className={`absolute rounded-[100px] size-[17px] top-1/2 -translate-y-1/2 bg-white transition-all ${toggles.maxPerStock ? 'left-[15px]' : 'left-[2px]'
@@ -473,39 +473,39 @@ export function BuyConditionTab() {
       {/* 매수 방법 선택 */}
       <Panel className="p-6 space-y-4">
         <Title size="lg">
-          <span className="text-[#ff6464]">매수</span>
+          <span className="text-brand-primary">매수</span>
           <span>{` 방법 선택`}</span>
         </Title>
 
         <div className="grid grid-cols-2 gap-[28px]">
           <div>
             <Title size="sm">매수 가격 기준</Title>
-            <div className="relative h-[40px] border-b border-[#a0a0a0]">
+            <div className="relative h-[40px] border-b border-text-muted">
               <select
                 value={buyCostBasisSelect}
                 onChange={(e) => setBuyCostBasisSelect(e.target.value)}
-                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full appearance-none cursor-pointer"
+                className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-full appearance-none cursor-pointer"
               >
                 <option value="{전일 종가}">전일 종가</option>
                 <option value="{당일 시가}">당일 시가</option>
               </select>
               <div className="absolute right-0 top-1/2 -translate-y-1/2 size-[32px] pointer-events-none">
                 <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-                  <path d={SVG_PATH.p2a094a00} fill="#A0A0A0" />
+                  <path d={SVG_PATH.p2a094a00} fill="var(--color-text-muted)" />
                 </svg>
               </div>
             </div>
           </div>
 
           <div>
-            <div className="relative h-full border-b border-[#a0a0a0]">
+            <div className="relative h-full border-b border-text-muted">
               <input
                 type="number"
                 value={buyCostBasisValue}
                 onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
-                className="absolute left-0 bottom-1 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-[95%]"
+                className="absolute left-0 bottom-1 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-[95%]"
               />
-              <div className="absolute right-1 bottom-2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-[#a0a0a0] tracking-[-0.6px]">
+              <div className="absolute right-1 bottom-2 flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[20px] text-nowrap text-text-muted tracking-[-0.6px]">
                 <p className="leading-[normal] whitespace-pre">%</p>
               </div>
             </div>

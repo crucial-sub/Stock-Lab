@@ -248,7 +248,7 @@ export function SellConditionTab() {
                 setStopLossValue(10);
               }
             }}
-            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.targetAndLoss ? "bg-[#d68c45]" : "bg-[#a0a0a0]"
+            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.targetAndLoss ? "bg-[#d68c45]" : "bg-text-muted"
               }`}
           >
             <div
@@ -281,7 +281,7 @@ export function SellConditionTab() {
                     }
                   }}
                   disabled={!toggles.targetAndLoss}
-                  className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.profitTarget ? "bg-[#d68c45]" : "bg-[#a0a0a0]"
+                  className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.profitTarget ? "bg-[#d68c45]" : "bg-text-muted"
                     } disabled:opacity-50`}
                 >
                   <div
@@ -324,7 +324,7 @@ export function SellConditionTab() {
                     }
                   }}
                   disabled={!toggles.targetAndLoss}
-                  className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.stopLoss ? "bg-[#d68c45]" : "bg-[#a0a0a0]"
+                  className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.stopLoss ? "bg-[#d68c45]" : "bg-text-muted"
                     } disabled:opacity-50`}
                 >
                   <div
@@ -360,7 +360,7 @@ export function SellConditionTab() {
         <div className="flex items-center justify-between">
           <Title size="lg" marginBottom="mb-0">
             <span>{`보유 `}</span>
-            <span className="text-[#7878FF]">기간</span>
+            <span className="text-accent-primary">기간</span>
           </Title>
           <button
             onClick={() => {
@@ -370,7 +370,7 @@ export function SellConditionTab() {
                 setMaxHoldDays(0);
               }
             }}
-            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.holdingPeriod ? "bg-[#d68c45]" : "bg-[#a0a0a0]"
+            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.holdingPeriod ? "bg-[#d68c45]" : "bg-text-muted"
               }`}
           >
             <div
@@ -422,12 +422,12 @@ export function SellConditionTab() {
               <Title size="sm" marginBottom="mb-0">
                 매도 가격 기준
               </Title>
-              <div className="relative h-[40px] border-b border-[#a0a0a0] w-[150px]">
+              <div className="relative h-[40px] border-b border-text-muted w-[150px]">
                 <select
                   value={holdSellCostBasisSelect}
                   onChange={(e) => setHoldSellCostBasisSelect(e.target.value)}
                   disabled={!toggles.holdingPeriod}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full appearance-none cursor-pointer disabled:opacity-50"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-full appearance-none cursor-pointer disabled:opacity-50"
                 >
                   <option value="{전일 종가}">전일 종가</option>
                   <option value="{당일 시가}">당일 시가</option>
@@ -439,7 +439,7 @@ export function SellConditionTab() {
                     preserveAspectRatio="none"
                     viewBox="0 0 32 32"
                   >
-                    <path d={SVG_PATH.p2a094a00} fill="#A0A0A0" />
+                    <path d={SVG_PATH.p2a094a00} fill="var(--color-text-muted)" />
                   </svg>
                 </div>
               </div>
@@ -464,11 +464,11 @@ export function SellConditionTab() {
         <div className="flex items-center justify-between">
           <Title size="lg" marginBottom="mb-0">
             <span>{`조건 `}</span>
-            <span className="text-[#7878FF]">매도</span>
+            <span className="text-accent-primary">매도</span>
           </Title>
           <button
             onClick={() => toggleState("conditionalSell")}
-            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.conditionalSell ? "bg-[#d68c45]" : "bg-[#a0a0a0]"
+            className={`h-[21px] w-[34px] rounded-[100px] relative transition-colors ${toggles.conditionalSell ? "bg-[#d68c45]" : "bg-text-muted"
               }`}
           >
             <div
@@ -508,7 +508,7 @@ export function SellConditionTab() {
 
                       {/* 조건식 미리보기 */}
                       <div className="flex-1">
-                        <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-[#a0a0a0] text-[20px] text-nowrap tracking-[-0.6px]">
+                        <div className="flex flex-col font-['Pretendard:Bold',sans-serif] justify-center leading-[0] not-italic text-text-muted text-[20px] text-nowrap tracking-[-0.6px]">
                           <p className="leading-[normal] whitespace-pre">
                             {getConditionExpression(condition)}
                           </p>
@@ -532,7 +532,7 @@ export function SellConditionTab() {
                       <button
                         onClick={() => removeSellCondition(condition.id)}
                         disabled={!toggles.conditionalSell}
-                        className="rounded-[8px] size-[40px] border border-[#ff6464] border-solid flex items-center justify-center disabled:opacity-50"
+                        className="rounded-[8px] size-[40px] border border-brand-primary border-solid flex items-center justify-center disabled:opacity-50"
                       >
                         <svg
                           className="block size-[24px]"
@@ -540,7 +540,7 @@ export function SellConditionTab() {
                           preserveAspectRatio="none"
                           viewBox="0 0 24 24"
                         >
-                          <path d={SVG_PATH.pa683700} fill="#FF6464" />
+                          <path d={SVG_PATH.pa683700} fill="var(--color-brand-primary)" />
                         </svg>
                       </button>
                     </div>
@@ -572,7 +572,7 @@ export function SellConditionTab() {
                     <option value="!=">≠</option>
                   </CustomSelect>
                   {/* 값 입력 */}
-                  <div className="relative h-[60px] w-[92px] border-b border-[#a0a0a0]">
+                  <div className="relative h-[60px] w-[92px] border-b border-text-muted">
                     <input
                       type="number"
                       value={condition.value}
@@ -580,7 +580,7 @@ export function SellConditionTab() {
                         handleValueChange(condition.id, Number(e.target.value))
                       }
                       disabled={!toggles.conditionalSell}
-                      className="absolute left-[55%] top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[#a0a0a0] text-[20px] tracking-[-0.6px] w-full text-center disabled:opacity-50"
+                      className="absolute left-[55%] top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-text-muted text-[20px] tracking-[-0.6px] w-full text-center disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -625,12 +625,12 @@ export function SellConditionTab() {
               <Title size="md" marginBottom="mb-0">
                 매도 가격 기준
               </Title>
-              <div className="relative h-[40px] border-b border-[#a0a0a0] w-[150px]">
+              <div className="relative h-[40px] border-b border-text-muted w-[150px]">
                 <select
                   value={condSellCostBasisSelect}
                   onChange={(e) => setCondSellCostBasisSelect(e.target.value)}
                   disabled={!toggles.conditionalSell}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-[#a0a0a0] tracking-[-0.6px] w-full appearance-none cursor-pointer disabled:opacity-50"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 bg-transparent border-none outline-none font-['Pretendard:Bold',sans-serif] text-[20px] text-text-muted tracking-[-0.6px] w-full appearance-none cursor-pointer disabled:opacity-50"
                 >
                   <option value="{전일 종가}">전일 종가</option>
                   <option value="{당일 시가}">당일 시가</option>
@@ -642,7 +642,7 @@ export function SellConditionTab() {
                     preserveAspectRatio="none"
                     viewBox="0 0 32 32"
                   >
-                    <path d={SVG_PATH.p2a094a00} fill="#A0A0A0" />
+                    <path d={SVG_PATH.p2a094a00} fill="var(--color-text-muted)" />
                   </svg>
                 </div>
               </div>

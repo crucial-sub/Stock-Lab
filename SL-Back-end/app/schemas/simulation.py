@@ -2,7 +2,7 @@
 백테스팅 시뮬레이션 관련 Pydantic 스키마
 """
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum

@@ -6,7 +6,7 @@
 """
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
-from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.pool import NullPool
 from sqlalchemy import event, text
 from typing import AsyncGenerator
 import logging

@@ -106,13 +106,18 @@ class BacktestRequest(BaseModel):
         description="필터에 사용할 최소 펀더멘털 점수"
     )
 
+    # 공개 설정 (선택 사항)
+    is_public: Optional[bool] = False
+    is_anonymous: Optional[bool] = False
+    hide_strategy_details: Optional[bool] = False
+
 
 class BacktestResponse(BaseModel):
     """백테스트 응답"""
-    backtestId: str  # Frontend 형식에 맞춤 (camelCase)
+    backtest_id: str
     status: str
     message: str
-    createdAt: datetime  # Frontend 형식에 맞춤 (camelCase)
+    created_at: datetime
 
 
 class BacktestStatusResponse(BaseModel):
@@ -128,11 +133,9 @@ class BacktestStatusResponse(BaseModel):
 
 class BacktestResultStatistics(BaseModel):
     """백테스트 결과 통계"""
-    model_config = ConfigDict(populate_by_name=True)
-
-    total_return: float = Field(..., serialization_alias="totalReturn")
-    annualized_return: float = Field(..., serialization_alias="annualizedReturn")
-    max_drawdown: float = Field(..., serialization_alias="maxDrawdown")
+    total_return: float
+    annualized_return: float
+    max_drawdown: float
     volatility: float
     sharpe_ratio: float = Field(..., serialization_alias="sharpeRatio")
     win_rate: float = Field(..., serialization_alias="winRate")
@@ -146,16 +149,14 @@ class BacktestResultStatistics(BaseModel):
 
 class BacktestTrade(BaseModel):
     """백테스트 거래 내역"""
-    model_config = ConfigDict(populate_by_name=True)
-
-    stock_name: str = Field(..., serialization_alias="stockName")
-    stock_code: str = Field(..., serialization_alias="stockCode")
-    buy_price: float = Field(..., serialization_alias="buyPrice")
-    sell_price: float = Field(..., serialization_alias="sellPrice")
+    stock_name: str
+    stock_code: str
+    buy_price: float
+    sell_price: float
     profit: float
-    profit_rate: float = Field(..., serialization_alias="profitRate")
-    buy_date: str = Field(..., serialization_alias="buyDate")
-    sell_date: str = Field(..., serialization_alias="sellDate")
+    profit_rate: float
+    buy_date: str
+    sell_date: str
     weight: float
     valuation: float
 
@@ -175,15 +176,13 @@ class BacktestYieldPoint(BaseModel):
 
 class BacktestResultResponse(BaseModel):
     """백테스트 결과 응답"""
-    model_config = ConfigDict(populate_by_name=True)
-
     id: str
     status: str
     statistics: BacktestResultStatistics
     trades: List[BacktestTrade]
-    yield_points: List[BacktestYieldPoint] = Field(..., serialization_alias="yieldPoints")
-    created_at: datetime = Field(..., serialization_alias="createdAt")
-    completed_at: Optional[datetime] = Field(None, serialization_alias="completedAt")
+    yield_points: List[BacktestYieldPoint]
+    created_at: datetime
+    completed_at: Optional[datetime]
 
 
 @router.post("/backtest/run", response_model=BacktestResponse)
@@ -216,7 +215,11 @@ async def run_backtest(
             description=f"User: {request.user_id}, Target: {', '.join(request.target_stocks[:3])}{'...' if len(request.target_stocks) > 3 else ''}",
             strategy_type="FACTOR_BASED",
             universe_type="THEME",  # 테마 기반 선택
-            initial_capital=initial_capital
+            initial_capital=initial_capital,
+            user_id=request.user_id,
+            is_public=request.is_public or False,
+            is_anonymous=request.is_anonymous or False,
+            hide_strategy_details=request.hide_strategy_details or False
         )
         db.add(strategy)
 
@@ -364,10 +367,10 @@ async def run_backtest(
         )
 
         return BacktestResponse(
-            backtestId=session_id,
+            backtest_id=session_id,
             status="pending",
             message="백테스트가 시작되었습니다",
-            createdAt=datetime.now()
+            created_at=datetime.now()
         )
 
     except Exception as e:
@@ -619,7 +622,7 @@ async def get_backtest_trades(
             "page": page,
             "limit": limit,
             "total": total_count,
-            "totalPages": (total_count + limit - 1) // limit
+            "total_pages": (total_count + limit - 1) // limit
         }
     }
 

@@ -16,95 +16,64 @@ module.exports = {
         md: "2rem /* 32px */",
         lg: "3rem /* 48px */",
       },
-      screens: {
-        "2xl": "1320px /* 82.5rem */",
-      },
-    },
-    borderRadius: {
-      none: "0px /* 0px */",
-      xs: "var(--radius-xs) /* 4px */",
-      sm: "var(--radius-sm) /* 8px */",
-      md: "var(--radius-md) /* 12px */",
-      lg: "var(--radius-lg) /* 16px */",
-      xl: "var(--radius-xl) /* 20px */",
-      "2xl": "var(--radius-2xl) /* 24px */",
-      full: "9999px /* full pill */",
     },
     extend: {
       fontFamily: {
-        sans: [
-          "Pretendard Variable /* main variable font */",
-          "Pretendard /* static Pretendard */",
-          "-apple-system /* macOS system font */",
-          "BlinkMacSystemFont /* Safari system font */",
-          "Segoe UI /* Windows system font */",
-          "sans-serif /* generic fallback */",
-        ],
+        sans: ["Pretendard Variable", "sans-serif"],
+        circular: ["Circular Std", "sans-serif"],
       },
       colors: {
         bg: {
-          app: "var(--bg-app) /* #000000 */",
-          surface: "var(--bg-surface) /* #1a1a1a */",
-          elevated: "var(--bg-surface-elevated) /* #2a2a2a */",
-          muted: "var(--bg-surface-muted) /* rgba(40, 40, 40, 0.8) */",
-          shine: "var(--bg-shine) /* rgba(255, 255, 255, 0.2) */",
+          app: "var(--color-bg-app) /* #f4f9ff */", /* 전체 페이지 공통 배경 */
+          surface: "var(--color-surface) /* #ffffff */", /* 카드/패널 기본 표면 */
+          muted: "var(--color-surface-muted) /* #eff6ff */", /* 옅은 구분 섹션 */
+          positive: "var(--color-surface-positive) /* #fff6f6 */", /* 상승/알림 영역 */
         },
         text: {
-          primary: "var(--text-primary) /* #ffffff */",
-          secondary: "var(--text-secondary) /* #a0a0a0 */",
-          tertiary: "var(--text-tertiary) /* #707070 */",
-          quarternary: "var(--text-quarternary) /* #969696 */",
-          disabled: "var(--text-disabled) /* #505050 */",
+          strong: "var(--color-text-strong) /* #000000 */", /* 제목/헤더 텍스트 */
+          body: "var(--color-text-body) /* #505050 */", /* 일반 본문 텍스트 */
+          muted: "var(--color-text-muted) /* #a0a0a0 */", /* 부가 설명/타임스탬프 */
         },
         brand: {
-          DEFAULT: "var(--brand) /* #ff8a3d */",
-          strong: "var(--brand-strong) /* #ff9f4f */",
-          weak: "var(--brand-weak) /* rgba(255, 138, 61, 0.2) */",
-          ring: "var(--brand-ring) /* rgba(255, 138, 61, 0.4) */",
+          primary: "var(--color-brand-primary) /* #ff6464 */", /* 주 브랜드/CTA */
         },
-        state: {
-          success: "var(--state-positive) /* #ff5252 */",
-          danger: "var(--state-negative) /* #4d9cff */",
-          warning: "var(--state-warning) /* #f2b950 */",
-          info: "var(--state-info) /* #4d78ff */",
+        accent: {
+          primary: "var(--color-accent-primary) /* #007dfc */", /* 링크/포커스 */
+          secondary: "var(--color-accent-secondary) /* #4c7cff */", /* 보조 블루 하이라이트 */
+          success: "var(--color-success) /* #00cd00 */", /* 긍정 지표/태그 텍스트 */
+        },
+        tag: {
+          neutral: "var(--color-tag-neutral) /* #c8c8c8 */", /* 중립 pill 테두리/텍스트 */
+        },
+        newsTag: {
+          positive: "var(--color-news-positive-bg) /* #ddffe5 */", /* 뉴스 긍정 태그 배경 */
+          positiveText: "var(--color-news-positive-text) /* #00cd00 */", /* 뉴스 긍정 태그 텍스트 */
+          neutral: "var(--color-news-neutral-bg) /* #fff1d6 */", /* 뉴스 중립 태그 배경 */
+          neutralText: "var(--color-news-neutral-text) /* #ffaa00 */", /* 뉴스 중립 태그 텍스트 */
+          negative: "var(--color-news-negative-bg) /* #ffe5e5 */", /* 뉴스 부정 태그 배경 */
+          negativeText: "var(--color-news-negative-text) /* #ff6464 */", /* 뉴스 부정 태그 텍스트 */
+          theme: "var(--color-news-theme-bg) /* #f4e2ff */", /* 뉴스 테마 태그 배경 */
+          themeText: "var(--color-news-theme-text) /* #a000fc */", /* 뉴스 테마 태그 텍스트 */
+          press: "var(--color-news-press-bg) /* #eaf5ff */", /* 뉴스 언론사 태그 배경 */
+          pressText: "var(--color-news-press-text) /* #007dfc */", /* 뉴스 언론사 태그 텍스트 */
         },
         border: {
-          DEFAULT: "var(--border-default) /* rgba(255, 255, 255, 0.1) */",
-          strong: "var(--border-strong) /* rgba(255, 255, 255, 0.2) */",
-          highlight: "var(--border-highlight) /* rgba(255, 138, 61, 0.5) */",
-        },
-        overlay: {
-          DEFAULT: "var(--bg-overlay) /* rgba(0, 0, 0, 0.9) */",
+          DEFAULT: "var(--color-border-default) /* #c8c8c8 */", /* 컴포넌트 외곽선 */
+          subtle: "var(--color-border-subtle) /* #e1e1e1 */", /* 카드 내부 구분선 */
         },
       },
       boxShadow: {
-        soft: "var(--shadow-soft) /* 0 4px 12px rgba(0, 0, 0, 0.5) */",
-        hard: "var(--shadow-hard) /* 0 8px 24px rgba(0, 0, 0, 0.7) */",
-        ring: "var(--shadow-ring) /* 0 0 0 1px rgba(255, 255, 255, 0.05) */",
+        header: "var(--shadow-header) /* 0px 4px 16px rgba(150,150,150,0.10) */",
+        card: "var(--shadow-card-soft) /* 0px 0px 8px rgba(0,0,0,0.10) */",
+        "card-muted":
+          "var(--shadow-card-muted) /* 0px 0px 8px rgba(0,0,0,0.08) */",
       },
-      backgroundImage: {
-        "quant-panel":
-          "linear-gradient(160deg, rgba(21,23,26,0.9), rgba(14,15,17,0.86)) /* 160deg dark panel gradient */",
-        "quant-tab-active":
-          "linear-gradient(140deg, rgba(255,138,61,0.18), rgba(255,177,106,0.12)) /* 140deg warm highlight */",
-        "quant-button":
-          "linear-gradient(140deg, #ffb36a, #ff8a3d) /* 140deg brand button gradient */",
-      },
-      keyframes: {
-        "pulse-glow": {
-          "0%, 100%": {
-            boxShadow:
-              "0 0 0 0 rgba(255, 138, 61, 0.35) /* initial glow strength */",
-          },
-          "50%": {
-            boxShadow:
-              "0 0 0 6px rgba(255, 138, 61, 0) /* expanded glow radius */",
-          },
-        },
-      },
-      animation: {
-        "pulse-glow":
-          "pulse-glow 2s ease-out infinite /* 2s cycle easing outward */",
+      borderRadius: {
+        xs: "var(--radius-xs) /* 2px */",
+        sm: "var(--radius-sm) /* 4px */",
+        md: "var(--radius-md) /* 8px */",
+        lg: "var(--radius-lg) /* 12px */",
+        xl: "var(--radius-xl) /* 16px */",
       },
     },
   },

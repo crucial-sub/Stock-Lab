@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Enable standalone output for Docker
-  output: "standalone",
+  output: 'standalone',
 
   // Disable TypeScript and ESLint checks during build (optional)
   // typescript: {

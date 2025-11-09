@@ -78,7 +78,7 @@ export function Checkbox({
               {/* 체크박스 외곽선 */}
               <path
                 d={SVG_PATH.outline}
-                fill={checked ? "white" : "var(--color-text-muted)"}
+                fill={checked ? "white" : "#A0A0A0"}
               />
               {/* 체크 마크 (체크 상태일 때만 표시) */}
               {checked && (
@@ -109,7 +109,7 @@ export function Checkbox({
         <span
           className={`font-['Pretendard'] text-[18px] tracking-[-0.54px] whitespace-nowrap ${checked
               ? "font-medium text-white"
-              : "font-extralight text-text-muted"
+              : "font-extralight text-[#a0a0a0]"
             } ${!disabled && "group-hover:text-white transition-colors"}`}
         >
           {label}

@@ -50,10 +50,8 @@ export function CustomSelect({
   children,
   ...selectProps
 }: CustomSelectProps) {
-  const borderColorClass =
-    borderColor === "white" ? "border-white" : "border-text-muted";
-  const textColorClass =
-    textColor === "white" ? "text-white" : "text-text-muted";
+  const borderColorClass = borderColor === "white" ? "border-white" : "border-[#a0a0a0]";
+  const textColorClass = textColor === "white" ? "text-white" : "text-[#a0a0a0]";
 
   return (
     <div className={`relative h-[60px] ${width} border-b ${borderColorClass} ${className}`}>
@@ -65,7 +63,7 @@ export function CustomSelect({
       </select>
       <div className="absolute right-0 top-1/2 -translate-y-1/2 size-[32px] pointer-events-none">
         <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 32 32">
-          <path d={SVG_PATH.p2a094a00} fill="var(--color-text-muted)" />
+          <path d={SVG_PATH.p2a094a00} fill="#A0A0A0" />
         </svg>
       </div>
     </div>

@@ -1,49 +1,21 @@
-import type { ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-interface ButtonProps {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "secondary" | "ghost";
   children: ReactNode;
-  onClick?: () => void;
-  variant?: "primary" | "secondary" | "tertiary" | "ghost";
-  size?: "sm" | "md" | "lg";
-  className?: string;
-  disabled?: boolean;
 }
 
-const VARIANT_STYLES: Record<NonNullable<ButtonProps["variant"]>, string> = {
-  primary: "bg-brand-primary text-white text-xl",
-  secondary: "bg-zinc-100 text-black text-xl",
-  tertiary: "bg-bg-positive text-brand-primary text-xl",
-  ghost: "bg-transparent text-black",
-};
-
-const SIZE_STYLES: Record<NonNullable<ButtonProps["size"]>, string> = {
-  sm: "py-[5px] text-[16px]",
-  md: "py-2 text-xl",
-  lg: "py-3 text-[16px]",
-};
-
 export function Button({
-  children,
-  onClick,
   variant = "primary",
-  size = "md",
-  className,
-  disabled = false,
+  className = "",
+  children,
+  ...props
 }: ButtonProps) {
+  const baseClass = "quant-button";
+  const variantClass = `${baseClass}-${variant}`;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={twMerge(
-        "flex items-center justify-center gap-1 overflow-hidden rounded-sm px-6 font-sans font-semibold",
-        VARIANT_STYLES[variant],
-        SIZE_STYLES[size],
-        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-        className,
-      )}
-    >
+    <button type="button" {...props} className={`${variantClass} ${className}`}>
       {children}
     </button>
   );

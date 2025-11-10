@@ -468,12 +468,12 @@ async def get_backtest_result(
 
     # 5. 종목 코드 목록 추출 및 종목명 조회
     stock_codes = list(set([trade.stock_code for trade in trades]))
-    companies_query = select(Company).where(Company.stock_code.in_(stock_codes))
+    companies_query = select(Company.stock_code, Company.company_name).where(Company.stock_code.in_(stock_codes))
     companies_result = await db.execute(companies_query)
-    companies = companies_result.scalars().all()
+    companies_rows = companies_result.all()
 
     # 종목 코드 → 종목명 매핑
-    stock_name_map = {company.stock_code: company.company_name for company in companies}
+    stock_name_map = {row.stock_code: row.company_name for row in companies_rows}
 
     # 6. 데이터 변환 - 매수/매도 거래를 매칭 (FIFO: 시간순으로 매칭)
     trade_list = []
@@ -593,12 +593,12 @@ async def get_backtest_trades(
 
     # 4. 종목 코드 목록 추출 및 종목명 조회
     stock_codes = list(set([sell_trade.stock_code for sell_trade, _ in paginated_trades]))
-    companies_query = select(Company).where(Company.stock_code.in_(stock_codes))
+    companies_query = select(Company.stock_code, Company.company_name).where(Company.stock_code.in_(stock_codes))
     companies_result = await db.execute(companies_query)
-    companies = companies_result.scalars().all()
+    companies_rows = companies_result.all()
 
     # 종목 코드 → 종목명 매핑
-    stock_name_map = {company.stock_code: company.company_name for company in companies}
+    stock_name_map = {row.stock_code: row.company_name for row in companies_rows}
 
     # 5. 데이터 변환
     trade_list = []

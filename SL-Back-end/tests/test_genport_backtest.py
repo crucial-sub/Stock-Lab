@@ -11,7 +11,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.services.backtest_genport_engine import GenPortBacktestEngine
+from app.services.backtest import BacktestEngine
 from app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +27,7 @@ async def test_genport_backtest():
 
     async with async_session() as db:
         # 백테스트 엔진 생성
-        engine = GenPortBacktestEngine(db)
+        engine = BacktestEngine(db)
 
         # 백테스트 파라미터 설정
         backtest_id = uuid4()

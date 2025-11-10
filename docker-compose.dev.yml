@@ -47,8 +47,9 @@ services:
     env_file:
       - ./SL-Back-end/.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/${POSTGRES_DB:-quant_investment_db}
-      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/${POSTGRES_DB:-quant_investment_db}
+      # SSH 터널을 통한 RDS 연결 (SSL 필수)
+      DATABASE_URL: postgresql+asyncpg://postgres:nmmteam05@host.docker.internal:5433/stock_lab_investment_db?ssl=require
+      DATABASE_SYNC_URL: postgresql://postgres:nmmteam05@host.docker.internal:5433/stock_lab_investment_db?sslmode=require
       REDIS_HOST: redis
       REDIS_PORT: 6379
       DEBUG: "true"

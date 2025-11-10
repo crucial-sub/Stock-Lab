@@ -15,11 +15,18 @@ export function useTradeTargetSelection(
 
   // 선택된 산업 및 테마 (초기에는 모두 선택됨)
   const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(
-    new Set(industries)
+    new Set()
   );
   const [selectedThemes, setSelectedThemes] = useState<Set<string>>(
     new Set(themeOptions.map((t) => t.id))
   );
+
+  // industries가 로드되면 모두 선택 상태로 초기화
+  useEffect(() => {
+    if (industries.length > 0 && selectedIndustries.size === 0) {
+      setSelectedIndustries(new Set(industries));
+    }
+  }, [industries, selectedIndustries.size]);
 
   // 전체선택 여부 확인
   const isAllIndustriesSelected = industries.every((ind) =>

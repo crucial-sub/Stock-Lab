@@ -1,19 +1,19 @@
 "use client";
 
 /**
- * 매매 대상 선택 탭 - 리팩토링 버전
+ * 매매 대상 선택 탭 - DB 연동 버전
  *
  * 개선 사항:
- * - 섹션별 컴포넌트 분리로 코드 가독성 향상 (490줄 → 60줄, 88% 감소)
- * - 공통 UI 컴포넌트 재사용으로 중복 코드 제거
+ * - 실제 DB의 industry 컬럼에서 데이터 로드
+ * - API 연동으로 실제 종목 데이터 표시
  * - 커스텀 훅으로 비즈니스 로직 분리
- * - 기존 UI/UX 완전 보존
  */
 
 import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useBacktestConfigStore } from "@/stores";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { runBacktest } from "@/lib/api/backtest";
+import { getIndustries } from "@/lib/api/industries";
 import { useRouter } from "next/navigation";
 import { useTradeTargetSelection } from "@/hooks/quant";
 import {
@@ -23,17 +23,7 @@ import {
   StockSearchAndTable,
 } from "./sections";
 
-// 산업 목록
-const industries = [
-  "코스피 대형",
-  "코스피 중대형",
-  "코스피 중형",
-  "코스피 중소형",
-  "코스피 소형",
-  "코스피 초소형",
-];
-
-// 테마 목록
+// 테마 목록도 API에서 가져올 예정 (현재는 목데이터)
 const themeOptions = [
   { id: "건설", name: "건설" },
   { id: "금융", name: "금융" },
@@ -60,53 +50,49 @@ const themeOptions = [
   { id: "화학", name: "화학" },
 ];
 
-// 모의 주식 데이터
-const mockStocks = [
-  {
-    name: "삼성전자",
-    theme: "전기 / 전자",
-    code: "005930",
-    price: "99,600원",
-    change: "-0.99%",
-  },
-  {
-    name: "삼성바이오로직스",
-    theme: "제약",
-    code: "207940",
-    price: "1,221,000원",
-    change: "0%",
-  },
-  {
-    name: "삼성SDI",
-    theme: "IT 서비스",
-    code: "006400",
-    price: "320,500원",
-    change: "-1.38%",
-  },
-  {
-    name: "삼성물산",
-    theme: "유통",
-    code: "028260",
-    price: "218,500원",
-    change: "+1.39%",
-  },
-  {
-    name: "삼성화재",
-    theme: "유통",
-    code: "028260",
-    price: "218,500원",
-    change: "+1.39%",
-  },
-];
-
 export default function TargetSelectionTab() {
   const { data: themes, isLoading: isLoadingThemes } = useThemesQuery();
   const { getBacktestRequest } = useBacktestConfigStore();
   const router = useRouter();
 
+  // 산업 데이터 상태 (DB에서 가져옴)
+  const [industries, setIndustries] = useState<string[]>([]);
+  const [isLoadingIndustries, setIsLoadingIndustries] = useState(true);
+  const [totalStockCount, setTotalStockCount] = useState(0);
+
   // 백테스트 실행 상태
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // DB에서 산업 목록 가져오기
+  useEffect(() => {
+    async function fetchIndustries() {
+      try {
+        setIsLoadingIndustries(true);
+        const data = await getIndustries();
+
+        // 산업명만 추출
+        const industryNames = data.map((item) => item.industry_name);
+        setIndustries(industryNames);
+
+        // 전체 종목 수 계산
+        const total = data.reduce((sum, item) => sum + item.stock_count, 0);
+        setTotalStockCount(total);
+
+        console.log("=== 산업 데이터 로드 성공 ===");
+        console.log("산업 수:", industryNames.length);
+        console.log("전체 종목 수:", total);
+        console.log("========================");
+      } catch (err) {
+        console.error("산업 데이터 로드 실패:", err);
+        setError("산업 데이터를 불러오는데 실패했습니다.");
+      } finally {
+        setIsLoadingIndustries(false);
+      }
+    }
+
+    fetchIndustries();
+  }, []);
 
   // 커스텀 훅으로 매매 대상 선택 로직 관리
   const {
@@ -156,7 +142,8 @@ export default function TargetSelectionTab() {
     }
   };
 
-  if (isLoadingThemes) {
+  // 로딩 중일 때
+  if (isLoadingThemes || isLoadingIndustries) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-text-body">데이터를 불러오는 중...</div>
@@ -164,14 +151,25 @@ export default function TargetSelectionTab() {
     );
   }
 
+  // 선택된 산업의 종목 수 계산 (임시: 전체 종목 수 사용)
+  const selectedStockCount = isAllIndustriesSelected
+    ? totalStockCount
+    : totalStockCount; // TODO: 선택된 산업의 실제 종목 수 계산
+
   return (
     <div className="space-y-6">
       {/* 헤더 */}
-      <TradeTargetHeader selectedCount={2539} totalCount={3580} />
+      <TradeTargetHeader
+        selectedCount={selectedStockCount}
+        totalCount={totalStockCount}
+      />
 
       {/* 매매 대상 종목 */}
       <div className="bg-bg-surface rounded-lg shadow-card p-6">
-        <StockCount selectedCount={2539} totalCount={3580} />
+        <StockCount
+          selectedCount={selectedStockCount}
+          totalCount={totalStockCount}
+        />
 
         {/* 유니버스 및 테마 선택 */}
         <UniverseThemeSelection
@@ -189,7 +187,7 @@ export default function TargetSelectionTab() {
       </div>
 
       {/* 종목 검색 및 테이블 */}
-      <StockSearchAndTable stocks={mockStocks} />
+      <StockSearchAndTable stocks={[]} />
 
       {/* 에러 메시지 */}
       {error && (

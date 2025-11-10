@@ -231,7 +231,7 @@ export default function MarketPricePage() {
                     }}
                   >
                     <Icon
-                      src={row.isFavorite ? "/icons/star_selected.svg" : "/icons/star.svg"}
+                      src={row.isFavorite ? "/icons/star_fill.svg" : "/icons/star.svg"}
                       alt="즐겨찾기"
                       size={28}
                       color={

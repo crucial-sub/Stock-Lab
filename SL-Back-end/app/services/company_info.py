@@ -116,7 +116,7 @@ class CompanyInfoService:
                 "listed_shares": latest_price.listed_shares if latest_price else None,
                 # 기업 정보
                 "ceo_name": company.ceo_name,
-                "listed_date": company.listed_date.isoformat() if company.listed_date else None,
+                "listed_date": company.est_dt,
                 "industry": company.industry,
                 # 점수
                 "momentum_score": company.momentum_score,

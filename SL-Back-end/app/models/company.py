@@ -1,7 +1,7 @@
 """
 기업 마스터 테이블 모델
 """
-from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Index, Float
+from sqlalchemy import Column, Integer, String, TIMESTAMP, Index, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -41,7 +41,7 @@ class Company(Base):
     market_type = Column(String(20), nullable=True, comment="시장 구분 (KOSPI/KOSDAQ/KONEX)")
     industry = Column(String(100), nullable=True, comment="업종")
     ceo_name = Column(String(100), nullable=True, comment="대표이사명")
-    listed_date = Column(Date, nullable=True, comment="상장일")
+    est_dt = Column(String(8), nullable=True, comment="상장일 (YYYYMMDD)")
 
     # 모멘텀 점수(매일 업데이트), 펀더멘탈 점수(분기별 업데이트)
     momentum_score = Column(Float, nullable=True, comment="0~100 모멘텀 점수")

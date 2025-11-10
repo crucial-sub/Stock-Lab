@@ -8,7 +8,7 @@ GenPort 스타일 백테스트 스키마 정의
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional, Dict, Any, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from uuid import UUID
 from enum import Enum
 
@@ -162,14 +162,12 @@ class BacktestCondition(BaseModel):
     # 논리식용 필드 (선택적)
     id: Optional[str] = Field(None, description="조건 ID (논리식 사용 시: A, B, C 등)")
 
-    @validator('value')
-    def validate_value_type(cls, v, values):
+    @model_validator(mode='after')
+    def validate_value_type(self):
         """연산자에 따른 값 타입 검증"""
-        if 'operator' in values:
-            op = values['operator']
-            if op == 'BETWEEN' and not isinstance(v, list):
-                raise ValueError("BETWEEN operator requires a list of two values")
-        return v
+        if self.operator == 'BETWEEN' and not isinstance(self.value, list):
+            raise ValueError("BETWEEN operator requires a list of two values")
+        return self
 
 
 class BacktestConditionExpression(BaseModel):
@@ -181,7 +179,8 @@ class BacktestConditionExpression(BaseModel):
         description="팩터 가중치 (선택적, 순위 매기기용)"
     )
 
-    @validator('expression')
+    @field_validator('expression')
+    @classmethod
     def validate_expression(cls, v):
         """논리식 기본 검증"""
         allowed_keywords = {'and', 'or', 'not', '(', ')'}
@@ -233,15 +232,12 @@ class BacktestCreateRequest(BaseModel):
     commission_rate: float = Field(0.00015, description="수수료율")
     slippage: float = Field(0.001, description="슬리피지")
 
-    @validator('buy_conditions', 'buy_expression')
-    def validate_buy_conditions(cls, v, values, field):
+    @model_validator(mode='after')
+    def validate_buy_conditions(self):
         """buy_conditions 또는 buy_expression 중 하나는 반드시 있어야 함"""
-        if field.name == 'buy_expression':
-            # buy_expression 검증 시점에 buy_conditions 확인
-            buy_conds = values.get('buy_conditions')
-            if not v and not buy_conds:
-                raise ValueError("Either buy_conditions or buy_expression must be provided")
-        return v
+        if not self.buy_conditions and not self.buy_expression:
+            raise ValueError("Either buy_conditions or buy_expression must be provided")
+        return self
 
 
 class BacktestResultGenPort(BaseModel):

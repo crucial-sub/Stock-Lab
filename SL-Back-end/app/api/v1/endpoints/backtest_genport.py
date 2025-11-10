@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.core.database import get_db
-from app.services.backtest_genport_engine import GenPortBacktestEngine
+from app.services.backtest import GenPortBacktestEngine
 from app.schemas.backtest_genport import (
     BacktestResultGenPort,
     BacktestCreateRequest,

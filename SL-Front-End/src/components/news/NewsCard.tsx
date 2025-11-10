@@ -1,15 +1,16 @@
 export interface NewsCardProps {
+  id?: string;
   title: string;
+  subtitle?: string;
   summary: string;
+  content?: string;
   tickerLabel: string;
+  themeName?: string;
+  pressName?: string;
   sentiment: "positive" | "neutral" | "negative";
   publishedAt: string;
   source: string;
   link?: string;
-  subtitle?: string;
-  content?: string;
-  themeName?: string;
-  pressName?: string;
   onClick?: () => void;
 }
 
@@ -23,6 +24,8 @@ export function NewsCard({
   title,
   summary,
   tickerLabel,
+  themeName,
+  pressName,
   sentiment,
   publishedAt,
   source,
@@ -46,17 +49,39 @@ export function NewsCard({
         <span className={`rounded-[4px] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal ${tone.bg} ${tone.text}`}>
           {sentiment === "positive" ? "긍정" : sentiment === "neutral" ? "중립" : "부정"}
         </span>
+        {/* {themeName && (
+          <span className="rounded-[4px] bg-[#F3D8FF] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal text-[#8A3FFC]">
+            {themeName}
+          </span>
+        )}
+        {pressName && (
+          <span className="rounded-[4px] bg-[#D7E9FF] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal text-[#007DFC]">
+            {pressName}
+          </span>
+        )} */}
         <span className="text-[0.8rem] font-normal text-text-muted">{publishedAt}</span>
-        <a
-          className="text-[0.8rem] font-normal text-text-muted underline-offset-4 hover:text-text-body"
-          href={link ?? "#"}
-          target="_blank"
-          rel="noreferrer"
-        >
-          {source}
-        </a>
+        {link && (
+          <a
+            className="flex max-w-[200px] items-center gap-1 text-[0.8rem] font-normal text-text-muted underline-offset-4 hover:text-text-body"
+            href={link}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="truncate">{link}</span>
+          </a>
+        )}
       </div>
-      <p className="mt-[0.5rem] text-[1rem] text-text-body">{summary}</p>
+      <p
+        className="mt-[0.5rem] text-[1rem] text-text-body"
+        style={{
+          display: "-webkit-box",
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {summary}
+      </p>
     </article>
   );
 }

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { NextPage } from "next";
 
 import { Icon } from "@/components/common/Icon";
-import { NewsCard, type NewsCardProps } from "@/components/news/NewsCard";
+import { NewsCard } from "@/components/news/NewsCard";
 import { NewsDetailModal } from "@/components/news/NewsDetailModal";
+import { useDebounce, useNewsDetailQuery, useNewsListQuery } from "@/hooks";
+import type { NewsListParams } from "@/types/news";
 
 const newsThemes = [
   "전체",
@@ -41,55 +43,28 @@ const newsThemes = [
 
 const NewsPage: NextPage = () => {
   const [selectedThemes, setSelectedThemes] = useState<string[]>(["전체"]);
-  const [selectedNews, setSelectedNews] = useState<NewsCardProps | null>(null);
+  const [keyword, setKeyword] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
 
-  const mockNewsItems: NewsCardProps[] = [
-    {
-      title: "제목의 위치는 여기입니다.",
-      subtitle: "여기에 부제목이 들어갑니다.",
-      summary:
-        "여기에 간단한 내용이 들어갑니다. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
-      tickerLabel: "종목 이름",
-      sentiment: "positive" as const,
-      publishedAt: "2025년 12월 31일 14시 30분",
-      source: "www.naver.com/example/link",
-      link: "https://www.naver.com",
-      themeName: "테마명",
-      pressName: "언론사 이름",
-      content:
-        "Lorem Ipsum is simply dummy text of the printing and typesetting industry. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged.",
-    },
-    {
-      title: "제목의 위치는 여기입니다.",
-      subtitle: "여기에 부제목이 들어갑니다.",
-      summary:
-        "여기에 간단한 내용이 들어갑니다. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
-      tickerLabel: "종목 이름",
-      sentiment: "neutral" as const,
-      publishedAt: "2025년 12월 31일 13시 30분",
-      source: "www.naver.com/example/link",
-      link: "https://www.naver.com",
-      themeName: "테마명",
-      pressName: "언론사 이름",
-      content:
-        "이 영역에는 상세 본문이 들어갑니다. Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",
-    },
-    {
-      title: "제목의 위치는 여기입니다.",
-      subtitle: "여기에 부제목이 들어갑니다.",
-      summary:
-        "여기에 간단한 내용이 들어갑니다. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
-      tickerLabel: "종목 이름",
-      sentiment: "negative" as const,
-      publishedAt: "2025년 12월 31일 12시 30분",
-      source: "www.naver.com/example/link",
-      link: "https://www.naver.com",
-      themeName: "테마명",
-      pressName: "언론사 이름",
-      content:
-        "추가 설명 텍스트가 들어갑니다. This provides more details about the article for modal display.",
-    },
-  ];
+  const debouncedKeyword = useDebounce(keyword, 300);
+
+  const newsParams: NewsListParams = useMemo(() => {
+    const themes = selectedThemes.includes("전체") ? [] : selectedThemes;
+    return {
+      keyword: debouncedKeyword || undefined,
+      themes: themes.length ? themes : undefined,
+      filter,
+    };
+  }, [debouncedKeyword, selectedThemes, filter]);
+
+  const {
+    data: newsList = [],
+    isLoading,
+    isError,
+  } = useNewsListQuery(newsParams);
+
+  const { data: selectedNews } = useNewsDetailQuery(selectedNewsId ?? undefined);
 
   const handleToggleTheme = (theme: string) => {
     if (theme === "전체") {
@@ -114,6 +89,8 @@ const NewsPage: NextPage = () => {
         <input
           type="search"
           placeholder="뉴스 검색"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
           className="w-full rounded-[8px] px-[1rem] py-[0.75rem] text-text-body font-semibold placeholder:text-tag-neutral shadow-card-muted focus:border focus:border-brand-primary"
         />
         <button
@@ -125,11 +102,13 @@ const NewsPage: NextPage = () => {
           검색
         </button>
         <select
-          className="rounded-[8px] shadow-card-muted bg-white px-[1rem] py-[0.5rem] text-text-body focus:border-brand-primary focus:outline-none"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          className="rounded-[8px] shadow-card-muted bg-white px-[1rem] pr-[2.5rem] py-[0.5rem] text-text-body focus:border-brand-primary focus:outline-none"
         >
           <option value="all">전체</option>
-          <option value="stock">종목 뉴스</option>
-          <option value="market">시장 동향</option>
+          <option value="latest">최신순</option>
+          <option value="popular">인기순</option>
         </select>
       </div>
 
@@ -141,30 +120,44 @@ const NewsPage: NextPage = () => {
               key={theme}
               type="button"
               onClick={() => handleToggleTheme(theme)}
-              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${isActive
-                ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
-                : "border-border-default bg-white text-text-body"
-                }`}
+              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${
+                isActive
+                  ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
+                  : "border-border-default bg-white text-text-body"
+              }`}
             >
               {theme}
             </button>
           );
         })}
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {mockNewsItems.map((item, index) => (
-          <NewsCard
-            key={`${item.title}-${index}`}
-            {...item}
-            onClick={() => setSelectedNews(item)}
-          />
-        ))}
-      </div>
-      {selectedNews && (
-        <NewsDetailModal
-          news={selectedNews}
-          onClose={() => setSelectedNews(null)}
-        />
+
+      {isLoading && (
+        <p className="text-center text-text-muted">뉴스를 불러오는 중입니다...</p>
+      )}
+      {isError && (
+        <p className="text-center text-accent-primary">뉴스 데이터를 불러오지 못했습니다.</p>
+      )}
+
+      {!isLoading && !isError && (
+        <div className="grid gap-4 md:grid-cols-3">
+          {newsList.map((item) => (
+            <NewsCard
+              key={item.id}
+              {...item}
+              onClick={() => setSelectedNewsId(item.id)}
+            />
+          ))}
+          {!newsList.length && (
+            <p className="col-span-full text-center text-text-muted">
+              조건에 해당하는 뉴스가 없습니다.
+            </p>
+          )}
+        </div>
+      )}
+
+      {selectedNewsId && selectedNews && (
+        <NewsDetailModal news={selectedNews} onClose={() => setSelectedNewsId(null)} />
       )}
     </section>
   );

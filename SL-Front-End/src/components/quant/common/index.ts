@@ -8,3 +8,4 @@ export { FormField, SelectField } from "./FormField";
 export { ConditionCard } from "./ConditionCard";
 export { CheckboxGroup } from "./CheckboxGroup";
 export { UnderLineInput } from "./UnderLineInput";
+export { FieldPanel } from "./FieldPanel";

@@ -46,15 +46,16 @@ interface BacktestConfigStore extends BacktestRunRequest {
 
 /**
  * 기본 설정값
- * - 날짜는 동적으로 계산 (현재 날짜, 1년 전)
+ * - 날짜는 고정된 초기값 사용 (하이드레이션 이슈 방지)
+ * - 실제 날짜는 클라이언트 사이드에서 설정
  * - 토글 기본값: 목표가/손절가 on, 나머지 off
  */
 const defaultConfig: BacktestRunRequest = {
   user_id: "default_user", // 실제로는 로그인한 사용자 ID를 사용
   strategy_name: "새 전략", // 기본 전략 이름
   is_day_or_month: "daily", // "일봉"
-  start_date: getOneYearAgo(), // 1년 전 날짜 (YYYYMMDD)
-  end_date: getCurrentDate(), // 현재 날짜 (YYYYMMDD)
+  start_date: "", // 초기값 공백 (클라이언트에서 설정)
+  end_date: "", // 초기값 공백 (클라이언트에서 설정)
   initial_investment: 5000, // 5000만원
   commission_rate: 0.1, // 0.1%
   slippage: 0.0, // 0.0% (슬리피지)

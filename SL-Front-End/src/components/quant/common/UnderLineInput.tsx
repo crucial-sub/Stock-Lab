@@ -38,9 +38,9 @@ export function UnderLineInput({
       max={max}
       step={step}
       className={`
-        w-full px-0 py-2
+        w-full h-10 px-0 py-2
         bg-transparent
-        border-0 border-b border-border-default
+        border-b border-black
         text-text-body
         placeholder:text-text-muted
         focus:outline-none focus:border-accent-primary

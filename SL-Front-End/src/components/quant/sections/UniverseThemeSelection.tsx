@@ -1,4 +1,4 @@
-import { CheckboxGroup } from "../common";
+import { CheckboxGroup, FieldPanel } from "../common";
 
 /**
  * 유니버스 및 테마 선택 섹션
@@ -31,7 +31,7 @@ export function UniverseThemeSelection({
   onToggleAllThemes,
 }: UniverseThemeSelectionProps) {
   return (
-    <div className="bg-bg-surface rounded-lg shadow-card p-6">
+    <FieldPanel conditionType="target">
       {/* 주식 유니버스 선택 */}
       <CheckboxGroup
         title="주식 유니버스 선택"
@@ -52,6 +52,6 @@ export function UniverseThemeSelection({
         onToggleAll={onToggleAllThemes}
         columns={6}
       />
-    </div>
+    </FieldPanel>
   );
 }

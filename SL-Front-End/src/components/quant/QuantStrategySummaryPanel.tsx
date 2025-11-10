@@ -1,5 +1,6 @@
 "use client";
 
+import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 import Image from "next/image";
 import { useEffect, useState } from "react";
@@ -56,7 +57,17 @@ export default function QuantStrategySummaryPanel({
     hold_days,
     condition_sell,
     trade_targets,
+    setStartDate,
+    setEndDate,
   } = useBacktestConfigStore();
+
+  // 날짜 초기화 (클라이언트 사이드에서만 실행)
+  useEffect(() => {
+    if (!start_date || !end_date) {
+      setStartDate(getOneYearAgo());
+      setEndDate(getCurrentDate());
+    }
+  }, [start_date, end_date, setStartDate, setEndDate]);
 
   // 탭 동기화
   useEffect(() => {

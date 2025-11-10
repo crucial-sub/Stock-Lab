@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
-import { SectionHeader, ToggleSwitch } from "../common";
+import { useEffect, useState } from "react";
+import { SectionHeader, ToggleSwitch, FieldPanel } from "../common";
 
 /**
  * 보유 기간 섹션
@@ -54,13 +55,13 @@ export function HoldPeriodSection() {
       />
 
       {isOpen && (
-        <div className="bg-bg-surface rounded-lg shadow-card p-6 border-l-4 border-accent-secondary">
+        <FieldPanel conditionType="sell">
           <div className="flex items-center gap-6">
             {/* 최소 종목 보유일 */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+              <Title variant="subtitle" className="mb-3">
                 최소 종목 보유일
-              </span>
+              </Title>
               <input
                 type="number"
                 value={minHoldDays}
@@ -72,9 +73,9 @@ export function HoldPeriodSection() {
 
             {/* 최대 종목 보유일 */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+              <Title variant="subtitle" className="mb-3">
                 최대 종목 보유일
-              </span>
+              </Title>
               <input
                 type="number"
                 value={maxHoldDays}
@@ -86,9 +87,9 @@ export function HoldPeriodSection() {
 
             {/* 매도 가격 기준 */}
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+              <Title variant="subtitle" className="mb-3">
                 매도 가격 기준
-              </span>
+              </Title>
               <select
                 value={sellPriceBasis}
                 onChange={(e) => setSellPriceBasis(e.target.value)}
@@ -106,7 +107,7 @@ export function HoldPeriodSection() {
               <span className="text-sm text-text-body">%</span>
             </div>
           </div>
-        </div>
+        </FieldPanel>
       )}
     </div>
   );

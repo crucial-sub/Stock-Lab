@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useBacktestConfigStore } from "@/stores";
 import { useSellConditionManager } from "@/hooks/quant";
-import { SectionHeader, ToggleSwitch, ConditionCard } from "../common";
+import { SectionHeader, ToggleSwitch, ConditionCard, FieldPanel } from "../common";
 import { FactorSelectionModal } from "../FactorSelectionModal";
+import { Title } from "@/components/common";
 
 /**
  * 조건 매도 섹션
@@ -98,13 +99,13 @@ export function ConditionalSellSection() {
       />
 
       {isOpen && (
-        <div className="bg-bg-surface rounded-lg shadow-card p-6 border-l-4 border-accent-secondary">
+        <FieldPanel conditionType="sell">
           <div className="space-y-6">
             {/* 매도 조건식 설정 */}
             <div>
-              <h4 className="text-base font-semibold text-text-strong mb-3">
+              <Title variant="subtitle" className="mb-3">
                 매도 조건식 설정
-              </h4>
+              </Title>
               <div className="space-y-3">
                 {sellConditions.map((condition) => (
                   <ConditionCard
@@ -132,9 +133,7 @@ export function ConditionalSellSection() {
             {/* 논리 조건식 */}
             <div className="border-t border-border-subtle pt-4">
               <div className="flex items-center gap-3">
-                <h4 className="text-base font-semibold text-text-strong">
-                  논리 조건식
-                </h4>
+                <Title variant="subtitle">논리 조건식</Title>
                 <input
                   type="text"
                   placeholder="논리 조건식을 입력해주세요."
@@ -147,9 +146,7 @@ export function ConditionalSellSection() {
 
             {/* 매도 가격 기준 */}
             <div className="flex items-center gap-3">
-              <h4 className="text-base font-semibold text-text-strong">
-                매도 가격 기준
-              </h4>
+              <Title variant="subtitle">매도 가격 기준</Title>
               <select
                 value={sellPriceBasis}
                 onChange={(e) => setSellPriceBasis(e.target.value)}
@@ -167,7 +164,7 @@ export function ConditionalSellSection() {
               <span className="text-sm text-text-body">%</span>
             </div>
           </div>
-        </div>
+        </FieldPanel>
       )}
 
       {/* 매도 조건식 팩터 선택 모달 */}

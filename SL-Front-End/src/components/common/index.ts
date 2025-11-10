@@ -2,6 +2,7 @@ export { Button } from "./Button";
 export { Checkbox } from "./Checkbox";
 export { CustomSelect } from "./CustomSelect";
 export { DatePickerField } from "./DatePickerField";
+export { Dropdown } from "./Dropdown";
 export { FilterGroup } from "./FilterGroup";
 export { GradientDivider } from "./GradientDivider";
 export { Input } from "./Input";

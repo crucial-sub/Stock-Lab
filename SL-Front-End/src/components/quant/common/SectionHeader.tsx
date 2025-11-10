@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
 import { Title } from "@/components/common/Title";
+import { ReactNode } from "react";
 
 /**
  * 섹션 헤더 공통 컴포넌트
@@ -9,7 +9,6 @@ import { Title } from "@/components/common/Title";
 interface SectionHeaderProps {
   title: string;
   description?: string;
-  highlight?: "buy" | "sell" | "none";
   action?: ReactNode;
   className?: string;
 }
@@ -17,26 +16,13 @@ interface SectionHeaderProps {
 export function SectionHeader({
   title,
   description,
-  highlight = "none",
   action,
   className = "",
 }: SectionHeaderProps) {
   return (
     <div className={`flex items-center justify-between ${className}`}>
       <div className="flex items-center gap-3">
-        {highlight === "buy" && (
-          <Title>
-            <span className="text-brand-primary">매수</span>{" "}
-            <span className="text-text-strong">{title}</span>
-          </Title>
-        )}
-        {highlight === "sell" && (
-          <Title>
-            <span className="text-brand-primary">매도</span>{" "}
-            <span className="text-text-strong">{title}</span>
-          </Title>
-        )}
-        {highlight === "none" && <Title>{title}</Title>}
+        <Title>{title}</Title>
         {description && (
           <p className="text-sm text-text-body">{description}</p>
         )}

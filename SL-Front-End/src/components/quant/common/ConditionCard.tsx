@@ -1,5 +1,7 @@
-import Image from "next/image";
+import { Dropdown } from "@/components/common";
 import type { Condition } from "@/stores";
+import Image from "next/image";
+import { UnderLineInput } from "./UnderLineInput";
 
 /**
  * 조건식 카드 공통 컴포넌트
@@ -24,54 +26,62 @@ export function ConditionCard({
   onRemove,
 }: ConditionCardProps) {
   return (
-    <div className="flex items-center gap-3 p-4 border border-border-default rounded-lg hover:border-accent-primary transition-colors">
-      {/* 조건 ID */}
-      <div className="w-12 h-12 flex items-center justify-center bg-brand-primary text-white font-bold text-lg rounded-md flex-shrink-0">
-        {condition.id}
-      </div>
+    <div className="flex items-center gap-3">
+      {/* 조건식 표시 영역 */}
+      <div className="relative w-[31.25rem] h-12 flex items-center gap-3 rounded-md border-[0.5px]">
+        {/* 조건식 ID */}
+        <div className="w-12 h-12 rounded-tl-md rounded-bl-md flex items-center justify-center bg-brand-primary text-white">
+          {condition.id}
+        </div>
 
-      {/* 조건 표시 (클릭 가능) */}
-      <div
-        onClick={onFactorSelect}
-        className="flex-1 text-text-body font-medium px-3 py-2 border border-border-default rounded-sm hover:border-accent-primary cursor-pointer transition-colors"
-      >
-        {expressionText}
+        {/* 텍스트 (클릭 가능) */}
+        <button
+          type="button"
+          onClick={onFactorSelect}
+          className="flex-1 text-left"
+        >
+          {expressionText}
+        </button>
+
+        {/* 삭제 아이콘 */}
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute right-3 flex items-center justify-center hover:opacity-100 transition-opacity"
+        >
+          <Image
+            src="/icons/trash.svg"
+            alt="삭제"
+            width={24}
+            height={24}
+            className="opacity-30"
+          />
+        </button>
       </div>
 
       {/* 부등호 선택 */}
-      <select
+      <Dropdown
         value={condition.operator}
-        onChange={(e) =>
-          onOperatorChange(
-            e.target.value as ">=" | "<=" | ">" | "<" | "=" | "!="
-          )
+        onChange={(value) =>
+          onOperatorChange(value as ">=" | "<=" | ">" | "<" | "=" | "!=")
         }
-        className="w-20 px-2 py-2 border border-border-default rounded-sm text-text-body focus:outline-none focus:border-accent-primary"
-      >
-        <option value=">=">≥</option>
-        <option value="<=">≤</option>
-        <option value=">">{">"}</option>
-        <option value="<">{"<"}</option>
-        <option value="=">=</option>
-        <option value="!=">≠</option>
-      </select>
-
-      {/* 값 입력 */}
-      <input
-        type="number"
-        value={condition.value}
-        onChange={(e) => onValueChange(Number(e.target.value))}
-        className="w-24 px-3 py-2 border border-border-default rounded-sm text-text-body text-center focus:outline-none focus:border-accent-primary"
+        options={[
+          { value: ">=", label: "≥" },
+          { value: "<=", label: "≤" },
+          { value: ">", label: ">" },
+          { value: "<", label: "<" },
+          { value: "=", label: "=" },
+          { value: "!=", label: "≠" },
+        ]}
+        variant="large"
       />
 
-      {/* 삭제 버튼 */}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="w-10 h-10 flex items-center justify-center border border-brand-primary text-brand-primary rounded-sm hover:bg-brand-primary hover:text-white transition-colors"
-      >
-        <Image src="/icons/trash.svg" alt="삭제" width={20} height={20} />
-      </button>
+      {/* 값 입력 */}
+      <UnderLineInput
+        value={condition.value}
+        onChange={(e) => onValueChange(Number(e.target.value))}
+        className="!w-20 text-center"
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
-import { SectionHeader, ToggleSwitch } from "../common";
+import { useEffect, useState } from "react";
+import { FieldPanel, SectionHeader, ToggleSwitch } from "../common";
 
 /**
  * 목표가 / 손절가 섹션
@@ -54,14 +55,12 @@ export function TargetLossSection() {
       />
 
       {isOpen && (
-        <div className="bg-bg-surface rounded-lg shadow-card p-6 border-l-4 border-accent-secondary">
+        <FieldPanel conditionType="sell">
           <div className="grid grid-cols-2 gap-6">
             {/* 목표가 */}
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <h4 className="text-base font-semibold text-text-strong">
-                  목표가
-                </h4>
+                <Title variant="subtitle">목표가</Title>
                 <ToggleSwitch
                   checked={profitTargetEnabled}
                   onChange={setProfitTargetEnabled}
@@ -83,9 +82,7 @@ export function TargetLossSection() {
             {/* 손절가 */}
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <h4 className="text-base font-semibold text-text-strong">
-                  손절가
-                </h4>
+                <Title variant="subtitle">손절가</Title>
                 <ToggleSwitch
                   checked={stopLossEnabled}
                   onChange={setStopLossEnabled}
@@ -104,7 +101,7 @@ export function TargetLossSection() {
               </div>
             </div>
           </div>
-        </div>
+        </FieldPanel>
       )}
     </div>
   );

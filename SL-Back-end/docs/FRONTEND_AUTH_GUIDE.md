@@ -1,6 +1,6 @@
 # 프론트엔드 인증 구현 가이드
 
-Stock-Lab 백엔드 API와 연동하기 위한 프론트엔드 인증 구현 가이드입니다.
+Stock-Lab 백엔드 API와 연동하기 위한 Next.js(App Router) 프론트엔드 인증 구현 가이드입니다.
 
 ## 목차
 1. [Quick Start](#quick-start)
@@ -19,18 +19,24 @@ Stock-Lab 백엔드 API와 연동하기 위한 프론트엔드 인증 구현 가
 
 ### 1. 환경 변수 설정
 
+- Next.js 루트 `.env.local` 에 API URL 을 정의합니다.
+
 ```env
-# .env.local (Next.js)
 NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+AUTH_API_URL=http://localhost:8000/api/v1  # 서버 전용(fetch) 사용 시
 ```
 
 ### 2. 필요한 패키지 설치
 
 ```bash
-npm install axios
-# 또는
-yarn add axios
+pnpm add axios
+# 또는 npm/yarn 사용 가능
 ```
+
+### 3. App Router 기본 구조
+
+- `app/(auth)/login/page.tsx` 와 같이 경로를 분리하고, 상태 관리나 QueryClient 는 `app/providers.tsx` 에서 설정합니다.
+- 서버 컴포넌트에서 인증 상태를 판별하려면 `cookies()` 를 사용해 저장된 JWT 를 확인하고, 없으면 `redirect('/login')` 을 호출합니다.
 
 ---
 
@@ -191,11 +197,37 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // 토큰 만료 또는 유효하지 않음
       tokenStorage.remove();
-      window.location.href = '/login';
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
 );
+
+### Next.js Route Handler 예시
+
+- 서버 컴포넌트나 Route Handler 에서 인증이 필요한 경우 `fetch` 를 직접 호출하고 `cookies()` 에 저장된 액세스 토큰을 헤더에 넣습니다.
+
+```ts
+// app/api/auth/me/route.ts
+import { cookies } from 'next/headers';
+
+export async function GET() {
+  const token = cookies().get('access_token')?.value;
+  const res = await fetch(`${process.env.AUTH_API_URL}/auth/me`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    return Response.json({ detail: '인증 실패' }, { status: res.status });
+  }
+
+  const data = await res.json();
+  return Response.json(data);
+}
+```
 ```
 
 ### 인증 API 함수

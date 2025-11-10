@@ -98,3 +98,23 @@
 - 관심 등록/해제 API (`POST /users/{id}/favorites`, `DELETE /users/{id}/favorites/{code}`) 는 계약 변화가 없습니다.
 - 모든 응답은 camelCase alias 로 직렬화되므로 TS 타입에서 그대로 사용하면 됩니다.
 - 변동 필드가 `null` 인 경우를 대비해 UI 포맷터에 fallback 문자열을 준비해 주세요.
+
+---
+
+## Next.js 연동 팁
+
+1. **데이터 패칭 방식**
+   - 시세/종목 리스트는 서버 컴포넌트에서 `fetch` 를 사용해 SSR 로 미리 받아오고, 상호작용(정렬/필터)은 클라이언트 컴포넌트에서 `useTransition` 또는 TanStack Query 로 재요청합니다.
+   - `cache: 'no-store'` 또는 `next: { revalidate: 60 }` 옵션을 활용해 적절한 캐싱 정책을 적용하세요.
+
+2. **환경 변수**
+   - `.env.local` 에 `NEXT_PUBLIC_API_URL` 을 설정해 클라이언트 요청에서 공통으로 사용합니다.
+   - 서버 전용 호출이 필요하면 `MARKET_API_URL` 같은 별도 키를 만들어 `fetch` 시 사용합니다.
+
+3. **라우트 구성**
+   - 시세 페이지: `app/(market)/quotes/page.tsx`
+   - 종목 상세: `app/(stocks)/[stockCode]/page.tsx`
+   - 관심/최근 종목: `app/(mypage)/favorites/page.tsx`, `app/(mypage)/recent/page.tsx`
+
+4. **상태 관리**
+   - App Router 환경에서는 React Query Provider 를 `app/providers.tsx` 에 배치하고, 각 클라이언트 컴포넌트에서 `useQuery` 로 데이터를 캐싱하면 라우트 전환 시 데이터를 재사용할 수 있습니다.

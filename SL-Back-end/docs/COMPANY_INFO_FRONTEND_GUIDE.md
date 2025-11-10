@@ -255,6 +255,48 @@
 
 ---
 
+## Next.js 연동 가이드
+
+### 1. App Router 구조
+- `app/(stocks)/[stockCode]/page.tsx` 와 같이 동적 세그먼트를 사용하면 종목별 페이지를 생성하기 쉽습니다.
+- 서버 컴포넌트에서 `fetch` 로 API를 호출하면 첫 화면을 SSR 로 렌더링할 수 있어 SEO 와 성능이 좋아집니다.
+
+```tsx
+// app/(stocks)/[stockCode]/page.tsx
+import { cookies } from 'next/headers';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+async function getCompanyInfo(stockCode: string) {
+  const userId = cookies().get('user_id')?.value;
+  const url = new URL(`${API_BASE}/company/${stockCode}/info`);
+  if (userId) url.searchParams.set('user_id', userId);
+
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('종목 정보를 불러오지 못했습니다.');
+  return res.json();
+}
+
+export default async function CompanyPage({ params }: { params: { stockCode: string } }) {
+  const data = await getCompanyInfo(params.stockCode);
+  return <CompanyInfoContainer data={data} />;
+}
+```
+
+### 2. 클라이언트 컴포넌트 분리
+- 차트, 탭, 모달 등 상호작용이 많은 컴포넌트는 `use client` 선언 후 서버 컴포넌트에서 내려준 데이터를 props 로 전달하세요.
+- TanStack Query 를 사용한다면 `app/providers.tsx` 에 QueryClientProvider 를 선언한 뒤 각 클라이언트 컴포넌트에서 재검증할 수 있습니다.
+
+### 3. 환경 변수
+- `.env.local` 에 `NEXT_PUBLIC_API_URL` 을 정의하면 서버·클라이언트 모두 동일한 값을 사용합니다.
+- Vercel 배포 시 환경 변수에 동일 키를 등록하세요.
+
+### 4. 로딩/에러 상태
+- `app/(stocks)/[stockCode]/loading.tsx` 를 두어 첫 요청 동안 Skeleton 을 출력하고, `error.tsx` 에서는 API 에러 메시지를 사용자 친화적으로 노출합니다.
+- 404 종목에 대해서는 `not-found.tsx` 를 구성해 “종목을 찾을 수 없습니다” 등의 문구를 보여주세요.
+
+---
+
 ## UI 구성 제안
 
 ### 1. 모달/페이지 레이아웃

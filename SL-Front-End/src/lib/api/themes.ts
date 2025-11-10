@@ -17,8 +17,8 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 export async function getThemes(isServer = false): Promise<Themes[]> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<{ sectors: Themes[] }>("/themes/list");
-  return response.data.sectors;
+  const response = await axios.get<{ themes: Themes[] }>("/themes/list");
+  return response.data.themes;
 }
 
 /**

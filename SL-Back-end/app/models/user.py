@@ -3,6 +3,7 @@ User 모델
 """
 from sqlalchemy import Column, String, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 import uuid
@@ -21,6 +22,9 @@ class User(Base):
     is_superuser = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    simulation_sessions = relationship("SimulationSession", back_populates="user", lazy="selectin")
 
     def __repr__(self):
         return f"<User(user_id={self.user_id}, name={self.name}, email={self.email}, phone={self.phone_number})>"

@@ -1,50 +1,18 @@
 /**
- * Quant 페이지 - 서버 컴포넌트
- * - 팩터 목록과 함수 목록을 서버에서 미리 불러옵니다 (SSR)
- * - React Query의 prefetch와 dehydrate를 사용하여 초기 데이터를 전달합니다
+ * Quant 페이지 - 동적 렌더링
+ * - 클라이언트에서 데이터를 가져오도록 변경 (빌드 시 백엔드 연결 불필요)
+ * - React Query를 통해 클라이언트에서 데이터를 fetch합니다
  */
 
-import { factorsQueryKey } from "@/hooks/useFactorsQuery";
-import { subFactorsQueryKey } from "@/hooks/useSubFactorsQuery";
-import { themesQueryKey } from "@/hooks/useThemesQuery";
-import { getFactors, getSubFactors, getThemes } from "@/lib/api";
-import { getQueryClient } from "@/lib/query-client";
-import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { QuantNewPageClient } from "./QuantNewPageClient";
 
+// 동적 렌더링 강제 (빌드 시 SSR 건너뛰기)
+export const dynamic = "force-dynamic";
+
 /**
- * Quant 새 전략 페이지 (서버 컴포넌트)
- * - 팩터와 함수 목록을 서버에서 prefetch합니다
- * - 클라이언트 컴포넌트에 hydrated 상태로 데이터를 전달합니다
+ * Quant 새 전략 페이지
+ * - 클라이언트 컴포넌트에서 데이터를 fetch합니다
  */
-export default async function NewScriptPage() {
-  // 서버용 QueryClient 생성
-  const queryClient = getQueryClient();
-
-  // 팩터 목록 prefetch
-  await queryClient.prefetchQuery({
-    queryKey: factorsQueryKey.list(),
-    queryFn: () => getFactors(true), // 서버 사이드 요청
-  });
-
-  // 함수 목록 prefetch
-  await queryClient.prefetchQuery({
-    queryKey: subFactorsQueryKey.list(),
-    queryFn: () => getSubFactors(true), // 서버 사이드 요청
-  });
-
-  // 테마 목록 prefetch
-  await queryClient.prefetchQuery({
-    queryKey: themesQueryKey.list(),
-    queryFn: () => getThemes(true), // 서버 사이드 요청
-  });
-
-  // QueryClient 상태를 dehydrate하여 클라이언트로 전달
-  const dehydratedState = dehydrate(queryClient);
-
-  return (
-    <HydrationBoundary state={dehydratedState}>
-      <QuantNewPageClient />
-    </HydrationBoundary>
-  );
+export default function NewScriptPage() {
+  return <QuantNewPageClient />;
 }

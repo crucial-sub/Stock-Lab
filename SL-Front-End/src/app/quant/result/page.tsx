@@ -4,13 +4,13 @@
  * - React Query의 prefetch와 dehydrate를 사용하여 초기 데이터를 전달합니다
  */
 
+import { backtestQueryKey } from "@/hooks/useBacktestQuery";
+import { getBacktestResult } from "@/lib/api";
+import { getQueryClient } from "@/lib/query-client";
 import {
   dehydrate,
   HydrationBoundary,
 } from "@tanstack/react-query";
-import { getQueryClient } from "@/lib/query-client";
-import { getBacktestResult } from "@/lib/api";
-import { backtestQueryKey } from "@/hooks/useBacktestQuery";
 import { QuantResultPageClient } from "./QuantResultPageClient";
 
 /**

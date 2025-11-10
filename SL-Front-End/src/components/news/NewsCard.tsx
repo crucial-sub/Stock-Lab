@@ -1,4 +1,4 @@
-interface NewsCardProps {
+export interface NewsCardProps {
   title: string;
   summary: string;
   tickerLabel: string;
@@ -6,6 +6,11 @@ interface NewsCardProps {
   publishedAt: string;
   source: string;
   link?: string;
+  subtitle?: string;
+  content?: string;
+  themeName?: string;
+  pressName?: string;
+  onClick?: () => void;
 }
 
 const sentimentColors: Record<NewsCardProps["sentiment"], { bg: string; text: string }> = {
@@ -22,11 +27,19 @@ export function NewsCard({
   publishedAt,
   source,
   link,
+  onClick,
 }: NewsCardProps) {
   const tone = sentimentColors[sentiment];
 
   return (
-    <article className="rounded-[8px] border border-border-subtle bg-white p-[1.25rem] shadow-card">
+    <article
+      className={`rounded-[8px] border border-border-subtle bg-white p-[1.25rem] shadow-card transition ${
+        onClick ? "cursor-pointer hover:shadow-card-muted" : ""
+      }`}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       <h2 className="text-[1.5rem] font-semibold text-text-strong">{title}</h2>
       <div className="mt-[0.5rem] flex flex-wrap items-center gap-2 text-[0.8rem]">
         <span className="rounded-[4px] bg-[#E1E1E1] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal text-text-strong">{tickerLabel}</span>

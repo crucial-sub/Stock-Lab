@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { NextPage } from "next";
 
 import { Icon } from "@/components/common/Icon";
+import { NewsCard } from "@/components/news/NewsCard";
 
 const newsThemes = [
   "전체",
@@ -39,6 +40,39 @@ const newsThemes = [
 
 const NewsPage: NextPage = () => {
   const [selectedThemes, setSelectedThemes] = useState<string[]>(["전체"]);
+
+  const mockNewsItems = [
+    {
+      title: "제목의 위치는 여기입니다.",
+      summary:
+        "여기에 간단한 내용이 들어갑니다. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
+      tickerLabel: "종목 이름",
+      sentiment: "positive" as const,
+      publishedAt: "30분 전",
+      source: "www.naver.com/example/link",
+      link: "https://www.naver.com",
+    },
+    {
+      title: "제목의 위치는 여기입니다.",
+      summary:
+        "여기에 간단한 내용이 들어갑니다. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
+      tickerLabel: "종목 이름",
+      sentiment: "neutral" as const,
+      publishedAt: "1시간 전",
+      source: "www.naver.com/example/link",
+      link: "https://www.naver.com",
+    },
+    {
+      title: "제목의 위치는 여기입니다.",
+      summary:
+        "여기에 간단한 내용이 들어갑니다. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s.",
+      tickerLabel: "종목 이름",
+      sentiment: "negative" as const,
+      publishedAt: "2시간 전",
+      source: "www.naver.com/example/link",
+      link: "https://www.naver.com",
+    },
+  ];
 
   const handleToggleTheme = (theme: string) => {
     if (theme === "전체") {
@@ -100,8 +134,13 @@ const NewsPage: NextPage = () => {
           );
         })}
       </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {mockNewsItems.map((item, index) => (
+          <NewsCard key={`${item.title}-${index}`} {...item} />
+        ))}
+      </div>
     </section>
-  )
+  );
 };
 
 export default NewsPage;

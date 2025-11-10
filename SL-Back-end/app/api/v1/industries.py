@@ -41,6 +41,11 @@ class IndustryStocksResponse(BaseModel):
     total_count: int
 
 
+class IndustryListRequest(BaseModel):
+    """여러 산업 조회 요청"""
+    industries: List[str]
+
+
 @router.get("/list", response_model=List[IndustryInfo])
 async def get_industries(db: AsyncSession = Depends(get_db)):
     """
@@ -88,27 +93,33 @@ async def get_stocks_by_industry(
     Returns:
         해당 산업의 모든 종목
     """
-    # 최신 주가 정보와 함께 종목 조회
+    # 필요한 컬럼만 선택하여 종목 조회
     stmt = (
-        select(Company)
+        select(
+            Company.stock_code,
+            Company.stock_name,
+            Company.company_name,
+            Company.industry,
+            Company.market_type
+        )
         .where(Company.stock_code.isnot(None))
         .where(Company.industry == industry_name)
         .order_by(Company.stock_name)
     )
 
     result = await db.execute(stmt)
-    companies = result.scalars().all()
+    rows = result.all()
 
     # 응답 생성
     stocks = [
         StockInfo(
-            stock_code=c.stock_code,
-            stock_name=c.stock_name or c.company_name,
-            company_name=c.company_name,
-            industry=c.industry or "기타",
-            market_type=c.market_type,
+            stock_code=row.stock_code,
+            stock_name=row.stock_name or row.company_name,
+            company_name=row.company_name,
+            industry=row.industry or "기타",
+            market_type=row.market_type,
         )
-        for c in companies
+        for row in rows
     ]
 
     return IndustryStocksResponse(
@@ -120,37 +131,122 @@ async def get_stocks_by_industry(
 
 @router.post("/stocks-by-industries", response_model=List[StockInfo])
 async def get_stocks_by_multiple_industries(
-    industries: List[str],
+    request: IndustryListRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
     여러 산업의 종목을 한번에 조회
 
     Args:
-        industries: 산업명 리스트
+        request: 산업명 리스트를 포함한 요청
 
     Returns:
         선택된 산업들의 모든 종목
     """
     stmt = (
-        select(Company)
+        select(
+            Company.stock_code,
+            Company.stock_name,
+            Company.company_name,
+            Company.industry,
+            Company.market_type
+        )
         .where(Company.stock_code.isnot(None))
-        .where(Company.industry.in_(industries))
+        .where(Company.industry.in_(request.industries))
         .order_by(Company.industry, Company.stock_name)
     )
 
     result = await db.execute(stmt)
-    companies = result.scalars().all()
+    rows = result.all()
 
     stocks = [
         StockInfo(
-            stock_code=c.stock_code,
-            stock_name=c.stock_name or c.company_name,
-            company_name=c.company_name,
-            industry=c.industry or "기타",
-            market_type=c.market_type,
+            stock_code=row.stock_code,
+            stock_name=row.stock_name or row.company_name,
+            company_name=row.company_name,
+            industry=row.industry or "기타",
+            market_type=row.market_type,
         )
-        for c in companies
+        for row in rows
+    ]
+
+    return stocks
+
+
+@router.get("/search", response_model=List[StockInfo])
+async def search_stocks(
+    query: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    종목명 또는 종목코드로 검색
+
+    검색 우선순위:
+    1. 완전 일치 (종목명 == 검색어)
+    2. 시작 일치 (종목명이 검색어로 시작)
+    3. 부분 일치 (종목명에 검색어 포함)
+
+    Args:
+        query: 검색어 (종목명 또는 종목코드)
+
+    Returns:
+        검색 결과에 해당하는 종목 목록 (우선순위순)
+    """
+    # CASE 문으로 우선순위 지정
+    # 1순위: 완전 일치
+    # 2순위: 시작 일치
+    # 3순위: 부분 일치
+    from sqlalchemy import case
+
+    priority = case(
+        # 완전 일치 (종목명 또는 종목코드)
+        (
+            (Company.stock_name == query) |
+            (Company.company_name == query) |
+            (Company.stock_code == query),
+            1
+        ),
+        # 시작 일치
+        (
+            (Company.stock_name.ilike(f"{query}%")) |
+            (Company.company_name.ilike(f"{query}%")) |
+            (Company.stock_code.ilike(f"{query}%")),
+            2
+        ),
+        # 부분 일치
+        else_=3
+    )
+
+    stmt = (
+        select(
+            Company.stock_code,
+            Company.stock_name,
+            Company.company_name,
+            Company.industry,
+            Company.market_type
+        )
+        .where(Company.stock_code.isnot(None))
+        .where(
+            (Company.stock_name.ilike(f"%{query}%")) |
+            (Company.company_name.ilike(f"%{query}%")) |
+            (Company.stock_code.ilike(f"%{query}%"))
+        )
+        .order_by(priority, Company.stock_name)  # 우선순위 → 종목명순
+        .limit(100)  # 최대 100개까지만 반환
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    stocks = [
+        StockInfo(
+            stock_code=row.stock_code,
+            stock_name=row.stock_name or row.company_name,
+            company_name=row.company_name,
+            industry=row.industry or "기타",
+            market_type=row.market_type,
+        )
+        for row in rows
     ]
 
     return stocks

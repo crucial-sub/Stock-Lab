@@ -18,10 +18,12 @@ export interface IndustryInfo {
  */
 export interface StockInfo {
   stock_code: string;
+  stock_name: string;
   company_name: string;
   industry: string;
-  market_cap?: number;
-  sector?: string;
+  market_type?: string;
+  current_price?: number;
+  change_rate?: number;
 }
 
 /**
@@ -65,6 +67,23 @@ export async function getStocksByIndustries(
   const response = await axiosInstance.post<StockInfo[]>(
     "/industries/stocks-by-industries",
     { industries: industryNames },
+  );
+  return response.data;
+}
+
+/**
+ * 종목명 또는 종목코드로 검색
+ * - GET /industries/search?query={query}
+ *
+ * @param query - 검색어 (종목명 또는 종목코드)
+ * @returns 검색 결과 종목 목록
+ */
+export async function searchStocks(query: string): Promise<StockInfo[]> {
+  if (!query || query.trim() === "") {
+    return [];
+  }
+  const response = await axiosInstance.get<StockInfo[]>(
+    `/industries/search?query=${encodeURIComponent(query)}`,
   );
   return response.data;
 }

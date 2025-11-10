@@ -48,8 +48,8 @@ services:
       - ./SL-Back-end/.env
     environment:
       # SSH 터널을 통한 RDS 연결 (SSL 필수)
-      DATABASE_URL: postgresql+asyncpg://postgres:nmmteam05@host.docker.internal:5433/stock_lab_investment_db?ssl=require
-      DATABASE_SYNC_URL: postgresql://postgres:nmmteam05@host.docker.internal:5433/stock_lab_investment_db?sslmode=require
+      DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db?ssl=require
+      DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db?sslmode=require
       REDIS_HOST: redis
       REDIS_PORT: 6379
       DEBUG: "true"

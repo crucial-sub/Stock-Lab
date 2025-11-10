@@ -16,13 +16,39 @@ class CompanyBasicInfo(BaseModel):
     stock_code: str = Field(..., serialization_alias="stockCode")
     stock_name: Optional[str] = Field(None, serialization_alias="stockName")
     market_type: Optional[str] = Field(None, serialization_alias="marketType")
+
+    # 주가 정보
+    current_price: Optional[int] = Field(None, serialization_alias="currentPrice", description="현재가(종가)")
+    vs_previous: Optional[int] = Field(None, serialization_alias="vsPrevious", description="전일대비")
+    trade_date: Optional[str] = Field(None, serialization_alias="tradeDate", description="기준일자")
+    previous_close: Optional[int] = Field(None, serialization_alias="previousClose", description="전일 종가")
+    change_vs_1d: Optional[int] = Field(None, serialization_alias="changevs1d", description="1일 전일대비")
+    change_vs_1w: Optional[int] = Field(None, serialization_alias="changevs1w", description="1주 전일대비")
+    change_vs_1m: Optional[int] = Field(None, serialization_alias="changevs1m", description="1개월 전일대비")
+    change_vs_2m: Optional[int] = Field(None, serialization_alias="changevs2m", description="2개월 전일대비")
+
+    # 기간별 변동률
+    fluctuation_rate: Optional[float] = Field(None, serialization_alias="fluctuationRate", description="전일대비 등락률(%)")
+    change_rate_1d: Optional[float] = Field(None, serialization_alias="changeRate1d", description="1일 변동률(%)")
+    change_rate_1w: Optional[float] = Field(None, serialization_alias="changeRate1w", description="1주일 변동률(%)")
+    change_rate_1m: Optional[float] = Field(None, serialization_alias="changeRate1m", description="1개월 변동률(%)")
+    change_rate_2m: Optional[float] = Field(None, serialization_alias="changeRate2m", description="2개월 변동률(%)")
+
+    # 시가총액 정보
     market_cap: Optional[int] = Field(None, serialization_alias="marketCap")
-    ceo_name: Optional[str] = Field(None, serialization_alias="ceoName")
     listed_shares: Optional[int] = Field(None, serialization_alias="listedShares")
+
+    # 기업 정보
+    ceo_name: Optional[str] = Field(None, serialization_alias="ceoName")
     listed_date: Optional[str] = Field(None, serialization_alias="listedDate")
     industry: Optional[str] = None
+
+    # 점수
     momentum_score: Optional[float] = Field(None, serialization_alias="momentumScore")
     fundamental_score: Optional[float] = Field(None, serialization_alias="fundamentalScore")
+
+    # 관심종목 여부
+    is_favorite: bool = Field(False, serialization_alias="isFavorite", description="관심종목 여부")
 
 
 class InvestmentIndicators(BaseModel):

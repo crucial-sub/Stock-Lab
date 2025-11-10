@@ -3,12 +3,15 @@
 - 라우팅 및 HTTP 요청/응답 처리
 - 비즈니스 로직은 서비스 레이어에서 처리
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
+from uuid import UUID
 import logging
 
 from app.core.database import get_db
 from app.services.company_info import CompanyInfoService
+from app.services.user_stock import UserStockService
 from app.schemas.company_info import (
     CompanyInfoResponse,
     CompanyBasicInfo,
@@ -29,6 +32,7 @@ router = APIRouter()
 @router.get("/company/{stock_code}/info", response_model=CompanyInfoResponse)
 async def get_company_info(
     stock_code: str,
+    user_id: Optional[UUID] = Query(None, description="사용자 ID (관심종목 판단 및 최근 본 주식 기록용)"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -36,6 +40,7 @@ async def get_company_info(
 
     Args:
         stock_code: 종목 코드 (6자리, 예: 005930)
+        user_id: 사용자 ID (선택, 관심종목 판단 및 최근 본 주식 기록용)
         db: 데이터베이스 세션
 
     Returns:
@@ -43,13 +48,18 @@ async def get_company_info(
     """
     try:
         service = CompanyInfoService(db)
-        data = await service.get_company_info(stock_code)
+        data = await service.get_company_info(stock_code, user_id)
 
         if not data:
             raise HTTPException(
                 status_code=404,
                 detail=f"종목 코드 {stock_code}를 찾을 수 없습니다"
             )
+
+        # 사용자 ID가 있으면 최근 본 주식에 기록
+        if user_id:
+            user_stock_service = UserStockService(db)
+            await user_stock_service.add_recent_view(user_id, stock_code)
 
         # 응답 모델로 변환
         return CompanyInfoResponse(

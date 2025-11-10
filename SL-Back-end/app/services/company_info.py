@@ -9,8 +9,9 @@ import logging
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
 from decimal import Decimal
+from uuid import UUID
 
-from sqlalchemy import select, and_, or_, desc
+from sqlalchemy import select, and_, or_, desc, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.company import Company
@@ -18,6 +19,7 @@ from app.models.stock_price import StockPrice
 from app.models.financial_statement import FinancialStatement
 from app.models.income_statement import IncomeStatement
 from app.models.balance_sheet import BalanceSheet
+from app.models.user_favorite_stock import UserFavoriteStock
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +30,13 @@ class CompanyInfoService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_company_info(self, stock_code: str) -> Dict[str, Any]:
+    async def get_company_info(self, stock_code: str, user_id: Optional[UUID] = None) -> Dict[str, Any]:
         """
         종목의 전체 재무 정보 조회
 
         Args:
             stock_code: 종목 코드 (6자리)
+            user_id: 사용자 ID (선택, 관심종목 판단용)
 
         Returns:
             종목 기본정보, 투자지표, 수익지표, 재무비율, 분기별실적, 재무제표, 차트 데이터
@@ -43,16 +46,26 @@ class CompanyInfoService:
         if not company:
             return None
 
+        # 1-1. 관심종목 여부 확인
+        is_favorite = False
+        if user_id:
+            is_favorite = await self._check_is_favorite(user_id, company.company_id)
+
         # 2. 최신 주가 정보
         latest_price = await self._get_latest_price(company.company_id)
 
-        # 3. 5년 차트 데이터
+        # 3. 기간별 변동률 계산
+        change_rates = await self._calculate_period_change_rates(
+            company.company_id, latest_price
+        )
+
+        # 4. 5년 차트 데이터
         price_history = await self._get_price_history(company.company_id)
 
-        # 4. 최근 8분기 재무제표
+        # 5. 최근 8분기 재무제표
         financial_statements = await self._get_financial_statements(company.company_id, limit=8)
 
-        # 5. 재무제표 파싱 및 지표 계산
+        # 6. 재무제표 파싱 및 지표 계산
         (
             quarterly_performance,
             income_statements,
@@ -60,33 +73,56 @@ class CompanyInfoService:
             latest_financial_data
         ) = await self._process_financial_statements(financial_statements)
 
-        # 6. 투자지표 계산
+        # 7. 투자지표 계산
         investment_indicators = self._calculate_investment_indicators(
             latest_price, latest_financial_data
         )
 
-        # 7. 수익지표 계산
+        # 8. 수익지표 계산
         profitability_indicators = self._calculate_profitability_indicators(
             latest_price, latest_financial_data
         )
 
-        # 8. 재무비율 계산
+        # 9. 재무비율 계산
         financial_ratios = self._calculate_financial_ratios(latest_financial_data)
 
-        # 9. 응답 데이터 조합
+        # 10. 전일 종가 계산
+        previous_close = self._calculate_previous_close(latest_price)
+
+        # 11. 응답 데이터 조합
         return {
             "basic_info": {
                 "company_name": company.company_name,
                 "stock_code": company.stock_code,
                 "stock_name": company.stock_name,
                 "market_type": company.market_type,
+                # 주가 정보
+                "current_price": latest_price.close_price if latest_price else None,
+                "vs_previous": latest_price.vs_previous if latest_price else None,
+                "previous_close": previous_close,
+                "fluctuation_rate": latest_price.fluctuation_rate if latest_price else None,
+                "trade_date": latest_price.trade_date.isoformat() if latest_price and latest_price.trade_date else None,
+                "change_vs_1d": change_rates.get("1d_change"),
+                "change_vs_1w": change_rates.get("1w_change"),
+                "change_vs_1m": change_rates.get("1m_change"),
+                "change_vs_2m": change_rates.get("2m_change"),
+                # 기간별 변동률
+                "change_rate_1d": change_rates.get("1d_rate"),
+                "change_rate_1w": change_rates.get("1w_rate"),
+                "change_rate_1m": change_rates.get("1m_rate"),
+                "change_rate_2m": change_rates.get("2m_rate"),
+                # 시가총액 정보
                 "market_cap": latest_price.market_cap if latest_price else None,
-                "ceo_name": company.ceo_name,
                 "listed_shares": latest_price.listed_shares if latest_price else None,
+                # 기업 정보
+                "ceo_name": company.ceo_name,
                 "listed_date": company.listed_date.isoformat() if company.listed_date else None,
                 "industry": company.industry,
+                # 점수
                 "momentum_score": company.momentum_score,
-                "fundamental_score": company.fundamental_score
+                "fundamental_score": company.fundamental_score,
+                # 관심종목 여부
+                "is_favorite": is_favorite
             },
             "investment_indicators": investment_indicators,
             "profitability_indicators": profitability_indicators,
@@ -191,12 +227,21 @@ class CompanyInfoService:
         limit: int = 8
     ) -> List[FinancialStatement]:
         """재무제표 조회 (최근 N개 분기)"""
+        quarter_priority = case(
+            (
+                (FinancialStatement.reprt_code == "11011", 1),  # Q4 (사업보고서)
+                (FinancialStatement.reprt_code == "11014", 2),  # Q3
+                (FinancialStatement.reprt_code == "11012", 3),  # Q2
+                (FinancialStatement.reprt_code == "11013", 4),  # Q1
+            ),
+            else_=5
+        )
         query = (
             select(FinancialStatement)
             .where(FinancialStatement.company_id == company_id)
             .order_by(
                 desc(FinancialStatement.bsns_year),
-                desc(FinancialStatement.reprt_code)
+                quarter_priority
             )
             .limit(limit)
         )
@@ -499,3 +544,148 @@ class CompanyInfoService:
             "debt_ratio": debt_ratio,
             "current_ratio": current_ratio
         }
+
+    async def _calculate_period_change_rates(
+        self,
+        company_id: int,
+        latest_price: Optional[StockPrice]
+    ) -> Dict[str, Optional[float]]:
+        """
+        기간별 변동률 계산
+
+        Args:
+            company_id: 회사 ID
+            latest_price: 최신 주가 정보
+
+        Returns:
+            기간별 변동률 딕셔너리 (1d, 1w, 1m, 2m)
+        """
+        if not latest_price or not latest_price.close_price:
+            return {
+                "1d_change": None,
+                "1w_change": None,
+                "1m_change": None,
+                "2m_change": None,
+                "1d_rate": None,
+                "1w_rate": None,
+                "1m_rate": None,
+                "2m_rate": None
+            }
+
+        current_price = latest_price.close_price
+
+        # 각 기간별 가격 조회 (거래일 기준)
+        price_1d = await self._get_price_n_trading_days_ago(company_id, 1)
+        price_1w = await self._get_price_n_trading_days_ago(company_id, 5)  # 5 거래일 = 1주
+        price_1m = await self._get_price_n_trading_days_ago(company_id, 22)  # 22 거래일 ≈ 1개월
+        price_2m = await self._get_price_n_trading_days_ago(company_id, 44)  # 44 거래일 ≈ 2개월
+
+        # 변동량 계산
+        change_vs_1d = self._calculate_change_amount(current_price, price_1d)
+        change_vs_1w = self._calculate_change_amount(current_price, price_1w)
+        change_vs_1m = self._calculate_change_amount(current_price, price_1m)
+        change_vs_2m = self._calculate_change_amount(current_price, price_2m)
+
+        # 변동률 계산
+        change_rate_1d = self._calculate_change_rate(current_price, price_1d.close_price if price_1d else None)
+        change_rate_1w = self._calculate_change_rate(current_price, price_1w.close_price if price_1w else None)
+        change_rate_1m = self._calculate_change_rate(current_price, price_1m.close_price if price_1m else None)
+        change_rate_2m = self._calculate_change_rate(current_price, price_2m.close_price if price_2m else None)
+
+        return {
+            "1d_change": change_vs_1d,
+            "1w_change": change_vs_1w,
+            "1m_change": change_vs_1m,
+            "2m_change": change_vs_2m,
+            "1d_rate": change_rate_1d,
+            "1w_rate": change_rate_1w,
+            "1m_rate": change_rate_1m,
+            "2m_rate": change_rate_2m
+        }
+
+    async def _get_price_n_trading_days_ago(
+        self,
+        company_id: int,
+        trading_days: int
+    ) -> Optional[StockPrice]:
+        """
+        N 거래일 전 주가 조회
+
+        Args:
+            company_id: 회사 ID
+            trading_days: 거래일 수
+
+        Returns:
+            N 거래일 전 주가 정보
+        """
+        query = (
+            select(StockPrice)
+            .where(StockPrice.company_id == company_id)
+            .order_by(desc(StockPrice.trade_date))
+            .offset(trading_days)  # N번째 건너뛰기
+            .limit(1)
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    def _calculate_change_rate(
+        self,
+        current_price: Optional[int],
+        past_price: Optional[int]
+    ) -> Optional[float]:
+        """
+        변동률 계산
+
+        Args:
+            current_price: 현재 가격
+            past_price: 과거 가격
+
+        Returns:
+            변동률 (%)
+        """
+        if not current_price or not past_price or past_price == 0:
+            return None
+
+        change_rate = ((current_price - past_price) / past_price) * 100
+        return round(change_rate, 2)
+
+    def _calculate_previous_close(
+        self,
+        latest_price: Optional[StockPrice]
+    ) -> Optional[int]:
+        """전일 종가 계산"""
+        if not latest_price or latest_price.close_price is None:
+            return None
+        if latest_price.vs_previous is None:
+            return None
+        return latest_price.close_price - latest_price.vs_previous
+
+    def _calculate_change_amount(
+        self,
+        current_price: Optional[int],
+        past_price: Optional[StockPrice]
+    ) -> Optional[int]:
+        """변동량 계산 (과거 데이터 없으면 None)"""
+        if current_price is None or past_price is None or past_price.close_price is None:
+            return None
+        return current_price - past_price.close_price
+
+    async def _check_is_favorite(self, user_id: UUID, company_id: int) -> bool:
+        """
+        관심종목 여부 확인
+
+        Args:
+            user_id: 사용자 ID
+            company_id: 회사 ID
+
+        Returns:
+            관심종목 여부
+        """
+        query = select(UserFavoriteStock).where(
+            and_(
+                UserFavoriteStock.user_id == user_id,
+                UserFavoriteStock.company_id == company_id
+            )
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none() is not None

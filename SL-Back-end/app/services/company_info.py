@@ -228,12 +228,10 @@ class CompanyInfoService:
     ) -> List[FinancialStatement]:
         """재무제표 조회 (최근 N개 분기)"""
         quarter_priority = case(
-            (
-                (FinancialStatement.reprt_code == "11011", 1),  # Q4 (사업보고서)
-                (FinancialStatement.reprt_code == "11014", 2),  # Q3
-                (FinancialStatement.reprt_code == "11012", 3),  # Q2
-                (FinancialStatement.reprt_code == "11013", 4),  # Q1
-            ),
+            (FinancialStatement.reprt_code == "11011", 1),  # Q4 (사업보고서)
+            (FinancialStatement.reprt_code == "11014", 2),  # Q3
+            (FinancialStatement.reprt_code == "11012", 3),  # Q2
+            (FinancialStatement.reprt_code == "11013", 4),  # Q1
             else_=5
         )
         query = (

@@ -1,192 +1,160 @@
 "use client";
 
-import { useThemesQuery } from "@/hooks/useThemesQuery";
-import { useBacktestConfigStore } from "@/stores";
-import Image from "next/image";
-import { useEffect, useState } from "react";
-import { runBacktest } from "@/lib/api/backtest";
-import { useRouter } from "next/navigation";
-
 /**
- * 매매 대상 선택 탭 - 새 디자인
+ * 매매 대상 선택 탭 - DB 연동 버전
  *
- * ThreeColumnLayout을 사용한 완전히 새로운 구현:
- * - 왼쪽: 네비게이션 사이드바
- * - 중앙: 매매 대상 선택 폼 (산업 선택, 테마 선택, 검색, 종목 테이블)
- * - 오른쪽: 설정 요약 패널
+ * 개선 사항:
+ * - 실제 DB의 industry 컬럼에서 데이터 로드
+ * - API 연동으로 실제 종목 데이터 표시
+ * - 커스텀 훅으로 비즈니스 로직 분리
  */
+
+import { useBacktestConfigStore } from "@/stores";
+import { useState, useEffect } from "react";
+import { runBacktest } from "@/lib/api/backtest";
+import { getIndustries, getStocksByIndustries, searchStocks, type StockInfo } from "@/lib/api/industries";
+import { useRouter } from "next/navigation";
+import { useTradeTargetSelection } from "@/hooks/quant";
+import {
+  TradeTargetHeader,
+  StockCount,
+  UniverseThemeSelection,
+  StockSearchAndTable,
+} from "./sections";
+
 export default function TargetSelectionTab() {
-  // React Query로 테마 데이터 가져오기
-  const { data: themes, isLoading: isLoadingThemes } = useThemesQuery();
-
-  // Zustand store
-  const { trade_targets, setTradeTargets, getBacktestRequest } = useBacktestConfigStore();
-
-  // 라우터
+  const { getBacktestRequest } = useBacktestConfigStore();
   const router = useRouter();
+
+  // 산업 데이터 상태 (DB에서 가져옴)
+  const [industries, setIndustries] = useState<string[]>([]);
+  const [industryStockCounts, setIndustryStockCounts] = useState<Map<string, number>>(new Map());
+  const [isLoadingIndustries, setIsLoadingIndustries] = useState(true);
+  const [totalStockCount, setTotalStockCount] = useState(0);
+
+  // 종목 검색 및 선택 상태
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
+  const [selectedStocks, setSelectedStocks] = useState<Set<string>>(new Set());
+  const [isSearching, setIsSearching] = useState(false);
 
   // 백테스트 실행 상태
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 사이드바 상태
-  const [activeSection, setActiveSection] = useState("매매 대상 설정");
-  const sidebarItems = [
-    "매수 조건",
-    "매도 조건",
-    "  목표가 / 손절가",
-    "  보유 기간",
-    "  조건 매도",
-    "매매 대상 설정",
-  ];
-
-  // 산업 목록 (하드코딩 - Figma 디자인 기준)
-  const industries = [
-    "코스피 대형",
-    "코스피 중대형",
-    "코스피 중형",
-    "코스피 중소형",
-    "코스피 소형",
-    "코스피 초소형",
-  ];
-
-  // 테마 목록 (하드코딩 - Figma 디자인 기준)
-  const themeOptions = [
-    { id: "건설", name: "건설" },
-    { id: "금융", name: "금융" },
-    { id: "기계 / 장비", name: "기계 / 장비" },
-    { id: "농업 / 임업 / 어업", name: "농업 / 임업 / 어업" },
-    { id: "보험사", name: "보험사" },
-    { id: "비금속", name: "비금속" },
-    { id: "섬유 / 의류", name: "섬유 / 의류" },
-    { id: "운송 / 창고", name: "운송 / 창고" },
-    { id: "은행", name: "은행" },
-    { id: "유통", name: "유통" },
-    { id: "운송설비 / 부품", name: "운송설비 / 부품" },
-    { id: "의약 / 정밀기기", name: "의약 / 정밀기기" },
-    { id: "전기 / 가스 / 수도", name: "전기 / 가스 / 수도" },
-    { id: "종이 / 목재", name: "종이 / 목재" },
-    { id: "증권", name: "증권" },
-    { id: "출판 / 매체 복제", name: "출판 / 매체 복제" },
-    { id: "통신", name: "통신" },
-    { id: "IT 서비스", name: "IT 서비스" },
-    { id: "기타 금융", name: "기타 금융" },
-    { id: "기타 제조", name: "기타 제조" },
-    { id: "기타", name: "기타" },
-    { id: "제약", name: "제약" },
-    { id: "화학", name: "화학" },
-  ];
-
-  // 선택된 산업 및 테마 (초기에는 모두 선택됨)
-  const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(
-    new Set(industries)
-  );
-  const [selectedThemes, setSelectedThemes] = useState<Set<string>>(
-    new Set(themeOptions.map(t => t.id))
-  );
-
-  // 검색어
-  const [searchQuery, setSearchQuery] = useState("");
-
-  // 모의 주식 데이터
-  const mockStocks = [
-    {
-      name: "삼성전자",
-      theme: "전기 / 전자",
-      code: "005930",
-      price: "99,600원",
-      change: "-0.99%",
-    },
-    {
-      name: "삼성바이오로직스",
-      theme: "제약",
-      code: "207940",
-      price: "1,221,000원",
-      change: "0%",
-    },
-    {
-      name: "삼성SDI",
-      theme: "IT 서비스",
-      code: "006400",
-      price: "320,500원",
-      change: "-1.38%",
-    },
-    {
-      name: "삼성물산",
-      theme: "유통",
-      code: "028260",
-      price: "218,500원",
-      change: "+1.39%",
-    },
-    {
-      name: "삼성화재",
-      theme: "유통",
-      code: "028260",
-      price: "218,500원",
-      change: "+1.39%",
-    },
-  ];
-
-  // 전체선택 여부 확인
-  const isAllIndustriesSelected = industries.every(ind => selectedIndustries.has(ind));
-  const isAllThemesSelected = themeOptions.every(theme => selectedThemes.has(theme.id));
-
-  // 유니버스 전체선택 토글
-  const toggleAllIndustries = () => {
-    if (isAllIndustriesSelected) {
-      // 모두 선택되어 있으면 전체 해제
-      setSelectedIndustries(new Set());
-    } else {
-      // 하나라도 해제되어 있으면 전체 선택
-      setSelectedIndustries(new Set(industries));
-    }
-  };
-
-  // 테마 전체선택 토글
-  const toggleAllThemes = () => {
-    if (isAllThemesSelected) {
-      // 모두 선택되어 있으면 전체 해제
-      setSelectedThemes(new Set());
-    } else {
-      // 하나라도 해제되어 있으면 전체 선택
-      setSelectedThemes(new Set(themeOptions.map(t => t.id)));
-    }
-  };
-
-  // 산업 토글
-  const toggleIndustry = (industry: string) => {
-    const newSelected = new Set(selectedIndustries);
-    if (newSelected.has(industry)) {
-      newSelected.delete(industry);
-    } else {
-      newSelected.add(industry);
-    }
-    setSelectedIndustries(newSelected);
-  };
-
-  // 테마 토글
-  const toggleTheme = (themeId: string) => {
-    const newSelected = new Set(selectedThemes);
-    if (newSelected.has(themeId)) {
-      newSelected.delete(themeId);
-    } else {
-      newSelected.add(themeId);
-    }
-    setSelectedThemes(newSelected);
-  };
-
-  // 선택된 유니버스와 테마를 전역 스토어에 업데이트
+  // DB에서 산업 목록 가져오기
   useEffect(() => {
-    const universes = Array.from(selectedIndustries);
-    const themes = Array.from(selectedThemes);
+    async function fetchIndustries() {
+      try {
+        setIsLoadingIndustries(true);
+        const data = await getIndustries();
 
-    setTradeTargets({
-      use_all_stocks: isAllIndustriesSelected && isAllThemesSelected,
-      selected_universes: universes,
-      selected_themes: themes,
-      selected_stocks: [], // 개별 종목 선택은 추후 구현
+        // 산업명만 추출
+        const industryNames = data.map((item) => item.industry_name);
+        setIndustries(industryNames);
+
+        // 산업별 종목 수를 Map으로 캐시
+        const countsMap = new Map<string, number>();
+        data.forEach((item) => {
+          countsMap.set(item.industry_name, item.stock_count);
+        });
+        setIndustryStockCounts(countsMap);
+
+        // 전체 종목 수 계산
+        const total = data.reduce((sum, item) => sum + item.stock_count, 0);
+        setTotalStockCount(total);
+
+        console.log("=== 산업 데이터 로드 성공 ===");
+        console.log("산업 수:", industryNames.length);
+        console.log("전체 종목 수:", total);
+        console.log("========================");
+      } catch (err) {
+        console.error("산업 데이터 로드 실패:", err);
+        setError("산업 데이터를 불러오는데 실패했습니다.");
+      } finally {
+        setIsLoadingIndustries(false);
+      }
+    }
+
+    fetchIndustries();
+  }, []);
+
+  // 선택된 산업의 종목 수 계산
+  const [selectedIndustryStockCount, setSelectedIndustryStockCount] = useState(0);
+
+  // 커스텀 훅으로 매매 대상 선택 로직 관리
+  const {
+    selectedIndustries,
+    isAllIndustriesSelected,
+    toggleIndustry,
+    toggleAllIndustries,
+  } = useTradeTargetSelection(
+    industries,
+    [],
+    Array.from(selectedStocks),
+    selectedIndustryStockCount + selectedStocks.size, // 최종 선택된 종목 수
+    totalStockCount
+  );
+
+  // 최종 선택된 종목 수 = 체크박스로 선택된 산업의 종목 + 개별 검색으로 선택된 종목
+  const finalSelectedCount = selectedIndustryStockCount + selectedStocks.size;
+
+  // 종목 검색 핸들러
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+
+    if (!query || query.trim() === "") {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearching(true);
+      const results = await searchStocks(query);
+      setSearchResults(results);
+    } catch (err) {
+      console.error("종목 검색 실패:", err);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // 종목 선택/해제 토글
+  const toggleStockSelection = (stockCode: string) => {
+    const newSelected = new Set(selectedStocks);
+    if (newSelected.has(stockCode)) {
+      newSelected.delete(stockCode);
+    } else {
+      newSelected.add(stockCode);
+    }
+    setSelectedStocks(newSelected);
+  };
+
+  // 선택된 산업의 종목 수 계산 (캐시된 데이터 사용 - API 호출 없음)
+  useEffect(() => {
+    // 아무 산업도 선택되지 않았거나 industries가 아직 로드되지 않은 경우
+    if (selectedIndustries.size === 0 || industryStockCounts.size === 0) {
+      setSelectedIndustryStockCount(0);
+      console.log("🔢 종목 수 계산: 0 (산업 선택 없음)");
+      return;
+    }
+
+    // 캐시된 Map에서 종목 수 합산 (즉시 계산, API 호출 없음)
+    let total = 0;
+    selectedIndustries.forEach((industry) => {
+      const count = industryStockCounts.get(industry) || 0;
+      total += count;
     });
-  }, [selectedIndustries, selectedThemes, isAllIndustriesSelected, isAllThemesSelected, setTradeTargets]);
+
+    setSelectedIndustryStockCount(total);
+    console.log("🔢 종목 수 계산:", {
+      선택된_산업_수: selectedIndustries.size,
+      산업별_종목_합계: total,
+      개별_선택_종목: selectedStocks.size,
+      최종_합계: total + selectedStocks.size
+    });
+  }, [selectedIndustries, industryStockCounts, selectedStocks.size]);
 
   // 백테스트 시작 핸들러
   const handleStartBacktest = async () => {
@@ -194,22 +162,18 @@ export default function TargetSelectionTab() {
       setIsRunning(true);
       setError(null);
 
-      // 전역 스토어에서 백테스트 요청 데이터 가져오기
       const request = getBacktestRequest();
 
-      // 서버로 전송되는 데이터 확인
       console.log("=== 백테스트 요청 데이터 ===");
       console.log(JSON.stringify(request, null, 2));
       console.log("========================");
 
-      // 백테스트 실행 API 호출
       const response = await runBacktest(request);
 
       console.log("=== 백테스트 응답 데이터 ===");
       console.log(JSON.stringify(response, null, 2));
       console.log("========================");
 
-      // 성공 시 결과 페이지로 이동
       router.push(`/quant/${response.backtestId}`);
     } catch (err: any) {
       console.error("=== 백테스트 실행 실패 ===");
@@ -218,239 +182,137 @@ export default function TargetSelectionTab() {
       console.error("Response status:", err.response?.status);
       console.error("========================");
 
-      const errorMessage = err.response?.data?.message || err.message || "백테스트 실행 중 오류가 발생했습니다.";
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "백테스트 실행 중 오류가 발생했습니다.";
       setError(errorMessage);
     } finally {
       setIsRunning(false);
     }
   };
 
-  // 메인 컨텐츠
-  const mainContent = (
+  // 로딩 중일 때
+  if (isLoadingIndustries) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-text-body">데이터를 불러오는 중...</div>
+      </div>
+    );
+  }
+
+  return (
     <div className="space-y-6">
       {/* 헤더 */}
-      <div>
-        <h2 className="text-2xl font-bold text-text-strong mb-2">
-          매매 대상 설정
-        </h2>
-        <p className="text-sm text-text-body">
-          매매할 대상을 선택합니다. 여러 대상을 한번에길 있는 종목을 배제할
-          수도 있고 종목별로 배제할 수도 있습니다.
-        </p>
-      </div>
+      <TradeTargetHeader
+        selectedCount={finalSelectedCount}
+        totalCount={totalStockCount}
+      />
 
       {/* 매매 대상 종목 */}
       <div className="bg-bg-surface rounded-lg shadow-card p-6">
-        <div className="mb-4">
-          <span className="text-lg font-bold text-text-strong">
-            매매 대상 종목
-          </span>
-          <span className="ml-3 text-accent-primary font-bold">
-            2539 종목 / 3580 종목
-          </span>
-          <span className="ml-2 text-sm text-text-body">(선택 / 전체)</span>
-        </div>
-
-        {/* 주식 유니버스 선택 */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-3">
-            <h4 className="text-base font-semibold text-text-strong">
-              주식 유니버스 선택
-            </h4>
-            <button
-              onClick={toggleAllIndustries}
-              className="flex items-center gap-2"
-            >
-              <div
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isAllIndustriesSelected
-                  ? "bg-accent-primary border-accent-primary"
-                  : "border-border-default"
-                  }`}
-              >
-                {isAllIndustriesSelected && (
-                  <Image
-                    src="/icons/check_box.svg"
-                    alt=""
-                    width={16}
-                    height={16}
-                  />
-                )}
-              </div>
-              <span className="text-sm text-accent-primary">전체선택</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-6 gap-3">
-            {industries.map((industry) => (
-              <button
-                key={industry}
-                onClick={() => toggleIndustry(industry)}
-                className="flex items-center gap-2"
-              >
-                <div
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center ${selectedIndustries.has(industry)
-                    ? "bg-accent-primary border-accent-primary"
-                    : "border-border-default"
-                    }`}
-                >
-                  {selectedIndustries.has(industry) && (
-                    <Image
-                      src="/icons/check_box.svg"
-                      alt=""
-                      width={16}
-                      height={16}
-                    />
-                  )}
-                </div>
-                <span className="text-sm text-text-body">{industry}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 주식 테마 선택 */}
-        <div>
-          <div className="flex items-center gap-3 mb-3">
-            <h4 className="text-base font-semibold text-text-strong">
-              주식 테마 선택
-            </h4>
-            <button
-              onClick={toggleAllThemes}
-              className="flex items-center gap-2"
-            >
-              <div
-                className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isAllThemesSelected
-                  ? "bg-accent-primary border-accent-primary"
-                  : "border-border-default"
-                  }`}
-              >
-                {isAllThemesSelected && (
-                  <Image
-                    src="/icons/check_box.svg"
-                    alt=""
-                    width={16}
-                    height={16}
-                  />
-                )}
-              </div>
-              <span className="text-sm text-accent-primary">전체선택</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-6 gap-3">
-            {themeOptions.map((theme) => (
-              <button
-                key={theme.id}
-                onClick={() => toggleTheme(theme.id)}
-                className="flex items-center gap-2"
-              >
-                <div
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center ${selectedThemes.has(theme.id)
-                    ? "bg-accent-primary border-accent-primary"
-                    : "border-border-default"
-                    }`}
-                >
-                  {selectedThemes.has(theme.id) && (
-                    <Image
-                      src="/icons/check_box.svg"
-                      alt=""
-                      width={16}
-                      height={16}
-                    />
-                  )}
-                </div>
-                <span className="text-sm text-text-body">{theme.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 검색 */}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="종목 이름으로 검색하기"
-          className="flex-1 px-4 py-3 bg-bg-surface border border-border-default rounded-sm text-text-body placeholder:text-text-muted focus:outline-none focus:border-accent-primary"
+        <StockCount
+          selectedCount={finalSelectedCount}
+          totalCount={totalStockCount}
         />
-        <button
-          type="button"
-          className="px-4 py-3 bg-bg-surface border border-border-default rounded-sm hover:bg-bg-muted transition-colors"
-        >
-          <Image src="/icons/search.svg" alt="검색" width={20} height={20} />
-        </button>
+
+        {/* 주식 테마 선택 (DB 산업 데이터) */}
+        <UniverseThemeSelection
+          industries={industries}
+          selectedIndustries={selectedIndustries}
+          isAllIndustriesSelected={isAllIndustriesSelected}
+          onToggleIndustry={toggleIndustry}
+          onToggleAllIndustries={toggleAllIndustries}
+        />
       </div>
 
-      {/* 종목 테이블 */}
-      <div className="bg-bg-surface rounded-lg shadow-card overflow-hidden">
-        {/* 테이블 헤더 */}
-        <div className="grid grid-cols-[60px_1fr_200px_150px_150px_150px_150px] gap-4 px-6 py-4 bg-bg-muted border-b border-border-subtle">
-          <div className="text-sm font-medium text-text-muted">선택</div>
-          <div className="text-sm font-medium text-text-muted">종목 이름</div>
-          <div className="text-sm font-medium text-text-muted">테마</div>
-          <div className="text-sm font-medium text-text-muted">종목 코드</div>
-          <div className="text-sm font-medium text-text-muted text-right">
-            전일 종가
-          </div>
-          <div className="text-sm font-medium text-text-muted text-right">
-            시장 등락률
-          </div>
+      {/* 종목 검색 및 테이블 */}
+      <div className="bg-bg-surface rounded-lg shadow-card p-6">
+        <h3 className="text-lg font-semibold mb-4">종목 검색</h3>
+
+        {/* 검색 입력 */}
+        <div className="mb-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="종목명 또는 종목코드를 입력하세요 (예: 삼성전자, 005930)"
+            className="w-full px-4 py-2 border border-border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary"
+          />
         </div>
 
-        {/* 테이블 바디 */}
-        <div>
-          {mockStocks.map((stock) => {
-            const isNegative = stock.change.startsWith("-");
-            return (
-              <div
-                key={`${stock.code}-${stock.name}`}
-                className="grid grid-cols-[60px_1fr_200px_150px_150px_150px_150px] gap-4 px-6 py-4 border-b border-border-subtle hover:bg-bg-muted transition-colors"
-              >
-                {/* 체크박스 */}
-                <div className="flex items-center justify-center">
-                  <button className="w-6 h-6">
-                    <Image
-                      src="/icons/check_box_blank.svg"
-                      alt=""
-                      width={24}
-                      height={24}
-                    />
-                  </button>
-                </div>
+        {/* 검색 결과 */}
+        {isSearching && (
+          <div className="text-center py-4 text-text-body">검색 중...</div>
+        )}
 
-                {/* 종목 이름 */}
-                <div className="flex items-center text-text-body">
-                  {stock.name}
-                </div>
+        {!isSearching && searchQuery && searchResults.length === 0 && (
+          <div className="text-center py-4 text-text-body">
+            검색 결과가 없습니다.
+          </div>
+        )}
 
-                {/* 테마 */}
-                <div className="flex items-center text-text-body">
-                  {stock.theme}
-                </div>
+        {!isSearching && searchResults.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-bg-tertiary">
+                <tr>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">선택</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">종목코드</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">종목명</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">산업</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">시장</th>
+                </tr>
+              </thead>
+              <tbody>
+                {searchResults.map((stock) => (
+                  <tr key={stock.stock_code} className="border-b border-border-primary hover:bg-bg-secondary">
+                    <td className="px-4 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedStocks.has(stock.stock_code)}
+                        onChange={() => toggleStockSelection(stock.stock_code)}
+                        className="w-4 h-4"
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-sm">{stock.stock_code}</td>
+                    <td className="px-4 py-2 text-sm font-medium">{stock.stock_name}</td>
+                    <td className="px-4 py-2 text-sm">{stock.industry}</td>
+                    <td className="px-4 py-2 text-sm">{stock.market_type || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-                {/* 종목 코드 */}
-                <div className="flex items-center text-text-body">
-                  {stock.code}
-                </div>
-
-                {/* 전일 종가 */}
-                <div className="flex items-center justify-end text-text-body">
-                  {stock.price}
-                </div>
-
-                {/* 시장 등락률 */}
-                <div
-                  className={`flex items-center justify-end font-semibold ${isNegative ? "text-accent-primary" : "text-brand-primary"
-                    }`}
-                >
-                  {stock.change}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {/* 선택된 개별 종목 표시 */}
+        {selectedStocks.size > 0 && (
+          <div className="mt-4 p-4 bg-bg-secondary rounded-lg">
+            <h4 className="text-sm font-semibold mb-2">
+              개별 선택된 종목 ({selectedStocks.size}개)
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {Array.from(selectedStocks).map((stockCode) => {
+                const stock = searchResults.find((s) => s.stock_code === stockCode);
+                return (
+                  <span
+                    key={stockCode}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-accent-primary/10 text-accent-primary rounded-full text-sm"
+                  >
+                    {stock?.stock_name || stockCode}
+                    <button
+                      onClick={() => toggleStockSelection(stockCode)}
+                      className="hover:text-accent-secondary"
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 에러 메시지 */}
@@ -476,14 +338,4 @@ export default function TargetSelectionTab() {
       </div>
     </div>
   );
-
-  if (isLoadingThemes) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-text-body">데이터를 불러오는 중...</div>
-      </div>
-    );
-  }
-
-  return mainContent;
 }

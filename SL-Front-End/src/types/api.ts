@@ -85,6 +85,9 @@ export interface BacktestRunRequest {
     selected_universes: string[];// 선택한 유니버스 코드 목록 e.g. ["KOSPI_LARGE", "KOSPI_MID"]
     selected_themes: string[]; // 선택한 테마 ID/코드 목록
     selected_stocks: string[]; // 개별로 지정한 종목 코드 목록 e.g. ["005930", "207940"]
+    // UI 전용 필드 (백엔드 요청에는 포함되지 않음)
+    selected_stock_count?: number; // 선택된 종목 수
+    total_stock_count?: number; // 전체 종목 수
   };
 }
 

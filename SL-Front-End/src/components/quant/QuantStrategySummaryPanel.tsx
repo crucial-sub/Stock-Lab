@@ -34,6 +34,9 @@ export default function QuantStrategySummaryPanel({
     "buy" | "sell" | "target"
   >(activeTab);
 
+  // 클라이언트 전용 마운트 상태
+  const [isMounted, setIsMounted] = useState(false);
+
   // store에서 필요한 값들 가져오기
   const {
     is_day_or_month,
@@ -57,6 +60,11 @@ export default function QuantStrategySummaryPanel({
     condition_sell,
     trade_targets,
   } = useBacktestConfigStore();
+
+  // 클라이언트 마운트 감지
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // 탭 동기화
   useEffect(() => {
@@ -160,11 +168,11 @@ export default function QuantStrategySummaryPanel({
                     />
                     <SummaryItem
                       label="투자 시작일"
-                      value={`${start_date.slice(0, 4)}.${start_date.slice(4, 6)}.${start_date.slice(6, 8)}`}
+                      value={isMounted ? `${start_date.slice(0, 4)}.${start_date.slice(4, 6)}.${start_date.slice(6, 8)}` : ""}
                     />
                     <SummaryItem
                       label="투자 종료일"
-                      value={`${end_date.slice(0, 4)}.${end_date.slice(4, 6)}.${end_date.slice(6, 8)}`}
+                      value={isMounted ? `${end_date.slice(0, 4)}.${end_date.slice(4, 6)}.${end_date.slice(6, 8)}` : ""}
                     />
                     <SummaryItem
                       label="수수료율"
@@ -181,10 +189,23 @@ export default function QuantStrategySummaryPanel({
                 <div className="space-y-4">
                   <h3 className="text-base font-bold text-accent-primary">매수 조건</h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <SummaryItem
-                      label="매수 조건식"
-                      value={buy_conditions.length > 0 ? buy_conditions.map(c => c.name).join(", ") : "미설정"}
-                    />
+                    <div>
+                      <div className="text-xs mb-1 text-text-muted">매수 조건식</div>
+                      <div className="text-sm text-text-body">
+                        {buy_conditions.length > 0 ? (
+                          <div className="space-y-1">
+                            {buy_conditions.map((c, idx) => (
+                              <div key={idx} className="flex gap-2">
+                                <span className="font-semibold">{c.name}</span>
+                                <span>{c.exp_left_side}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          "미설정"
+                        )}
+                      </div>
+                    </div>
                     <SummaryItem
                       label="논리 조건식"
                       value={buy_logic || "미설정"}
@@ -234,7 +255,7 @@ export default function QuantStrategySummaryPanel({
                     <div className="col-span-2">
                       <SummaryItem
                         label="매수 가격 기준"
-                        value={`${buy_price_basis} 기준${buy_price_offset !== 0 ? `, ${buy_price_offset > 0 ? "+" : ""}${buy_price_offset}%` : ""}`}
+                        value={`${buy_price_basis} 기준, ${buy_price_offset > 0 ? "+" : ""}${buy_price_offset}%`}
                       />
                     </div>
                   </div>
@@ -287,7 +308,7 @@ export default function QuantStrategySummaryPanel({
                       <SummaryItem
                         label="매도 가격 기준"
                         value={hold_days
-                          ? `${hold_days.sell_price_basis} 기준${hold_days.sell_price_offset !== 0 ? `, ${hold_days.sell_price_offset > 0 ? "+" : ""}${hold_days.sell_price_offset}%` : ""}`
+                          ? `${hold_days.sell_price_basis} 기준, ${hold_days.sell_price_offset > 0 ? "+" : ""}${hold_days.sell_price_offset}%`
                           : "미설정"}
                         disabled={!hold_days}
                       />
@@ -301,13 +322,25 @@ export default function QuantStrategySummaryPanel({
                     조건 매도
                   </h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <SummaryItem
-                      label="매도 조건식"
-                      value={condition_sell && condition_sell.sell_conditions.length > 0
-                        ? condition_sell.sell_conditions.map(c => c.name).join(", ")
-                        : "미설정"}
-                      disabled={!condition_sell}
-                    />
+                    <div>
+                      <div className={`text-xs mb-1 ${!condition_sell ? "text-text-muted" : "text-text-muted"}`}>
+                        매도 조건식
+                      </div>
+                      <div className={`text-sm ${!condition_sell ? "text-text-muted" : "text-text-body"}`}>
+                        {condition_sell && condition_sell.sell_conditions.length > 0 ? (
+                          <div className="space-y-1">
+                            {condition_sell.sell_conditions.map((c, idx) => (
+                              <div key={idx} className="flex gap-2">
+                                <span className="font-semibold">{c.name}</span>
+                                <span>{c.exp_left_side}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          "미설정"
+                        )}
+                      </div>
+                    </div>
                     <SummaryItem
                       label="논리 조건식"
                       value={condition_sell?.sell_logic || "미설정"}
@@ -317,7 +350,7 @@ export default function QuantStrategySummaryPanel({
                       <SummaryItem
                         label="매도 가격 기준"
                         value={condition_sell
-                          ? `${condition_sell.sell_price_basis} 기준${condition_sell.sell_price_offset !== 0 ? `, ${condition_sell.sell_price_offset > 0 ? "+" : ""}${condition_sell.sell_price_offset}%` : ""}`
+                          ? `${condition_sell.sell_price_basis} 기준, ${condition_sell.sell_price_offset > 0 ? "+" : ""}${condition_sell.sell_price_offset}%`
                           : "미설정"}
                         disabled={!condition_sell}
                       />
@@ -332,6 +365,19 @@ export default function QuantStrategySummaryPanel({
                 {/* 매매 대상 */}
                 <div className="space-y-4">
                   <h3 className="text-base font-bold text-brand-primary">매매 대상</h3>
+
+                  {/* 종목 개수 표시 */}
+                  {trade_targets.total_stock_count !== undefined && (
+                    <div className="bg-bg-secondary p-3 rounded-lg">
+                      <span className="text-sm font-semibold text-text-strong">
+                        선택된 종목:
+                      </span>
+                      <span className="ml-2 text-sm font-bold text-accent-primary">
+                        {trade_targets.selected_stock_count || 0} 종목 / {trade_targets.total_stock_count} 종목
+                      </span>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <div>
                       <div className="text-xs text-text-muted mb-2">유니버스</div>
@@ -346,7 +392,7 @@ export default function QuantStrategySummaryPanel({
                       )}
                     </div>
                     <div>
-                      <div className="text-xs text-text-muted mb-2">테마</div>
+                      <div className="text-xs text-text-muted mb-2">테마 ({trade_targets.selected_themes.length}개 산업)</div>
                       {trade_targets.selected_themes.length > 0 ? (
                         <div className="grid grid-cols-3 gap-2">
                           {trade_targets.selected_themes.map((theme, index) => (
@@ -360,7 +406,7 @@ export default function QuantStrategySummaryPanel({
                       )}
                     </div>
                     <div>
-                      <div className="text-xs text-text-muted mb-2">개별 종목</div>
+                      <div className="text-xs text-text-muted mb-2">개별 종목 ({trade_targets.selected_stocks.length}개)</div>
                       {trade_targets.selected_stocks.length > 0 ? (
                         <ul className="list-disc list-inside text-sm text-text-body space-y-1">
                           {trade_targets.selected_stocks.map((stock, index) => (

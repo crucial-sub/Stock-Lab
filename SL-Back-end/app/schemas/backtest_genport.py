@@ -162,12 +162,16 @@ class BacktestCondition(BaseModel):
     # 논리식용 필드 (선택적)
     id: Optional[str] = Field(None, description="조건 ID (논리식 사용 시: A, B, C 등)")
 
-    @model_validator(mode='after')
-    def validate_value_type(self):
+    @field_validator('value')
+    @classmethod
+    def validate_value_type(cls, v, info):
         """연산자에 따른 값 타입 검증"""
-        if self.operator == 'BETWEEN' and not isinstance(self.value, list):
-            raise ValueError("BETWEEN operator requires a list of two values")
-        return self
+        # info.data로 다른 필드 접근
+        if 'operator' in info.data:
+            op = info.data['operator']
+            if op == 'BETWEEN' and not isinstance(v, list):
+                raise ValueError("BETWEEN operator requires a list of two values")
+        return v
 
 
 class BacktestConditionExpression(BaseModel):
@@ -220,6 +224,10 @@ class BacktestCreateRequest(BaseModel):
     )
 
     sell_conditions: List[BacktestCondition] = Field(..., description="매도 조건")
+    condition_sell: Optional[Dict[str, Any]] = Field(
+        None,
+        description="조건 매도 (논리식 구조)"
+    )
 
     # 백테스트 설정
     start_date: date = Field(..., description="시작일")
@@ -254,6 +262,7 @@ class BacktestResultGenPort(BaseModel):
     settings: BacktestSettings
     buy_conditions: List[BacktestCondition]
     sell_conditions: List[BacktestCondition]
+    condition_sell: Optional[Dict[str, Any]]
 
     # 통계 요약
     statistics: BacktestStatistics
@@ -334,6 +343,7 @@ class BacktestCreateRequest(BaseModel):
     """백테스트 생성 요청"""
     buy_conditions: List[BacktestCondition] = Field(..., description="매수 조건 목록")
     sell_conditions: List[BacktestCondition] = Field(..., description="매도 조건 목록")
+    condition_sell: Optional[Dict[str, Any]] = Field(None, description="조건 매도 상세")
     start_date: date = Field(..., description="백테스트 시작일")
     end_date: date = Field(..., description="백테스트 종료일")
     initial_capital: Decimal = Field(Decimal("100000000"), description="초기 자본금")

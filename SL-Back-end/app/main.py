@@ -17,6 +17,7 @@ from app.core.cache import cache
 
 from app.api.routes import backtest, auth, company_info, strategy, market_quote, user_stock
 from app.api.v1.endpoints import backtest_genport
+from app.api.v1 import industries
 
 settings = get_settings()
 
@@ -169,6 +170,12 @@ app.include_router(
     company_info.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Company Info"]
+)
+
+app.include_router(
+    industries.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Industries"]
 )
 
 app.include_router(

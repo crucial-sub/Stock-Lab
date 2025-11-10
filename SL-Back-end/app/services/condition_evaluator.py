@@ -3,12 +3,13 @@
 논리식 파싱 및 평가 로직
 """
 import ast
+import logging
 import operator
-from typing import Dict, List, Any, Union, Optional
-from decimal import Decimal
+from typing import Dict, List, Any, Union, Optional, Tuple
 import pandas as pd
 import re
 from dataclasses import dataclass
+from datetime import date
 
 
 @dataclass
@@ -91,6 +92,28 @@ class ConditionEvaluator:
 
     def __init__(self):
         self.parser = LogicalExpressionParser()
+        self.logger = logging.getLogger(__name__)
+
+    @staticmethod
+    def _normalize_factor_key(name: Optional[str]) -> Optional[str]:
+        if not name:
+            return None
+        return name.replace("{", "").replace("}", "").strip()
+
+    def _get_stock_slice(
+        self,
+        factor_data: pd.DataFrame,
+        stock_code: str,
+        trading_date: Union[pd.Timestamp, str]
+    ) -> pd.DataFrame:
+        trading_ts = pd.Timestamp(trading_date)
+        date_col = factor_data['date']
+        if not isinstance(date_col.iloc[0], pd.Timestamp):
+            date_col = pd.to_datetime(date_col)
+        mask = (factor_data['stock_code'] == stock_code) & (date_col == trading_ts)
+        if not mask.any():
+            return pd.DataFrame()
+        return factor_data.loc[mask].head(1)
 
     def evaluate_factor_condition(
         self,
@@ -109,17 +132,15 @@ class ConditionEvaluator:
         Returns:
             ConditionResult
         """
-        factor_name = condition['factor']
+        factor_name = condition.get('factor')
+        factor_key = self._normalize_factor_key(factor_name)
         op = condition['operator']
         threshold = condition['value']
+        value_type = condition.get('value_type', 'VALUE').upper()
 
         # 팩터 값 추출
         try:
-            trading_ts = pd.Timestamp(trading_date)
-
-            stock_mask = (factor_data['stock_code'] == stock_code)
-            date_mask = (pd.to_datetime(factor_data['date']) == trading_ts)
-            stock_data = factor_data[stock_mask & date_mask]
+            stock_data = self._get_stock_slice(factor_data, stock_code, trading_date)
 
             if stock_data.empty:
                 return ConditionResult(
@@ -130,22 +151,26 @@ class ConditionEvaluator:
                     operator=op
                 )
 
-            # 팩터 값 가져오기
-            if factor_name in stock_data.columns:
-                factor_value = float(stock_data[factor_name].iloc[0])
-            else:
-                # 랭킹 컬럼 확인
-                rank_col = f"{factor_name}_RANK"
-                if rank_col in stock_data.columns:
-                    factor_value = float(stock_data[rank_col].iloc[0])
+            factor_value = None
+            if factor_key:
+                if value_type == 'RANK':
+                    rank_col = f"{factor_key}_RANK"
+                    if rank_col in stock_data.columns:
+                        factor_value = float(stock_data[rank_col].iloc[0])
                 else:
-                    return ConditionResult(
-                        condition_id=condition.get('id', ''),
-                        result=False,
-                        factor_value=None,
-                        threshold_value=threshold,
-                        operator=op
-                    )
+                    if factor_key in stock_data.columns:
+                        factor_value = float(stock_data[factor_key].iloc[0])
+                    elif f"{factor_key}_RANK" in stock_data.columns:
+                        factor_value = float(stock_data[f"{factor_key}_RANK"].iloc[0])
+
+            if factor_value is None or pd.isna(factor_value):
+                return ConditionResult(
+                    condition_id=condition.get('id', ''),
+                    result=False,
+                    factor_value=None,
+                    threshold_value=threshold,
+                    operator=op
+                )
 
             # 조건 평가
             result = self._evaluate_operator(factor_value, op, threshold)
@@ -204,7 +229,7 @@ class ConditionEvaluator:
         stock_codes: List[str],
         buy_expression: Dict[str, Any],
         trading_date: pd.Timestamp
-    ) -> List[str]:
+    ) -> Tuple[List[str], Dict[str, Dict[str, ConditionResult]]]:
         """
         매수 조건 평가 (논리식 기반)
         Args:
@@ -228,27 +253,66 @@ class ConditionEvaluator:
         # 조건 ID -> 조건 정의 매핑
         condition_map = {c['id']: c for c in conditions}
 
-        selected_stocks = []
+        selected_stocks: List[str] = []
+        evaluation_details: Dict[str, Dict[str, ConditionResult]] = {}
 
         for stock_code in stock_codes:
-            # 각 조건 평가
-            condition_results = {}
+            condition_results: Dict[str, ConditionResult] = {}
+            bool_context: Dict[str, bool] = {}
 
             for cond_id, condition in condition_map.items():
                 result = self.evaluate_factor_condition(
                     factor_data, stock_code, condition, trading_date
                 )
-                condition_results[cond_id] = result.result
+                condition_results[cond_id] = result
+                bool_context[cond_id] = result.result
 
-            # 논리식 평가
             try:
-                if self.parser.evaluate(expression, condition_results):
+                if self.parser.evaluate(expression, bool_context):
                     selected_stocks.append(stock_code)
-            except Exception as e:
-                print(f"Error evaluating expression for {stock_code}: {e}")
-                continue
+                    evaluation_details[stock_code] = condition_results
+            except Exception as exc:
+                self.logger.warning("Expression eval failed for %s: %s", stock_code, exc)
 
-        return selected_stocks
+        return selected_stocks, evaluation_details
+
+    def evaluate_condition_group(
+        self,
+        factor_data: pd.DataFrame,
+        stock_code: str,
+        conditions: List[Dict[str, Any]],
+        trading_date: pd.Timestamp
+    ) -> Tuple[bool, float, Dict[str, ConditionResult]]:
+        """단순 조건 리스트 평가 (AND 로직)"""
+        condition_results: Dict[str, ConditionResult] = {}
+        total_score = 0.0
+        passed_all = True
+
+        for condition in conditions:
+            cond_id = condition.get('id') or condition.get('name') or condition.get('factor')
+            result = self.evaluate_factor_condition(
+                factor_data, stock_code, condition, trading_date
+            )
+            condition_results[cond_id] = result
+            if result.result:
+                total_score += float(condition.get('weight', 1.0) or 1.0)
+            else:
+                passed_all = False
+
+        return passed_all, total_score, condition_results
+
+    def calculate_condition_score(
+        self,
+        conditions: List[Dict[str, Any]],
+        condition_results: Dict[str, ConditionResult]
+    ) -> float:
+        score = 0.0
+        for condition in conditions:
+            cond_id = condition.get('id') or condition.get('name') or condition.get('factor')
+            result = condition_results.get(cond_id)
+            if result and result.result:
+                score += float(condition.get('weight', 1.0) or 1.0)
+        return score
 
     def rank_stocks_by_factor_score(
         self,
@@ -268,24 +332,31 @@ class ConditionEvaluator:
             List[tuple]: [(stock_code, score), ...] 정렬된 리스트
         """
         scores = []
+        normalized_weights = {
+            self._normalize_factor_key(factor): float(weight)
+            for factor, weight in factor_weights.items()
+        }
 
         for stock_code in stock_codes:
-            trading_ts = pd.Timestamp(trading_date)
-            stock_mask = (factor_data['stock_code'] == stock_code)
-            date_mask = (pd.to_datetime(factor_data['date']) == trading_ts)
-            stock_data = factor_data[stock_mask & date_mask]
-
+            stock_data = self._get_stock_slice(factor_data, stock_code, trading_date)
             if stock_data.empty:
                 continue
 
-            # 팩터 스코어 계산
-            total_score = 0
-            for factor, weight in factor_weights.items():
+            total_score = 0.0
+            for factor, weight in normalized_weights.items():
+                if not factor:
+                    continue
+
+                value = None
                 if factor in stock_data.columns:
                     value = stock_data[factor].iloc[0]
-                    if pd.notna(value):
-                        # 정규화 (선택적)
-                        total_score += float(value) * weight
+                elif f"{factor}_RANK" in stock_data.columns:
+                    value = stock_data[f"{factor}_RANK"].iloc[0]
+
+                if value is None or pd.isna(value):
+                    continue
+
+                total_score += float(value) * weight
 
             scores.append((stock_code, total_score))
 

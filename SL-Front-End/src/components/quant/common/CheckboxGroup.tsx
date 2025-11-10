@@ -16,6 +16,7 @@ interface CheckboxGroupProps {
   selectedIds: Set<string>;
   onToggleItem: (id: string) => void;
   onToggleAll: () => void;
+  isAllSelected?: boolean; // 외부에서 전달받을 수 있도록 추가
   columns?: 2 | 3 | 4 | 5 | 6;
   className?: string;
 }
@@ -26,10 +27,14 @@ export function CheckboxGroup({
   selectedIds,
   onToggleItem,
   onToggleAll,
+  isAllSelected: isAllSelectedProp,
   columns = 6,
   className = "",
 }: CheckboxGroupProps) {
-  const isAllSelected = items.every((item) => selectedIds.has(item.id));
+  // prop이 전달되면 사용하고, 아니면 내부에서 계산
+  const isAllSelected = isAllSelectedProp !== undefined
+    ? isAllSelectedProp
+    : items.length > 0 && items.every((item) => selectedIds.has(item.id));
 
   const gridColsClass = {
     2: "grid-cols-2",

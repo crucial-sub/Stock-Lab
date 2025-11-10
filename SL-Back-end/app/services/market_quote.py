@@ -79,12 +79,7 @@ class MarketQuoteService:
                 StockPrice.trade_date
             )
             .join(StockPrice, Company.company_id == StockPrice.company_id)
-            .where(
-                and_(
-                    Company.is_active == 1,
-                    StockPrice.trade_date == latest_trade_date
-                )
-            )
+            .where(StockPrice.trade_date == latest_trade_date)
             .order_by(order_func(sort_column))
             .offset(offset)
             .limit(page_size + 1)  # has_next 판단을 위해 1개 더 조회
@@ -103,12 +98,7 @@ class MarketQuoteService:
             select(func.count())
             .select_from(Company)
             .join(StockPrice, Company.company_id == StockPrice.company_id)
-            .where(
-                and_(
-                    Company.is_active == 1,
-                    StockPrice.trade_date == latest_trade_date
-                )
-            )
+            .where(StockPrice.trade_date == latest_trade_date)
         )
         count_result = await self.db.execute(count_query)
         total = count_result.scalar()

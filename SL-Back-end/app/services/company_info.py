@@ -157,13 +157,10 @@ class CompanyInfoService:
         search_query = (
             select(Company)
             .where(
-                and_(
-                    Company.is_active == 1,
-                    or_(
-                        Company.company_name.like(f"%{query}%"),
-                        Company.stock_name.like(f"%{query}%"),
-                        Company.stock_code.like(f"%{query}%")
-                    )
+                or_(
+                    Company.company_name.like(f"%{query}%"),
+                    Company.stock_name.like(f"%{query}%"),
+                    Company.stock_code.like(f"%{query}%")
                 )
             )
             .limit(limit)

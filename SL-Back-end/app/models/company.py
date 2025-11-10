@@ -42,7 +42,6 @@ class Company(Base):
     industry = Column(String(100), nullable=True, comment="업종")
     ceo_name = Column(String(100), nullable=True, comment="대표이사명")
     listed_date = Column(Date, nullable=True, comment="상장일")
-    is_active = Column(Integer, default=1, comment="활성 상태 (1:상장중, 0:상장폐지)")
 
     # 모멘텀 점수(매일 업데이트), 펀더멘탈 점수(분기별 업데이트)
     momentum_score = Column(Float, nullable=True, comment="0~100 모멘텀 점수")
@@ -59,7 +58,6 @@ class Company(Base):
 
     # Indexes (복합 인덱스)
     __table_args__ = (
-        Index('idx_company_active_market', 'is_active', 'market_type'),
         Index('idx_company_industry', 'industry'),
         {"comment": "기업 마스터 테이블 - 모든 데이터의 중앙 허브"}
     )

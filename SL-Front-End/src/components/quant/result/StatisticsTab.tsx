@@ -14,6 +14,7 @@ import {
   Legend,
   PieLabelRenderProps,
 } from "recharts";
+import { Title } from "@/components/common/Title";
 import type { BacktestResult } from "@/types/api";
 
 /**
@@ -47,7 +48,9 @@ export function StatisticsTab({ statistics }: StatisticsTabProps) {
 
   return (
     <div className="bg-bg-surface rounded-lg shadow-card p-6">
-      <h3 className="text-lg font-bold text-text-strong mb-6">매매 결과 통계</h3>
+      <div className="mb-6">
+        <Title>매매 결과 통계</Title>
+      </div>
 
       {/* 통계 지표 그리드 */}
       <div className="grid grid-cols-3 gap-8 mb-12">

@@ -1,3 +1,5 @@
+import { Title } from "@/components/common";
+
 /**
  * 매매 대상 헤더 섹션
  * - 제목 및 선택된 종목 수 표시
@@ -13,9 +15,7 @@ export function TradeTargetHeader({
 }: TradeTargetHeaderProps) {
   return (
     <div>
-      <h2 className="text-2xl font-bold text-text-strong mb-2">
-        매매 대상 설정
-      </h2>
+      <Title>매매 대상 설정</Title>
       <p className="text-sm text-text-body">
         매매할 대상을 선택합니다. 여러 대상을 한번에길 있는 종목을 배제할 수도
         있고 종목별로 배제할 수도 있습니다.

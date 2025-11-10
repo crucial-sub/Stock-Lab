@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
+import { Title } from "@/components/common/Title";
+
 /**
  * 퀀트 전략 목록 페이지 (메인)
  * Figma 디자인: 01.quant_page.png
@@ -39,9 +41,7 @@ export default function QuantPage() {
     <div className="min-h-screen bg-background p-6">
       {/* 페이지 제목 */}
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-text-strong">
-          내가 만든 전략 목록
-        </h1>
+        <Title>내가 만든 전략 목록</Title>
         <Link
           href="/quant/new"
           className="bg-accent-danger text-white px-6 py-2.5 rounded-lg font-medium hover:bg-accent-danger/90 transition-colors"

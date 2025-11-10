@@ -12,10 +12,11 @@
 
 **Endpoint:** `GET /api/v1/company/{stock_code}/info`
 
-**설명:** 종목의 모든 재무 정보를 한 번의 API 호출로 가져옵니다.
+**설명:** 종목의 모든 재무/시세 정보를 한 번의 API 호출로 가져옵니다. `user_id` 쿼리를 추가하면 관심종목 여부를 판단하고 최근 본 종목에 기록합니다.
 
 **Parameters:**
 - `stock_code` (string, required): 종목 코드 (6자리, 예: `005930`)
+- `user_id` (UUID, optional): 사용자 ID. 전달 시 `basicInfo.isFavorite` 가 활성화되고 최근 본 종목에 저장됩니다.
 
 **Response:**
 
@@ -26,11 +27,27 @@
     "stockCode": "005930",
     "stockName": "삼성전자",
     "marketType": "KOSPI",
+    "currentPrice": 71200,
+    "previousClose": 70100,
+    "vsPrevious": 1100,
+    "fluctuationRate": 1.57,
+    "tradeDate": "2024-06-10",
+    "changevs1d": 1100,
+    "changevs1w": 2500,
+    "changevs1m": 4200,
+    "changevs2m": 6500,
+    "changeRate1d": 1.57,
+    "changeRate1w": 3.64,
+    "changeRate1m": 6.27,
+    "changeRate2m": 10.05,
     "marketCap": 500000000000000,
-    "ceoName": "한종희",
     "listedShares": 5969782550,
+    "ceoName": "한종희",
     "listedDate": "1975-06-11",
-    "industry": "전자부품 제조업"
+    "industry": "전자부품 제조업",
+    "momentumScore": 78,
+    "fundamentalScore": 82,
+    "isFavorite": true
   },
   "investmentIndicators": {
     "per": 15.5,
@@ -148,11 +165,21 @@
 | stockCode | string | 종목 코드 (6자리) |
 | stockName | string | 종목 약칭 |
 | marketType | string | 시장 구분 (KOSPI/KOSDAQ/KONEX) |
-| marketCap | integer | 시가총액 (원) |
-| ceoName | string | 대표이사명 |
-| listedShares | integer | 발행 주식 수 (주) |
-| listedDate | string | 상장일 (YYYY-MM-DD) |
-| industry | string | 업종 |
+| currentPrice | integer \| null | 최신 종가 (원) |
+| previousClose | integer \| null | 전일 종가 (원) |
+| vsPrevious | integer \| null | 전일 대비 증감액 (원) |
+| fluctuationRate | float \| null | 전일 대비 변동률 (%) |
+| tradeDate | string \| null | 기준 거래일 (YYYY-MM-DD) |
+| changevs1d/1w/1m/2m | integer \| null | 기간별 절대 변화값 (원), 데이터 없으면 `null` |
+| changeRate1d/1w/1m/2m | float \| null | 기간별 변동률 (%) |
+| marketCap | integer \| null | 시가총액 (원) |
+| listedShares | integer \| null | 발행 주식 수 (주) |
+| ceoName | string \| null | 대표이사명 |
+| listedDate | string \| null | 상장일 (YYYY-MM-DD) |
+| industry | string \| null | 업종 |
+| momentumScore | float \| null | 모멘텀 점수 (0~100) |
+| fundamentalScore | float \| null | 펀더멘털 점수 (0~100) |
+| isFavorite | boolean | 사용자 관심종목 여부 (`user_id` 전달 시 계산) |
 
 ### 2. 투자지표 (investmentIndicators)
 
@@ -222,6 +249,51 @@
 | low | integer | 저가 (원) |
 | close | integer | 종가 (원) |
 | volume | integer | 거래량 (주) |
+
+- 서비스는 기본적으로 5년 치 일별 데이터를 오름차순으로 제공합니다. 필요한 기간(예: 1Y/3Y)만 필터링해서 사용하세요.
+- 거래량/가격이 없는 날은 존재하지 않으므로 별도 결측 처리 없이 바로 차트에 바인딩할 수 있습니다.
+
+---
+
+## Next.js 연동 가이드
+
+### 1. App Router 구조
+- `app/(stocks)/[stockCode]/page.tsx` 와 같이 동적 세그먼트를 사용하면 종목별 페이지를 생성하기 쉽습니다.
+- 서버 컴포넌트에서 `fetch` 로 API를 호출하면 첫 화면을 SSR 로 렌더링할 수 있어 SEO 와 성능이 좋아집니다.
+
+```tsx
+// app/(stocks)/[stockCode]/page.tsx
+import { cookies } from 'next/headers';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+async function getCompanyInfo(stockCode: string) {
+  const userId = cookies().get('user_id')?.value;
+  const url = new URL(`${API_BASE}/company/${stockCode}/info`);
+  if (userId) url.searchParams.set('user_id', userId);
+
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('종목 정보를 불러오지 못했습니다.');
+  return res.json();
+}
+
+export default async function CompanyPage({ params }: { params: { stockCode: string } }) {
+  const data = await getCompanyInfo(params.stockCode);
+  return <CompanyInfoContainer data={data} />;
+}
+```
+
+### 2. 클라이언트 컴포넌트 분리
+- 차트, 탭, 모달 등 상호작용이 많은 컴포넌트는 `use client` 선언 후 서버 컴포넌트에서 내려준 데이터를 props 로 전달하세요.
+- TanStack Query 를 사용한다면 `app/providers.tsx` 에 QueryClientProvider 를 선언한 뒤 각 클라이언트 컴포넌트에서 재검증할 수 있습니다.
+
+### 3. 환경 변수
+- `.env.local` 에 `NEXT_PUBLIC_API_URL` 을 정의하면 서버·클라이언트 모두 동일한 값을 사용합니다.
+- Vercel 배포 시 환경 변수에 동일 키를 등록하세요.
+
+### 4. 로딩/에러 상태
+- `app/(stocks)/[stockCode]/loading.tsx` 를 두어 첫 요청 동안 Skeleton 을 출력하고, `error.tsx` 에서는 API 에러 메시지를 사용자 친화적으로 노출합니다.
+- 404 종목에 대해서는 `not-found.tsx` 를 구성해 “종목을 찾을 수 없습니다” 등의 문구를 보여주세요.
 
 ---
 

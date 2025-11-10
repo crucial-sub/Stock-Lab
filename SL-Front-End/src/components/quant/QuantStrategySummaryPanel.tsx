@@ -181,10 +181,23 @@ export default function QuantStrategySummaryPanel({
                 <div className="space-y-4">
                   <h3 className="text-base font-bold text-accent-primary">매수 조건</h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <SummaryItem
-                      label="매수 조건식"
-                      value={buy_conditions.length > 0 ? buy_conditions.map(c => c.name).join(", ") : "미설정"}
-                    />
+                    <div>
+                      <div className="text-xs mb-1 text-text-muted">매수 조건식</div>
+                      <div className="text-sm text-text-body">
+                        {buy_conditions.length > 0 ? (
+                          <div className="space-y-1">
+                            {buy_conditions.map((c, idx) => (
+                              <div key={idx} className="flex gap-2">
+                                <span className="font-semibold">{c.name}</span>
+                                <span>{c.exp_left_side}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          "미설정"
+                        )}
+                      </div>
+                    </div>
                     <SummaryItem
                       label="논리 조건식"
                       value={buy_logic || "미설정"}
@@ -234,7 +247,7 @@ export default function QuantStrategySummaryPanel({
                     <div className="col-span-2">
                       <SummaryItem
                         label="매수 가격 기준"
-                        value={`${buy_price_basis} 기준${buy_price_offset !== 0 ? `, ${buy_price_offset > 0 ? "+" : ""}${buy_price_offset}%` : ""}`}
+                        value={`${buy_price_basis} 기준, ${buy_price_offset > 0 ? "+" : ""}${buy_price_offset}%`}
                       />
                     </div>
                   </div>
@@ -287,7 +300,7 @@ export default function QuantStrategySummaryPanel({
                       <SummaryItem
                         label="매도 가격 기준"
                         value={hold_days
-                          ? `${hold_days.sell_price_basis} 기준${hold_days.sell_price_offset !== 0 ? `, ${hold_days.sell_price_offset > 0 ? "+" : ""}${hold_days.sell_price_offset}%` : ""}`
+                          ? `${hold_days.sell_price_basis} 기준, ${hold_days.sell_price_offset > 0 ? "+" : ""}${hold_days.sell_price_offset}%`
                           : "미설정"}
                         disabled={!hold_days}
                       />
@@ -301,13 +314,25 @@ export default function QuantStrategySummaryPanel({
                     조건 매도
                   </h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <SummaryItem
-                      label="매도 조건식"
-                      value={condition_sell && condition_sell.sell_conditions.length > 0
-                        ? condition_sell.sell_conditions.map(c => c.name).join(", ")
-                        : "미설정"}
-                      disabled={!condition_sell}
-                    />
+                    <div>
+                      <div className={`text-xs mb-1 ${!condition_sell ? "text-text-muted" : "text-text-muted"}`}>
+                        매도 조건식
+                      </div>
+                      <div className={`text-sm ${!condition_sell ? "text-text-muted" : "text-text-body"}`}>
+                        {condition_sell && condition_sell.sell_conditions.length > 0 ? (
+                          <div className="space-y-1">
+                            {condition_sell.sell_conditions.map((c, idx) => (
+                              <div key={idx} className="flex gap-2">
+                                <span className="font-semibold">{c.name}</span>
+                                <span>{c.exp_left_side}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          "미설정"
+                        )}
+                      </div>
+                    </div>
                     <SummaryItem
                       label="논리 조건식"
                       value={condition_sell?.sell_logic || "미설정"}
@@ -317,7 +342,7 @@ export default function QuantStrategySummaryPanel({
                       <SummaryItem
                         label="매도 가격 기준"
                         value={condition_sell
-                          ? `${condition_sell.sell_price_basis} 기준${condition_sell.sell_price_offset !== 0 ? `, ${condition_sell.sell_price_offset > 0 ? "+" : ""}${condition_sell.sell_price_offset}%` : ""}`
+                          ? `${condition_sell.sell_price_basis} 기준, ${condition_sell.sell_price_offset > 0 ? "+" : ""}${condition_sell.sell_price_offset}%`
                           : "미설정"}
                         disabled={!condition_sell}
                       />

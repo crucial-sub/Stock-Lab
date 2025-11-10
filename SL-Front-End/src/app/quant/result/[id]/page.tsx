@@ -1,7 +1,7 @@
 /**
- * 백테스트 결과 페이지 - 서버 컴포넌트
- * - 백테스트 결과를 서버에서 미리 불러옵니다 (SSR)
- * - React Query의 prefetch와 dehydrate를 사용하여 초기 데이터를 전달합니다
+ * 백테스트 결과 페이지 - 동적 라우트
+ * - URL: /quant/result/[id]
+ * - 백테스트 ID를 URL 파라미터로 받아옵니다
  */
 
 import { backtestQueryKey } from "@/hooks/useBacktestQuery";
@@ -11,44 +11,36 @@ import {
   dehydrate,
   HydrationBoundary,
 } from "@tanstack/react-query";
-import { QuantResultPageClient } from "./QuantResultPageClient";
+import { QuantResultPageClient } from "../QuantResultPageClient";
 
 /**
  * 백테스트 결과 페이지 Props
  */
 interface QuantResultPageProps {
-  searchParams: Promise<{
-    id?: string;
+  params: Promise<{
+    id: string;
   }>;
 }
 
 /**
  * 백테스트 결과 페이지 (서버 컴포넌트)
- * - URL 쿼리 파라미터에서 백테스트 ID를 받아옵니다
+ * - URL 파라미터에서 백테스트 ID를 받아옵니다
  * - 백테스트 결과를 서버에서 prefetch합니다
  * - 클라이언트 컴포넌트에 hydrated 상태로 데이터를 전달합니다
  */
 export default async function QuantResultPage({
-  searchParams,
+  params,
 }: QuantResultPageProps) {
-  // searchParams를 await하여 해결
-  const resolvedSearchParams = await searchParams;
-  const backtestId = resolvedSearchParams.id;
+  // params를 await하여 해결
+  const resolvedParams = await params;
+  const backtestId = resolvedParams.id;
 
-  // 백테스트 ID가 없으면 에러 페이지 표시
-  if (!backtestId) {
-    return (
-      <div className="min-h-screen bg-bg-app flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-semibold text-text-primary">
-            백테스트 ID가 없습니다
-          </h1>
-          <p className="text-text-secondary">
-            올바른 백테스트 결과 URL을 사용해주세요.
-          </p>
-        </div>
-      </div>
-    );
+  // Mock 모드 체크
+  const isMockMode = backtestId.startsWith("mock");
+
+  // Mock 모드면 prefetch 스킵
+  if (isMockMode) {
+    return <QuantResultPageClient backtestId={backtestId} />;
   }
 
   // 서버용 QueryClient 생성

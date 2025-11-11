@@ -14,8 +14,7 @@ import os
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, company_info, strategy
-from app.api.v1.endpoints import backtest_genport
+from app.api.routes import backtest, auth, company_info, strategy, factors
 from app.api.v1 import industries
 
 settings = get_settings()
@@ -154,12 +153,6 @@ app.include_router(
 )
 
 app.include_router(
-    backtest_genport.router,
-    prefix=f"{settings.API_V1_PREFIX}/backtest",
-    tags=["Stock-Lab Backtest"]
-)
-
-app.include_router(
     strategy.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Strategy"]
@@ -175,6 +168,12 @@ app.include_router(
     industries.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Industries"]
+)
+
+app.include_router(
+    factors.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Factors"]
 )
 
 # Root 엔드포인트

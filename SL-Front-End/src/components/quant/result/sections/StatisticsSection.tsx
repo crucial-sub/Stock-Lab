@@ -20,8 +20,13 @@ export function StatisticsSection({
   periodReturns,
 }: StatisticsSectionProps) {
   const stats = statistics;
-  const totalProfit = initialCapital * (stats.totalReturn / 100);
-  const finalAssets = initialCapital + totalProfit;
+
+  // 실제 데이터 기반 계산
+  const totalProfit = (stats.finalCapital || initialCapital) - initialCapital;
+  const finalAssets = stats.finalCapital || initialCapital;
+
+  // 일 평균 수익률 계산 (총 수익률을 거래일 수로 나눔)
+  const dailyReturn = stats.totalReturn / 252; // 연간 252 거래일 기준
 
   return (
     <div className="bg-bg-surface rounded-lg shadow-card p-6 mb-6">
@@ -34,27 +39,27 @@ export function StatisticsSection({
           <div className="grid grid-cols-4 gap-8 mb-6">
             <StatMetric
               label="일 평균 수익률"
-              value={`${(stats.totalReturn / 365).toFixed(2)}%`}
-              color="text-accent-primary"
-              tooltip="일별 평균 수익률"
+              value={`${dailyReturn.toFixed(3)}%`}
+              color={dailyReturn >= 0 ? "text-accent-primary" : "text-accent-error"}
+              tooltip="일별 평균 수익률 (연간 252 거래일 기준)"
             />
             <StatMetric
               label="누적 수익률"
-              value={`${stats.annualizedReturn.toFixed(2)}%`}
-              color="text-accent-primary"
-              tooltip="연간 수익률"
+              value={`${stats.totalReturn.toFixed(2)}%`}
+              color={stats.totalReturn >= 0 ? "text-accent-primary" : "text-accent-error"}
+              tooltip="전체 기간 누적 수익률"
             />
             <StatMetric
               label="CAGR"
               value={`${stats.annualizedReturn.toFixed(2)}%`}
-              color="text-accent-primary"
+              color={stats.annualizedReturn >= 0 ? "text-accent-primary" : "text-accent-error"}
               tooltip="연평균 복리 수익률"
             />
             <StatMetric
               label="MDD"
-              value={`${stats.maxDrawdown.toFixed(2)}%`}
-              color="text-text-strong"
-              tooltip="최대 낙폭"
+              value={`${Math.abs(stats.maxDrawdown).toFixed(2)}%`}
+              color="text-accent-error"
+              tooltip="최대 낙폭 (Maximum Drawdown)"
             />
           </div>
 
@@ -67,14 +72,14 @@ export function StatisticsSection({
             />
             <StatMetric
               label="총 손익"
-              value={`${totalProfit.toLocaleString()}원`}
-              color="text-accent-primary"
+              value={`${totalProfit >= 0 ? '+' : ''}${Math.round(totalProfit).toLocaleString()}원`}
+              color={totalProfit >= 0 ? "text-accent-primary" : "text-accent-error"}
               size="large"
-              tooltip="총 수익금"
+              tooltip="총 수익금 (최종 자산 - 투자 원금)"
             />
             <StatMetric
               label="현재 총 자산"
-              value={`${finalAssets.toLocaleString()}원`}
+              value={`${Math.round(finalAssets).toLocaleString()}원`}
               size="large"
             />
           </div>

@@ -14,7 +14,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    사용자 요청                                │
-│  POST /api/v1/backtest/genport                              │
+│  POST /api/v1/backtest                                      │
 │  {                                                          │
 │    buy_conditions: [...],                                   │
 │    sell_conditions: [...],                                  │
@@ -33,8 +33,8 @@
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│         2. GenPortBacktestEngine 초기화                      │
-│  engine = GenPortBacktestEngine(db)                        │
+│         2. BacktestEngine 초기화                             │
+│  engine = BacktestEngine(db)                               │ 
 │  - tax_rate 설정 (0.23% 고정)                              │
 │  - commission_rate, slippage를 파라미터로 받음              │
 └─────────────────────────────────────────────────────────────┘
@@ -302,7 +302,7 @@
 │  │   - drawdowns: 낙폭 배열                             │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                                                             │
-│  반환: BacktestResultGenPort 객체 (메모리)                  │
+│  반환: BacktestResult 객체 (메모리)                  │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -369,7 +369,7 @@
 │                                                             │
 │  {                                                          │
 │    "backtest_id": "a3f5c2d8-...",                          │
-│    "backtest_name": "genport_20250109_143022",             │
+│    "backtest_name": "20250109_143022",                     │
 │    "status": "COMPLETED",                                  │
 │    "statistics": {                                         │
 │      "total_return": 15.23,                                │
@@ -537,7 +537,7 @@ holdings = 20개 종목 보유
 
 ### 현재 상태: ❌ 미구현
 ```python
-async def _save_result(self, backtest_id: UUID, result: BacktestResultGenPort):
+async def _save_result(self, backtest_id: UUID, result: BacktestResult):
     """결과 저장 (추후 구현)"""
     # 실제 구현시 데이터베이스에 결과 저장
     logger.info(f"Saving backtest result for {backtest_id}")
@@ -575,7 +575,7 @@ CREATE TABLE backtest_sessions (
 ```python
 session = BacktestSession(
     backtest_id=backtest_id,
-    backtest_name="genport_20250109_143022",
+    backtest_name="20250109_143022",
     status="COMPLETED",
     created_at=datetime.now(),
     completed_at=datetime.now(),

@@ -17,7 +17,7 @@ async def test_integration():
     # 1. Import 테스트
     print("\n1️⃣ Import 테스트...")
     try:
-        from app.services.backtest import BacktestEngineGenPort
+        from app.services.backtest import BacktestEngine
         from app.services.factor_integration import FactorIntegration
         from app.services.factor_calculator_complete import CompleteFactorCalculator
         print("✅ 모든 모듈 import 성공")

@@ -1,6 +1,5 @@
 """
-GenPort 스타일 백테스트 스키마 정의
-스크린샷 기반으로 설계된 응답 모델
+백테스트 스키마 정의
 - 논리식 조건 지원 추가
 - 필수 Enum 타입 추가
 """
@@ -248,8 +247,8 @@ class BacktestCreateRequest(BaseModel):
         return self
 
 
-class BacktestResultGenPort(BaseModel):
-    """GenPort 스타일 백테스트 결과"""
+class BacktestResult(BaseModel):
+    """백테스트 결과"""
 
     # 백테스트 정보
     backtest_id: str = Field(..., description="백테스트 ID")
@@ -297,6 +296,11 @@ class BacktestResultGenPort(BaseModel):
         description="전체 거래 내역"
     )
 
+    # 원시 주문/체결 기록
+    orders: List[Dict[str, Any]] = Field(default_factory=list, description="주문 히스토리")
+    executions: List[Dict[str, Any]] = Field(default_factory=list, description="체결 히스토리")
+    position_history: List[Dict[str, Any]] = Field(default_factory=list, description="포지션 스냅샷")
+
     # 리밸런싱 이력
     rebalance_dates: List[date] = Field(
         default_factory=list,
@@ -337,22 +341,6 @@ class BacktestListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-
-
-class BacktestCreateRequest(BaseModel):
-    """백테스트 생성 요청"""
-    buy_conditions: List[BacktestCondition] = Field(..., description="매수 조건 목록")
-    sell_conditions: List[BacktestCondition] = Field(..., description="매도 조건 목록")
-    condition_sell: Optional[Dict[str, Any]] = Field(None, description="조건 매도 상세")
-    start_date: date = Field(..., description="백테스트 시작일")
-    end_date: date = Field(..., description="백테스트 종료일")
-    initial_capital: Decimal = Field(Decimal("100000000"), description="초기 자본금")
-    rebalance_frequency: str = Field("MONTHLY", description="리밸런싱 주기")
-    max_positions: int = Field(20, ge=1, le=100, description="최대 보유 종목 수")
-    position_sizing: str = Field("EQUAL_WEIGHT", description="포지션 사이징 방법")
-    benchmark: str = Field("KOSPI", description="벤치마크")
-    commission_rate: float = Field(0.00015, ge=0, le=0.01, description="수수료율")
-    slippage: float = Field(0.001, ge=0, le=0.1, description="슬리피지")
 
 
 class FactorInfo(BaseModel):

@@ -16,7 +16,6 @@ from app.core.database import init_db, close_db
 from app.core.cache import cache
 
 from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news
-from app.api.v1.endpoints import backtest_genport
 from app.api.v1 import industries
 
 settings = get_settings()

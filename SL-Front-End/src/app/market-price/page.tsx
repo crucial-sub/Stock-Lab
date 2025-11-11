@@ -7,10 +7,11 @@ import { StockInfoCard } from "@/components/market-price/StockInfoCard";
 import { marketQuoteApi, type SortBy } from "@/lib/api/market-quote";
 
 const marketTabs: { label: string; sortBy: SortBy }[] = [
+  { label: "시가총액 순", sortBy: "market_cap" },
   { label: "체결량 순", sortBy: "volume" },
   { label: "등락률 순", sortBy: "change_rate" },
   { label: "거래 대금 순", sortBy: "trading_value" },
-  { label: "시가총액 순", sortBy: "market_cap" },
+  
 ];
 
 const columnTemplate = "grid grid-cols-[2.6fr,1fr,1fr,1fr,1fr,1fr] gap-4";
@@ -29,7 +30,7 @@ type MarketRow = {
 };
 
 export default function MarketPricePage() {
-  const [selectedTab, setSelectedTab] = useState(marketTabs[3]); // 시가총액 순 기본값
+  const [selectedTab, setSelectedTab] = useState(marketTabs[0]); // 시가총액 순 기본값
   const [rows, setRows] = useState<MarketRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<MarketRow | null>(null);
   const todayLabel = new Date().toLocaleDateString("ko-KR", {

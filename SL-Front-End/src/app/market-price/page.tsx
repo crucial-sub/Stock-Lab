@@ -14,136 +14,25 @@ const marketTabs = [
   "시가총액 순",
 ];
 
-const mockMarketRows = [
-  {
-    rank: 1,  // 순위
-    name: "크래프톤",  // 종목 명
-    code: "002200",  // 종목 코드
-    price: "263,500원", // 전일 종가
-    change: "+5.55%", // 전일 등락률
-    trend: "up" as const, // +, - 여부
-    volume: "304,016주",  // 전일 체결량
-    tradingValue: "439억원",  // 전일 거래대금
-    marketCap: "439억원", // 시총
-    isFavorite: false // 즐겨찾기 여부
-  },
-  {
-    rank: 2,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: true,
-  },
-  {
-    rank: 3,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 4,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 5,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 6,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 7,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 8,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 9,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 10,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-];
-
 const columnTemplate = "grid grid-cols-[2.6fr,1fr,1fr,1fr,1fr,1fr] gap-4";
+
+type MarketRow = {
+  rank: number;
+  name: string;
+  code: string;
+  price: string;
+  change: string;
+  trend: "up" | "down" | "flat";
+  volume: string;
+  tradingValue: string;
+  marketCap: string;
+  isFavorite: boolean;
+};
 
 export default function MarketPricePage() {
   const [selectedTab, setSelectedTab] = useState(marketTabs[0]);
-  const [rows, setRows] = useState(mockMarketRows);
-  const [selectedRow, setSelectedRow] =
-    useState<(typeof mockMarketRows)[number] | null>(null);
+  const [rows, setRows] = useState<MarketRow[]>([]);
+  const [selectedRow, setSelectedRow] = useState<MarketRow | null>(null);
   const todayLabel = new Date().toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
@@ -161,6 +50,8 @@ export default function MarketPricePage() {
           pageSize: 50,
         });
 
+        console.log("API Response:", response);
+
         // API 데이터를 목업 데이터 형식으로 변환
         const formattedRows = response.items.map((item) => ({
           rank: item.rank,
@@ -175,6 +66,7 @@ export default function MarketPricePage() {
           isFavorite: item.isFavorite,
         }));
 
+        console.log("Formatted Rows:", formattedRows);
         setRows(formattedRows);
       } catch (error) {
         console.error("시세 데이터 조회 실패:", error);

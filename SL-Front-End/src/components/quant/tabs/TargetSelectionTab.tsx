@@ -9,6 +9,7 @@
  * - 커스텀 훅으로 비즈니스 로직 분리
  */
 
+import { Title } from "@/components/common";
 import {
   StockCount,
   TradeTargetHeader,
@@ -227,11 +228,11 @@ export default function TargetSelectionTab() {
       </FieldPanel>
 
       {/* 종목 검색 및 테이블 */}
-      <div className="bg-bg-surface rounded-lg shadow-card p-6">
-        <h3 className="text-lg font-semibold mb-4">종목 검색</h3>
+      <FieldPanel conditionType="target">
+        <Title variant="subtitle">종목 검색</Title>
 
         {/* 검색 입력 */}
-        <div className="mb-4">
+        <div className="my-4">
           <input
             type="text"
             value={searchQuery}
@@ -313,7 +314,7 @@ export default function TargetSelectionTab() {
             </div>
           </div>
         )}
-      </div>
+      </FieldPanel>
 
       {/* 에러 메시지 */}
       {error && (

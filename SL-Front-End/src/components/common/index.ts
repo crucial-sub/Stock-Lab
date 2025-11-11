@@ -1,12 +1,9 @@
 export { Button } from "./Button";
 export { Checkbox } from "./Checkbox";
-export { CustomSelect } from "./CustomSelect";
 export { Dropdown } from "./Dropdown";
-export { FilterGroup } from "./FilterGroup";
-export { GradientDivider } from "./GradientDivider";
+export { Icon } from "./Icon";
 export { Input } from "./Input";
 export { Panel } from "./Panel";
-export { RadioButton } from "./RadioButton";
 export { Select } from "./Select";
 export { Title } from "./Title";
 export { ToggleSwitch } from "./ToggleSwitch";

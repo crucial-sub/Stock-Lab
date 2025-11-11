@@ -31,7 +31,7 @@ export function StockCount({
   totalCount,
 }: TradeTargetHeaderProps) {
   return (
-    <div className="flex items-end">
+    <div className="flex items-end mb-5">
       <Title variant="subtitle">매매 대상 종목</Title>
       <span className="text-[1.25rem] ml-3 text-brand-primary font-semibold">
         {selectedCount} 종목

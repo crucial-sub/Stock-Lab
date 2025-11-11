@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Header } from "./Header";
 import { SideNav } from "./SideNav";
 
-const BARE_LAYOUT_ROUTES = ["/login"];
+const BARE_LAYOUT_ROUTES = ["/login", "/signup"];
 
 interface AppShellProps {
   children: ReactNode;

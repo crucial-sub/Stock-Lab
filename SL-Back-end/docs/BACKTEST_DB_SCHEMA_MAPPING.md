@@ -1,7 +1,7 @@
 # 백테스트 엔진 - RDS DB 스키마 매핑
 
 ## 개요
-`backtest_genport_engine.py`가 RDS 데이터베이스의 실제 테이블 스키마와 올바르게 연동되도록 필드 매핑을 정리한 문서입니다.
+`backtest_engine.py`가 RDS 데이터베이스의 실제 테이블 스키마와 올바르게 연동되도록 필드 매핑을 정리한 문서입니다.
 
 ---
 
@@ -242,7 +242,7 @@ extended_start = start_date - timedelta(days=180)
 ## 10. 참고 문서
 - [ERD_GUIDE.md](./ERD_GUIDE.md): 전체 데이터베이스 스키마
 - [FACTOR_SHORTLIST.md](../FACTOR_SHORTLIST.md): 팩터 정의 및 계산 수식
-- [backtest_genport_engine.py](../app/services/backtest_genport_engine.py): 백테스트 엔진 구현
+- [backtest_engine.py](../app/services/backtest_engine.py): 백테스트 엔진 구현
 
 ---
 

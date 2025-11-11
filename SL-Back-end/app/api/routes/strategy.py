@@ -45,7 +45,7 @@ async def get_my_strategies(
     - 각 전략의 최신 백테스트 결과 통계 포함
     """
     try:
-        user_id = str(current_user.user_id)
+        user_id = current_user.user_id
 
         # 1. 사용자의 모든 전략 조회
         strategies_query = (
@@ -269,7 +269,7 @@ async def update_strategy_sharing_settings(
     - is_public, is_anonymous, hide_strategy_details 설정 변경
     """
     try:
-        user_id = str(current_user.user_id)
+        user_id = current_user.user_id
 
         # 1. 전략 조회 및 권한 확인
         strategy_query = select(PortfolioStrategy).where(

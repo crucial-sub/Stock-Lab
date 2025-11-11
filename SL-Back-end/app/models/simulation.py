@@ -71,7 +71,7 @@ class PortfolioStrategy(Base):
     description = Column(Text, nullable=True, comment="전략 설명")
 
     # 소유자 정보
-    user_id = Column(String(36), nullable=True, index=True, comment="전략 생성자 ID (UUID)")
+    user_id = Column(UUID(as_uuid=True), nullable=True, index=True, comment="전략 생성자 ID (UUID)")
 
     # 공개 설정
     is_public = Column(Boolean, default=False, nullable=False, comment="공개 여부 (랭킹 집계)")

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { companyApi, CompanyInfoResponse } from "@/lib/api/company";
 
 interface StockInfoCardProps {
   name: string;
@@ -17,39 +18,104 @@ const periodTabs = [
   "3년",
 ];
 
-const changeStats = [
-  { label: "일주일 전", value: "-2,000원 (-2.77%)" },
-  { label: "30일 전", value: "38,500원 (+12.75%)" },
-  { label: "180일 전", value: "-113,000원 (-30.01%)" },
-];
-
-const scoreBreakdowns = [
-  { title: "모멘텀", score: 18, caption: "전일 대비 +8점" },
-  { title: "펀더멘탈", score: 61, caption: "4주전 대비 +51점" },
-];
-
-const overviewStats = [
-  { label: "시가총액", value: "589조 39억원" },
-  { label: "PSR", value: "1.91배" },
-  { label: "PBR", value: "1.48배" },
-];
-
-const supplyScores = [
-  { title: "외국인 수급 점수", score: 91, caption: "외국인 관심도" },
-  { title: "기관 수급점수", score: 2, caption: "기관 관심도" },
-];
-
 export function StockInfoCard({ name, code }: StockInfoCardProps) {
   const [activePeriod, setActivePeriod] = useState(periodTabs[0]);
+  const [companyData, setCompanyData] = useState<CompanyInfoResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCompanyInfo = async () => {
+      try {
+        setLoading(true);
+        const data = await companyApi.getCompanyInfo(code);
+        setCompanyData(data);
+      } catch (error) {
+        console.error("종목 정보 조회 실패:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCompanyInfo();
+  }, [code]);
+
+  if (loading || !companyData) {
+    return (
+      <article className="flex flex-col gap-[1.25rem] bg-white p-[2rem] text-text-strong">
+        <p className="text-center text-text-muted">로딩 중...</p>
+      </article>
+    );
+  }
+
+  const { basicInfo, investmentIndicators } = companyData;
+
+  // 가격 변동 통계 계산
+  const changeStats = [
+    {
+      label: "일주일 전",
+      value: basicInfo.changevs1w
+        ? `${basicInfo.changevs1w > 0 ? "+" : ""}${basicInfo.changevs1w.toLocaleString()}원 (${basicInfo.changeRate1w?.toFixed(2) || 0}%)`
+        : "-",
+    },
+    {
+      label: "30일 전",
+      value: basicInfo.changevs1m
+        ? `${basicInfo.changevs1m > 0 ? "+" : ""}${basicInfo.changevs1m.toLocaleString()}원 (${basicInfo.changeRate1m?.toFixed(2) || 0}%)`
+        : "-",
+    },
+    {
+      label: "60일 전",
+      value: basicInfo.changevs2m
+        ? `${basicInfo.changevs2m > 0 ? "+" : ""}${basicInfo.changevs2m.toLocaleString()}원 (${basicInfo.changeRate2m?.toFixed(2) || 0}%)`
+        : "-",
+    },
+  ];
+
+  // 개요 통계
+  const overviewStats = [
+    {
+      label: "시가총액",
+      value: basicInfo.marketCap
+        ? `${Math.floor(basicInfo.marketCap / 1000000000000)}조 ${Math.floor((basicInfo.marketCap % 1000000000000) / 100000000)}억원`
+        : "-",
+    },
+    { label: "PSR", value: investmentIndicators.psr ? `${investmentIndicators.psr.toFixed(2)}배` : "-" },
+    { label: "PBR", value: investmentIndicators.pbr ? `${investmentIndicators.pbr.toFixed(2)}배` : "-" },
+  ];
 
   return (
     <article className="flex flex-col gap-[1.25rem] bg-white p-[2rem] text-text-strong">
       <header className="text-start">
-        <p className="text-[0.8rem] text-text-muted font-normal">코스피 | {code}</p>
+        <p className="text-[0.8rem] text-text-muted font-normal">
+          {basicInfo.marketType || "코스피"} | {code}
+        </p>
         <h2 className="text-[1.5rem] font-semibold">{name}</h2>
-        <div className="mt-[-0.5rem] text-[1.5rem] font-semibold">265,500원</div>
-        <p className="text-brand-primary font-semibold">+2,000원 (0.76%)</p>
-        <p className="pt-[0.25rem] text-[0.8rem] text-text-muted font-normal">2025년 12월 31일 기준</p>
+        <div className="mt-[-0.5rem] text-[1.5rem] font-semibold">
+          {basicInfo.currentPrice ? `${basicInfo.currentPrice.toLocaleString()}원` : "-"}
+        </div>
+        <p
+          className={`font-semibold ${
+            (basicInfo.changevs1d || 0) > 0
+              ? "text-brand-primary"
+              : (basicInfo.changevs1d || 0) < 0
+                ? "text-accent-primary"
+                : "text-text-muted"
+          }`}
+        >
+          {basicInfo.changevs1d
+            ? `${basicInfo.changevs1d > 0 ? "+" : ""}${basicInfo.changevs1d.toLocaleString()}원 (${basicInfo.fluctuationRate?.toFixed(2) || 0}%)`
+            : "0원 (0%)"}
+        </p>
+        <p className="pt-[0.25rem] text-[0.8rem] text-text-muted font-normal">
+          {basicInfo.tradeDate
+            ? new Date(basicInfo.tradeDate).toLocaleDateString("ko-KR", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })
+            : "-"}{" "}
+          기준
+        </p>
       </header>
       <div className="flex flex-wrap justify-center gap-3">
         {periodTabs.map((tab) => {
@@ -108,15 +174,8 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
       <Divider />
       <section className="rounded-[8px] bg-white">
         <SectionHeader title="종목 진단 점수" helper="?" />
-        <div className="py-[1rem] flex flex-col gap-6">
-          <div className="flex items-center justify-center">
-            <DiagnosisCircle score={39} delta={-14} />
-          </div>
-          <div className="grid gap-6 md:grid-cols-2">
-            {scoreBreakdowns.map((item) => (
-              <Card key={item.title} title={item.title} value={`${item.score}점`} caption={item.caption} />
-            ))}
-          </div>
+        <div className="py-[1rem] flex items-center justify-center">
+          <p className="text-text-muted">종목 진단 점수는 준비 중입니다.</p>
         </div>
       </section>
 
@@ -124,7 +183,7 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
       <section className="rounded-[8px]">
         <SectionHeader title="개요" />
         <p className="pt-[0.25rem] text-[0.8rem] font-normal text-text-muted">
-          하드웨어 및 장비, 전기 / 전자제품
+          {basicInfo.industry || "산업 정보 없음"}
         </p>
         <div className="pt-[1rem] grid md:grid-cols-3">
           {overviewStats.map((stat, index) => {
@@ -151,13 +210,8 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
       <section className="pt-[1rem]">
         <SectionHeader title="수급점수" />
         <p className="pt-[0.25rem] text-[0.8rem] font-normal text-text-muted">
-          수급 동향을 점수화했어요
+          수급점수는 준비 중입니다.
         </p>
-        <div className="pt-[1rem] grid gap-4 md:grid-cols-2">
-          {supplyScores.map((stat) => (
-            <Card key={stat.title} title={stat.title} value={`${stat.score}점`} caption={stat.caption} />
-          ))}
-        </div>
       </section>
     </article>
   );

@@ -1,5 +1,5 @@
 """
-GenPort 백테스트 결과 저장 모델
+백테스트 결과 저장 모델
 """
 from sqlalchemy import Column, Integer, String, Date, DateTime, TIMESTAMP, ForeignKey, Index, UniqueConstraint, BigInteger, Numeric, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB

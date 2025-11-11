@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GenPort 백테스트 테이블 생성 스크립트
+백테스트 테이블 생성 스크립트
 """
 import asyncio
 import sys
@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.core.database import engine, Base
-from app.models.backtest_genport import (
+from app.models.backtest import (
     BacktestSession, BacktestCondition, BacktestStatistics,
     BacktestDailySnapshot, BacktestTrade, BacktestHolding
 )
@@ -23,13 +23,13 @@ async def create_tables():
     """백테스트 관련 테이블 생성"""
     try:
         # 모든 모델을 임포트하여 Base.metadata에 등록
-        logger.info("Creating GenPort backtest tables...")
+        logger.info("Creating backtest tables...")
 
         async with engine.begin() as conn:
             # 테이블 생성
             await conn.run_sync(Base.metadata.create_all)
 
-        logger.info("✅ Successfully created all GenPort backtest tables!")
+        logger.info("✅ Successfully created all backtest tables!")
         logger.info("Created tables:")
         logger.info("  - backtest_sessions")
         logger.info("  - backtest_conditions")

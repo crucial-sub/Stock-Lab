@@ -219,6 +219,6 @@ aws rds describe-db-instances \
 
 - [상세 SSH 터널링 가이드](../aws-deployment/SSH_TUNNEL_SETUP.md)
 - [AWS 배포 가이드](../aws-deployment/CICD_SETUP_GUIDE.md)
-- [백테스트 API 명세서](docs/API_SPECIFICATION_GENPORT.md)
+- [백테스트 API 명세서](docs/API_SPECIFICATION.md)
 
 문제가 발생하면 Slack #dev-backend 채널에 문의하세요.

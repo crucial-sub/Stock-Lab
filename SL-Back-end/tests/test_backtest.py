@@ -1,5 +1,5 @@
 """
-GenPort 백테스트 엔진 테스트
+백테스트 엔진 테스트
 """
 
 import asyncio
@@ -18,8 +18,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def test_genport_backtest():
-    """GenPort 백테스트 테스트"""
+async def test_backtest():
+    """백테스트 테스트"""
 
     # 데이터베이스 연결
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
@@ -195,4 +195,4 @@ async def test_genport_backtest():
 
 if __name__ == "__main__":
     # 비동기 실행
-    asyncio.run(test_genport_backtest())
+    asyncio.run(test_backtest())

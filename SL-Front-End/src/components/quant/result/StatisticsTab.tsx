@@ -26,64 +26,117 @@ interface StatisticsTabProps {
 }
 
 export function StatisticsTab({ statistics }: StatisticsTabProps) {
-  // 차트 데이터
+  // 실제 통계 데이터 기반 계산
+  const winRate = (statistics.winRate || 0);
+  const loseRate = 100 - winRate;
+
+  // 차트 데이터 - 실제 데이터 기반
   const successRateData = [
-    { name: "매도실패(상승)", value: 55, color: "#ff4d6d" },
-    { name: "매도성공(상승)", value: 45, color: "#3b82f6" },
+    { name: "수익 거래", value: winRate, color: "#3b82f6" },
+    { name: "손실 거래", value: loseRate, color: "#ff4d6d" },
   ];
 
+  // TODO: 실제 유니버스별 비중 데이터가 있으면 대체
   const universeData = [
-    { name: "코스피대형", value: 37, color: "#3b82f6" },
-    { name: "코스피중대형", value: 17, color: "#a855f7" },
-    { name: "코스피중형", value: 46, color: "#ec4899" },
+    { name: "코스피", value: 60, color: "#3b82f6" },
+    { name: "코스닥", value: 40, color: "#a855f7" },
   ];
 
+  // TODO: 실제 매도 조건별 비중 데이터가 있으면 대체
   const sellConditionData = [
-    { name: "목표가", value: 47, color: "#10b981" },
-    { name: "손절가", value: 23, color: "#f59e0b" },
-    { name: "보유기간(최대)", value: 18, color: "#8b5cf6" },
-    { name: "조건매도", value: 12, color: "#06b6d4" },
+    { name: "목표가", value: 40, color: "#10b981" },
+    { name: "손절가", value: 30, color: "#f59e0b" },
+    { name: "보유기간", value: 20, color: "#8b5cf6" },
+    { name: "기타", value: 10, color: "#06b6d4" },
   ];
 
   return (
     <div className="bg-bg-surface rounded-lg shadow-card p-6">
       <h3 className="text-lg font-bold text-text-strong mb-6">매매 결과 통계</h3>
 
-      {/* 통계 지표 그리드 */}
+      {/* 통계 지표 그리드 - 실제 데이터 */}
       <div className="grid grid-cols-3 gap-8 mb-12">
         {/* 왼쪽 섹션 */}
         <div className="space-y-6">
-          <StatItem label="총 거래일" value="242일" />
+          <StatItem label="총 거래 횟수" value={`${statistics.totalTrades}회`} />
           <StatItem
-            label="수익률에 평균 수익률"
-            value="2.87%"
+            label="승리 거래"
+            value={`${statistics.winningTrades}회`}
             valueColor="text-accent-primary"
           />
-          <StatItem label="일 표준편차" value="0.45" />
-          <StatItem label="Sharpe Ratio" value={statistics.sharpeRatio.toFixed(2)} />
-          <StatItem label="고점 대비 절반 비율" value="73%" />
+          <StatItem
+            label="패배 거래"
+            value={`${statistics.losingTrades}회`}
+            valueColor="text-accent-error"
+          />
+          <StatItem
+            label="Sharpe Ratio"
+            value={statistics.sharpeRatio.toFixed(2)}
+          />
+          <StatItem
+            label="변동성"
+            value={`${(statistics.volatility * 100).toFixed(2)}%`}
+          />
         </div>
 
         {/* 중간 섹션 */}
         <div className="space-y-6">
-          <StatItem label="평균 보유일" value="5.05일" />
           <StatItem
-            label="손실률에 평균 수익률"
-            value="-2.08%"
-            valueColor="text-brand-primary"
+            label="승률"
+            value={`${statistics.winRate.toFixed(2)}%`}
+            valueColor="text-accent-primary"
           />
-          <StatItem label="월 표준편차" value="1.97" />
-          <StatItem label="월 평균 수익률" value="1.35%" />
-          <StatItem label="KOSPI 상관성" value="0.55" />
+          <StatItem
+            label="손익비 (Profit Factor)"
+            value={statistics.profitFactor.toFixed(2)}
+          />
+          <StatItem
+            label="최대 낙폭 (MDD)"
+            value={`${Math.abs(statistics.maxDrawdown).toFixed(2)}%`}
+            valueColor="text-accent-error"
+          />
+          <StatItem
+            label="연 환산 수익률"
+            value={`${statistics.annualizedReturn.toFixed(2)}%`}
+            valueColor={statistics.annualizedReturn >= 0 ? "text-accent-primary" : "text-accent-error"}
+          />
+          <StatItem
+            label="총 수익률"
+            value={`${statistics.totalReturn.toFixed(2)}%`}
+            valueColor={statistics.totalReturn >= 0 ? "text-accent-primary" : "text-accent-error"}
+          />
         </div>
 
         {/* 오른쪽 섹션 */}
         <div className="space-y-6">
-          <StatItem label="총 매매 횟수" value="809회" />
-          <StatItem label="평균 손익비" value="1.38" />
-          <StatItem label="CPC Index" value="1.34" />
-          <StatItem label="익절 승률(상승/보합/하락)" value="57% / 0% / 43%" />
-          <StatItem label="KOSDAQ 상관성" value="0.56" />
+          <StatItem
+            label="초기 자본"
+            value={`${statistics.initialCapital.toLocaleString()}원`}
+          />
+          <StatItem
+            label="최종 자본"
+            value={`${statistics.finalCapital.toLocaleString()}원`}
+            valueColor={statistics.finalCapital >= statistics.initialCapital ? "text-accent-primary" : "text-accent-error"}
+          />
+          <StatItem
+            label="순손익"
+            value={`${(statistics.finalCapital - statistics.initialCapital).toLocaleString()}원`}
+            valueColor={statistics.finalCapital >= statistics.initialCapital ? "text-accent-primary" : "text-accent-error"}
+          />
+          <StatItem
+            label="평균 거래당 수익"
+            value={statistics.totalTrades > 0
+              ? `${((statistics.finalCapital - statistics.initialCapital) / statistics.totalTrades).toLocaleString()}원`
+              : "0원"
+            }
+          />
+          <StatItem
+            label="수익률 / MDD"
+            value={statistics.maxDrawdown !== 0
+              ? (statistics.totalReturn / Math.abs(statistics.maxDrawdown)).toFixed(2)
+              : "N/A"
+            }
+          />
         </div>
       </div>
 

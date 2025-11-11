@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useBacktestConfigStore } from "@/stores";
 import { useBuyConditionManager } from "@/hooks/quant";
 import { ConditionCard, SectionHeader } from "../common";
 import { FactorSelectionModal } from "../FactorSelectionModal";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
+import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 
 /**
  * 매수 조건식 설정 섹션
@@ -16,6 +17,19 @@ export function BuyConditionsSection() {
     useBacktestConfigStore();
 
   const { data: subFactors = [] } = useSubFactorsQuery();
+  const { data: factors = [] } = useFactorsQuery();
+
+  // 우선순위 팩터 기본값 설정 (최초 1회만)
+  useEffect(() => {
+    if (!priority_factor && factors.length > 0) {
+      // PER 팩터를 기본값으로 설정
+      const defaultFactor = factors.find(f => f.name === 'per') || factors[0];
+      if (defaultFactor) {
+        setPriorityFactor(`{${defaultFactor.display_name}}`);
+        setPriorityFactorDisplay(defaultFactor.display_name);
+      }
+    }
+  }, [factors, priority_factor, setPriorityFactor]);
 
   const {
     buyConditions,

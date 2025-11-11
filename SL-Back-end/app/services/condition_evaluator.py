@@ -98,7 +98,8 @@ class ConditionEvaluator:
     def _normalize_factor_key(name: Optional[str]) -> Optional[str]:
         if not name:
             return None
-        return name.replace("{", "").replace("}", "").strip()
+        # 최종적으로 계산 모듈은 대문자 컬럼을 사용하므로 키를 일관되게 맞춘다
+        return name.replace("{", "").replace("}", "").strip().upper()
 
     def _get_stock_slice(
         self,

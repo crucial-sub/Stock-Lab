@@ -17,7 +17,7 @@ sys.path.insert(0, str(project_root))
 
 from sqlalchemy import text
 from app.core.database import engine
-from app.models.backtest_genport_extended import (
+from app.models.backtest_extended import (
     BacktestSessionExtended,
     BacktestOrder,
     BacktestExecution,

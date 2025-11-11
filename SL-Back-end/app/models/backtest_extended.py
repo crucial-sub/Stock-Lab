@@ -1,5 +1,5 @@
 """
-GenPort 백테스트 확장 모델 - 논리식, 주문/체결, 상세 통계 저장
+백테스트 확장 모델 - 논리식, 주문/체결, 상세 통계 저장
 """
 from sqlalchemy import Column, Integer, String, Date, DateTime, TIMESTAMP, ForeignKey, Index, UniqueConstraint, BigInteger, Numeric, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB

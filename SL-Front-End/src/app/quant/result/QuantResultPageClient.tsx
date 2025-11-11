@@ -116,8 +116,8 @@ export function QuantResultPageClient({
     return null;
   }
 
-  // 실제 데이터에서 초기 투자금 가져오기
-  const initialCapital = finalResult.statistics.initialCapital || 50000000;
+  // 실제 데이터에서 초기 투자금 가져오기 (기본값: 5억원)
+  const initialCapital = 50000000;
 
   // 실제 수익률 데이터 계산 (yieldPoints에서 추출)
   const calculatePeriodReturns = () => {

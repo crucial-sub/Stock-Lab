@@ -1,11 +1,12 @@
 import { Dropdown, Title, ToggleSwitch, UnderlineInput } from "@/components/common";
-import { useSellConditionManager } from "@/hooks/quant";
-import { useBacktestConfigStore } from "@/stores";
-import Image from "next/image";
-import { useEffect, useState } from "react";
 import { ConditionCard, FieldPanel, SectionHeader } from "@/components/quant/ui";
 import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
+import { useFactorsQuery } from "@/hooks/useFactorsQuery";
+import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
+import { useBacktestConfigStore } from "@/stores";
+import Image from "next/image";
+import { useEffect, useState } from "react";
 
 /**
  * 조건 매도 섹션
@@ -14,22 +15,31 @@ import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
  * - 매도 가격 기준
  */
 export function ConditionalSellSection() {
-  const { condition_sell, setConditionSell } = useBacktestConfigStore();
-
+  // ✅ backtestConfigStore에서 직접 가져오기
   const {
-    sellConditions,
-    isModalOpen,
-    openModal,
-    closeModal,
-    handleFactorSelect,
-    getCurrentCondition,
-    handleOperatorChange,
-    handleValueChange,
-    addSellCondition,
-    removeSellCondition,
-    getConditionExpression,
-  } = useSellConditionManager();
+    sellConditionsUI,
+    addSellConditionUI,
+    updateSellConditionUI,
+    removeSellConditionUI,
+    condition_sell,
+    setConditionSell,
+  } = useBacktestConfigStore((state) => ({
+    sellConditionsUI: state.sellConditionsUI,
+    addSellConditionUI: state.addSellConditionUI,
+    updateSellConditionUI: state.updateSellConditionUI,
+    removeSellConditionUI: state.removeSellConditionUI,
+    condition_sell: state.condition_sell,
+    setConditionSell: state.setConditionSell,
+  }));
 
+  const { data: subFactors = [] } = useSubFactorsQuery();
+  const { data: factors = [] } = useFactorsQuery();
+
+  // 모달 상태
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentConditionId, setCurrentConditionId] = useState<string | null>(null);
+
+  // 토글 및 설정 상태
   const [isOpen, setIsOpen] = useState(condition_sell !== null);
   const [sellLogic, setSellLogic] = useState<string>(
     condition_sell?.sell_logic || ""
@@ -43,15 +53,15 @@ export function ConditionalSellSection() {
 
   // 조건 매도 토글 시 초기 조건 추가
   useEffect(() => {
-    if (isOpen && sellConditions.length === 0) {
-      addSellCondition();
+    if (isOpen && sellConditionsUI.length === 0) {
+      addSellConditionUI();
     }
-  }, [isOpen]);
+  }, [isOpen, sellConditionsUI.length, addSellConditionUI]);
 
   // 전역 스토어 업데이트
   useEffect(() => {
     if (isOpen) {
-      const formattedConditions = sellConditions
+      const formattedConditions = sellConditionsUI
         .filter((c) => c.factorName !== null)
         .map((c) => {
           let expLeftSide = "";
@@ -69,7 +79,7 @@ export function ConditionalSellSection() {
             name: c.id,
             exp_left_side: expLeftSide,
             inequality: c.operator,
-            exp_right_side: c.value,
+            exp_right_side: Number(c.value) || 0, // API 명세 확정 후 수정 예정
           };
         });
 
@@ -84,12 +94,84 @@ export function ConditionalSellSection() {
     }
   }, [
     isOpen,
-    sellConditions,
+    sellConditionsUI,
     sellLogic,
     sellPriceBasis,
     sellPriceOffset,
     setConditionSell,
   ]);
+
+  // 모달 열기
+  const openModal = (id: string) => {
+    setCurrentConditionId(id);
+    setIsModalOpen(true);
+  };
+
+  // 모달 닫기
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setCurrentConditionId(null);
+  };
+
+  // 팩터 선택
+  const handleFactorSelect = (
+    factorId: string,
+    factorName: string,
+    subFactorId: string,
+    argument?: string
+  ) => {
+    if (!currentConditionId) return;
+
+    const subFactor = subFactors.find((sf) => String(sf.id) === subFactorId);
+    const subFactorName = subFactor?.display_name || null;
+
+    updateSellConditionUI(currentConditionId, {
+      factorName,
+      subFactorName,
+      argument,
+    });
+
+    closeModal();
+  };
+
+  // 연산자 변경
+  const handleOperatorChange = (id: string, operator: string) => {
+    updateSellConditionUI(id, { operator });
+  };
+
+  // 값 변경
+  const handleValueChange = (id: string, value: string) => {
+    updateSellConditionUI(id, { value });
+  };
+
+  // 조건식 텍스트 생성
+  const getConditionExpression = (condition: any) => {
+    if (!condition.factorName) return '팩터를 선택하세요';
+
+    let text = '';
+    if (condition.subFactorName) {
+      text = condition.argument
+        ? `${condition.subFactorName}({${condition.factorName}},{${condition.argument}})`
+        : `${condition.subFactorName}({${condition.factorName}})`;
+    } else {
+      text = condition.factorName;
+    }
+
+    return `${text} ${condition.operator} ${condition.value || '___'}`;
+  };
+
+  // 현재 조건 가져오기
+  const getCurrentCondition = () => {
+    if (!currentConditionId) return undefined;
+    const condition = sellConditionsUI.find(c => c.id === currentConditionId);
+    if (!condition) return undefined;
+
+    return {
+      factorName: condition.factorName || undefined,
+      subFactorName: condition.subFactorName || undefined,
+      argument: condition.argument,
+    };
+  };
 
   return (
     <div id="section-conditional-sell" className="space-y-3">
@@ -110,7 +192,7 @@ export function ConditionalSellSection() {
 
               {/* 조건 목록 */}
               <div className="space-y-2 mb-2">
-                {sellConditions.map((condition) => (
+                {sellConditionsUI.map((condition) => (
                   <ConditionCard
                     key={condition.id}
                     condition={condition}
@@ -118,7 +200,7 @@ export function ConditionalSellSection() {
                     onFactorSelect={() => openModal(condition.id)}
                     onOperatorChange={(op) => handleOperatorChange(condition.id, op)}
                     onValueChange={(val) => handleValueChange(condition.id, val)}
-                    onRemove={() => removeSellCondition(condition.id)}
+                    onRemove={() => removeSellConditionUI(condition.id)}
                     conditionType="sell"
                   />
                 ))}
@@ -127,7 +209,7 @@ export function ConditionalSellSection() {
               {/* 조건 추가 버튼 */}
               <button
                 type="button"
-                onClick={addSellCondition}
+                onClick={addSellConditionUI}
                 className="w-[31.25rem] h-12 flex items-center gap-3 rounded-md border-[0.5px] relative"
               >
                 {/* plus 아이콘 */}
@@ -208,7 +290,7 @@ export function ConditionalSellSection() {
         isOpen={isModalOpen}
         onClose={closeModal}
         onSelect={handleFactorSelect}
-        initialValues={getCurrentCondition()}
+        initialValues={getCurrentCondition() as any}
       />
     </div>
   );

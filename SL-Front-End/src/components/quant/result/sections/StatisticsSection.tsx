@@ -23,8 +23,8 @@ export function StatisticsSection({
   const stats = statistics;
 
   // 실제 데이터 기반 계산
-  const totalProfit = (stats.finalCapital || initialCapital) - initialCapital;
-  const finalAssets = stats.finalCapital || initialCapital;
+  const totalProfit = initialCapital * (stats.totalReturn / 100);
+  const finalAssets = initialCapital * (1 + stats.totalReturn / 100);
 
   // 일 평균 수익률 계산 (총 수익률을 거래일 수로 나눔)
   const dailyReturn = stats.totalReturn / 252; // 연간 252 거래일 기준

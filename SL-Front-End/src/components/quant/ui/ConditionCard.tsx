@@ -1,6 +1,15 @@
 import { Dropdown, UnderlineInput } from "@/components/common";
-import type { Condition } from "@/stores";
 import Image from "next/image";
+
+// API 명세 확정 후 수정 예정
+interface Condition {
+  id: string;
+  factorName: string | null;
+  subFactorName: string | null;
+  operator: string;
+  value: string;
+  argument?: string;
+}
 
 /**
  * 조건식 카드 공통 컴포넌트
@@ -12,7 +21,7 @@ interface ConditionCardProps {
   expressionText: string;
   onFactorSelect: () => void;
   onOperatorChange: (operator: ">=" | "<=" | ">" | "<" | "=" | "!=") => void;
-  onValueChange: (value: number) => void;
+  onValueChange: (value: string) => void; // API 명세 확정 후 수정 예정
   onRemove: () => void;
   /** 조건 타입 (매수: buy, 매도: sell) - 색상 결정에 사용 */
   conditionType: "buy" | "sell";
@@ -84,7 +93,7 @@ export function ConditionCard({
       {/* 값 입력 */}
       <UnderlineInput
         value={condition.value}
-        onChange={(e) => onValueChange(Number(e.target.value))}
+        onChange={(e) => onValueChange(e.target.value)}
         className="!w-20 text-center"
       />
     </div>

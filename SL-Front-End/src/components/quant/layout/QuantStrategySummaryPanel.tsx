@@ -46,7 +46,7 @@ export default function QuantStrategySummaryPanel({
     end_date,
     commission_rate,
     slippage,
-    buy_conditions,
+    buyConditionsUI,
     buy_logic,
     priority_factor,
     priority_order,
@@ -58,6 +58,7 @@ export default function QuantStrategySummaryPanel({
     buy_price_offset,
     target_and_loss,
     hold_days,
+    sellConditionsUI,
     condition_sell,
     trade_targets,
     setStartDate,
@@ -201,16 +202,26 @@ export default function QuantStrategySummaryPanel({
                   <FieldTitle tab="buy">매수 조건</FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <div>
-                      <div className={`text-[1rem] font-normal ${buy_conditions.length > 0 ? "" : "text-tag-neutral"}`}>매수 조건식</div>
-                      <div className={`font-semibold text-[1rem] ${buy_conditions.length > 0 ? "" : "text-tag-neutral"}`}>
-                        {buy_conditions.length > 0 ? (
+                      <div className={`text-[1rem] font-normal ${buyConditionsUI.length > 0 && buyConditionsUI.some(c => c.factorName) ? "" : "text-tag-neutral"}`}>매수 조건식</div>
+                      <div className={`font-semibold text-[1rem] ${buyConditionsUI.length > 0 && buyConditionsUI.some(c => c.factorName) ? "" : "text-tag-neutral"}`}>
+                        {buyConditionsUI.length > 0 && buyConditionsUI.some(c => c.factorName) ? (
                           <div className="space-y-1">
-                            {buy_conditions.map((c, idx) => (
-                              <div key={idx} className="flex gap-2">
-                                <span className="font-semibold">{c.name}</span>
-                                <span>{c.exp_left_side}</span>
-                              </div>
-                            ))}
+                            {buyConditionsUI.filter(c => c.factorName).map((c) => {
+                              let expression = '';
+                              if (c.subFactorName) {
+                                expression = c.argument
+                                  ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
+                                  : `${c.subFactorName}({${c.factorName}})`;
+                              } else {
+                                expression = `{${c.factorName}}`;
+                              }
+                              return (
+                                <div key={c.id} className="flex gap-2">
+                                  <span className="font-semibold">{c.id}:</span>
+                                  <span>{expression} {c.operator} {c.value}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           "미설정"
@@ -336,18 +347,28 @@ export default function QuantStrategySummaryPanel({
                   </FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <div>
-                      <div className={`text-[1rem] font-normal ${condition_sell && condition_sell?.sell_conditions.length > 0 ? "" : "text-tag-neutral"}`}>
+                      <div className={`text-[1rem] font-normal ${condition_sell && sellConditionsUI.length > 0 && sellConditionsUI.some(c => c.factorName) ? "" : "text-tag-neutral"}`}>
                         매도 조건식
                       </div>
-                      <div className={`font-semibold text-[1rem] ${condition_sell && condition_sell?.sell_conditions.length > 0 ? "" : "text-tag-neutral"}`}>
-                        {condition_sell && condition_sell.sell_conditions.length > 0 ? (
+                      <div className={`font-semibold text-[1rem] ${condition_sell && sellConditionsUI.length > 0 && sellConditionsUI.some(c => c.factorName) ? "" : "text-tag-neutral"}`}>
+                        {condition_sell && sellConditionsUI.length > 0 && sellConditionsUI.some(c => c.factorName) ? (
                           <div className="space-y-1">
-                            {condition_sell.sell_conditions.map((c, idx) => (
-                              <div key={idx} className="flex gap-2">
-                                <span className="font-semibold">{c.name}</span>
-                                <span>{c.exp_left_side}</span>
-                              </div>
-                            ))}
+                            {sellConditionsUI.filter(c => c.factorName).map((c) => {
+                              let expression = '';
+                              if (c.subFactorName) {
+                                expression = c.argument
+                                  ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
+                                  : `${c.subFactorName}({${c.factorName}})`;
+                              } else {
+                                expression = `{${c.factorName}}`;
+                              }
+                              return (
+                                <div key={c.id} className="flex gap-2">
+                                  <span className="font-semibold">{c.id}:</span>
+                                  <span>{expression} {c.operator} {c.value}</span>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           "미설정"

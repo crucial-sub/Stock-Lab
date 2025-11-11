@@ -27,6 +27,9 @@ interface StatisticsTabProps {
 }
 
 export function StatisticsTab({ statistics }: StatisticsTabProps) {
+  // 초기 자본 (기본값: 5억원 = 500,000,000원, API 명세 확정 후 수정 예정)
+  const initialCapital = 50000000;
+
   // 실제 통계 데이터 기반 계산
   const winRate = (statistics.winRate || 0);
   const loseRate = 100 - winRate;
@@ -61,15 +64,15 @@ export function StatisticsTab({ statistics }: StatisticsTabProps) {
       <div className="grid grid-cols-3 gap-8 mb-12">
         {/* 왼쪽 섹션 */}
         <div className="space-y-6">
-          <StatItem label="총 거래 횟수" value={`${statistics.totalTrades}회`} />
+          <StatItem label="총 거래 횟수" value={`${(statistics as any).totalTrades || 0}회`} />
           <StatItem
             label="승리 거래"
-            value={`${statistics.winningTrades}회`}
+            value={`${(statistics as any).winningTrades || 0}회`}
             valueColor="text-accent-primary"
           />
           <StatItem
             label="패배 거래"
-            value={`${statistics.losingTrades}회`}
+            value={`${(statistics as any).losingTrades || 0}회`}
             valueColor="text-accent-error"
           />
           <StatItem
@@ -114,22 +117,22 @@ export function StatisticsTab({ statistics }: StatisticsTabProps) {
         <div className="space-y-6">
           <StatItem
             label="초기 자본"
-            value={`${statistics.initialCapital.toLocaleString()}원`}
+            value={`${initialCapital.toLocaleString()}원`}
           />
           <StatItem
             label="최종 자본"
-            value={`${statistics.finalCapital.toLocaleString()}원`}
-            valueColor={statistics.finalCapital >= statistics.initialCapital ? "text-accent-primary" : "text-accent-error"}
+            value={`${((statistics as any).finalCapital || initialCapital).toLocaleString()}원`}
+            valueColor={(statistics as any).finalCapital >= initialCapital ? "text-accent-primary" : "text-accent-error"}
           />
           <StatItem
             label="순손익"
-            value={`${(statistics.finalCapital - statistics.initialCapital).toLocaleString()}원`}
-            valueColor={statistics.finalCapital >= statistics.initialCapital ? "text-accent-primary" : "text-accent-error"}
+            value={`${(((statistics as any).finalCapital || initialCapital) - initialCapital).toLocaleString()}원`}
+            valueColor={(statistics as any).finalCapital >= initialCapital ? "text-accent-primary" : "text-accent-error"}
           />
           <StatItem
             label="평균 거래당 수익"
-            value={statistics.totalTrades > 0
-              ? `${((statistics.finalCapital - statistics.initialCapital) / statistics.totalTrades).toLocaleString()}원`
+            value={(statistics as any).totalTrades > 0
+              ? `${((((statistics as any).finalCapital || initialCapital) - initialCapital) / (statistics as any).totalTrades).toLocaleString()}원`
               : "0원"
             }
           />

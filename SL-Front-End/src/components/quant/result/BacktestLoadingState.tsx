@@ -90,7 +90,6 @@ export function BacktestLoadingState({
         valueXField: "date",
         stroke: am5.color(0x3b82f6), // 파란색
         fill: am5.color(0x3b82f6),
-        fillOpacity: 0.1,
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY}%",
         }),

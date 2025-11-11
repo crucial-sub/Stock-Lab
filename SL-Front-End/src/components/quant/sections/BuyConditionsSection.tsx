@@ -2,7 +2,6 @@ import { Title } from "@/components/common";
 import { ConditionCard, FieldPanel, SectionHeader } from "@/components/quant/ui";
 import { UnderlineInput } from "@/components/common";
 import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
-import { useBuyConditionManager } from "@/hooks/quant";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
@@ -16,11 +15,41 @@ import { useEffect, useState } from "react";
  * - 매수 종목 선택 우선순위 (팩터 선택 모달 사용)
  */
 export function BuyConditionsSection() {
-  const { buy_logic, setBuyLogic, priority_factor, setPriorityFactor, priority_order, setPriorityOrder } =
-    useBacktestConfigStore();
+  // ✅ backtestConfigStore에서 직접 가져오기
+  const {
+    buyConditionsUI,
+    addBuyConditionUI,
+    updateBuyConditionUI,
+    removeBuyConditionUI,
+    buy_logic,
+    setBuyLogic,
+    priority_factor,
+    setPriorityFactor,
+    priority_order,
+    setPriorityOrder,
+  } = useBacktestConfigStore((state) => ({
+    buyConditionsUI: state.buyConditionsUI,
+    addBuyConditionUI: state.addBuyConditionUI,
+    updateBuyConditionUI: state.updateBuyConditionUI,
+    removeBuyConditionUI: state.removeBuyConditionUI,
+    buy_logic: state.buy_logic,
+    setBuyLogic: state.setBuyLogic,
+    priority_factor: state.priority_factor,
+    setPriorityFactor: state.setPriorityFactor,
+    priority_order: state.priority_order,
+    setPriorityOrder: state.setPriorityOrder,
+  }));
 
   const { data: subFactors = [] } = useSubFactorsQuery();
   const { data: factors = [] } = useFactorsQuery();
+
+  // 모달 상태
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentConditionId, setCurrentConditionId] = useState<string | null>(null);
+
+  // 우선순위 팩터 선택 모달 상태
+  const [isPriorityModalOpen, setIsPriorityModalOpen] = useState(false);
+  const [priorityFactorDisplay, setPriorityFactorDisplay] = useState<string>("");
 
   // 우선순위 팩터 기본값 설정 (최초 1회만)
   useEffect(() => {
@@ -34,24 +63,79 @@ export function BuyConditionsSection() {
     }
   }, [factors, priority_factor, setPriorityFactor]);
 
-  const {
-    buyConditions,
-    isModalOpen,
-    openModal,
-    closeModal,
-    handleFactorSelect,
-    getCurrentCondition,
-    handleOperatorChange,
-    handleValueChange,
-    addBuyCondition,
-    removeBuyCondition,
-    getConditionExpression,
-  } = useBuyConditionManager();
+  // 모달 열기
+  const openModal = (id: string) => {
+    setCurrentConditionId(id);
+    setIsModalOpen(true);
+  };
 
-  // 우선순위 팩터 선택 모달 상태
-  const [isPriorityModalOpen, setIsPriorityModalOpen] = useState(false);
-  const [priorityFactorDisplay, setPriorityFactorDisplay] = useState<string>("");
+  // 모달 닫기
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setCurrentConditionId(null);
+  };
 
+  // 팩터 선택
+  const handleFactorSelect = (
+    factorId: string,
+    factorName: string,
+    subFactorId: string,
+    argument?: string
+  ) => {
+    if (!currentConditionId) return;
+
+    const subFactor = subFactors.find((sf) => String(sf.id) === subFactorId);
+    const subFactorName = subFactor?.display_name || null;
+
+    updateBuyConditionUI(currentConditionId, {
+      factorName,
+      subFactorName,
+      argument,
+    });
+
+    closeModal();
+  };
+
+  // 연산자 변경
+  const handleOperatorChange = (id: string, operator: string) => {
+    updateBuyConditionUI(id, { operator });
+  };
+
+  // 값 변경
+  const handleValueChange = (id: string, value: string) => {
+    updateBuyConditionUI(id, { value });
+  };
+
+  // 조건식 텍스트 생성
+  const getConditionExpression = (condition: any) => {
+    if (!condition.factorName) return '팩터를 선택하세요';
+
+    let text = '';
+    if (condition.subFactorName) {
+      text = condition.argument
+        ? `${condition.subFactorName}({${condition.factorName}},{${condition.argument}})`
+        : `${condition.subFactorName}({${condition.factorName}})`;
+    } else {
+      text = condition.factorName;
+    }
+
+    return `${text} ${condition.operator} ${condition.value || '___'}`;
+  };
+
+  // 현재 조건 가져오기
+  const getCurrentCondition = () => {
+    if (!currentConditionId) return undefined;
+    const condition = buyConditionsUI.find(c => c.id === currentConditionId);
+    if (!condition) return undefined;
+
+    return {
+      factorName: condition.factorName || undefined,
+      subFactorName: condition.subFactorName || undefined,
+      argument: condition.argument,
+    };
+  };
+
+  // 우선순위 팩터 선택
   const handlePriorityFactorSelect = (
     factorId: string,
     factorName: string,
@@ -97,7 +181,7 @@ export function BuyConditionsSection() {
 
             {/* 조건 목록 */}
             <div className="space-y-2 mb-2">
-              {buyConditions.map((condition) => (
+              {buyConditionsUI.map((condition) => (
                 <ConditionCard
                   key={condition.id}
                   condition={condition}
@@ -105,7 +189,7 @@ export function BuyConditionsSection() {
                   onFactorSelect={() => openModal(condition.id)}
                   onOperatorChange={(op) => handleOperatorChange(condition.id, op)}
                   onValueChange={(val) => handleValueChange(condition.id, val)}
-                  onRemove={() => removeBuyCondition(condition.id)}
+                  onRemove={() => removeBuyConditionUI(condition.id)}
                   conditionType="buy"
                 />
               ))}
@@ -114,7 +198,7 @@ export function BuyConditionsSection() {
             {/* 조건 추가 버튼 */}
             <button
               type="button"
-              onClick={addBuyCondition}
+              onClick={addBuyConditionUI}
               className="w-[31.25rem] h-12 flex items-center gap-3 rounded-md border-[0.5px] relative"
             >
               {/* plus 아이콘 */}
@@ -212,7 +296,7 @@ export function BuyConditionsSection() {
             </div>
             <div
               onClick={() => setIsPriorityModalOpen(true)}
-              className="w-[31.25rem] p-[14px] border-[0.5px] border-tag-neutral rounded-md cursor-pointe hover:border-accent-primary"
+              className="w-[31.25rem] p-[14px] border-[0.5px] border-tag-neutral rounded-md cursor-pointer hover:border-accent-primary"
             >
               {priorityFactorDisplay || priority_factor || "팩터를 선택해주세요"}
             </div>
@@ -225,7 +309,7 @@ export function BuyConditionsSection() {
         isOpen={isModalOpen}
         onClose={closeModal}
         onSelect={handleFactorSelect}
-        initialValues={getCurrentCondition()}
+        initialValues={getCurrentCondition() as any}
       />
 
       {/* 우선순위 팩터 선택 모달 */}

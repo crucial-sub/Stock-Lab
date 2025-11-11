@@ -98,12 +98,13 @@ class FactorIntegration:
 
         # 논리식 조건인 경우
         if isinstance(buy_conditions, dict) and 'expression' in buy_conditions:
-            return self.condition_evaluator.evaluate_buy_conditions(
+            selected_stocks, _ = self.condition_evaluator.evaluate_buy_conditions(
                 factor_data=factor_data,
                 stock_codes=stock_codes,
                 buy_expression=buy_conditions,
                 trading_date=trading_date
             )
+            return selected_stocks
 
         # 일반 조건인 경우 (AND 로직)
         selected_stocks = []

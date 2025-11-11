@@ -485,6 +485,10 @@ class BacktestEngine:
         income_df = pd.DataFrame(income_result.mappings().all())
         balance_df = pd.DataFrame(balance_result.mappings().all())
 
+        # 계정 과목 정규화 (연도별 차이 해결)
+        if not income_df.empty:
+            income_df['account_nm'] = income_df['account_nm'].str.replace('당기순이익(손실)', '당기순이익', regex=False)
+
         # 데이터 통합 및 피벗
         if not income_df.empty:
             income_pivot = income_df.pivot_table(
@@ -538,6 +542,17 @@ class BacktestEngine:
                     return pd.Timestamp(year, 12, 31)  # 기본값
 
             financial_df['report_date'] = financial_df.apply(make_report_date, axis=1)
+
+            # 매출액 계산 (2023년처럼 직접 제공되지 않는 경우)
+            # Revenue = Cost of Goods Sold + Gross Profit
+            if '매출액' in financial_df.columns and '매출원가' in financial_df.columns and '매출총이익' in financial_df.columns:
+                financial_df['매출액'] = financial_df.apply(
+                    lambda row: row['매출원가'] + row['매출총이익']
+                    if pd.isna(row.get('매출액')) and pd.notna(row.get('매출원가')) and pd.notna(row.get('매출총이익'))
+                    else row.get('매출액'),
+                    axis=1
+                )
+
             logger.info(f"Loaded financial data for {financial_df['stock_code'].nunique()} companies")
 
         return financial_df
@@ -732,6 +747,7 @@ class BacktestEngine:
                     # 가치 팩터 (PER, PBR)
                     if any(f in required_factors for f in ['PER', 'PBR']):
                         try:
+                            logger.info(f"🎯 가치 팩터 계산 시작 - required_factors: {required_factors}")
                             value_map = self._calculate_value_factors(price_until_date, financial_pl, calc_date)
                             # 필요한 팩터만 필터링
                             filtered_value_map = {}
@@ -909,11 +925,14 @@ class BacktestEngine:
 
     def _calculate_value_factors(self, price_pl: pl.DataFrame, financial_pl: pl.DataFrame, calc_date) -> Dict[str, Dict[str, float]]:
         """가치 팩터 계산"""
+        logger.info(f"🎯 _calculate_value_factors 호출됨! calc_date={calc_date}")
         factors: Dict[str, Dict[str, float]] = {}
         latest_price = price_pl.filter(pl.col('date') == calc_date)
         latest_financial = financial_pl.filter(pl.col('report_date') <= calc_date)
+        logger.info(f"🎯 latest_price 건수: {len(latest_price)}, latest_financial 건수: {len(latest_financial)}")
 
         if latest_price.is_empty() or latest_financial.is_empty():
+            logger.debug(f"가치 팩터 계산 건너뜀 - price empty: {latest_price.is_empty()}, financial empty: {latest_financial.is_empty()}")
             return factors
 
         for stock in latest_price.select('stock_code').unique().to_pandas()['stock_code']:
@@ -923,12 +942,36 @@ class BacktestEngine:
             if stock_financial.is_empty():
                 continue
 
-            stock_financial = stock_financial.sort('report_date', descending=True).head(1)
+            # 최신 재무 데이터 선택 (PBR용 - 최신 분기 포함)
+            stock_financial_latest = stock_financial.sort('report_date', descending=True).head(1)
+
+            # PER 계산을 위해 당기순이익이 있는 연간 보고서 우선 선택
+            # report_code='11011'은 연간보고서
+            annual_reports = stock_financial.filter(pl.col('report_code') == '11011')
+            if not annual_reports.is_empty():
+                stock_financial_annual = annual_reports.sort('report_date', descending=True).head(1)
+            else:
+                stock_financial_annual = None
+
             entry = factors.setdefault(stock, {})
 
-            net_income = stock_financial.select('당기순이익').to_pandas().iloc[0, 0] if '당기순이익' in stock_financial.columns else None
-            equity = stock_financial.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in stock_financial.columns else None
-            market_cap = stock_price.select('market_cap').to_pandas().iloc[0, 0] if 'market_cap' in stock_price.columns else None
+            # NaN 체크를 위해 pandas의 isna() 사용
+            import pandas as pd
+
+            # 당기순이익: 연간 보고서에서 가져오기 (없으면 None)
+            if stock_financial_annual is not None:
+                net_income_raw = stock_financial_annual.select('당기순이익').to_pandas().iloc[0, 0] if '당기순이익' in stock_financial_annual.columns else None
+            else:
+                net_income_raw = None
+
+            # 자본총계: 최신 데이터 사용
+            equity_raw = stock_financial_latest.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in stock_financial_latest.columns else None
+            market_cap_raw = stock_price.select('market_cap').to_pandas().iloc[0, 0] if 'market_cap' in stock_price.columns else None
+
+            # NaN을 None으로 변환
+            net_income = None if net_income_raw is None or pd.isna(net_income_raw) else net_income_raw
+            equity = None if equity_raw is None or pd.isna(equity_raw) else equity_raw
+            market_cap = None if market_cap_raw is None or pd.isna(market_cap_raw) else market_cap_raw
 
             if net_income and market_cap and net_income > 0:
                 entry['PER'] = float(market_cap) / float(net_income)
@@ -1202,11 +1245,21 @@ class BacktestEngine:
             priority_order = buy_conditions.get('priority_order', 'desc')
 
         # 일별 시뮬레이션
+        total_days = len([d for d in trading_days if pd.Timestamp(start_date) <= d <= pd.Timestamp(end_date)])
+        current_day_index = 0
+
+        # MDD 추적 변수
+        peak_value = float(initial_capital)
+        current_mdd = 0.0
+
         for trading_day in trading_days:
             if trading_day < pd.Timestamp(start_date) or trading_day > pd.Timestamp(end_date):
                 continue
 
+            current_day_index += 1
             daily_new_positions = 0
+            daily_buy_count = 0  # 당일 매수 횟수
+            daily_sell_count = 0  # 당일 매도 횟수
 
             # 매도 신호 확인 및 실행 (매일 체크)
             sell_trades = await self._execute_sells(
@@ -1215,7 +1268,7 @@ class BacktestEngine:
                 price_data, trading_day, cash_balance,
                 orders, executions
             )
-            sell_executions = sell_trades
+            daily_sell_count = len(sell_trades)  # 당일 매도 횟수 기록
 
             # 매도 후 현금 업데이트
             for trade in sell_trades:
@@ -1332,7 +1385,7 @@ class BacktestEngine:
                     daily_new_positions=daily_new_positions,
                     max_daily_new_positions=self.max_daily_stock
                 )
-                buy_executions = buy_trades
+                daily_buy_count = len(buy_trades)  # 당일 매수 횟수 기록
 
                 # 매수 후 현금 업데이트
                 for trade in buy_trades:
@@ -1387,6 +1440,46 @@ class BacktestEngine:
                 'benchmark_return': benchmark_ret
             }
             daily_snapshots.append(daily_snapshot)
+
+            # 실시간 진행 상황 업데이트 (매 10일마다 또는 5% 진행마다)
+            progress_percentage = int((current_day_index / total_days) * 100)
+            should_update = (
+                current_day_index % 10 == 0 or  # 10일마다
+                progress_percentage % 5 == 0  # 5%마다
+            )
+
+            if should_update:
+                # 현재 수익률 계산
+                current_return = ((portfolio_value - initial_capital) / initial_capital) * 100
+
+                # MDD 계산
+                portfolio_value_float = float(portfolio_value)
+                if portfolio_value_float > peak_value:
+                    peak_value = portfolio_value_float
+                drawdown = ((portfolio_value_float - peak_value) / peak_value) * 100
+                if drawdown < current_mdd:
+                    current_mdd = drawdown
+                # SimulationSession 업데이트
+                from sqlalchemy import update
+                from app.models.simulation import SimulationSession
+
+                stmt = (
+                    update(SimulationSession)
+                    .where(SimulationSession.session_id == str(backtest_id))
+                    .values(
+                        progress=progress_percentage,
+                        current_date=trading_day.date(),
+                        buy_count=daily_buy_count,  # 당일 매수 횟수
+                        sell_count=daily_sell_count,  # 당일 매도 횟수
+                        current_return=float(current_return),
+                        current_capital=float(portfolio_value),
+                        current_mdd=float(current_mdd)
+                    )
+                )
+                await self.db.execute(stmt)
+                await self.db.commit()
+
+                logger.info(f"📊 실시간 진행 상황 업데이트: {progress_percentage}% | 날짜: {trading_day.date()} | 매수: {daily_buy_count} | 매도: {daily_sell_count} | 수익률: {current_return:.2f}% | MDD: {current_mdd:.2f}%")
 
         # 백테스트 종료 시 모든 보유 종목 강제 매도
         if holdings:
@@ -1605,7 +1698,7 @@ class BacktestEngine:
                     'order_id': f"ORD-S-{stock_code}-{trading_day}",
                     'order_date': trading_day,
                     'stock_code': stock_code,
-                    'stock_name': f"Stock_{stock_code}",
+                    'stock_name': holding.stock_name,
                     'side': 'SELL',
                     'order_type': 'MARKET',
                     'quantity': quantity,
@@ -1620,7 +1713,7 @@ class BacktestEngine:
                     'execution_date': trading_day,
                     'trade_date': trading_day,
                     'stock_code': stock_code,
-                    'stock_name': f"Stock_{stock_code}",
+                    'stock_name': holding.stock_name,
                     'side': 'SELL',
                     'trade_type': 'SELL',
                     'quantity': quantity,
@@ -1677,12 +1770,17 @@ class BacktestEngine:
         # 포지션 사이징에서 available_slots로 신규 매수 수량 제한
 
         # 통합 모듈로 매수 조건 평가 (54개 팩터 사용)
+        logger.info(f"🔍 조건 평가 시작 - 거래 가능 종목: {len(tradeable_stocks)}개, 조건 타입: {type(buy_conditions)}")
+        logger.info(f"🔍 buy_conditions 내용: {buy_conditions}")
+
         selected_stocks = factor_integrator.evaluate_buy_conditions_with_factors(
             factor_data=factor_data,
             stock_codes=tradeable_stocks,
             buy_conditions=buy_conditions,
             trading_date=trading_ts
         )
+
+        logger.info(f"🔍 조건 평가 완료 - 조건 만족 종목: {len(selected_stocks)}개 - {selected_stocks[:10]}")
 
         # 팩터 가중치가 있는 경우 스코어링
         if isinstance(buy_conditions, dict) and 'factor_weights' in buy_conditions:
@@ -1892,6 +1990,7 @@ class BacktestEngine:
                 continue
 
             current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
+            stock_name = current_price_data.iloc[0].get('stock_name', f"Stock_{stock_code}")
 
             # 슬리피지 적용
             execution_price = current_price * (1 + self.slippage)
@@ -1935,7 +2034,7 @@ class BacktestEngine:
                 'order_id': f"ORD-B-{stock_code}-{trading_day}",
                 'order_date': trading_day,
                 'stock_code': stock_code,
-                'stock_name': f"Stock_{stock_code}",
+                'stock_name': stock_name,
                 'side': 'BUY',
                 'order_type': 'MARKET',
                 'quantity': quantity,
@@ -1951,7 +2050,7 @@ class BacktestEngine:
                 'execution_date': trading_day,
                 'trade_date': trading_day,
                 'stock_code': stock_code,
-                'stock_name': f"Stock_{stock_code}",
+                'stock_name': stock_name,
                 'side': 'BUY',
                 'trade_type': 'BUY',
                 'quantity': quantity,
@@ -1980,7 +2079,7 @@ class BacktestEngine:
                 holdings[stock_code] = Position(
                     position_id=f"POS-{stock_code}-{trading_day}",
                     stock_code=stock_code,
-                    stock_name=f"Stock_{stock_code}",
+                    stock_name=stock_name,
                     entry_date=trading_day,
                     entry_price=execution_price,
                     quantity=quantity,
@@ -2315,8 +2414,16 @@ class BacktestEngine:
         if not sell_trades:
             return {}
 
+        # buy_conditions가 dict 형태(논리식)인 경우 조건 리스트 추출
+        conditions_list = buy_conditions
+        if isinstance(buy_conditions, dict) and 'conditions' in buy_conditions:
+            conditions_list = buy_conditions['conditions']
+        elif isinstance(buy_conditions, dict):
+            # dict이지만 'conditions' 키가 없는 경우 빈 리스트
+            conditions_list = []
+
         # 각 팩터별 성과 분석
-        for condition in buy_conditions:
+        for condition in conditions_list:
             factor_name = condition.get('factor')
             if not factor_name:
                 continue
@@ -2542,16 +2649,15 @@ class BacktestEngine:
         # 연도별 성과 집계
         yearly_performance = self._aggregate_yearly_performance(daily_snapshots)
 
-        # 거래 내역 변환
+        # 거래 내역 변환 (BUY와 SELL 모두 포함)
         trade_records = []
         executions = portfolio_result.get('executions', [])
         for execution in executions:
-            if execution.get('side') != 'SELL':
-                continue
+            trade_type = execution.get('side', execution.get('trade_type', 'UNKNOWN'))
             trade_records.append(TradeRecord(
                 trade_id=str(execution.get('execution_id', '')),
                 trade_date=execution['execution_date'],
-                trade_type='SELL',
+                trade_type=trade_type,
                 stock_code=execution['stock_code'],
                 stock_name=execution.get('stock_name', ''),
                 quantity=execution['quantity'],

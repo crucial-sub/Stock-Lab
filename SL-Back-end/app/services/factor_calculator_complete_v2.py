@@ -16,12 +16,11 @@ from app.models.stock_price import StockPrice
 from app.models.financial_statement import FinancialStatement
 from app.models.income_statement import IncomeStatement
 from app.models.balance_sheet import BalanceSheet
-from app.models.cashflow_statement import CashflowStatement
 
 logger = logging.getLogger(__name__)
 
 
-class CompleteFactorCalculator:
+class CompleteFactorCalculatorV2:
     """
     54개 팩터 완전 구현 V2
     현재 데이터베이스 스키마에 맞게 재설계
@@ -176,8 +175,7 @@ class CompleteFactorCalculator:
 
         # 손익계산서 계정 과목
         income_accounts = [
-            '당기순이익', '당기순이익(손실)',  # 2023년에는 "당기순이익(손실)" 사용
-            '영업이익', '매출액', '매출원가', '매출총이익',  # 2023은 매출총이익 사용
+            '당기순이익', '영업이익', '매출액', '매출원가',
             '영업비용', '법인세비용', '이자비용'
         ]
 
@@ -187,9 +185,6 @@ class CompleteFactorCalculator:
             '유동자산', '비유동자산', '유동부채', '비유동부채',
             '재고자산', '매출채권', '현금및현금성자산'
         ]
-
-        # 현금흐름표 계정 과목 (패턴 매칭)
-        # - 영업활동현금흐름은 다양한 표기가 있음: "영업활동현금흐름", "영업활동으로 인한 현금흐름" 등
 
         # 손익계산서 데이터
         income_query = select(
@@ -223,34 +218,11 @@ class CompleteFactorCalculator:
             and_(*base_filters, BalanceSheet.account_nm.in_(balance_accounts))
         )
 
-        # 현금흐름표 데이터 (영업활동현금흐름 찾기)
-        cashflow_query = select(
-            Company.stock_code,
-            FinancialStatement.bsns_year.label('fiscal_year'),
-            FinancialStatement.reprt_code.label('report_code'),
-            CashflowStatement.account_nm,
-            CashflowStatement.thstrm_amount.label('current_amount')
-        ).join(
-            CashflowStatement, FinancialStatement.stmt_id == CashflowStatement.stmt_id
-        ).join(
-            Company, FinancialStatement.company_id == Company.company_id
-        ).where(
-            and_(
-                *base_filters,
-                CashflowStatement.account_nm.like('%영업활동%현금%')
-            )
-        )
-
         income_df = pd.DataFrame((await self.db.execute(income_query)).mappings().all())
         balance_df = pd.DataFrame((await self.db.execute(balance_query)).mappings().all())
-        cashflow_df = pd.DataFrame((await self.db.execute(cashflow_query)).mappings().all())
 
-        if income_df.empty and balance_df.empty and cashflow_df.empty:
+        if income_df.empty and balance_df.empty:
             return pd.DataFrame()
-
-        # 계정 과목 정규화 (연도별 차이 해결)
-        if not income_df.empty:
-            income_df['account_nm'] = income_df['account_nm'].str.replace('당기순이익(손실)', '당기순이익', regex=False)
 
         def _pivot(df: pd.DataFrame) -> pd.DataFrame:
             if df.empty:
@@ -268,17 +240,6 @@ class CompleteFactorCalculator:
         income_pivot = _pivot(income_df)
         balance_pivot = _pivot(balance_df)
 
-        # 현금흐름표 피벗 (영업활동현금흐름만 추출)
-        cashflow_pivot = pd.DataFrame()
-        if not cashflow_df.empty:
-            # 영업활동현금흐름 값 추출 (다양한 표기 중 첫 번째 값 사용)
-            cashflow_grouped = cashflow_df.groupby(['stock_code', 'fiscal_year', 'report_code']).agg({
-                'current_amount': 'first'  # 첫 번째 매칭되는 값 사용
-            }).reset_index()
-            cashflow_grouped.rename(columns={'current_amount': '영업활동현금흐름'}, inplace=True)
-            cashflow_pivot = cashflow_grouped
-
-        # merge income and balance
         if income_pivot.empty:
             merged = balance_pivot
         elif balance_pivot.empty:
@@ -289,15 +250,6 @@ class CompleteFactorCalculator:
                 balance_pivot,
                 on=['stock_code', 'fiscal_year', 'report_code'],
                 how='outer'
-            )
-
-        # merge cashflow
-        if not cashflow_pivot.empty and not merged.empty:
-            merged = pd.merge(
-                merged,
-                cashflow_pivot,
-                on=['stock_code', 'fiscal_year', 'report_code'],
-                how='left'
             )
 
         if merged.empty:
@@ -318,24 +270,6 @@ class CompleteFactorCalculator:
             return datetime(year, 12, 31)
 
         merged['report_date'] = merged.apply(_report_date, axis=1)
-
-        # 매출액 계산 (2023년처럼 직접 제공되지 않는 경우)
-        # Revenue = Cost of Goods Sold + Gross Profit
-        if '매출액' in merged.columns and '매출원가' in merged.columns and '매출총이익' in merged.columns:
-            merged['매출액'] = merged.apply(
-                lambda row: row['매출원가'] + row['매출총이익']
-                if pd.isna(row.get('매출액')) and pd.notna(row.get('매출원가')) and pd.notna(row.get('매출총이익'))
-                else row.get('매출액'),
-                axis=1
-            )
-
-        # 성장률 계산을 위해 연간 보고서(11011)를 우선적으로 사용
-        # 연간 보고서가 가장 완전한 데이터를 포함
-        annual_only = merged[merged['report_code'] == '11011'].copy()
-
-        # 연간 보고서가 있으면 그것만 사용, 없으면 전체 사용
-        if not annual_only.empty and len(annual_only) >= 2:
-            merged = annual_only
 
         # 각 종목별로 최신 데이터와 이전 연도 데이터 모두 유지 (성장률 계산용)
         merged = merged.sort_values(['stock_code', 'report_date'], ascending=[True, False])
@@ -388,8 +322,7 @@ class CompleteFactorCalculator:
         turnover = recent_window.groupby('stock_code').apply(
             lambda g: _safe_ratio(g['volume'].mean(), g['listed_shares'].iloc[0]) * 100 if len(g) > 0 and g['listed_shares'].iloc[0] else None,
             include_groups=False
-        )
-        turnover.name = 'TURNOVER_RATE'
+        ).rename('TURNOVER_RATE')
 
         # 모멘텀 팩터
         momentum_window = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=120)]
@@ -399,8 +332,7 @@ class CompleteFactorCalculator:
                 g.sort_values('trade_date').iloc[0]['close_price']
             ) - 1 if not g.empty and len(g[g['trade_date'] == g['trade_date'].max()]) > 0 else None,
             include_groups=False
-        )
-        momentum.name = 'MOM_3M'
+        ).rename('MOM_3M')
 
         # 변동성
         pct_returns = price_df.sort_values('trade_date').groupby('stock_code')['close_price'].pct_change()
@@ -465,11 +397,8 @@ class CompleteFactorCalculator:
             lambda row: _safe_ratio(row.get('자산총계'), row.get('자본총계')), axis=1
         )
 
-        # OCF_RATIO: 영업현금흐름비율 = 영업활동현금흐름 / 매출액 * 100
-        result['OCF_RATIO'] = latest.apply(
-            lambda row: _safe_ratio(row.get('영업활동현금흐름'), row.get('매출액')) * 100
-            if _safe_ratio(row.get('영업활동현금흐름'), row.get('매출액')) is not None else None, axis=1
-        )
+        # 영업현금흐름은 cashflow_statements에서 가져와야 하므로 나중에 추가
+        result['OCF_RATIO'] = None
 
         return result
 
@@ -633,26 +562,13 @@ class CompleteFactorCalculator:
             lambda row: _safe_ratio(row.get('현금및현금성자산'), row.get('유동부채')), axis=1
         )
 
-        # WORKING_CAPITAL_RATIO: 운전자본비율 = (유동자산 - 유동부채) / 자산총계 * 100
-        result['WORKING_CAPITAL_RATIO'] = latest.apply(
-            lambda row: _safe_ratio(
-                (row.get('유동자산', 0) - row.get('유동부채', 0)),
-                row.get('자산총계')
-            ) * 100 if row.get('자산총계', 0) > 0 else None, axis=1
-        )
-
-        # EQUITY_RATIO: 자기자본비율 = 자본총계 / 자산총계 * 100
+        # 나머지 팩터들은 더 복잡한 계산 필요
+        result['ALTMAN_Z_SCORE'] = None
+        result['WORKING_CAPITAL_RATIO'] = None
         result['EQUITY_RATIO'] = latest.apply(
             lambda row: _safe_ratio(row.get('자본총계'), row.get('자산총계')) * 100
             if _safe_ratio(row.get('자본총계'), row.get('자산총계')) is not None else None, axis=1
         )
-
-        # ALTMAN_Z_SCORE: 알트만 Z스코어 (간소화 버전)
-        # Z = 1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5
-        # X1 = 운전자본/자산총계, X2 = 이익잉여금/자산총계, X3 = 영업이익/자산총계
-        # X4 = 시가총액/부채총계, X5 = 매출액/자산총계
-        # 이익잉여금 데이터가 없으므로 간소화된 버전 사용
-        result['ALTMAN_Z_SCORE'] = None  # 이익잉여금 데이터 필요
 
         return result
 
@@ -719,16 +635,9 @@ class CompleteFactorCalculator:
                 if avg_vol_prev > 0:
                     row['VOLUME_ROC'] = ((avg_vol_recent - avg_vol_prev) / avg_vol_prev) * 100
 
-            # PRICE_TO_MA_20: 주가 / 20일 이동평균
-            if len(latest_prices) >= 20:
-                recent_20 = latest_prices.tail(20)
-                ma_20 = recent_20['close_price'].mean()
-                current = latest_prices.iloc[-1]['close_price']
-                if ma_20 > 0:
-                    row['PRICE_TO_MA_20'] = (current / ma_20) * 100
-
-            # MACD는 EMA 계산이 복잡하여 보류
+            # MACD는 복잡하므로 나중에 추가
             row['MACD_SIGNAL'] = None
+            row['PRICE_TO_MA_20'] = None
 
             result_list.append(row)
 
@@ -749,43 +658,19 @@ class CompleteFactorCalculator:
         result = pd.DataFrame()
         result['stock_code'] = latest['stock_code']
 
-        def _safe_ratio(num, den):
-            if num is None or den is None or pd.isna(num) or pd.isna(den) or den == 0:
-                return None
-            return float(num) / float(den)
+        # Accruals Ratio = (당기순이익 - 영업현금흐름) / 자산총계
+        # 영업현금흐름 데이터가 없으므로 일단 None
+        result['ACCRUALS_RATIO'] = None
+        result['EARNINGS_QUALITY'] = None
+        result['QUALITY_SCORE'] = None
 
-        # ACCRUALS_RATIO: 발생액비율 = (당기순이익 - 영업활동현금흐름) / 자산총계
-        result['ACCRUALS_RATIO'] = latest.apply(
-            lambda row: _safe_ratio(
-                (row.get('당기순이익', 0) - row.get('영업활동현금흐름', 0)),
-                row.get('자산총계')
-            ) if row.get('영업활동현금흐름') is not None else None, axis=1
-        )
-
-        # EARNINGS_QUALITY: 이익품질 = 영업활동현금흐름 / 당기순이익
-        result['EARNINGS_QUALITY'] = latest.apply(
-            lambda row: _safe_ratio(row.get('영업활동현금흐름'), row.get('당기순이익'))
-            if row.get('영업활동현금흐름') is not None and row.get('당기순이익') is not None else None, axis=1
-        )
-
-        # QUALITY_SCORE: 간단한 품질 점수 (0-5 점)
-        result['QUALITY_SCORE'] = latest.apply(
-            lambda row: (
-                (1 if row.get('당기순이익', 0) > 0 else 0) +
-                (1 if row.get('영업활동현금흐름', 0) > 0 else 0) +
-                (1 if row.get('영업활동현금흐름', 0) > row.get('당기순이익', 0) else 0) +
-                (1 if row.get('자본총계', 0) > row.get('부채총계', 0) else 0) +
-                (1 if row.get('유동자산', 0) > row.get('유동부채', 1) else 0)
-            ), axis=1
-        )
-
-        # LEVERAGE: 레버리지 = 부채총계 / 자산총계 * 100
+        # 자산 대비 부채 비율
         result['LEVERAGE'] = latest.apply(
-            lambda row: _safe_ratio(row.get('부채총계'), row.get('자산총계')) * 100
-            if _safe_ratio(row.get('부채총계'), row.get('자산총계')) is not None else None, axis=1
+            lambda row: (row.get('부채총계', 0) / row.get('자산총계', 1)) * 100
+            if row.get('자산총계', 0) > 0 else None, axis=1
         )
 
-        # RETENTION_RATIO: 유보율 (배당 데이터 필요)
+        # 유보율 (retained earnings ratio) - 근사치
         result['RETENTION_RATIO'] = None
 
         return result

@@ -221,6 +221,14 @@ class SimulationSession(Base):
     progress = Column(Integer, default=0, comment="진행률 (%)")
     error_message = Column(Text, nullable=True, comment="에러 메시지")
 
+    # 실시간 진행 상황 (백테스트 실행 중에만 사용)
+    current_date = Column("current_date", Date, nullable=True, comment="현재 처리 중인 날짜")
+    buy_count = Column(Integer, default=0, comment="현재까지 매수 횟수")
+    sell_count = Column(Integer, default=0, comment="현재까지 매도 횟수")
+    current_return = Column(DECIMAL(10, 4), nullable=True, comment="현재 수익률 (%)")
+    current_capital = Column(DECIMAL(15, 2), nullable=True, comment="현재 자본금")
+    current_mdd = Column(DECIMAL(10, 4), nullable=True, comment="현재 MDD (%)")
+
     # 공유 설정
     is_public = Column(Boolean, default=False, comment="공개 여부 (랭킹 노출)")
     is_anonymous = Column(Boolean, default=False, comment="익명 공개 여부")

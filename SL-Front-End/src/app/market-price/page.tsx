@@ -4,14 +4,14 @@ import { useState, useEffect } from "react";
 
 import { Icon } from "@/components/common/Icon";
 import { StockInfoCard } from "@/components/market-price/StockInfoCard";
-import { marketQuoteApi } from "@/lib/api/market-quote";
+import { marketQuoteApi, type SortBy } from "@/lib/api/market-quote";
 
-const marketTabs = [
-  "최근 본 주식",
-  "체결량 순",
-  "등락률 순",
-  "거래 대금 순",
-  "시가총액 순",
+const marketTabs: { label: string; sortBy: SortBy }[] = [
+  { label: "시가총액 순", sortBy: "market_cap" },
+  { label: "체결량 순", sortBy: "volume" },
+  { label: "등락률 순", sortBy: "change_rate" },
+  { label: "거래 대금 순", sortBy: "trading_value" },
+  
 ];
 
 const columnTemplate = "grid grid-cols-[2.6fr,1fr,1fr,1fr,1fr,1fr] gap-4";
@@ -30,7 +30,7 @@ type MarketRow = {
 };
 
 export default function MarketPricePage() {
-  const [selectedTab, setSelectedTab] = useState(marketTabs[0]);
+  const [selectedTab, setSelectedTab] = useState(marketTabs[0]); // 시가총액 순 기본값
   const [rows, setRows] = useState<MarketRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<MarketRow | null>(null);
   const todayLabel = new Date().toLocaleDateString("ko-KR", {
@@ -44,7 +44,7 @@ export default function MarketPricePage() {
     const fetchData = async () => {
       try {
         const response = await marketQuoteApi.getMarketQuotes({
-          sortBy: "market_cap",
+          sortBy: selectedTab.sortBy,
           sortOrder: "desc",
           page: 1,
           pageSize: 50,
@@ -52,7 +52,7 @@ export default function MarketPricePage() {
 
         console.log("API Response:", response);
 
-        // API 데이터를 목업 데이터 형식으로 변환
+        // API 데이터를 표시 형식으로 변환
         const formattedRows = response.items.map((item) => ({
           rank: item.rank,
           name: item.name,
@@ -74,7 +74,7 @@ export default function MarketPricePage() {
     };
 
     fetchData();
-  }, []);
+  }, [selectedTab]);
 
   const handleToggleFavorite = (rank: number) => {
     setRows((prev) =>
@@ -93,10 +93,10 @@ export default function MarketPricePage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-wrap gap-2">
               {marketTabs.map((tab) => {
-                const isActive = tab === selectedTab;
+                const isActive = tab.sortBy === selectedTab.sortBy;
                 return (
                   <button
-                    key={tab}
+                    key={tab.sortBy}
                     type="button"
                     onClick={() => setSelectedTab(tab)}
                     className={`rounded-[8px] px-[1.5rem] py-[0.5rem] text-[1.25rem] font-semibold transition ${isActive
@@ -104,7 +104,7 @@ export default function MarketPricePage() {
                       : "text-text-body font-normal"
                       }`}
                   >
-                    {tab}
+                    {tab.label}
                   </button>
                 );
               })}

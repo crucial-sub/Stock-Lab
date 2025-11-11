@@ -69,7 +69,7 @@ export function BuyConditionsSection() {
   };
 
   return (
-    <div className="space-y-3">
+    <div id="section-buy-conditions" className="space-y-3">
       <SectionHeader title="매수 조건 설정" />
 
       <FieldPanel conditionType="buy">

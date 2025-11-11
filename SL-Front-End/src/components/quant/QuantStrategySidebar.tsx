@@ -56,34 +56,78 @@ export default function QuantStrategySidebar({
       setSelectedSubItem(firstItem);
       setActiveTab(tab);
 
-      // 중앙 컨텐츠 영역의 해당 섹션으로 스크롤
-      scrollToSection(firstItem);
+      // 탭 전환 후 DOM 렌더링을 기다린 후 스크롤 (100ms 딜레이)
+      setTimeout(() => {
+        scrollToSection(firstItem);
+      }, 100);
     }
   };
 
   // 세부 항목 클릭 핸들러 - 탭 전환 + 아이템 선택 + 스크롤
   const handleSubItemClick = (tab: "buy" | "sell" | "target", subItem: string) => {
+    const currentTab = activeTab;
     setSelectedSubItem(subItem);
     setActiveTab(tab);
 
-    // 중앙 컨텐츠 영역의 해당 섹션으로 스크롤
-    scrollToSection(subItem);
+    // 같은 탭 내에서는 즉시 스크롤, 다른 탭으로 전환 시 DOM 렌더링 대기 후 스크롤
+    if (currentTab === tab) {
+      scrollToSection(subItem);
+    } else {
+      setTimeout(() => {
+        scrollToSection(subItem);
+      }, 100);
+    }
   };
 
   // 중앙 컨텐츠 영역의 섹션으로 스크롤하는 함수
   const scrollToSection = (sectionName: string) => {
-    // 섹션 이름을 ID로 변환 (공백 제거, 소문자 변환)
-    const sectionId = sectionName.replace(/\s+/g, '-').toLowerCase();
-    const element = document.getElementById(sectionId);
+    // 섹션 이름을 영문 ID로 매핑
+    const sectionIdMap: Record<string, string> = {
+      '일반 조건 설정': 'section-general-settings',
+      '매수 조건 설정': 'section-buy-conditions',
+      '매수 비중 설정': 'section-buy-weight',
+      '매수 방법 선택': 'section-buy-method',
+      '목표가 / 손절가': 'section-target-loss',
+      '보유 기간': 'section-hold-period',
+      '조건 매도': 'section-conditional-sell',
+      '매매 대상 선택': 'section-trade-target',
+    };
 
-    if (element) {
-      // 부드러운 스크롤, 화면 중앙에 배치하여 최적의 가독성 제공
-      element.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-        inline: 'nearest'
-      });
+    const sectionId = sectionIdMap[sectionName];
+
+    if (!sectionId) {
+      console.warn(`[Scroll] 섹션 ID 매핑을 찾을 수 없습니다: ${sectionName}`);
+      return;
     }
+
+    // 타겟 섹션 요소 찾기
+    const targetElement = document.getElementById(sectionId);
+    if (!targetElement) {
+      console.warn(`[Scroll] 타겟 요소를 찾을 수 없습니다: ${sectionId}`);
+      return;
+    }
+
+    // 스크롤 컨테이너 찾기 (fixed 위치의 중앙 컨텐츠 영역)
+    const scrollContainer = document.getElementById('quant-main-content');
+    if (!scrollContainer) {
+      console.warn('[Scroll] 스크롤 컨테이너를 찾을 수 없습니다: quant-main-content');
+      return;
+    }
+
+    // 컨테이너 내에서 타겟 요소의 상대적 위치 계산
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetRect = targetElement.getBoundingClientRect();
+
+    // 타겟 요소가 컨테이너 상단에서 80px 아래에 오도록 스크롤 위치 계산
+    const scrollOffset = targetRect.top - containerRect.top + scrollContainer.scrollTop - 80;
+
+    // 스크롤 컨테이너를 스크롤
+    scrollContainer.scrollTo({
+      top: scrollOffset,
+      behavior: 'smooth'
+    });
+
+    console.log(`[Scroll] 스크롤 실행: ${sectionName} → ${sectionId}, offset: ${scrollOffset}`);
   };
 
 

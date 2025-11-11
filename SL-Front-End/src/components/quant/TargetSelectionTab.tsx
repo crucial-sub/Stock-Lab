@@ -165,7 +165,7 @@ export default function TargetSelectionTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div id="section-trade-target" className="space-y-6">
       {/* 헤더 */}
       <TradeTargetHeader selectedCount={2539} totalCount={3580} />
 

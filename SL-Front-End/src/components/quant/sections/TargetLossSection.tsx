@@ -45,7 +45,7 @@ export function TargetLossSection() {
   ]);
 
   return (
-    <div className="space-y-3">
+    <div id="section-target-loss" className="space-y-3">
       <SectionHeader
         title="목표가 / 손절가"
         description="설사리 감사에 따라 목표 기준에서의 매수가 / 손절가에 도달 시 매도 주문을 합니다."

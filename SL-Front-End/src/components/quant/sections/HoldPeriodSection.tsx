@@ -47,7 +47,7 @@ export function HoldPeriodSection() {
   ]);
 
   return (
-    <div className="space-y-3">
+    <div id="section-hold-period" className="space-y-3">
       <SectionHeader
         title="보유 기간"
         description="최소 보유일 만큼 시 매수 후 일정 기간 이상 매매 어떤 상황에도 매도되지 않습니다. 최대 보유일 경과 시 매매 주 후에도 주문을 합니다."

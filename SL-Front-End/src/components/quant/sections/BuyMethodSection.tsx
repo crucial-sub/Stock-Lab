@@ -26,7 +26,7 @@ export function BuyMethodSection() {
   }, [buyCostBasisSelect, buyCostBasisValue, setBuyPriceBasis, setBuyPriceOffset]);
 
   return (
-    <div className="space-y-3">
+    <div id="section-buy-method" className="space-y-3">
       <SectionHeader title="매수 방법 선택" />
 
       <FieldPanel conditionType="buy">

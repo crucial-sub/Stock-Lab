@@ -26,7 +26,7 @@ export function BuyWeightSection() {
   const [enableMaxDailyStock, setEnableMaxDailyStock] = useState(max_daily_stock !== null);
 
   return (
-    <div className="space-y-3">
+    <div id="section-buy-weight" className="space-y-3">
       <SectionHeader title="매수 비중 설정" />
 
       <FieldPanel conditionType="buy">

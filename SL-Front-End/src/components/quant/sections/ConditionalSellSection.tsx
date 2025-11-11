@@ -91,7 +91,7 @@ export function ConditionalSellSection() {
   ]);
 
   return (
-    <div className="space-y-3">
+    <div id="section-conditional-sell" className="space-y-3">
       <SectionHeader
         title="조건 매도"
         description="변경된 상영한 조건식을 충족했을 때도 주문을 합니다."

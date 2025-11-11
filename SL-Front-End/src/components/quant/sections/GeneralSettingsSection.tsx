@@ -24,7 +24,7 @@ export function GeneralSettingsSection() {
   } = useBacktestConfigStore();
 
   return (
-    <div className="space-y-3">
+    <div id="section-general-settings" className="space-y-3">
       <SectionHeader title="일반 조건 설정" />
       <FieldPanel conditionType="buy">
 

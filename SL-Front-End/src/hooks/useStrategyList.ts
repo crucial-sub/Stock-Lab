@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import type { Strategy } from "@/types/strategy";
 
 /**
@@ -6,6 +6,8 @@ import type { Strategy } from "@/types/strategy";
  * - 전략 목록 상태 관리
  * - 선택, 검색, 삭제 등의 로직 처리
  * - 향후 서버 연동을 위한 구조 준비
+ *
+ * Note: React Compiler가 자동으로 메모이제이션을 처리하므로 useCallback 제거
  */
 export function useStrategyList(initialStrategies: Strategy[] = []) {
   // 전략 목록 상태
@@ -23,35 +25,35 @@ export function useStrategyList(initialStrategies: Strategy[] = []) {
   /**
    * 개별 전략 선택/해제
    */
-  const toggleStrategy = useCallback((id: number) => {
+  const toggleStrategy = (id: number) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((strategyId) => strategyId !== id) : [...prev, id]
     );
-  }, []);
+  };
 
   /**
    * 전체 전략 선택/해제
    */
-  const toggleAllStrategies = useCallback(() => {
+  const toggleAllStrategies = () => {
     if (selectedIds.length === strategies.length) {
       setSelectedIds([]);
     } else {
       setSelectedIds(strategies.map((s) => s.id));
     }
-  }, [selectedIds.length, strategies]);
+  };
 
   /**
    * 검색 키워드 업데이트
    */
-  const updateSearchKeyword = useCallback((keyword: string) => {
+  const updateSearchKeyword = (keyword: string) => {
     setSearchKeyword(keyword);
-  }, []);
+  };
 
   /**
    * 검색 실행
    * TODO: 향후 서버 API 연동 예정
    */
-  const executeSearch = useCallback(async () => {
+  const executeSearch = async () => {
     setIsLoading(true);
     try {
       // TODO: API 호출
@@ -73,13 +75,13 @@ export function useStrategyList(initialStrategies: Strategy[] = []) {
     } finally {
       setIsLoading(false);
     }
-  }, [searchKeyword, initialStrategies]);
+  };
 
   /**
    * 선택된 전략 삭제
    * TODO: 향후 서버 API 연동 예정
    */
-  const deleteSelectedStrategies = useCallback(async () => {
+  const deleteSelectedStrategies = async () => {
     if (selectedIds.length === 0) return;
 
     const confirmed = window.confirm(
@@ -105,13 +107,13 @@ export function useStrategyList(initialStrategies: Strategy[] = []) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedIds]);
+  };
 
   /**
    * 전략 목록 새로고침
    * TODO: 향후 서버 API 연동 예정
    */
-  const refreshStrategies = useCallback(async () => {
+  const refreshStrategies = async () => {
     setIsLoading(true);
     try {
       // TODO: API 호출
@@ -125,7 +127,7 @@ export function useStrategyList(initialStrategies: Strategy[] = []) {
     } finally {
       setIsLoading(false);
     }
-  }, [initialStrategies]);
+  };
 
   return {
     // 상태

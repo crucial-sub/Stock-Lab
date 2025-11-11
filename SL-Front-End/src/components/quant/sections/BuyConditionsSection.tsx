@@ -7,6 +7,7 @@ import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 /**
  * 매수 조건식 설정 섹션
@@ -15,30 +16,28 @@ import { useEffect, useState } from "react";
  * - 매수 종목 선택 우선순위 (팩터 선택 모달 사용)
  */
 export function BuyConditionsSection() {
-  // ✅ backtestConfigStore에서 직접 가져오기
+  // ✅ useShallow hook 사용 (데이터와 함수 분리)
   const {
     buyConditionsUI,
-    addBuyConditionUI,
-    updateBuyConditionUI,
-    removeBuyConditionUI,
     buy_logic,
-    setBuyLogic,
     priority_factor,
-    setPriorityFactor,
     priority_order,
-    setPriorityOrder,
-  } = useBacktestConfigStore((state) => ({
-    buyConditionsUI: state.buyConditionsUI,
-    addBuyConditionUI: state.addBuyConditionUI,
-    updateBuyConditionUI: state.updateBuyConditionUI,
-    removeBuyConditionUI: state.removeBuyConditionUI,
-    buy_logic: state.buy_logic,
-    setBuyLogic: state.setBuyLogic,
-    priority_factor: state.priority_factor,
-    setPriorityFactor: state.setPriorityFactor,
-    priority_order: state.priority_order,
-    setPriorityOrder: state.setPriorityOrder,
-  }));
+  } = useBacktestConfigStore(
+    useShallow((state) => ({
+      buyConditionsUI: state.buyConditionsUI,
+      buy_logic: state.buy_logic,
+      priority_factor: state.priority_factor,
+      priority_order: state.priority_order,
+    }))
+  );
+
+  // 함수들은 별도로 선택 (안정적인 참조)
+  const addBuyConditionUI = useBacktestConfigStore(state => state.addBuyConditionUI);
+  const updateBuyConditionUI = useBacktestConfigStore(state => state.updateBuyConditionUI);
+  const removeBuyConditionUI = useBacktestConfigStore(state => state.removeBuyConditionUI);
+  const setBuyLogic = useBacktestConfigStore(state => state.setBuyLogic);
+  const setPriorityFactor = useBacktestConfigStore(state => state.setPriorityFactor);
+  const setPriorityOrder = useBacktestConfigStore(state => state.setPriorityOrder);
 
   const { data: subFactors = [] } = useSubFactorsQuery();
   const { data: factors = [] } = useFactorsQuery();

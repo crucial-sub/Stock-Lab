@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo } from "react";
 
 import { Title } from "@/components/common/Title";
 import { SearchBar } from "@/components/quant/list/SearchBar";
@@ -22,18 +21,15 @@ import type { Strategy } from "@/types/strategy";
  */
 export default function QuantPage() {
   // 더미 데이터 (향후 서버 API로 교체)
-  const initialStrategies: Strategy[] = useMemo(
-    () =>
-      Array.from({ length: 10 }, (_, i) => ({
-        id: i + 1,
-        name: "전략 이름은 이렇게 표시",
-        dailyAverageReturn: i % 3 === 0 ? 99.9 : -99.9,
-        cumulativeReturn: i % 3 === 0 ? 99.9 : -99.9,
-        maxDrawdown: i % 3 === 0 ? 99.99 : -99.99,
-        createdAt: "2025.12.31",
-      })),
-    []
-  );
+  // React Compiler가 자동으로 메모이제이션 처리
+  const initialStrategies: Strategy[] = Array.from({ length: 10 }, (_, i) => ({
+    id: i + 1,
+    name: "전략 이름은 이렇게 표시",
+    dailyAverageReturn: i % 3 === 0 ? 99.9 : -99.9,
+    cumulativeReturn: i % 3 === 0 ? 99.9 : -99.9,
+    maxDrawdown: i % 3 === 0 ? 99.99 : -99.99,
+    createdAt: "2025.12.31",
+  }));
 
   // 전략 목록 관리 훅
   const {

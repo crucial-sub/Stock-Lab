@@ -9,22 +9,45 @@
  * - 통계/차트/탭 네비게이션 컴포넌트 분리
  * - 기존 UI/UX 완전 보존
  * - 백테스트 진행 상태 실시간 폴링 및 로딩 UI 표시
+ * - 무거운 차트 컴포넌트 lazy loading으로 성능 최적화
  */
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useBacktestResultQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
-import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
-import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
-import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
-import { SettingsTab } from "@/components/quant/result/SettingsTab";
 import {
   PageHeader,
   TabNavigation,
   StatisticsSection,
 } from "@/components/quant/result/sections";
-import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import type { BacktestRunRequest } from "@/types/api";
 import { mockBacktestResult } from "@/mocks/backtestResult";
+
+// 차트 컴포넌트들을 동적 로딩 (코드 스플리팅)
+const TradingHistoryTab = dynamic(
+  () => import("@/components/quant/result/TradingHistoryTab").then(mod => ({ default: mod.TradingHistoryTab })),
+  { loading: () => <div className="text-center py-10">거래 내역을 불러오는 중...</div> }
+);
+
+const ReturnsTab = dynamic(
+  () => import("@/components/quant/result/ReturnsTab").then(mod => ({ default: mod.ReturnsTab })),
+  { loading: () => <div className="text-center py-10">수익률 차트를 불러오는 중...</div> }
+);
+
+const StatisticsTabWrapper = dynamic(
+  () => import("@/components/quant/result/StatisticsTabWrapper").then(mod => ({ default: mod.StatisticsTabWrapper })),
+  { loading: () => <div className="text-center py-10">통계 데이터를 불러오는 중...</div> }
+);
+
+const SettingsTab = dynamic(
+  () => import("@/components/quant/result/SettingsTab").then(mod => ({ default: mod.SettingsTab })),
+  { loading: () => <div className="text-center py-10">설정 정보를 불러오는 중...</div> }
+);
+
+const BacktestLoadingState = dynamic(
+  () => import("@/components/quant/result/BacktestLoadingState").then(mod => ({ default: mod.BacktestLoadingState })),
+  { ssr: false }
+);
 
 interface QuantResultPageClientProps {
   backtestId: string;

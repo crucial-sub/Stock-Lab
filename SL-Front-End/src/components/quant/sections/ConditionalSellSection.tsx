@@ -7,6 +7,7 @@ import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 /**
  * 조건 매도 섹션
@@ -15,22 +16,22 @@ import { useEffect, useState } from "react";
  * - 매도 가격 기준
  */
 export function ConditionalSellSection() {
-  // ✅ backtestConfigStore에서 직접 가져오기
+  // ✅ useShallow hook 사용 (데이터와 함수 분리)
   const {
     sellConditionsUI,
-    addSellConditionUI,
-    updateSellConditionUI,
-    removeSellConditionUI,
     condition_sell,
-    setConditionSell,
-  } = useBacktestConfigStore((state) => ({
-    sellConditionsUI: state.sellConditionsUI,
-    addSellConditionUI: state.addSellConditionUI,
-    updateSellConditionUI: state.updateSellConditionUI,
-    removeSellConditionUI: state.removeSellConditionUI,
-    condition_sell: state.condition_sell,
-    setConditionSell: state.setConditionSell,
-  }));
+  } = useBacktestConfigStore(
+    useShallow((state) => ({
+      sellConditionsUI: state.sellConditionsUI,
+      condition_sell: state.condition_sell,
+    }))
+  );
+
+  // 함수들은 별도로 선택 (안정적인 참조)
+  const addSellConditionUI = useBacktestConfigStore(state => state.addSellConditionUI);
+  const updateSellConditionUI = useBacktestConfigStore(state => state.updateSellConditionUI);
+  const removeSellConditionUI = useBacktestConfigStore(state => state.removeSellConditionUI);
+  const setConditionSell = useBacktestConfigStore(state => state.setConditionSell);
 
   const { data: subFactors = [] } = useSubFactorsQuery();
   const { data: factors = [] } = useFactorsQuery();

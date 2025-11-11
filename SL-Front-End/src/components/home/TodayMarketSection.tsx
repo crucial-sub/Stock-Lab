@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Title } from "@/components/common/Title";
 import { MarketTickerCard, type MarketTickerCardProps } from "./MarketTickerCard";
@@ -19,10 +19,8 @@ export function TodayMarketSection({
   const pausedRef = useRef(false);
   const [isPaused, setIsPaused] = useState(false);
 
-  const duplicatedItems = useMemo(
-    () => (items.length ? [...items, ...items] : []),
-    [items],
-  );
+  // React Compiler가 자동으로 메모이제이션 처리
+  const duplicatedItems = items.length ? [...items, ...items] : [];
 
   useEffect(() => {
     pausedRef.current = isPaused;

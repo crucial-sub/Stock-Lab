@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { NextPage } from "next";
 
 import { Icon } from "@/components/common/Icon";
@@ -49,14 +49,13 @@ const NewsPage: NextPage = () => {
 
   const debouncedKeyword = useDebounce(keyword, 300);
 
-  const newsParams: NewsListParams = useMemo(() => {
-    const themes = selectedThemes.includes("전체") ? [] : selectedThemes;
-    return {
-      keyword: debouncedKeyword || undefined,
-      themes: themes.length ? themes : undefined,
-      filter,
-    };
-  }, [debouncedKeyword, selectedThemes, filter]);
+  // React Compiler가 자동으로 메모이제이션 처리
+  const themes = selectedThemes.includes("전체") ? [] : selectedThemes;
+  const newsParams: NewsListParams = {
+    keyword: debouncedKeyword || undefined,
+    themes: themes.length ? themes : undefined,
+    filter,
+  };
 
   const {
     data: newsList = [],

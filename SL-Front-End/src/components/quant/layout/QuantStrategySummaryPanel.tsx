@@ -4,6 +4,7 @@ import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 interface QuantStrategySummaryPanelProps {
   activeTab: "buy" | "sell" | "target";
@@ -38,7 +39,8 @@ export default function QuantStrategySummaryPanel({
   // 클라이언트 전용 마운트 상태
   const [isMounted, setIsMounted] = useState(false);
 
-  // store에서 필요한 값들 가져오기
+  // ✅ useShallow hook 사용 (Zustand 5.0+)
+  // 데이터 필드들을 객체로 선택 (useShallow가 얕은 비교 수행)
   const {
     is_day_or_month,
     initial_investment,
@@ -61,17 +63,45 @@ export default function QuantStrategySummaryPanel({
     sellConditionsUI,
     condition_sell,
     trade_targets,
-    setStartDate,
-    setEndDate,
-  } = useBacktestConfigStore();
+  } = useBacktestConfigStore(
+    useShallow((state) => ({
+      is_day_or_month: state.is_day_or_month,
+      initial_investment: state.initial_investment,
+      start_date: state.start_date,
+      end_date: state.end_date,
+      commission_rate: state.commission_rate,
+      slippage: state.slippage,
+      buyConditionsUI: state.buyConditionsUI,
+      buy_logic: state.buy_logic,
+      priority_factor: state.priority_factor,
+      priority_order: state.priority_order,
+      per_stock_ratio: state.per_stock_ratio,
+      max_holdings: state.max_holdings,
+      max_buy_value: state.max_buy_value,
+      max_daily_stock: state.max_daily_stock,
+      buy_price_basis: state.buy_price_basis,
+      buy_price_offset: state.buy_price_offset,
+      target_and_loss: state.target_and_loss,
+      hold_days: state.hold_days,
+      sellConditionsUI: state.sellConditionsUI,
+      condition_sell: state.condition_sell,
+      trade_targets: state.trade_targets,
+    }))
+  );
+
+  // setter 함수들은 별도로 선택 (안정적인 참조)
+  const setStartDate = useBacktestConfigStore(state => state.setStartDate);
+  const setEndDate = useBacktestConfigStore(state => state.setEndDate);
 
   // 날짜 초기화 (클라이언트 사이드에서만 실행)
+  // setter 함수는 안정적이므로 dependency에서 제외 (React Compiler가 자동 처리)
   useEffect(() => {
     if (!start_date || !end_date) {
       setStartDate(getOneYearAgo());
       setEndDate(getCurrentDate());
     }
-  }, [start_date, end_date, setStartDate, setEndDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start_date, end_date]);
 
   // 클라이언트 마운트 감지
   useEffect(() => {

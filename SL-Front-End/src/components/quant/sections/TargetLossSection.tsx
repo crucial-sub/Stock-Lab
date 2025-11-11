@@ -1,9 +1,8 @@
-import { Title } from "@/components/common";
+import { Title, ToggleSwitch, UnderlineInput } from "@/components/common";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
+import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { FieldPanel, SectionHeader } from "@/components/quant/ui";
-import { ToggleSwitch, UnderlineInput } from "@/components/common";
-import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 
 /**
  * 목표가 / 손절가 섹션
@@ -69,7 +68,7 @@ export function TargetLossSection() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-text-body">매수가 대비</span>
+                <span className={`${profitTargetEnabled ? "" : "text-tag-neutral"}`}>매수가 대비</span>
                 <div className="relative">
                   <UnderlineInput
                     value={targetGain}
@@ -77,11 +76,11 @@ export function TargetLossSection() {
                     className="w-[3.75rem] !h-full"
                     disabled={!profitTargetEnabled}
                   />
-                  <span className="absolute right-0 top-[5px]">
+                  <span className={`absolute right-0 top-0 ${profitTargetEnabled ? "" : "text-tag-neutral"}`}>
                     %
                   </span>
                 </div>
-                <span className="text-sm text-text-body">상승 시 매도 주문</span>
+                <span className={`${profitTargetEnabled ? "" : "text-tag-neutral"}`}>상승 시 매도 주문</span>
               </div>
             </div>
 
@@ -95,7 +94,7 @@ export function TargetLossSection() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-text-body">매수가 대비</span>
+                <span className={`${stopLossEnabled ? "" : "text-tag-neutral"}`}>매수가 대비</span>
                 <div className="relative">
                   <UnderlineInput
                     value={stopLoss}
@@ -103,11 +102,11 @@ export function TargetLossSection() {
                     className="w-[3.75rem] !h-full"
                     disabled={!stopLossEnabled}
                   />
-                  <span className="absolute right-0 top-[5px]">
+                  <span className={`absolute right-0 top-[5px] ${stopLossEnabled ? "" : "text-tag-neutral"}`}>
                     %
                   </span>
                 </div>
-                <span className="text-sm text-text-body">% 하락 시 매도 주문</span>
+                <span className={`${stopLossEnabled ? "" : "text-tag-neutral"}`}>% 하락 시 매도 주문</span>
               </div>
             </div>
           </div>

@@ -15,10 +15,14 @@ RUN pnpm install
 # Copy source code (will be overridden by volume mount in dev)
 COPY . .
 
+# Copy and set executable permissions for entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 3000
 
 ENV NODE_ENV=development \
     PORT=3000
 
-# Start development server with hot-reload
-CMD ["pnpm", "dev"]
+# Use entrypoint to install dependencies at startup (for dev with volume mounts)
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

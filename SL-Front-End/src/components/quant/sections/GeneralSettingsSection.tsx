@@ -1,7 +1,7 @@
 import { Title, UnderlineInput } from "@/components/common";
-import { useBacktestConfigStore } from "@/stores";
-import { FieldPanel, SectionHeader } from "@/components/quant/ui";
 import { FormField } from "@/components/quant/common";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
+import { useBacktestConfigStore } from "@/stores";
 
 /**
  * 일반 조건 설정 섹션

@@ -3,7 +3,6 @@
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import type { Factor, SubFactor } from "@/types/api";
-import Image from "next/image";
 import { useState } from "react";
 
 interface FactorSelectionModalProps {
@@ -134,32 +133,24 @@ export function FactorSelectionModal({
           <div className="flex gap-8">
             <button
               onClick={() => setCurrentTab("factor")}
-              className={`text-base font-semibold pb-1 transition-colors ${
-                currentTab === "factor"
-                  ? "text-brand-primary"
-                  : "text-gray-400"
-              }`}
+              className={`text-base font-semibold pb-1 transition-colors ${currentTab === "factor"
+                ? "text-brand-primary"
+                : "text-gray-400"
+                }`}
             >
               팩터 선택하기
             </button>
             <button
               onClick={() => setCurrentTab("subfactor")}
               disabled={!selectedFactor}
-              className={`text-base font-semibold pb-1 transition-colors ${
-                currentTab === "subfactor" && selectedFactor
-                  ? "text-brand-primary"
-                  : "text-gray-400 disabled:cursor-not-allowed"
-              }`}
+              className={`text-base font-semibold pb-1 transition-colors ${currentTab === "subfactor" && selectedFactor
+                ? "text-brand-primary"
+                : "text-gray-400 disabled:cursor-not-allowed"
+                }`}
             >
               함수 선택하기
             </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <Image src="/icons/close.svg" alt="닫기" width={20} height={20} />
-          </button>
         </div>
 
         {/* 모달 컨텐츠 */}
@@ -183,11 +174,10 @@ export function FactorSelectionModal({
                         <li key={factor.id}>
                           <button
                             onClick={() => handleFactorSelect(factor)}
-                            className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                              selectedFactor?.id === factor.id
-                                ? "bg-brand-primary text-white font-medium"
-                                : "text-gray-700 hover:bg-gray-50"
-                            }`}
+                            className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${selectedFactor?.id === factor.id
+                              ? "bg-brand-primary text-white font-medium"
+                              : "text-gray-700 hover:bg-gray-50"
+                              }`}
                           >
                             • {factor.display_name}
                           </button>
@@ -239,11 +229,10 @@ export function FactorSelectionModal({
                           onChange={() => handleSubFactorSelect(subFactor)}
                           className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
                         />
-                        <span className={`text-sm ${
-                          selectedSubFactor?.id === subFactor.id
-                            ? "text-brand-primary font-medium"
-                            : "text-gray-700 group-hover:text-gray-900"
-                        }`}>
+                        <span className={`text-sm ${selectedSubFactor?.id === subFactor.id
+                          ? "text-brand-primary font-medium"
+                          : "text-gray-700 group-hover:text-gray-900"
+                          }`}>
                           {subFactor.display_name}
                         </span>
                       </label>
@@ -282,11 +271,10 @@ export function FactorSelectionModal({
                                 onChange={() => setSelectedArgument(arg)}
                                 className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
                               />
-                              <span className={`text-sm ${
-                                selectedArgument === arg
-                                  ? "text-brand-primary font-medium"
-                                  : "text-gray-700 group-hover:text-gray-900"
-                              }`}>
+                              <span className={`text-sm ${selectedArgument === arg
+                                ? "text-brand-primary font-medium"
+                                : "text-gray-700 group-hover:text-gray-900"
+                                }`}>
                                 {arg}
                               </span>
                             </label>

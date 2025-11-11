@@ -159,7 +159,7 @@ export default function QuantStrategySummaryPanel({
               <>
                 {/* 일반 조건 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-brand-primary">일반 조건</h3>
+                  <FieldTitle tab="buy">일반 조건</FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <SummaryItem
                       label="백테스트 데이터"
@@ -190,11 +190,11 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 매수 조건 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-brand-primary">매수 조건</h3>
+                  <FieldTitle tab="buy">매수 조건</FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <div>
-                      <div className="text-base mb-1 text-tag-neutral">매수 조건식</div>
-                      <div className="text-sm ">
+                      <div className={`text-[1rem] font-normal ${buy_conditions.length > 0 ? "" : "text-tag-neutral"}`}>매수 조건식</div>
+                      <div className={`font-semibold text-[1rem] ${buy_conditions.length > 0 ? "" : "text-tag-neutral"}`}>
                         {buy_conditions.length > 0 ? (
                           <div className="space-y-1">
                             {buy_conditions.map((c, idx) => (
@@ -212,11 +212,13 @@ export default function QuantStrategySummaryPanel({
                     <SummaryItem
                       label="논리 조건식"
                       value={buy_logic || "미설정"}
+                      disabled={!buy_logic}
                     />
                     <div className="col-span-2">
                       <SummaryItem
                         label="매수 종목 선택 우선순위"
                         value={priority_factor ? `[${priority_order === "desc" ? "높은 값부터" : "낮은 값부터"}] ${priority_factor}` : "미설정"}
+                        disabled={!priority_factor}
                       />
                     </div>
                   </div>
@@ -224,7 +226,7 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 매수 비중 설정 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-brand-primary">매수 비중 설정</h3>
+                  <FieldTitle tab="buy">매수 비중 설정</FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <SummaryItem
                       label="종목당 매수 비중"
@@ -253,7 +255,7 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 매수 방법 설정 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-brand-primary">매수 방법 설정</h3>
+                  <FieldTitle tab="buy">매수 방법 설정</FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <div className="col-span-2">
                       <SummaryItem
@@ -270,9 +272,9 @@ export default function QuantStrategySummaryPanel({
               <>
                 {/* 목표가/손절가 설정 */}
                 <div className="space-y-4">
-                  <h3 className={`text-base font-bold ${target_and_loss ? "text-accent-primary" : "text-tag-neutral"}`}>
+                  <FieldTitle tab="sell" isActive={target_and_loss !== null}>
                     목표가 / 손절가 설정
-                  </h3>
+                  </FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <SummaryItem
                       label="목표가"
@@ -293,9 +295,9 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 보유 기간 */}
                 <div className="space-y-4">
-                  <h3 className={`text-base font-bold ${hold_days ? "text-accent-primary" : "text-tag-neutral"}`}>
+                  <FieldTitle tab="sell" isActive={hold_days !== null}>
                     보유 기간
-                  </h3>
+                  </FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <SummaryItem
                       label="최소 보유 기간"
@@ -321,15 +323,15 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 조건 매도 */}
                 <div className="space-y-4">
-                  <h3 className={`text-base font-bold ${condition_sell ? "text-accent-primary" : "text-tag-neutral"}`}>
+                  <FieldTitle tab="sell" isActive={condition_sell !== null}>
                     조건 매도
-                  </h3>
+                  </FieldTitle>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <div>
-                      <div className={`text-base mb-1 ${!condition_sell ? "text-tag-neutral" : "text-tag-neutral"}`}>
+                      <div className={`text-[1rem] font-normal ${condition_sell && condition_sell?.sell_conditions.length > 0 ? "" : "text-tag-neutral"}`}>
                         매도 조건식
                       </div>
-                      <div className={`text-base ${!condition_sell ? "text-tag-neutral" : ""}`}>
+                      <div className={`font-semibold text-[1rem] ${condition_sell && condition_sell?.sell_conditions.length > 0 ? "" : "text-tag-neutral"}`}>
                         {condition_sell && condition_sell.sell_conditions.length > 0 ? (
                           <div className="space-y-1">
                             {condition_sell.sell_conditions.map((c, idx) => (
@@ -347,7 +349,7 @@ export default function QuantStrategySummaryPanel({
                     <SummaryItem
                       label="논리 조건식"
                       value={condition_sell?.sell_logic || "미설정"}
-                      disabled={!condition_sell}
+                      disabled={!condition_sell?.sell_logic}
                     />
                     <div className="col-span-2">
                       <SummaryItem
@@ -355,7 +357,7 @@ export default function QuantStrategySummaryPanel({
                         value={condition_sell
                           ? `${condition_sell.sell_price_basis} 기준, ${condition_sell.sell_price_offset > 0 ? "+" : ""}${condition_sell.sell_price_offset}%`
                           : "미설정"}
-                        disabled={!condition_sell}
+                        disabled={!condition_sell?.sell_price_basis}
                       />
                     </div>
                   </div>
@@ -367,7 +369,7 @@ export default function QuantStrategySummaryPanel({
               <>
                 {/* 매매 대상 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold">매매 대상</h3>
+                  <FieldTitle tab="target">매매 대상</FieldTitle>
                   <div className="space-y-4">
                     <div>
                       <div className="text-xs text-tag-neutral mb-2">유니버스</div>
@@ -419,7 +421,71 @@ export default function QuantStrategySummaryPanel({
 }
 
 /**
- * 요약 항목 컴포넌트 (Figma 디자인에 맞춘 label-value 쌍)
+ * 1. 필드 제목 컴포넌트
+ * - 일반 조건, 매수 조건, 매수 비중 설정 등의 큰 섹션 제목
+ */
+interface FieldTitleProps {
+  children: React.ReactNode;
+  tab: "buy" | "sell" | "target";
+  isActive?: boolean; // 매도 조건 탭에서 활성화 여부
+}
+
+function FieldTitle({ children, tab, isActive = true }: FieldTitleProps) {
+  let colorClass = "";
+
+  if (tab === "buy") {
+    colorClass = "text-brand-primary";
+  } else if (tab === "sell") {
+    colorClass = isActive ? "text-accent-primary" : "text-tag-neutral";
+  } else {
+    // target 탭은 색상 없음 (기본 text-strong)
+    colorClass = "";
+  }
+
+  return (
+    <h3 className={`font-semibold text-[1.25rem] ${colorClass}`}>
+      {children}
+    </h3>
+  );
+}
+
+/**
+ * 2. 세부 항목 제목 컴포넌트
+ * - 백테스트 데이터, 투자금액, 매수 조건식 등의 항목 레이블
+ */
+interface ItemLabelProps {
+  children: React.ReactNode;
+  disabled?: boolean;
+}
+
+function ItemLabel({ children, disabled = false }: ItemLabelProps) {
+  return (
+    <div className={`font-normal text-[1rem] ${disabled ? "text-tag-neutral" : ""}`}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 3. 세부 항목 내용 컴포넌트
+ * - 일봉, 5000만원 등의 실제 값
+ */
+interface ItemValueProps {
+  children: React.ReactNode;
+  disabled?: boolean;
+}
+
+function ItemValue({ children, disabled = false }: ItemValueProps) {
+  return (
+    <div className={`font-semibold text-[1rem] ${disabled ? "text-tag-neutral" : ""}`}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 요약 항목 컴포넌트 (label-value 쌍)
+ * - ItemLabel과 ItemValue를 조합한 편의 컴포넌트
  */
 interface SummaryItemProps {
   label: string;
@@ -430,12 +496,12 @@ interface SummaryItemProps {
 function SummaryItem({ label, value, disabled = false }: SummaryItemProps) {
   return (
     <div>
-      <div className={`mb-1 ${disabled ? "text-tag-neutral" : "text-text-strong"}`}>
+      <ItemLabel disabled={disabled}>
         {label}
-      </div>
-      <div className={`font-semibold ${disabled ? "text-tag-neutral" : "text-text-strong"} whitespace-pre-line`}>
+      </ItemLabel>
+      <ItemValue disabled={disabled}>
         {value}
-      </div>
+      </ItemValue>
     </div>
   );
 }

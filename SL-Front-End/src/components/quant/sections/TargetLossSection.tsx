@@ -2,7 +2,7 @@ import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
 import { FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
-import ActiveConditionBtn from "../common/ActiveConditionBtn";
+import ActiveConditionBtn from "../common/ActivateConditionBtn";
 
 /**
  * 목표가 / 손절가 섹션

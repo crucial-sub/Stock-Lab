@@ -2,7 +2,7 @@ import { Dropdown, Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
 import { FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
-import ActiveConditionBtn from "../common/ActiveConditionBtn";
+import ActivateConditionBtn from "../common/ActivateConditionBtn";
 
 /**
  * 보유 기간 섹션
@@ -121,7 +121,7 @@ export function HoldPeriodSection() {
           </div>
         </FieldPanel>
       ) : (
-        <ActiveConditionBtn checked={isOpen} onChange={setIsOpen} />
+        <ActivateConditionBtn checked={isOpen} onChange={setIsOpen} />
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ConditionCard, FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
-import ActiveConditionBtn from "../common/ActiveConditionBtn";
+import ActiveConditionBtn from "../common/ActivateConditionBtn";
 import { FactorSelectionModal } from "../FactorSelectionModal";
 
 /**

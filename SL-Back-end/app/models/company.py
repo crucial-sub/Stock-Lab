@@ -36,7 +36,7 @@ class Company(Base):
 
     # 기업 정보
     company_name = Column(String(200), nullable=False, index=True, comment="정식 회사명")
-    company_name_eng = Column(String(200), nullable=True, comment="영문 회사명")
+    # company_name_eng = Column(String(200), nullable=True, comment="영문 회사명")  # DB에 없는 컬럼
     stock_name = Column(String(100), nullable=True, comment="종목 약칭")
     market_type = Column(String(20), nullable=True, comment="시장 구분 (KOSPI/KOSDAQ/KONEX)")
     industry = Column(String(100), nullable=True, comment="업종")

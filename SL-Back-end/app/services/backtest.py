@@ -7,6 +7,7 @@ GenPort 스타일 백테스트 엔진 (확장판)
 
 import asyncio
 import logging
+import copy
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple, Any, Union
@@ -117,8 +118,8 @@ class DrawdownPeriod:
     is_active: bool = True
 
 
-class GenPortBacktestEngine:
-    """GenPort 스타일 백테스트 엔진"""
+class BacktestEngine:
+    """백테스트 엔진"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -148,6 +149,7 @@ class GenPortBacktestEngine:
         sell_conditions: List[Dict],
         start_date: date,
         end_date: date,
+        condition_sell: Optional[Dict[str, Any]] = None,
         initial_capital: Decimal = Decimal("100000000"),
         rebalance_frequency: str = "MONTHLY",
         max_positions: int = 20,
@@ -168,10 +170,28 @@ class GenPortBacktestEngine:
             price_data = await self._load_price_data(start_date, end_date)
             financial_data = await self._load_financial_data(start_date, end_date)
 
-            # 2. 팩터 계산
-            factor_data = await self._calculate_all_factors(
-                price_data, financial_data, start_date, end_date
+            # 2. 팩터 계산 - 통합 모듈 사용 (54개 팩터)
+            from app.services.factor_integration import FactorIntegration
+            factor_integrator = FactorIntegration(self.db)
+
+            # 모든 종목 코드 추출
+            stock_codes = price_data['stock_code'].unique().tolist() if not price_data.empty else None
+
+            # 54개 팩터 모두 계산
+            factor_data = await factor_integrator.get_integrated_factor_data(
+                start_date=start_date,
+                end_date=end_date,
+                stock_codes=stock_codes
             )
+
+            logger.info(f"팩터 계산 완료: {len(factor_data)}개 레코드, {len(factor_data.columns)-3}개 팩터")
+
+            # 기존 13개 팩터 계산은 백업용으로 남겨둠 (필요시 폴백)
+            if factor_data.empty:
+                logger.warning("통합 팩터 계산 실패, 기존 방식으로 폴백")
+                factor_data = await self._calculate_all_factors(
+                    price_data, financial_data, start_date, end_date
+                )
 
             # 3. 벤치마크 데이터 로드
             benchmark_data = await self._load_benchmark_data(benchmark, start_date, end_date)
@@ -183,11 +203,12 @@ class GenPortBacktestEngine:
                 price_data=price_data,
                 buy_conditions=buy_conditions,
                 sell_conditions=sell_conditions,
+                condition_sell=condition_sell,
                 initial_capital=initial_capital,
                 rebalance_frequency=rebalance_frequency,
                 max_positions=max_positions,
                 position_sizing=position_sizing,
-                benchmark_data=pd.DataFrame(),  # 빈 DataFrame (벤치마크 제외)
+                benchmark_data=benchmark_data,
                 start_date=start_date,
                 end_date=end_date
             )
@@ -204,6 +225,7 @@ class GenPortBacktestEngine:
                 statistics=statistics,
                 buy_conditions=buy_conditions,
                 sell_conditions=sell_conditions,
+                condition_sell=condition_sell,
                 settings={
                     "rebalance_frequency": rebalance_frequency,
                     "max_positions": max_positions,
@@ -234,6 +256,8 @@ class GenPortBacktestEngine:
             StockPrice.company_id,
             Company.stock_code,
             Company.company_name.label('stock_name'),
+            Company.industry.label('industry'),
+            Company.market_type.label('market_type'),
             StockPrice.trade_date.label('date'),
             StockPrice.open_price,
             StockPrice.high_price,
@@ -444,6 +468,11 @@ class GenPortBacktestEngine:
             if todays_prices.empty:
                 continue
 
+            industry_map = {}
+            if 'industry' in todays_prices.columns:
+                industry_map = dict(zip(todays_prices['stock_code'], todays_prices['industry']))
+
+            size_bucket_map = self._assign_size_buckets(todays_prices)
             stock_factor_map: Dict[str, Dict[str, float]] = defaultdict(dict)
             price_until_date = price_pl.filter(pl.col('date') <= calc_date)
 
@@ -469,7 +498,9 @@ class GenPortBacktestEngine:
             for stock in todays_prices['stock_code'].unique():
                 record = {
                     'date': pd.Timestamp(calc_date),
-                    'stock_code': stock
+                    'stock_code': stock,
+                    'industry': industry_map.get(stock),
+                    'size_bucket': size_bucket_map.get(stock)
                 }
                 record.update(stock_factor_map.get(stock, {}))
                 factor_rows.append(record)
@@ -488,6 +519,37 @@ class GenPortBacktestEngine:
             )
 
         return factor_df
+
+    def _assign_size_buckets(self, todays_prices: pd.DataFrame) -> Dict[str, str]:
+        """시가총액 기반 규모 버킷 계산"""
+        if 'market_cap' not in todays_prices.columns:
+            return {}
+
+        caps = todays_prices[['stock_code', 'market_cap']].dropna()
+        if caps.empty:
+            return {}
+
+        try:
+            q1 = caps['market_cap'].quantile(0.33)
+            q2 = caps['market_cap'].quantile(0.66)
+        except Exception:
+            q1 = q2 = None
+
+        size_map = {}
+
+        for _, row in caps.iterrows():
+            value = row['market_cap']
+            if q1 is None or q2 is None:
+                bucket = 'UNKNOWN'
+            elif value >= q2:
+                bucket = 'LARGE'
+            elif value >= q1:
+                bucket = 'MID'
+            else:
+                bucket = 'SMALL'
+            size_map[row['stock_code']] = bucket
+
+        return size_map
 
     def _merge_factor_maps(
         self,
@@ -694,7 +756,8 @@ class GenPortBacktestEngine:
 
         normalized_df = factor_df.copy()
 
-        factor_columns = [col for col in factor_df.columns if col not in ('date', 'stock_code')]
+        meta_columns = {'date', 'stock_code', 'industry', 'size_bucket', 'market_type'}
+        factor_columns = [col for col in factor_df.columns if col not in meta_columns]
 
         for col in factor_columns:
             if col not in normalized_df.columns:
@@ -713,6 +776,18 @@ class GenPortBacktestEngine:
             if std and std > 0:
                 normalized_df[col] = (normalized_df[col] - mean) / std
 
+        # 섹터 중립화 (평균 제거)
+        if 'industry' in normalized_df.columns:
+            for col in factor_columns:
+                group_means = normalized_df.groupby(['date', 'industry'])[col].transform('mean')
+                normalized_df[col] = normalized_df[col] - group_means
+
+        # 규모 중립화 (평균 제거)
+        if 'size_bucket' in normalized_df.columns:
+            for col in factor_columns:
+                group_means = normalized_df.groupby(['date', 'size_bucket'])[col].transform('mean')
+                normalized_df[col] = normalized_df[col] - group_means
+
         return normalized_df
 
     def _calculate_factor_ranks(self, factor_df: pd.DataFrame) -> pd.DataFrame:
@@ -722,7 +797,8 @@ class GenPortBacktestEngine:
             return factor_df
 
         ranked_df = factor_df.copy()
-        factor_columns = [col for col in factor_df.columns if col not in ('date', 'stock_code')]
+        meta_columns = {'date', 'stock_code', 'industry', 'size_bucket', 'market_type'}
+        factor_columns = [col for col in factor_df.columns if col not in meta_columns]
         lower_is_better = {'PER', 'PBR', 'VOLATILITY'}
 
         for col in factor_columns:
@@ -741,6 +817,7 @@ class GenPortBacktestEngine:
         price_data: pd.DataFrame,
         buy_conditions: List[Dict],
         sell_conditions: List[Dict],
+        condition_sell: Optional[Dict[str, Any]],
         initial_capital: Decimal,
         rebalance_frequency: str,
         max_positions: int,
@@ -756,9 +833,11 @@ class GenPortBacktestEngine:
         # 초기 설정
         current_capital = initial_capital
         cash_balance = initial_capital
-        holdings = {}  # {stock_code: {'quantity': int, 'avg_price': Decimal, 'buy_date': date}}
-        trades = []
-        daily_snapshots = []
+        holdings: Dict[str, Position] = {}
+        orders: List[Dict[str, Any]] = []
+        executions: List[Dict[str, Any]] = []
+        daily_snapshots: List[Dict[str, Any]] = []
+        position_history: List[Dict[str, Any]] = []
 
         # 거래일 리스트
         trading_days = sorted(price_data['date'].unique())
@@ -771,6 +850,12 @@ class GenPortBacktestEngine:
             # 동일 날짜 중복 방지를 위해 마지막 값 사용
             benchmark_lookup = benchmark_copy.drop_duplicates(subset=['date'], keep='last').set_index('date')
 
+        priority_factor = None
+        priority_order = "desc"
+        if isinstance(buy_conditions, dict):
+            priority_factor = buy_conditions.get('priority_factor')
+            priority_order = buy_conditions.get('priority_order', 'desc')
+
         # 일별 시뮬레이션
         for trading_day in trading_days:
             if trading_day < pd.Timestamp(start_date) or trading_day > pd.Timestamp(end_date):
@@ -779,36 +864,61 @@ class GenPortBacktestEngine:
             # 매도 신호 확인 및 실행 (매일 체크)
             sell_trades = await self._execute_sells(
                 holdings, factor_data, sell_conditions,
-                price_data, trading_day, cash_balance
+                condition_sell,
+                price_data, trading_day, cash_balance,
+                orders, executions
             )
-            trades.extend(sell_trades)
+            sell_executions = sell_trades
 
             # 매도 후 현금 업데이트
             for trade in sell_trades:
                 cash_balance += trade['amount'] - trade['commission'] - trade['tax']
-                if trade['stock_code'] in holdings:
+                position = holdings.get(trade['stock_code'])
+                if position:
+                    position.is_open = False
+                    position.exit_date = trading_day
+                    position.exit_price = trade['price']
+                    position.realized_pnl = (trade['price'] - position.entry_price) * position.quantity
+                    self.closed_positions.append(position)
                     del holdings[trade['stock_code']]
 
             # 리밸런싱 체크 (매수는 리밸런싱 날짜에만)
             if pd.Timestamp(trading_day) in [pd.Timestamp(d) for d in rebalance_dates]:
                 # 매수 종목 선정
                 buy_candidates = await self._select_buy_candidates(
-                    factor_data, buy_conditions, trading_day,
-                    price_data, holdings, max_positions
+                    factor_data=factor_data,
+                    buy_conditions=buy_conditions,
+                    trading_day=trading_day,
+                    price_data=price_data,
+                    holdings=holdings,
+                    max_positions=max_positions,
+                    priority_factor=priority_factor,
+                    priority_order=priority_order
                 )
 
                 # 포지션 사이징
                 position_sizes = self._calculate_position_sizes(
-                    buy_candidates, cash_balance, position_sizing,
-                    max_positions - len(holdings)
+                    buy_candidates=buy_candidates,
+                    cash_balance=cash_balance,
+                    position_sizing=position_sizing,
+                    available_slots=max_positions - len(holdings),
+                    price_data=price_data,
+                    trading_day=trading_day,
+                    current_holdings=holdings
                 )
 
                 # 매수 실행 (팩터 데이터 포함)
                 buy_trades = await self._execute_buys(
-                    position_sizes, price_data, trading_day,
-                    cash_balance, holdings, factor_data
+                    position_sizes=position_sizes,
+                    price_data=price_data,
+                    trading_day=trading_day,
+                    cash_balance=cash_balance,
+                    holdings=holdings,
+                    factor_data=factor_data,
+                    orders=orders,
+                    executions=executions
                 )
-                trades.extend(buy_trades)
+                buy_executions = buy_trades
 
                 # 매수 후 현금 업데이트
                 for trade in buy_trades:
@@ -834,38 +944,66 @@ class GenPortBacktestEngine:
             )
 
             # 일별 스냅샷 저장
+            snapshot_holdings = copy.deepcopy(holdings)
+
+            # 포지션 히스토리 (각 종목별 일별 상태)
+            for stock_code, data in snapshot_holdings.items():
+                current_price_data = price_data[
+                    (price_data['stock_code'] == stock_code) &
+                    (price_data['date'] == trading_day)
+                ]
+                current_price = Decimal(str(current_price_data.iloc[0]['close_price'])) if not current_price_data.empty else data.entry_price
+                position_history.append({
+                    'date': trading_day,
+                    'stock_code': stock_code,
+                    'quantity': data.quantity,
+                    'avg_price': data.entry_price,
+                    'market_price': current_price,
+                    'market_value': current_price * data.quantity
+                })
+
             daily_snapshot = {
                 'date': trading_day,
                 'portfolio_value': portfolio_value,
                 'cash_balance': cash_balance,
                 'invested_amount': portfolio_value - cash_balance,
-                'holdings': dict(holdings),
-                'trade_count': len([t for t in trades if t['trade_date'] == trading_day]),
+                'holdings': snapshot_holdings,
+                'trade_count': len([execu for execu in executions if execu['execution_date'] == trading_day]),
                 'benchmark_value': benchmark_value,
                 'benchmark_return': benchmark_ret
             }
             daily_snapshots.append(daily_snapshot)
 
         return {
-            'trades': trades,
+            'trades': [execution for execution in executions if execution['side'] == 'SELL'],
+            'orders': orders,
+            'executions': executions,
             'daily_snapshots': daily_snapshots,
             'final_holdings': holdings,
             'final_cash': cash_balance,
-            'rebalance_dates': rebalance_dates
+            'rebalance_dates': rebalance_dates,
+            'position_history': position_history
         }
 
     async def _execute_sells(
         self,
-        holdings: Dict,
+        holdings: Dict[str, Position],
         factor_data: pd.DataFrame,
         sell_conditions: List[Dict],
+        condition_sell: Optional[Dict[str, Any]],
         price_data: pd.DataFrame,
         trading_day: date,
-        cash_balance: Decimal
+        cash_balance: Decimal,
+        orders: List[Dict[str, Any]],
+        executions: List[Dict[str, Any]]
     ) -> List[Dict]:
         """매도 실행"""
 
-        sell_trades = []
+        sell_executions = []
+        trading_ts = pd.Timestamp(trading_day)
+        date_factors = pd.DataFrame()
+        if factor_data is not None and not factor_data.empty:
+            date_factors = factor_data[factor_data['date'] == trading_ts]
 
         for stock_code, holding in list(holdings.items()):
             # 현재가 조회
@@ -886,7 +1024,7 @@ class GenPortBacktestEngine:
             for condition in sell_conditions:
                 if condition.get('type') == 'STOP_LOSS':
                     # 손절 조건
-                    loss_rate = ((current_price / holding['avg_price']) - 1) * 100
+                    loss_rate = ((current_price / holding.entry_price) - 1) * 100
                     if loss_rate <= -float(condition.get('value', 10)):
                         should_sell = True
                         sell_reason = f"Stop loss triggered: {loss_rate:.2f}%"
@@ -894,7 +1032,7 @@ class GenPortBacktestEngine:
 
                 elif condition.get('type') == 'TAKE_PROFIT':
                     # 익절 조건
-                    profit_rate = ((current_price / holding['avg_price']) - 1) * 100
+                    profit_rate = ((current_price / holding.entry_price) - 1) * 100
                     if profit_rate >= float(condition.get('value', 20)):
                         should_sell = True
                         sell_reason = f"Take profit triggered: {profit_rate:.2f}%"
@@ -902,15 +1040,44 @@ class GenPortBacktestEngine:
 
                 elif condition.get('type') == 'HOLD_DAYS':
                     # 보유 기간 조건
-                    hold_days = (trading_day - holding['buy_date']).days
+                    hold_days = (trading_day - holding.entry_date).days
                     if hold_days >= int(condition.get('value', 30)):
                         should_sell = True
                         sell_reason = f"Hold period exceeded: {hold_days} days"
                         break
 
+            if (not should_sell) and condition_sell and not date_factors.empty:
+                condition_list = condition_sell.get('sell_conditions') or []
+                logic = condition_sell.get('sell_logic')
+                evaluator = self.condition_evaluator
+                if logic and condition_list:
+                    expression_payload = {
+                        "expression": logic,
+                        "conditions": condition_list
+                    }
+                    selected, _ = evaluator.evaluate_buy_conditions(
+                        factor_data=date_factors,
+                        stock_codes=[stock_code],
+                        buy_expression=expression_payload,
+                        trading_date=trading_ts
+                    )
+                    if stock_code in selected:
+                        should_sell = True
+                        sell_reason = "Condition sell triggered"
+                elif condition_list:
+                    passed, _, _ = evaluator.evaluate_condition_group(
+                        factor_data=date_factors,
+                        stock_code=stock_code,
+                        conditions=condition_list,
+                        trading_date=trading_ts
+                    )
+                    if passed:
+                        should_sell = True
+                        sell_reason = "Condition sell triggered"
+
             if should_sell:
                 # 매도 실행
-                quantity = holding['quantity']
+                quantity = holding.quantity
 
                 # 슬리피지 적용 (매도 시 불리하게 - 가격 하락)
                 execution_price = current_price * (1 - self.slippage)
@@ -919,182 +1086,233 @@ class GenPortBacktestEngine:
                 commission = amount * self.commission_rate
                 tax = amount * self.tax_rate
 
-                profit = (execution_price - holding['avg_price']) * quantity
-                profit_rate = ((execution_price / holding['avg_price']) - 1) * 100
+                profit = (execution_price - holding.entry_price) * quantity
+                profit_rate = ((execution_price / holding.entry_price) - 1) * 100
 
-                trade = {
-                    'trade_id': f"S_{stock_code}_{trading_day}",
-                    'trade_date': trading_day,
-                    'trade_type': 'SELL',
+                order = {
+                    'order_id': f"ORD-S-{stock_code}-{trading_day}",
+                    'order_date': trading_day,
                     'stock_code': stock_code,
                     'stock_name': f"Stock_{stock_code}",
+                    'side': 'SELL',
+                    'order_type': 'MARKET',
                     'quantity': quantity,
-                    'price': execution_price,  # 슬리피지 적용된 가격
+                    'status': 'FILLED',
+                    'reason': sell_reason
+                }
+                orders.append(order)
+
+                execution = {
+                    'execution_id': f"EXE-S-{stock_code}-{trading_day}",
+                    'order_id': order['order_id'],
+                    'execution_date': trading_day,
+                    'trade_date': trading_day,
+                    'stock_code': stock_code,
+                    'stock_name': f"Stock_{stock_code}",
+                    'side': 'SELL',
+                    'trade_type': 'SELL',
+                    'quantity': quantity,
+                    'price': execution_price,
                     'amount': amount,
                     'commission': commission,
                     'tax': tax,
+                    'slippage': self.slippage,
+                    'realized_pnl': profit,
                     'profit': profit,
                     'profit_rate': profit_rate,
-                    'hold_days': (trading_day - holding['buy_date']).days,
-                    'selection_reason': sell_reason
+                    'hold_days': (trading_day - holding.entry_date).days,
+                    'selection_reason': sell_reason,
+                    'factors': {}
                 }
+                executions.append(execution)
+                sell_executions.append(execution)
 
-                sell_trades.append(trade)
-
-        return sell_trades
+        return sell_executions
 
     async def _select_buy_candidates(
         self,
         factor_data: pd.DataFrame,
-        buy_conditions: List[Dict],
+        buy_conditions: Any,
         trading_day: date,
         price_data: pd.DataFrame,
         holdings: Dict,
-        max_positions: int
+        max_positions: int,
+        priority_factor: Optional[str] = None,
+        priority_order: str = "desc"
     ) -> List[str]:
-        """매수 후보 종목 선정 (논리식 지원)"""
-        from app.services.condition_evaluator import ConditionEvaluator
+        """매수 후보 종목 선정 (논리식/가중치 지원) - 통합 모듈 사용"""
 
-        candidates = []
+        # 통합 모듈 사용
+        from app.services.factor_integration import FactorIntegration
+        factor_integrator = FactorIntegration(self.db)
 
-        # 해당 날짜의 팩터 데이터
+        candidates: List[str] = []
+
         if factor_data.empty:
             return candidates
 
-        date_factors = factor_data[factor_data['date'] == trading_day]
+        trading_ts = pd.Timestamp(trading_day)
 
-        if date_factors.empty:
-            return candidates
-
-        # 현재 거래 가능한 종목 필터링
+        # 거래 가능한 종목 필터링
         tradeable_stocks = price_data[
             (price_data['date'] == trading_day) &
             (price_data['volume'] > 0) &
             (price_data['close_price'] > 0)
-        ]['stock_code'].unique()
+        ]['stock_code'].unique().tolist()
 
-        # 이미 보유중인 종목 제외
+        # 현재 보유 종목 제외
         tradeable_stocks = [s for s in tradeable_stocks if s not in holdings]
 
-        # 논리식 처리 확인
-        if isinstance(buy_conditions, dict) and 'expression' in buy_conditions:
-            # 새로운 논리식 기반 처리
-            evaluator = ConditionEvaluator()
-            selected = evaluator.evaluate_buy_conditions(
-                factor_data=date_factors,
-                stock_codes=list(tradeable_stocks),
-                buy_expression=buy_conditions,
-                trading_date=pd.Timestamp(trading_day)
-            )
+        # 통합 모듈로 매수 조건 평가 (54개 팩터 사용)
+        selected_stocks = factor_integrator.evaluate_buy_conditions_with_factors(
+            factor_data=factor_data,
+            stock_codes=tradeable_stocks,
+            buy_conditions=buy_conditions,
+            trading_date=trading_ts
+        )
 
-            # 팩터 스코어로 순위 매기기 (선택적)
+        # 팩터 가중치가 있는 경우 스코어링
+        if isinstance(buy_conditions, dict) and 'factor_weights' in buy_conditions:
             factor_weights = buy_conditions.get('factor_weights', {})
-            if factor_weights and selected:
-                ranked = evaluator.rank_stocks_by_factor_score(
-                    factor_data=date_factors,
-                    stock_codes=selected,
+
+            if factor_weights and selected_stocks:
+                # 복합 스코어로 순위 매기기
+                ranked_stocks = factor_integrator.rank_stocks_by_composite_score(
+                    factor_data=factor_data,
+                    stock_codes=selected_stocks,
                     factor_weights=factor_weights,
-                    trading_date=pd.Timestamp(trading_day)
+                    trading_date=trading_ts,
+                    top_n=max_positions
                 )
-                candidates = [stock for stock, _ in ranked[:max_positions]]
+                candidates = [stock for stock, score in ranked_stocks]
             else:
-                candidates = selected[:max_positions]
-
+                # 가중치가 없으면 선택된 종목 그대로 사용
+                candidates = selected_stocks[:max_positions]
         else:
-            # 기존 AND 로직 (하위 호환성)
-            scores = {}
-            num_conditions = len(buy_conditions)
-
-            for stock in tradeable_stocks:
-                conditions_met = 0
-                stock_slice = date_factors[date_factors['stock_code'] == stock]
-                if stock_slice.empty:
-                    continue
-
-                for condition in buy_conditions:
-                    factor_type = condition.get('factor')
-                    operator = condition.get('operator', '>')
-                    threshold = float(condition.get('value', 0))
-
-                    value = None
-                    rank_value = None
-
-                    rank_col = f"{factor_type}_RANK"
-                    if rank_col in stock_slice.columns:
-                        rank_raw = stock_slice[rank_col].iloc[0]
-                        rank_value = float(rank_raw) if pd.notna(rank_raw) else None
-
-                    if factor_type in stock_slice.columns:
-                        val_raw = stock_slice[factor_type].iloc[0]
-                        value = float(val_raw) if pd.notna(val_raw) else None
-
-                    passed = False
-                    if rank_value is not None:
-                        if operator == '<' and rank_value < threshold:
-                            passed = True
-                        elif operator == '>' and rank_value > threshold:
-                            passed = True
-                    elif value is not None:
-                        if operator == '>' and value > threshold:
-                            passed = True
-                        elif operator == '<' and value < threshold:
-                            passed = True
-
-                    if passed:
-                        conditions_met += 1
-
-                if conditions_met == num_conditions:
-                    scores[stock] = conditions_met
-
-            # 스코어 기준 정렬
-            sorted_stocks = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-            candidates = [stock for stock, _ in sorted_stocks[:max_positions]]
+            # 일반 조건인 경우 선택된 종목 사용
+            candidates = selected_stocks[:max_positions]
 
         return candidates
+
+    def _priority_bonus(
+        self,
+        date_factors: pd.DataFrame,
+        stock_code: str,
+        factor_key: Optional[str],
+        priority_order: str
+    ) -> float:
+        if not factor_key:
+            return 0.0
+
+        stock_slice = date_factors[date_factors['stock_code'] == stock_code]
+        if stock_slice.empty:
+            return 0.0
+
+        value = None
+        if factor_key in stock_slice.columns:
+            value = stock_slice[factor_key].iloc[0]
+        elif f"{factor_key}_RANK" in stock_slice.columns:
+            value = stock_slice[f"{factor_key}_RANK"].iloc[0]
+
+        if value is None or pd.isna(value):
+            return 0.0
+
+        bonus = float(value)
+        return -bonus if priority_order.lower() == 'asc' else bonus
 
     def _calculate_position_sizes(
         self,
         buy_candidates: List[str],
         cash_balance: Decimal,
         position_sizing: str,
-        available_slots: int
+        available_slots: int,
+        price_data: pd.DataFrame,
+        trading_day: date,
+        current_holdings: Dict[str, Position]
     ) -> Dict[str, Decimal]:
         """포지션 사이징 계산"""
 
-        position_sizes = {}
+        position_sizes: Dict[str, Decimal] = {}
 
-        if not buy_candidates or available_slots <= 0:
+        if not buy_candidates:
             return position_sizes
 
-        # 실제로 매수할 종목 수
-        num_positions = min(len(buy_candidates), available_slots)
+        max_new_positions = max(available_slots, 0)
+        existing_candidates = [s for s in buy_candidates if s in current_holdings]
+        new_candidates = [s for s in buy_candidates if s not in current_holdings][:max_new_positions]
+        effective_candidates = existing_candidates + new_candidates
 
-        if num_positions == 0:
+        if not effective_candidates:
             return position_sizes
+
+        num_positions = len(effective_candidates)
+        allocatable_cash = cash_balance * Decimal("0.95")
 
         if position_sizing == "EQUAL_WEIGHT":
-            # 동일 가중
-            allocation_per_stock = cash_balance * Decimal("0.95") / num_positions  # 5% 현금 보유
+            allocation_per_stock = allocatable_cash / num_positions
+            for stock in effective_candidates:
+                position_sizes[stock] = allocation_per_stock
+            return position_sizes
 
+        closes = price_data[
+            (price_data['date'] == trading_day) &
+            (price_data['stock_code'].isin(effective_candidates))
+        ][['stock_code', 'close_price', 'market_cap']].dropna()
+
+        if closes.empty:
+            allocation_per_stock = allocatable_cash / num_positions
             for stock in buy_candidates[:num_positions]:
                 position_sizes[stock] = allocation_per_stock
+            return position_sizes
 
-        elif position_sizing == "RISK_PARITY":
-            # 리스크 패리티 (간단히 변동성 역수 비례)
-            # 실제로는 각 종목의 변동성을 계산해야 함
-            equal_allocation = cash_balance * Decimal("0.95") / num_positions
+        if position_sizing == "MARKET_CAP":
+            subset = closes.set_index('stock_code')
+            weights = subset['market_cap']
+            total = weights.sum()
+            if total <= 0:
+                total = 1
+            normalized = weights / total
+            for stock in effective_candidates:
+                w = normalized.get(stock, 0)
+                position_sizes[stock] = Decimal(str(w)) * allocatable_cash
+            return position_sizes
 
-            for stock in buy_candidates[:num_positions]:
-                # 임시로 동일 가중 사용
-                position_sizes[stock] = equal_allocation
+        if position_sizing == "RISK_PARITY":
+            returns = price_data[
+                (price_data['stock_code'].isin(effective_candidates)) &
+                (price_data['date'] <= trading_day) &
+                (price_data['date'] >= trading_day - pd.Timedelta(days=90))
+            ][['stock_code', 'date', 'close_price']]
 
-        elif position_sizing == "MARKET_CAP":
-            # 시가총액 가중
-            # 실제로는 시가총액 데이터를 사용해야 함
-            equal_allocation = cash_balance * Decimal("0.95") / num_positions
+            vol_map: Dict[str, float] = {}
+            if not returns.empty:
+                for stock, group in returns.groupby('stock_code'):
+                    if len(group) > 10:
+                        pct = group.sort_values('date')['close_price'].pct_change().dropna()
+                        if not pct.empty:
+                            vol = pct.std()
+                            if vol and vol > 0:
+                                vol_map[stock] = 1 / vol
 
-            for stock in buy_candidates[:num_positions]:
-                position_sizes[stock] = equal_allocation
+            if not vol_map:
+                allocation_per_stock = allocatable_cash / num_positions
+                for stock in buy_candidates[:num_positions]:
+                    position_sizes[stock] = allocation_per_stock
+                return position_sizes
+
+            total = sum(vol_map.values())
+            for stock in effective_candidates:
+                w = vol_map.get(stock, 0)
+                if total > 0:
+                    position_sizes[stock] = Decimal(str(w / total)) * allocatable_cash
+                else:
+                    position_sizes[stock] = Decimal("0")
+
+            return position_sizes
+
+        allocation_per_stock = allocatable_cash / num_positions
+        for stock in effective_candidates:
+            position_sizes[stock] = allocation_per_stock
 
         return position_sizes
 
@@ -1104,8 +1322,10 @@ class GenPortBacktestEngine:
         price_data: pd.DataFrame,
         trading_day: date,
         cash_balance: Decimal,
-        holdings: Dict,
-        factor_data: pd.DataFrame = None
+        holdings: Dict[str, Position],
+        factor_data: pd.DataFrame = None,
+        orders: List[Dict[str, Any]] = None,
+        executions: List[Dict[str, Any]] = None
     ) -> List[Dict]:
         """매수 실행 (팩터 정보 포함)"""
 
@@ -1155,29 +1375,62 @@ class GenPortBacktestEngine:
                             trade_factors[col] = float(value)
 
             # 매수 실행
-            trade = {
-                'trade_id': f"B_{stock_code}_{trading_day}",
-                'trade_date': trading_day,
-                'trade_type': 'BUY',
+            order = {
+                'order_id': f"ORD-B-{stock_code}-{trading_day}",
+                'order_date': trading_day,
                 'stock_code': stock_code,
                 'stock_name': f"Stock_{stock_code}",
+                'side': 'BUY',
+                'order_type': 'MARKET',
+                'quantity': quantity,
+                'status': 'FILLED',
+                'reason': "Factor-based selection"
+            }
+            if orders is not None:
+                orders.append(order)
+
+            execution = {
+                'execution_id': f"EXE-B-{stock_code}-{trading_day}",
+                'order_id': order['order_id'],
+                'execution_date': trading_day,
+                'trade_date': trading_day,
+                'stock_code': stock_code,
+                'stock_name': f"Stock_{stock_code}",
+                'side': 'BUY',
+                'trade_type': 'BUY',
                 'quantity': quantity,
                 'price': execution_price,
                 'amount': amount,
                 'commission': commission,
-                'tax': Decimal("0"),  # 매수시 세금 없음
-                'factors': trade_factors,  # 팩터 정보 추가
+                'tax': Decimal("0"),
+                'slippage': self.slippage,
+                'factors': trade_factors,
                 'selection_reason': "Factor-based selection"
             }
+            if executions is not None:
+                executions.append(execution)
 
-            buy_trades.append(trade)
+            buy_trades.append(execution)
 
-            # 보유 종목에 추가
-            holdings[stock_code] = {
-                'quantity': quantity,
-                'avg_price': execution_price,
-                'buy_date': trading_day
-            }
+            existing_position = holdings.get(stock_code)
+            if existing_position:
+                total_qty = existing_position.quantity + quantity
+                new_avg_price = ((existing_position.entry_price * existing_position.quantity) + (execution_price * quantity)) / total_qty
+                existing_position.entry_price = new_avg_price
+                existing_position.quantity = total_qty
+                existing_position.current_price = execution_price
+                existing_position.current_value = execution_price * total_qty
+            else:
+                holdings[stock_code] = Position(
+                    position_id=f"POS-{stock_code}-{trading_day}",
+                    stock_code=stock_code,
+                    stock_name=f"Stock_{stock_code}",
+                    entry_date=trading_day,
+                    entry_price=execution_price,
+                    quantity=quantity,
+                    current_price=execution_price,
+                    current_value=execution_price * quantity
+                )
 
         return buy_trades
 
@@ -1220,7 +1473,7 @@ class GenPortBacktestEngine:
 
     def _calculate_portfolio_value(
         self,
-        holdings: Dict,
+        holdings: Dict[str, Position],
         price_data: pd.DataFrame,
         trading_day: date,
         cash_balance: Decimal
@@ -1238,9 +1491,11 @@ class GenPortBacktestEngine:
             if not current_price_data.empty:
                 current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
             else:
-                current_price = holding['avg_price']
+                current_price = holding.entry_price
 
-            total_value += current_price * holding['quantity']
+            holding.current_price = current_price
+            holding.current_value = current_price * holding.quantity
+            total_value += holding.current_value
 
         return total_value
 
@@ -1254,7 +1509,8 @@ class GenPortBacktestEngine:
         """통계 계산"""
 
         daily_snapshots = portfolio_result['daily_snapshots']
-        trades = portfolio_result['trades']
+        executions = portfolio_result.get('executions', portfolio_result.get('trades', []))
+        sell_executions = [exe for exe in executions if exe.get('side') == 'SELL']
 
         if not daily_snapshots:
             # 빈 통계 반환
@@ -1339,9 +1595,9 @@ class GenPortBacktestEngine:
         calmar_ratio = annualized_return / max_drawdown if max_drawdown > 0 else 0
 
         # 거래 통계
-        winning_trades = [t for t in trades if t.get('profit', 0) > 0]
-        losing_trades = [t for t in trades if t.get('profit', 0) <= 0]
-        win_rate = len(winning_trades) / len(trades) * 100 if trades else 0
+        winning_trades = [t for t in sell_executions if t.get('realized_pnl', 0) > 0]
+        losing_trades = [t for t in sell_executions if t.get('realized_pnl', 0) <= 0]
+        win_rate = len(winning_trades) / len(sell_executions) * 100 if sell_executions else 0
 
         avg_win = np.mean([float(t.get('profit_rate', 0)) for t in winning_trades]) if winning_trades else 0
         avg_loss = np.mean([abs(float(t.get('profit_rate', 0))) for t in losing_trades]) if losing_trades else 0
@@ -1358,7 +1614,7 @@ class GenPortBacktestEngine:
             sharpe_ratio=Decimal(str(sharpe_ratio)),
             sortino_ratio=Decimal(str(sortino_ratio)),
             calmar_ratio=Decimal(str(calmar_ratio)),
-            total_trades=len(trades),
+            total_trades=len(sell_executions),
             winning_trades=len(winning_trades),
             losing_trades=len(losing_trades),
             win_rate=Decimal(str(win_rate)),
@@ -1541,7 +1797,7 @@ class GenPortBacktestEngine:
 
     async def _format_current_holdings(
         self,
-        holdings: Dict
+        holdings: Dict[str, Position]
     ) -> List[PortfolioHolding]:
         """현재 보유 종목 포맷"""
 
@@ -1579,28 +1835,28 @@ class GenPortBacktestEngine:
                 stock_name = stock_info.company_name
                 current_price = Decimal(str(stock_info.close_price))
             else:
-                stock_name = f"Stock_{stock_code}"
-                current_price = holding['avg_price']
+                stock_name = holding.stock_name
+                current_price = holding.entry_price
 
             # 손익 계산
-            value = current_price * holding['quantity']
-            profit = (current_price - holding['avg_price']) * holding['quantity']
-            profit_rate = ((current_price / holding['avg_price']) - 1) * 100
+            value = current_price * holding.quantity
+            profit = (current_price - holding.entry_price) * holding.quantity
+            profit_rate = ((current_price / holding.entry_price) - 1) * 100
 
             total_value += value
 
             formatted_holdings.append(PortfolioHolding(
                 stock_code=stock_code,
                 stock_name=stock_name,
-                quantity=holding['quantity'],
-                avg_price=holding['avg_price'],
+                quantity=holding.quantity,
+                avg_price=holding.entry_price,
                 current_price=current_price,
                 value=value,
                 profit=profit,
                 profit_rate=Decimal(str(profit_rate)),
                 weight=Decimal("0"),  # 나중에 계산
-                buy_date=holding['buy_date'],
-                hold_days=(latest_date - holding['buy_date']).days if latest_date else 0,
+                buy_date=holding.entry_date,
+                hold_days=(latest_date - holding.entry_date).days if latest_date else 0,
                 factors={}
             ))
 
@@ -1651,6 +1907,7 @@ class GenPortBacktestEngine:
         statistics: StatsSchema,
         buy_conditions: List[Dict],
         sell_conditions: List[Dict],
+        condition_sell: Optional[Dict[str, Any]],
         settings: Dict
     ) -> BacktestResultGenPort:
         """결과 포맷팅"""
@@ -1703,23 +1960,26 @@ class GenPortBacktestEngine:
 
         # 거래 내역 변환
         trade_records = []
-        for trade in portfolio_result['trades']:
+        executions = portfolio_result.get('executions', [])
+        for execution in executions:
+            if execution.get('side') != 'SELL':
+                continue
             trade_records.append(TradeRecord(
-                trade_id=trade.get('trade_id', ''),
-                trade_date=trade['trade_date'],
-                trade_type=trade['trade_type'],
-                stock_code=trade['stock_code'],
-                stock_name=trade.get('stock_name', ''),
-                quantity=trade['quantity'],
-                price=trade['price'],
-                amount=trade['amount'],
-                commission=trade['commission'],
-                tax=trade.get('tax', Decimal("0")),
-                profit=trade.get('profit'),
-                profit_rate=trade.get('profit_rate'),
-                hold_days=trade.get('hold_days'),
-                factors=trade.get('factors', {}),
-                selection_reason=trade.get('selection_reason')
+                trade_id=execution.get('execution_id', ''),
+                trade_date=execution['execution_date'],
+                trade_type='SELL',
+                stock_code=execution['stock_code'],
+                stock_name=execution.get('stock_name', ''),
+                quantity=execution['quantity'],
+                price=execution['price'],
+                amount=execution['amount'],
+                commission=execution['commission'],
+                tax=execution.get('tax', Decimal("0")),
+                profit=execution.get('realized_pnl'),
+                profit_rate=execution.get('profit_rate'),
+                hold_days=execution.get('hold_days'),
+                factors=execution.get('factors', {}),
+                selection_reason=execution.get('selection_reason')
             ))
 
         # 현재 보유 종목
@@ -1749,6 +2009,7 @@ class GenPortBacktestEngine:
             settings=BacktestSettings(**settings),
             buy_conditions=[BacktestCondition(**c) for c in buy_conditions],
             sell_conditions=[BacktestCondition(**c) for c in sell_conditions],
+            condition_sell=condition_sell,
             statistics=statistics,
             current_holdings=current_holdings,
             daily_performance=daily_performance,

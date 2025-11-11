@@ -16,6 +16,8 @@ from app.models.balance_sheet import BalanceSheet
 from app.models.cashflow_statement import CashflowStatement
 from app.models.disclosure import Disclosure
 from app.models.dividend import DividendInfo
+from app.models.user_favorite_stock import UserFavoriteStock
+from app.models.user_recent_stock import UserRecentStock
 
 # Simulation 모델들
 try:

@@ -35,6 +35,9 @@ export default function QuantStrategySummaryPanel({
     "buy" | "sell" | "target"
   >(activeTab);
 
+  // 클라이언트 전용 마운트 상태
+  const [isMounted, setIsMounted] = useState(false);
+
   // store에서 필요한 값들 가져오기
   const {
     is_day_or_month,
@@ -68,6 +71,11 @@ export default function QuantStrategySummaryPanel({
       setEndDate(getCurrentDate());
     }
   }, [start_date, end_date, setStartDate, setEndDate]);
+
+  // 클라이언트 마운트 감지
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // 탭 동기화
   useEffect(() => {
@@ -171,11 +179,11 @@ export default function QuantStrategySummaryPanel({
                     />
                     <SummaryItem
                       label="투자 시작일"
-                      value={`${start_date.slice(0, 4)}.${start_date.slice(4, 6)}.${start_date.slice(6, 8)}`}
+                      value={isMounted ? `${start_date.slice(0, 4)}.${start_date.slice(4, 6)}.${start_date.slice(6, 8)}` : ""}
                     />
                     <SummaryItem
                       label="투자 종료일"
-                      value={`${end_date.slice(0, 4)}.${end_date.slice(4, 6)}.${end_date.slice(6, 8)}`}
+                      value={isMounted ? `${end_date.slice(0, 4)}.${end_date.slice(4, 6)}.${end_date.slice(6, 8)}` : ""}
                     />
                     <SummaryItem
                       label="수수료율"
@@ -370,6 +378,19 @@ export default function QuantStrategySummaryPanel({
                 {/* 매매 대상 */}
                 <div className="space-y-4">
                   <FieldTitle tab="target">매매 대상</FieldTitle>
+
+                  {/* 종목 개수 표시 */}
+                  {trade_targets.total_stock_count !== undefined && (
+                    <div className="bg-bg-secondary p-3 rounded-lg">
+                      <span className="text-sm font-semibold text-text-strong">
+                        선택된 종목:
+                      </span>
+                      <span className="ml-2 text-sm font-bold text-accent-primary">
+                        {trade_targets.selected_stock_count || 0} 종목 / {trade_targets.total_stock_count} 종목
+                      </span>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <div>
                       <div className="text-xs text-tag-neutral mb-2">유니버스</div>
@@ -384,39 +405,44 @@ export default function QuantStrategySummaryPanel({
                       )}
                     </div>
                     <div>
-                      <div className="text-xs text-tag-neutral mb-2">테마</div>
-                      {trade_targets.selected_themes.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {trade_targets.selected_themes.map((theme, index) => (
-                            <div key={index} className="text-sm ">
-                              {theme}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-sm ">선택 안 함</div>
-                      )}
-                    </div>
+                      <div className="text-xs text-text-muted mb-2">테마 ({trade_targets.selected_themes.length}개 산업)</div>
+                      {
+                        trade_targets.selected_themes.length > 0 ? (
+                          <div className="grid grid-cols-3 gap-2">
+                            {trade_targets.selected_themes.map((theme, index) => (
+                              <div key={index} className="text-sm ">
+                                {theme}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm ">선택 안 함</div>
+                        )
+                      }
+                    </div >
                     <div>
-                      <div className="text-xs text-tag-neutral mb-2">개별 종목</div>
-                      {trade_targets.selected_stocks.length > 0 ? (
-                        <ul className="list-disc list-inside text-sm  space-y-1">
-                          {trade_targets.selected_stocks.map((stock, index) => (
-                            <li key={index}>{stock}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="text-sm ">선택 안 함</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                      <div className="text-xs text-text-muted mb-2">개별 종목 ({trade_targets.selected_stocks.length}개)</div>
+                      {
+                        trade_targets.selected_stocks.length > 0 ? (
+                          <ul className="list-disc list-inside text-sm  space-y-1">
+                            {trade_targets.selected_stocks.map((stock, index) => (
+                              <li key={index}>{stock}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="text-sm ">선택 안 함</div>
+                        )
+                      }
+                    </div >
+                  </div >
+                </div >
               </>
-            )}
-          </div>
-        </div>
+            )
+            }
+          </div >
+        </div >
       )}
-    </div>
+    </div >
   );
 }
 

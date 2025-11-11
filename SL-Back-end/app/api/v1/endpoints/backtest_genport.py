@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.core.database import get_db
-from app.services.backtest_genport_engine import GenPortBacktestEngine
+from app.services.backtest import BacktestEngine
 from app.schemas.backtest_genport import (
     BacktestResultGenPort,
     BacktestCreateRequest,
@@ -201,6 +201,7 @@ async def create_backtest(
             backtest_id=backtest_id,
             buy_conditions=[c.dict() for c in request.buy_conditions],
             sell_conditions=[c.dict() for c in request.sell_conditions],
+            condition_sell=request.condition_sell.dict() if request.condition_sell else None,
             start_date=request.start_date,
             end_date=request.end_date,
             initial_capital=request.initial_capital,

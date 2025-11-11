@@ -1,6 +1,6 @@
 import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
-import { FieldPanel, FormField, SectionHeader, UnderLineInput } from "../common";
+import { FieldPanel, FormField, SectionHeader, UnderlineInput } from "@/components/quant/common";
 
 /**
  * 일반 조건 설정 섹션
@@ -53,7 +53,7 @@ export function GeneralSettingsSection() {
             <Title variant="subtitle" className="mb-2">
               투자 시작일
             </Title>
-            <UnderLineInput
+            <UnderlineInput
               type="date"
               value={
                 start_date
@@ -71,7 +71,7 @@ export function GeneralSettingsSection() {
             <Title variant="subtitle" className="mb-2">
               투자 종료일
             </Title>
-            <UnderLineInput
+            <UnderlineInput
               type="date"
               value={
                 end_date

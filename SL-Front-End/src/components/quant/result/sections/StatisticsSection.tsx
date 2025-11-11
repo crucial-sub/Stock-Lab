@@ -1,4 +1,5 @@
-import { StatMetric, PeriodReturnsChart } from "../common";
+import { StatMetric } from "@/components/quant/result/common/StatMetric";
+import { PeriodReturnsChart } from "@/components/quant/result/common/PeriodReturnsChart";
 
 /**
  * Result 페이지 통계 섹션

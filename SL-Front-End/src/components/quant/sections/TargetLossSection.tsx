@@ -1,8 +1,8 @@
 import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
-import ActiveConditionBtn from "../common/ActivateConditionBtn";
+import { FieldPanel, SectionHeader, ToggleSwitch, UnderlineInput } from "@/components/quant/common";
+import ActiveConditionBtn from "@/components/quant/common/ActivateConditionBtn";
 
 /**
  * 목표가 / 손절가 섹션
@@ -70,7 +70,7 @@ export function TargetLossSection() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-text-body">매수가 대비</span>
                 <div className="relative">
-                  <UnderLineInput
+                  <UnderlineInput
                     value={targetGain}
                     onChange={(e) => setTargetGain(Number(e.target.value))}
                     className="w-[3.75rem] !h-full"
@@ -96,7 +96,7 @@ export function TargetLossSection() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-text-body">매수가 대비</span>
                 <div className="relative">
-                  <UnderLineInput
+                  <UnderlineInput
                     value={stopLoss}
                     onChange={(e) => setStopLoss(Number(e.target.value))}
                     className="w-[3.75rem] !h-full"

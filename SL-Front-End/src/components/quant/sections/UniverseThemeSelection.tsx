@@ -1,4 +1,4 @@
-import { CheckboxGroup, FieldPanel } from "../common";
+import { CheckboxGroup, FieldPanel } from "@/components/quant/common";
 
 /**
  * 유니버스 및 테마 선택 섹션

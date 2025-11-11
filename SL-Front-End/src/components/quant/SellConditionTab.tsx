@@ -11,12 +11,12 @@
  */
 
 import { useSellConditionManager } from "@/hooks/quant";
-import { FactorSelectionModal } from "./FactorSelectionModal";
+import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 import {
   TargetLossSection,
   HoldPeriodSection,
   ConditionalSellSection,
-} from "./sections";
+} from "@/components/quant/sections";
 
 export default function SellConditionTab() {
   const {

@@ -1,7 +1,6 @@
-import { Dropdown } from "@/components/common";
+import { Dropdown, UnderlineInput } from "@/components/common";
 import type { Condition } from "@/stores";
 import Image from "next/image";
-import { UnderLineInput } from "./UnderLineInput";
 
 /**
  * 조건식 카드 공통 컴포넌트
@@ -83,7 +82,7 @@ export function ConditionCard({
       />
 
       {/* 값 입력 */}
-      <UnderLineInput
+      <UnderlineInput
         value={condition.value}
         onChange={(e) => onValueChange(Number(e.target.value))}
         className="!w-20 text-center"

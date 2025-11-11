@@ -1,6 +1,6 @@
 import type { Strategy } from "@/types/strategy";
 import Image from "next/image";
-import { StrategyListItem } from "./StrategyListItem";
+import { StrategyListItem } from "@/components/quant/list/StrategyListItem";
 
 /**
  * 전략 목록 테이블 컴포넌트

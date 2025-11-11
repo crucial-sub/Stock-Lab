@@ -4,8 +4,8 @@ import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
 import { useState } from "react";
-import { ConditionCard, FieldPanel, SectionHeader, UnderLineInput } from "../common";
-import { FactorSelectionModal } from "../FactorSelectionModal";
+import { ConditionCard, FieldPanel, SectionHeader, UnderlineInput } from "@/components/quant/common";
+import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 
 /**
  * 매수 조건식 설정 섹션
@@ -134,7 +134,7 @@ export function BuyConditionsSection() {
             <Title variant="subtitle" className="mb-3">
               논리 조건식 작성
             </Title>
-            <UnderLineInput
+            <UnderlineInput
               placeholder="A and B"
               value={buy_logic}
               onChange={(e) => setBuyLogic(e.target.value)}

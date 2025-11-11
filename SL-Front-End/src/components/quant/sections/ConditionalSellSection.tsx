@@ -3,9 +3,9 @@ import { useSellConditionManager } from "@/hooks/quant";
 import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { ConditionCard, FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
-import ActiveConditionBtn from "../common/ActivateConditionBtn";
-import { FactorSelectionModal } from "../FactorSelectionModal";
+import { ConditionCard, FieldPanel, SectionHeader, ToggleSwitch, UnderlineInput } from "@/components/quant/common";
+import ActiveConditionBtn from "@/components/quant/common/ActivateConditionBtn";
+import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 
 /**
  * 조건 매도 섹션
@@ -162,7 +162,7 @@ export function ConditionalSellSection() {
               <Title variant="subtitle" className="mb-3">
                 논리 조건식 작성
               </Title>
-              <UnderLineInput
+              <UnderlineInput
                 placeholder="A and B"
                 value={sellLogic}
                 onChange={(e) => setSellLogic(e.target.value)}
@@ -186,7 +186,7 @@ export function ConditionalSellSection() {
                   variant="medium"
                 />
                 <div className="relative">
-                  <UnderLineInput
+                  <UnderlineInput
                     value={sellPriceOffset}
                     onChange={(e) => setSellPriceOffset(Number(e.target.value))}
                     className="w-32"

@@ -1,7 +1,7 @@
 import { Dropdown, Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { FieldPanel, SectionHeader, UnderLineInput } from "../common";
+import { FieldPanel, SectionHeader, UnderlineInput } from "@/components/quant/common";
 
 /**
  * 매수 방법 선택 섹션
@@ -46,7 +46,7 @@ export function BuyMethodSection() {
             variant="medium"
           />
           <div className="relative">
-            <UnderLineInput
+            <UnderlineInput
               value={buyCostBasisValue}
               onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
               className="w-32"

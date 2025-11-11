@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ReturnsChartWrapper } from "./ReturnsChartWrapper";
+import { ReturnsChartWrapper } from "@/components/quant/result/ReturnsChartWrapper";
 import type { BacktestResult } from "@/types/api";
 
 /**

@@ -11,13 +11,13 @@
  */
 
 import { useBuyConditionManager } from "@/hooks/quant";
-import { FactorSelectionModal } from "./FactorSelectionModal";
+import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 import {
   BuyConditionsSection,
   BuyMethodSection,
   BuyWeightSection,
   GeneralSettingsSection,
-} from "./sections";
+} from "@/components/quant/sections";
 
 export default function BuyConditionTab() {
   const {

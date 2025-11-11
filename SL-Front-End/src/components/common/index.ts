@@ -10,5 +10,5 @@ export { Panel } from "./Panel";
 export { RadioButton } from "./RadioButton";
 export { Select } from "./Select";
 export { Title } from "./Title";
-export { Toggle } from "./Toggle";
+export { ToggleSwitch } from "./ToggleSwitch";
 export { UnderlineInput } from "./UnderlineInput";

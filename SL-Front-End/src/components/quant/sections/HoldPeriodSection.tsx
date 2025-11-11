@@ -1,8 +1,8 @@
 import { Dropdown, Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
-import ActivateConditionBtn from "../common/ActivateConditionBtn";
+import { FieldPanel, SectionHeader, ToggleSwitch, UnderlineInput } from "@/components/quant/common";
+import ActivateConditionBtn from "@/components/quant/common/ActivateConditionBtn";
 
 /**
  * 보유 기간 섹션
@@ -64,7 +64,7 @@ export function HoldPeriodSection() {
                 최소 종목 보유일
               </Title>
               <div className="relative max-w-32">
-                <UnderLineInput
+                <UnderlineInput
                   value={minHoldDays}
                   onChange={(e) => setMinHoldDays(Number(e.target.value))}
                   className="!h-full"
@@ -81,7 +81,7 @@ export function HoldPeriodSection() {
                 최대 종목 보유일
               </Title>
               <div className="relative max-w-32">
-                <UnderLineInput
+                <UnderlineInput
                   value={maxHoldDays}
                   onChange={(e) => setMaxHoldDays(Number(e.target.value))}
                   className="!h-full"
@@ -107,7 +107,7 @@ export function HoldPeriodSection() {
                   ]}
                 />
                 <div className="relative">
-                  <UnderLineInput
+                  <UnderlineInput
                     value={sellPriceOffset}
                     onChange={(e) => setSellPriceOffset(Number(e.target.value))}
                     className=" !h-full"

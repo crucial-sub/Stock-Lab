@@ -1,7 +1,7 @@
 import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useState } from "react";
-import { FieldPanel, FormField, SectionHeader, ToggleSwitch } from "../common";
+import { FieldPanel, FormField, SectionHeader, ToggleSwitch } from "@/components/quant/common";
 
 /**
  * 매수 비중 설정 섹션

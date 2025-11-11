@@ -21,7 +21,7 @@ import {
   StockCount,
   UniverseThemeSelection,
   StockSearchAndTable,
-} from "./sections";
+} from "@/components/quant/sections";
 
 // 산업 목록
 const industries = [

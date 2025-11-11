@@ -266,7 +266,7 @@ export default function MarketPricePage() {
                     }}
                   >
                     <Icon
-                      src={row.isFavorite ? "/icons/star_selected.svg" : "/icons/star.svg"}
+                      src={row.isFavorite ? "/icons/star_fill.svg" : "/icons/star.svg"}
                       alt="즐겨찾기"
                       size={28}
                       color={
@@ -325,7 +325,7 @@ export default function MarketPricePage() {
             </h2>
             <button
               type="button"
-              className="mr-[0.25rem] ml-auto flex h-[0.7rem] w-[0.7rem] rounded-full bg-[#FF6464]"
+              className="mr-[0.25rem] ml-auto flex h-3 w-3 rounded-full bg-[#FF6464]"
               aria-label="닫기"
               onClick={() => setSelectedRow(null)}
             />

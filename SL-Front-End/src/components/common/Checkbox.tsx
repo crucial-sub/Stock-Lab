@@ -1,4 +1,4 @@
-import { SVG_PATH } from "@/constants";
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 /**
@@ -15,12 +15,16 @@ interface CheckboxProps {
   disabled?: boolean;
   /** 추가 CSS 클래스 */
   className?: string;
+  /** 색상 variant - primary(파란색), danger(빨간색) */
+  variant?: "primary" | "danger";
 }
 
 /**
  * 재사용 가능한 Checkbox 컴포넌트
- * - Figma 디자인과 일치하는 체크박스 UI
- * - 체크 상태에 따라 색상과 체크 마크 표시 변경
+ * - public/icons 폴더의 SVG 아이콘 사용
+ * - check-box-blank.svg: 체크 안 됨
+ * - check-box-blue.svg: 파란색 체크
+ * - check-box-red.svg: 빨간색 체크
  *
  * @example
  * ```tsx
@@ -28,6 +32,7 @@ interface CheckboxProps {
  *   checked={isChecked}
  *   onChange={(checked) => setIsChecked(checked)}
  *   label="건설"
+ *   variant="danger"
  * />
  * ```
  */
@@ -37,6 +42,7 @@ export function Checkbox({
   label,
   disabled = false,
   className = "",
+  variant = "primary",
 }: CheckboxProps) {
   /**
    * 체크박스 클릭 핸들러
@@ -47,70 +53,33 @@ export function Checkbox({
     }
   };
 
+  // variant에 따른 아이콘 파일명 결정
+  const getIconName = () => {
+    if (!checked) return "check-box-blank";
+    return variant === "danger" ? "check-box-red" : "check-box-blue";
+  };
+
   return (
     <button
       type="button"
       onClick={handleClick}
       disabled={disabled}
-      className={`flex items-center gap-[8px] ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer group"} ${className}`}
+      className={`flex items-center gap-[8px] ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer group"
+        } ${className}`}
     >
       {/* 체크박스 아이콘 */}
-      <div className="size-[24px]">
-        <svg
-          className="block size-full"
-          fill="none"
-          preserveAspectRatio="none"
-          viewBox="0 0 24 24"
-        >
-          <g>
-            <mask
-              height="24"
-              id="mask0_checkbox"
-              maskUnits="userSpaceOnUse"
-              style={{ maskType: "alpha" }}
-              width="24"
-              x="0"
-              y="0"
-            >
-              <rect fill="#D9D9D9" height="24" width="24" />
-            </mask>
-            <g mask="url(#mask0_checkbox)">
-              {/* 체크박스 외곽선 */}
-              <path
-                d={SVG_PATH.outline}
-                fill={checked ? "white" : "var(--color-text-muted)"}
-              />
-              {/* 체크 마크 (체크 상태일 때만 표시) */}
-              {checked && (
-                <g>
-                  <mask
-                    height="24"
-                    id="mask1_checkbox"
-                    maskUnits="userSpaceOnUse"
-                    style={{ maskType: "alpha" }}
-                    width="24"
-                    x="0"
-                    y="0"
-                  >
-                    <rect fill="#D9D9D9" height="24" width="24" />
-                  </mask>
-                  <g mask="url(#mask1_checkbox)">
-                    <path d={SVG_PATH.checkmark} fill="white" />
-                  </g>
-                </g>
-              )}
-            </g>
-          </g>
-        </svg>
-      </div>
+      <Image
+        src={`/icons/${getIconName()}.svg`}
+        alt="checkbox"
+        width={24}
+        height={24}
+        className="flex-shrink-0"
+      />
 
       {/* 라벨 텍스트 */}
       {label && (
         <span
-          className={`font-['Pretendard'] text-[18px] tracking-[-0.54px] whitespace-nowrap ${checked
-              ? "font-medium text-white"
-              : "font-extralight text-text-muted"
-            } ${!disabled && "group-hover:text-white transition-colors"}`}
+          className={`whitespace-nowrap`}
         >
           {label}
         </span>

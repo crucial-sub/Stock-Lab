@@ -1,9 +1,9 @@
-import { FieldPanel } from "@/components/quant/ui";
-import { CheckboxGroup } from "@/components/quant/common";
+import { Checkbox } from "@/components/common";
 
 /**
  * 주식 테마 선택 섹션
  * - DB에서 가져온 산업 데이터를 테마로 표시
+ * - 디자인 시안에 맞춘 UI 구성
  */
 interface UniverseThemeSelectionProps {
   industries: string[];
@@ -21,17 +21,30 @@ export function UniverseThemeSelection({
   onToggleAllIndustries,
 }: UniverseThemeSelectionProps) {
   return (
-    <FieldPanel conditionType="target">
-      {/* 주식 유니버스 선택 */}
-      <CheckboxGroup
-        title="주식 테마 선택"
-        items={industries.map((ind) => ({ id: ind, label: ind }))}
-        selectedIds={selectedIndustries}
-        onToggleItem={onToggleIndustry}
-        onToggleAll={onToggleAllIndustries}
-        isAllSelected={isAllIndustriesSelected}
-        columns={6}
-      />
-    </FieldPanel>
+    <div className="space-y-4">
+      {/* 주식 테마 선택 섹션 */}
+      <div>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="font-semibold">주식 테마 선택</span>
+          <Checkbox
+            checked={isAllIndustriesSelected}
+            onChange={onToggleAllIndustries}
+            label="전체선택"
+            variant="danger"
+          />
+        </div>
+        <div className="grid grid-cols-6 gap-3">
+          {industries.map((industry) => (
+            <Checkbox
+              key={industry}
+              checked={selectedIndustries.has(industry)}
+              onChange={() => onToggleIndustry(industry)}
+              label={industry}
+              variant="danger"
+            />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -14,9 +14,9 @@ export function TradeTargetHeader({
   totalCount,
 }: TradeTargetHeaderProps) {
   return (
-    <div>
+    <div className="flex gap-3">
       <Title>매매 대상 설정</Title>
-      <p className="text-sm text-text-body">
+      <p className="text-[0.75rem] self-end mb-1">
         매매할 대상을 선정합니다. 매매 대상에 포함되지 않는 종목은 매수 조건을 충족했을 때도 매매르 하지 않습니다.
       </p>
     </div>

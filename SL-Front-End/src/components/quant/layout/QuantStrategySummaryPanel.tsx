@@ -427,65 +427,65 @@ export default function QuantStrategySummaryPanel({
             {selectedSummaryTab === "target" && (
               <>
                 {/* 매매 대상 */}
-                <div className="space-y-4">
-                  <FieldTitle tab="target">매매 대상</FieldTitle>
-
+                <div className="space-y-7">
                   {/* 종목 개수 표시 */}
-                  {trade_targets.total_stock_count !== undefined && (
-                    <div className="bg-bg-secondary p-3 rounded-lg">
-                      <span className="text-sm font-semibold text-text-strong">
-                        선택된 종목:
-                      </span>
-                      <span className="ml-2 text-sm font-bold text-accent-primary">
-                        {trade_targets.selected_stock_count || 0} 종목 / {trade_targets.total_stock_count} 종목
-                      </span>
-                    </div>
-                  )}
+                  <div className="space-y-5">
+                    <FieldTitle tab="target">매매 대상 종목</FieldTitle>
+                    {trade_targets.total_stock_count !== undefined && (
+                      <div className="space-y-5">
+                        <div className="flex flex-col gap-1">
+                          <span>선택한 매매 대상 종목</span>
+                          <span className="font-semibold">{trade_targets.selected_stock_count || 0} 종목</span>
+                        </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <div className="text-xs text-tag-neutral mb-2">유니버스</div>
-                      {trade_targets.selected_universes.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          <span>전체 종목</span>
+                          <span className="font-semibold">{trade_targets.total_stock_count} 종목</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-5">
+                    <FieldTitle tab="target">선택한 테마</FieldTitle>
+                    <div className="flex gap-[6.5625rem]">
+                      <div className="flex flex-col gap-1">
+                        <span>선택한 테마 수</span>
+                        <span className="font-semibold">{trade_targets.selected_themes.length}개</span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span>전체 테마 수</span>
+                        <span className="font-semibold">16개</span>
+                      </div>
+                    </div>
+                    {
+                      trade_targets.selected_themes.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {trade_targets.selected_themes.map((theme, index) => (
+                            <div key={index} className="text-sm ">
+                              {theme}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm ">선택 안 함</div>
+                      )
+                    }
+                  </div>
+                  <div className="space-y-5">
+                    <FieldTitle tab="target">선택한 세부 종목 ({trade_targets.selected_stocks.length}개)</FieldTitle>
+                    {
+                      trade_targets.selected_stocks.length > 0 ? (
                         <ul className="list-disc list-inside text-sm  space-y-1">
-                          {trade_targets.selected_universes.map((universe, index) => (
-                            <li key={index}>{universe}</li>
+                          {trade_targets.selected_stocks.map((stock, index) => (
+                            <li key={index}>{stock}</li>
                           ))}
                         </ul>
                       ) : (
                         <div className="text-sm ">선택 안 함</div>
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-xs text-text-muted mb-2">테마 ({trade_targets.selected_themes.length}개 산업)</div>
-                      {
-                        trade_targets.selected_themes.length > 0 ? (
-                          <div className="grid grid-cols-3 gap-2">
-                            {trade_targets.selected_themes.map((theme, index) => (
-                              <div key={index} className="text-sm ">
-                                {theme}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-sm ">선택 안 함</div>
-                        )
-                      }
-                    </div >
-                    <div>
-                      <div className="text-xs text-text-muted mb-2">개별 종목 ({trade_targets.selected_stocks.length}개)</div>
-                      {
-                        trade_targets.selected_stocks.length > 0 ? (
-                          <ul className="list-disc list-inside text-sm  space-y-1">
-                            {trade_targets.selected_stocks.map((stock, index) => (
-                              <li key={index}>{stock}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <div className="text-sm ">선택 안 함</div>
-                        )
-                      }
-                    </div >
-                  </div >
+                      )
+                    }
+                  </div>
                 </div >
               </>
             )

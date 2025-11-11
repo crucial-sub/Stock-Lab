@@ -1,7 +1,7 @@
 "use client";
 
-import QuantStrategySidebar from "@/components/quant/QuantStrategySidebar";
-import QuantStrategySummaryPanel from "@/components/quant/QuantStrategySummaryPanel";
+import QuantStrategySidebar from "@/components/quant/layout/QuantStrategySidebar";
+import QuantStrategySummaryPanel from "@/components/quant/layout/QuantStrategySummaryPanel";
 import { useQuantTabStore } from "@/stores";
 import { ReactNode, useState } from "react";
 

@@ -1,5 +1,6 @@
 import { Title } from "@/components/common";
-import { ConditionCard, FieldPanel, SectionHeader, UnderlineInput } from "@/components/quant/common";
+import { ConditionCard, FieldPanel, SectionHeader } from "@/components/quant/ui";
+import { UnderlineInput } from "@/components/common";
 import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 import { useBuyConditionManager } from "@/hooks/quant";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Image from "next/image";
-import { FieldPanel } from "@/components/quant/common";
+import { FieldPanel } from "@/components/quant/ui";
 
 /**
  * 종목 검색 및 테이블 섹션

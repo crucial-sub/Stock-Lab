@@ -1,4 +1,5 @@
-import { CheckboxGroup, FieldPanel } from "@/components/quant/common";
+import { FieldPanel } from "@/components/quant/ui";
+import { CheckboxGroup } from "@/components/quant/common";
 
 /**
  * 주식 테마 선택 섹션

@@ -1,10 +1,10 @@
-import { Dropdown, Title } from "@/components/common";
+import { Dropdown, Title, ToggleSwitch, UnderlineInput } from "@/components/common";
 import { useSellConditionManager } from "@/hooks/quant";
 import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { ConditionCard, FieldPanel, SectionHeader, ToggleSwitch, UnderlineInput } from "@/components/quant/common";
-import ActiveConditionBtn from "@/components/quant/common/ActivateConditionBtn";
+import { ConditionCard, FieldPanel, SectionHeader } from "@/components/quant/ui";
+import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 
 /**

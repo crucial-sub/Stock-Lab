@@ -1,8 +1,9 @@
 import { Dropdown, Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { FieldPanel, SectionHeader, ToggleSwitch, UnderlineInput } from "@/components/quant/common";
-import ActivateConditionBtn from "@/components/quant/common/ActivateConditionBtn";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
+import { ToggleSwitch, UnderlineInput } from "@/components/common";
+import ActivateConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 
 /**
  * 보유 기간 섹션

@@ -2,15 +2,15 @@
 
 ## 1. 개요
 - 백엔드 `companies` 테이블(`SL-Back-end/app/models/company.py:37-47`)과 관련 API에서 `momentum_score`, `fundamental_score` 필드를 지원하도록 확장되었습니다.
-- `/backtest/run` 요청(`SL-Back-end/app/api/routes/backtest.py:90-107, 348-364`)과 `/company-info/{stockCode}` 응답(`SL-Back-end/app/api/routes/company_info.py:33-47, 433-446`)에 신규 필드가 노출되므로, 프론트 전략 빌더·회사 정보 화면에서 필수 입력/표시 요소를 추가해야 합니다.
+- `/backtest/run` 요청(`SL-Back-end/app/api/routes/backtest.py`)과 `/company/{stock_code}/info` 응답(`SL-Back-end/app/api/routes/company_info.py`)에 신규 필드가 노출되므로, 프론트 전략 빌더·회사 정보 화면에서 필수 입력/표시 요소를 추가해야 합니다.
 - 아래 체크리스트를 완료하면 프론트가 모멘텀/펀더멘털 점수를 필터·표시·전달할 수 있습니다.
 
 ## 2. 백엔드 노출 지점 요약
 | 구분 | 필드 | 위치 | 설명 |
 | --- | --- | --- | --- |
-| Company Info API | `momentumScore`, `fundamentalScore` | `CompanyInfoResponse.basic_info` (`SL-Back-end/app/api/routes/company_info.py:433-446`) | 종목 상세 패널의 기본정보에 점수 포함 |
-| Backtest Request | `minMomentumScore`, `minFundamentalScore` | `BacktestRequest` (`SL-Back-end/app/api/routes/backtest.py:90-107`) | 전략 실행 시 유니버스 필터 파라미터 |
-| Factors List | `MOMENTUM_SCORE`, `FUNDAMENTAL_SCORE` | `/api/backtest/factors/list` (`SL-Back-end/app/api/routes/backtest.py:717-745`) | 팩터 선택 UI에서 노출 필요 |
+| Company Info API | `momentumScore`, `fundamentalScore` | `CompanyInfoResponse.basic_info` (`GET /api/v1/company/{stock_code}/info`) | 종목 상세 패널의 기본정보에 점수 포함 |
+| Backtest Request | `minMomentumScore`, `minFundamentalScore` | `BacktestRequest` (`POST /api/v1/backtest/run`) | 전략 실행 시 유니버스 필터 파라미터 |
+| Factors List | `MOMENTUM_SCORE`, `FUNDAMENTAL_SCORE` | `/api/v1/backtest/factors/list` | 팩터 선택 UI에서 노출 필요 |
 
 ## 3. 프론트 수정 체크리스트
 

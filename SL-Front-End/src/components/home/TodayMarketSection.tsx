@@ -59,7 +59,10 @@ export function TodayMarketSection({
   return (
     <section className={`flex flex-col gap-5 ${className}`}>
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-semibold">오늘의 주식 시장</h2>
+        <div className="flex items-baseline gap-4">
+          <h2 className="text-3xl font-semibold">오늘의 주식 시장</h2>
+          <span className="text-base font-normal text-text-muted">등락률 상위20 종목</span>
+        </div>
         <Link href={'/market-price'} className="text-xl font-light transition">
           더보기
         </Link>
@@ -78,7 +81,10 @@ export function TodayMarketSection({
                 key={`${item.id}-${index}`}
                 className="w-full max-w-[489px] flex-shrink-0"
               >
-                <MarketTickerCard {...item} />
+                <MarketTickerCard
+                  {...item}
+                  onDetailClick={item.onDetailClick}
+                />
               </div>
             ))}
           </div>

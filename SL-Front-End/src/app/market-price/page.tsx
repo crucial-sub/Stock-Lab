@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { Icon } from "@/components/common/Icon";
 import { StockInfoCard } from "@/components/market-price/StockInfoCard";
+import { marketQuoteApi } from "@/lib/api/market-quote";
 
 const marketTabs = [
   "최근 본 주식",
@@ -148,6 +149,40 @@ export default function MarketPricePage() {
     month: "long",
     day: "numeric",
   });
+
+  // API 데이터 fetch
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await marketQuoteApi.getMarketQuotes({
+          sortBy: "market_cap",
+          sortOrder: "desc",
+          page: 1,
+          pageSize: 50,
+        });
+
+        // API 데이터를 목업 데이터 형식으로 변환
+        const formattedRows = response.items.map((item) => ({
+          rank: item.rank,
+          name: item.name,
+          code: item.code,
+          price: `${item.price.toLocaleString()}원`,
+          change: `${item.changeRate > 0 ? "+" : ""}${item.changeRate.toFixed(2)}%`,
+          trend: item.trend as "up" | "down" | "flat",
+          volume: `${item.volume.toLocaleString()}주`,
+          tradingValue: `${Math.floor(item.tradingValue / 100000000)}억원`,
+          marketCap: item.marketCap ? `${Math.floor(item.marketCap / 100000000)}억원` : "-",
+          isFavorite: item.isFavorite,
+        }));
+
+        setRows(formattedRows);
+      } catch (error) {
+        console.error("시세 데이터 조회 실패:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleToggleFavorite = (rank: number) => {
     setRows((prev) =>

@@ -14,7 +14,8 @@ import os
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote
+
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news
 from app.api.v1 import industries
 
 settings = get_settings()
@@ -180,6 +181,12 @@ app.include_router(
     market_quote.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Market Quote"]
+)
+
+app.include_router(
+    news.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["News"]
 )
 
 # Root 엔드포인트

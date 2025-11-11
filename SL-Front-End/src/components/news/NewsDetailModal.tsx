@@ -1,80 +1,66 @@
-import { Icon } from "@/components/common/Icon";
-import { NewsCardProps } from "./NewsCard";
+﻿import { Icon } from "@/components/common/Icon";
+import type { NewsItem } from "@/types/news";
 
 interface NewsDetailModalProps {
-  news: NewsCardProps;
+  news: NewsItem;
   onClose: () => void;
 }
 
 export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
-  const sentimentLabel = news.sentiment === "positive" ? "긍정" : news.sentiment === "neutral" ? "중립" : "부정";
-  const sentimentClasses: Record<NewsCardProps["sentiment"], string> = {
-    positive: "bg-[#DDFFE5] text-[#00CE00] border border-[#00CE00]",
-    neutral: "bg-[#FFF1D6] text-[#FFAA00] border border-[#FFAA00]",
-    negative: "bg-[#FFE5E5] text-[#FF6464] border border-[#FF6464]",
-  };
-
-  const tagItems = [
-    { label: news.tickerLabel, className: "bg-[#E1E1E1] text-text-strong border border-text-strong" },
-    news.themeName ? { label: news.themeName, className: "bg-[#F4E2FF] text-[#8A3FFC] border border-[#8A3FFC]" } : null,
-    { label: sentimentLabel, className: sentimentClasses[news.sentiment] },
-    news.pressName ? { label: news.pressName, className: "bg-[#EAF5FF] text-[#007DFC] border border-[#007DFC]" } : null,
-  ].filter(Boolean) as { label: string; className: string }[];
+  const displayDate = news.date?.display ?? news.date?.iso ?? "";
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="relative w-full max-w-3xl rounded-[8px] bg-white p-[0.75rem] shadow-card max-h-[90vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative w-full max-w-3xl rounded-[8px] bg-white p-[1rem] shadow-card max-h-[90vh] overflow-y-auto"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 flex items-center bg-white pb-2 shadow-header">
-          <p className="absolute left-1/2 -translate-x-1/2 text-sm text-text-muted">
-            {news.tickerLabel} : {news.title}
-          </p>
+        <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-[8px] border-b border-border-default bg-white px-3 py-2">
+          <div className="flex flex-col gap-0.5 text-sm text-text-muted">
+            <span>{news.stock_name ?? news.stock_code ?? "종목"}</span>
+            <span className="text-text-body font-semibold">{displayDate}</span>
+          </div>
           <button
             type="button"
             aria-label="닫기"
-            className="ml-auto flex h-3 w-3 items-center justify-center rounded-full bg-[#FF6464]"
+            className="h-9 w-9 rounded-full bg-[#FF6464] text-white"
             onClick={onClose}
-          />
+          >
+            ×
+          </button>
         </div>
 
-        <div className="m-3 pt-[1rem] flex flex-col gap-4">
-          <div>
-            <h2 className="text-[1.5rem] font-semibold text-text-strong">{news.title}</h2>
-            {news.subtitle && (
-              <p className="mt-[0.25rem] text-[1.25rem] text-text-body">{news.subtitle}</p>
-            )}
-          </div>
-          <div className="mt-[-0.5rem] flex flex-wrap items-center gap-2 text-sm text-text-muted">
-            <span>{news.publishedAt}</span>
-            {news.link && (
-              <a
-                href={news.link}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-text-muted"
-              >
-                <Icon src="/icons/link.svg" alt="링크" size={20} color="var(--color-text-muted)" />
-                {news.source}
-              </a>
-            )}
-          </div>
+        <div className="p-4">
+          <h2 className="text-[1.75rem] font-semibold text-text-strong">{news.title}</h2>
+          <p className="mt-2 text-sm text-text-muted">{news.source}</p>
 
-          <div className="flex flex-wrap gap-2">
-            {tagItems.map((tag) => (
-              <span key={tag.label} className={`rounded-[4px] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal ${tag.className}`}>
-                {tag.label}
-              </span>
-            ))}
-          </div>
+          {news.content && (
+            <p className="mt-4 text-base leading-relaxed text-text-body whitespace-pre-line">{news.content}</p>
+          )}
 
-          <p className="leading-relaxed text-text-body">
-            {news.content ?? news.summary}
-          </p>
+          {news.link && (
+            <a
+              href={news.link}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-brand-primary"
+            >
+              <Icon src="/icons/link.svg" alt="원문 링크 아이콘" size={20} color="currentColor" />
+              원문에서 보기
+            </a>
+          )}
+
+          {news.original_link && news.original_link !== news.link && (
+            <a
+              href={news.original_link}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-2 text-sm font-medium text-text-muted"
+            >
+              <Icon src="/icons/link.svg" alt="원문 링크 아이콘" size={20} color="currentColor" />
+              멀티 링크 열기
+            </a>
+          )}
         </div>
       </div>
     </div>

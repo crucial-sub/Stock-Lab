@@ -1,0 +1,24 @@
+# Chatbot Configuration
+
+llm:
+  provider: "bedrock"
+  # Default Mistral on Bedrock (override with BEDROCK_MODEL_ID)
+  model: "mistral.mistral-7b-instruct-v0:2"
+  temperature: 0.7
+  max_tokens: 2000
+  region: "us-east-1"
+
+rag:
+  vectordb_path: "../rag/vectordb/chroma"
+  top_k: 3
+  score_threshold: 0.7
+  # Default Titan Embeddings on Bedrock (override with BEDROCK_EMBEDDING_MODEL_ID)
+  embedding_model_id: "amazon.titan-embed-text-v2:0"
+
+conversation:
+  max_history: 10
+  session_timeout: 3600 # seconds
+
+backend:
+  api_url: "http://localhost:8000"
+  timeout: 30

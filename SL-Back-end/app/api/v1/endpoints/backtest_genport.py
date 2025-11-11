@@ -180,7 +180,7 @@ async def get_available_factors():
 
 @router.post("/backtest", response_model=BacktestResultGenPort)
 async def create_backtest(
-    request: BacktestCreateRequest,
+    request: BacktestCreateRequest, # This should be imported from schemas
     db: AsyncSession = Depends(get_db)
 ):
     """

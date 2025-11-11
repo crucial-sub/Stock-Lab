@@ -14,6 +14,7 @@ import uuid
 import logging
 import asyncio
 
+from app.core.dependencies import get_current_user
 from app.core.database import get_db
 from app.models.simulation import (
     SimulationSession,
@@ -25,6 +26,7 @@ from app.models.simulation import (
     SimulationTrade
 )
 from app.models.company import Company
+from app.models.user import User
 from pydantic import BaseModel, Field, ConfigDict
 
 logger = logging.getLogger(__name__)
@@ -63,7 +65,6 @@ class SellConditions(BaseModel):
 class BacktestRequest(BaseModel):
     """백테스트 실행 요청 - 프론트엔드 스키마에 맞춤"""
     # 기본 설정
-    user_id: str
     strategy_name: str
     is_day_or_month: str  # "daily" or "monthly"
     start_date: str  # YYYYMMDD
@@ -188,6 +189,7 @@ class BacktestResultResponse(BaseModel):
 @router.post("/backtest/run", response_model=BacktestResponse)
 async def run_backtest(
     request: BacktestRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -212,11 +214,11 @@ async def run_backtest(
         strategy = PortfolioStrategy(
             strategy_id=strategy_id,
             strategy_name=request.strategy_name,
-            description=f"User: {request.user_id}, Target: {', '.join(request.target_stocks[:3])}{'...' if len(request.target_stocks) > 3 else ''}",
+            description=f"User: {current_user.user_id}, Target: {', '.join(request.target_stocks[:3])}{'...' if len(request.target_stocks) > 3 else ''}",
             strategy_type="FACTOR_BASED",
             universe_type="THEME",  # 테마 기반 선택
             initial_capital=initial_capital,
-            user_id=request.user_id,
+            user_id=str(current_user.user_id),
             is_public=request.is_public or False,
             is_anonymous=request.is_anonymous or False,
             hide_strategy_details=request.hide_strategy_details or False
@@ -881,4 +883,3 @@ async def list_available_themes():
             {"id": 29, "name": "it_service", "display_name": "IT서비스"},
         ]
     }
-

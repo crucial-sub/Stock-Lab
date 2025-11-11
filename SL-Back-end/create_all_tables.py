@@ -18,6 +18,7 @@ from app.models.disclosure import Disclosure
 from app.models.dividend import DividendInfo
 from app.models.user_favorite_stock import UserFavoriteStock
 from app.models.user_recent_stock import UserRecentStock
+from app.models.news import NewsArticle, ThemeSentiment
 
 # Simulation 모델들
 try:

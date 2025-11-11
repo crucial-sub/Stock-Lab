@@ -1,7 +1,7 @@
 import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { FieldPanel, SectionHeader, ToggleSwitch } from "../common";
+import { FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
 
 /**
  * 목표가 / 손절가 섹션
@@ -58,8 +58,8 @@ export function TargetLossSection() {
         <FieldPanel conditionType="sell">
           <div className="grid grid-cols-2 gap-6">
             {/* 목표가 */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-5">
                 <Title variant="subtitle">목표가</Title>
                 <ToggleSwitch
                   checked={profitTargetEnabled}
@@ -68,19 +68,23 @@ export function TargetLossSection() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-text-body">매수가 대비</span>
-                <input
-                  type="number"
-                  value={targetGain}
-                  onChange={(e) => setTargetGain(Number(e.target.value))}
-                  disabled={!profitTargetEnabled}
-                  className="w-24 px-3 py-2 border border-border-default rounded-sm text-text-strong disabled:opacity-50"
-                />
-                <span className="text-sm text-text-body">% 상승 시 매도 주문</span>
+                <div className="relative">
+                  <UnderLineInput
+                    value={targetGain}
+                    onChange={(e) => setTargetGain(Number(e.target.value))}
+                    className="w-[3.75rem] !h-full"
+                    disabled={!profitTargetEnabled}
+                  />
+                  <span className="absolute right-0 top-[5px]">
+                    %
+                  </span>
+                </div>
+                <span className="text-sm text-text-body">상승 시 매도 주문</span>
               </div>
             </div>
 
             {/* 손절가 */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <Title variant="subtitle">손절가</Title>
                 <ToggleSwitch
@@ -90,13 +94,17 @@ export function TargetLossSection() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-text-body">매수가 대비</span>
-                <input
-                  type="number"
-                  value={stopLoss}
-                  onChange={(e) => setStopLoss(Number(e.target.value))}
-                  disabled={!stopLossEnabled}
-                  className="w-24 px-3 py-2 border border-border-default rounded-sm text-text-strong disabled:opacity-50"
-                />
+                <div className="relative">
+                  <UnderLineInput
+                    value={stopLoss}
+                    onChange={(e) => setStopLoss(Number(e.target.value))}
+                    className="w-[3.75rem] !h-full"
+                    disabled={!stopLossEnabled}
+                  />
+                  <span className="absolute right-0 top-[5px]">
+                    %
+                  </span>
+                </div>
                 <span className="text-sm text-text-body">% 하락 시 매도 주문</span>
               </div>
             </div>

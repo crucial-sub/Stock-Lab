@@ -63,9 +63,11 @@ export function QuantNewPageClient() {
           </div>
         }
       >
-        {activeTab === "buy" && <BuyConditionTab />}
-        {activeTab === "sell" && <SellConditionTab />}
-        {activeTab === "target" && <TargetSelectionTab />}
+        <div className="pb-12">
+          {activeTab === "buy" && <BuyConditionTab />}
+          {activeTab === "sell" && <SellConditionTab />}
+          {activeTab === "target" && <TargetSelectionTab />}
+        </div>
       </Suspense>
     </div>
   );

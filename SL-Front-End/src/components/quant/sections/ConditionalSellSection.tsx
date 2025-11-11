@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
-import { useBacktestConfigStore } from "@/stores";
+import { Dropdown, Title } from "@/components/common";
 import { useSellConditionManager } from "@/hooks/quant";
-import { SectionHeader, ToggleSwitch, ConditionCard, FieldPanel } from "../common";
+import { useBacktestConfigStore } from "@/stores";
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { ConditionCard, FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
 import { FactorSelectionModal } from "../FactorSelectionModal";
-import { Title } from "@/components/common";
 
 /**
  * 조건 매도 섹션
@@ -42,7 +43,6 @@ export function ConditionalSellSection() {
   // 조건 매도 토글 시 초기 조건 추가
   useEffect(() => {
     if (isOpen && sellConditions.length === 0) {
-      addSellCondition();
       addSellCondition();
     }
   }, [isOpen]);
@@ -100,13 +100,15 @@ export function ConditionalSellSection() {
 
       {isOpen && (
         <FieldPanel conditionType="sell">
-          <div className="space-y-6">
+          <div className="space-y-10">
             {/* 매도 조건식 설정 */}
             <div>
               <Title variant="subtitle" className="mb-3">
                 매도 조건식 설정
               </Title>
-              <div className="space-y-3">
+
+              {/* 조건 목록 */}
+              <div className="space-y-2 mb-2">
                 {sellConditions.map((condition) => (
                   <ConditionCard
                     key={condition.id}
@@ -116,52 +118,83 @@ export function ConditionalSellSection() {
                     onOperatorChange={(op) => handleOperatorChange(condition.id, op)}
                     onValueChange={(val) => handleValueChange(condition.id, val)}
                     onRemove={() => removeSellCondition(condition.id)}
+                    conditionType="sell"
                   />
                 ))}
-
-                {/* 조건식 추가 버튼 */}
-                <button
-                  type="button"
-                  onClick={addSellCondition}
-                  className="w-full py-3 border border-white rounded-md text-white text-sm font-medium hover:bg-white hover:bg-opacity-20 transition-colors"
-                >
-                  조건식을 추가하려면 클릭하세요.
-                </button>
               </div>
+
+              {/* 조건 추가 버튼 */}
+              <button
+                type="button"
+                onClick={addSellCondition}
+                className="w-[31.25rem] h-12 flex items-center gap-3 rounded-md border-[0.5px] relative"
+              >
+                {/* plus 아이콘 */}
+                <div className="">
+                  <Image
+                    src="/icons/plus.svg"
+                    alt=""
+                    width={48}
+                    height={48}
+                    className="rounded-tl-md rounded-bl-md"
+                  />
+                </div>
+
+                {/* 텍스트 */}
+                <div className="text-tag-neutral">
+                  조건식을 추가하려면 클릭하세요.
+                </div>
+
+                {/* 삭제 아이콘 */}
+                <Image
+                  src="/icons/trash.svg"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="absolute right-3 opacity-30"
+                />
+              </button>
             </div>
 
             {/* 논리 조건식 */}
-            <div className="border-t border-border-subtle pt-4">
-              <div className="flex items-center gap-3">
-                <Title variant="subtitle">논리 조건식</Title>
-                <input
-                  type="text"
-                  placeholder="논리 조건식을 입력해주세요."
-                  value={sellLogic}
-                  onChange={(e) => setSellLogic(e.target.value)}
-                  className="w-64 px-3 py-2 bg-transparent border-b border-text-muted text-text-strong placeholder:text-text-muted"
-                />
-              </div>
+            <div>
+              <Title variant="subtitle" className="mb-3">
+                논리 조건식 작성
+              </Title>
+              <UnderLineInput
+                placeholder="A and B"
+                value={sellLogic}
+                onChange={(e) => setSellLogic(e.target.value)}
+                className="w-[31.25rem]"
+              />
             </div>
 
             {/* 매도 가격 기준 */}
-            <div className="flex items-center gap-3">
-              <Title variant="subtitle">매도 가격 기준</Title>
-              <select
-                value={sellPriceBasis}
-                onChange={(e) => setSellPriceBasis(e.target.value)}
-                className="px-3 py-2 bg-transparent border border-border-default rounded-sm text-text-strong appearance-none cursor-pointer"
-              >
-                <option value="전일 종가">전일 종가</option>
-                <option value="당일 시가">당일 시가</option>
-              </select>
-              <input
-                type="number"
-                value={sellPriceOffset}
-                onChange={(e) => setSellPriceOffset(Number(e.target.value))}
-                className="w-24 px-3 py-2 bg-transparent border border-border-default rounded-sm text-text-strong"
-              />
-              <span className="text-sm text-text-body">%</span>
+            <div>
+              <Title variant="subtitle" className="mb-3">
+                매도 가격 기준
+              </Title>
+              <div className="flex gap-4 items-center">
+                <Dropdown
+                  value={sellPriceBasis}
+                  options={[
+                    { value: "전일 종가", label: "전일 종가" },
+                    { value: "당일 시가", label: "당일 시가" },
+                  ]}
+                  onChange={setSellPriceBasis}
+                  variant="medium"
+                />
+                <div className="relative">
+                  <UnderLineInput
+                    value={sellPriceOffset}
+                    onChange={(e) => setSellPriceOffset(Number(e.target.value))}
+                    className="w-32"
+                  />
+                  <span className="absolute right-0 bottom-[0.625rem]">
+                    %
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </FieldPanel>

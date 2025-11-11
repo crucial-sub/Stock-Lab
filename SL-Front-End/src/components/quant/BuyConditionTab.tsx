@@ -13,10 +13,10 @@
 import { useBuyConditionManager } from "@/hooks/quant";
 import { FactorSelectionModal } from "./FactorSelectionModal";
 import {
-  GeneralSettingsSection,
   BuyConditionsSection,
-  BuyWeightSection,
   BuyMethodSection,
+  BuyWeightSection,
+  GeneralSettingsSection,
 } from "./sections";
 
 export default function BuyConditionTab() {
@@ -30,7 +30,7 @@ export default function BuyConditionTab() {
   return (
     <>
       {/* Main Content */}
-      <div className="space-y-6 pb-12">
+      <div className="space-y-6">
         {/* 일반 조건 설정 */}
         <GeneralSettingsSection />
 

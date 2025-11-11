@@ -91,6 +91,7 @@ export function BuyConditionsSection() {
                   onOperatorChange={(op) => handleOperatorChange(condition.id, op)}
                   onValueChange={(val) => handleValueChange(condition.id, val)}
                   onRemove={() => removeBuyCondition(condition.id)}
+                  conditionType="buy"
                 />
               ))}
             </div>

@@ -15,6 +15,8 @@ interface ConditionCardProps {
   onOperatorChange: (operator: ">=" | "<=" | ">" | "<" | "=" | "!=") => void;
   onValueChange: (value: number) => void;
   onRemove: () => void;
+  /** 조건 타입 (매수: buy, 매도: sell) - 색상 결정에 사용 */
+  conditionType: "buy" | "sell";
 }
 
 export function ConditionCard({
@@ -24,13 +26,17 @@ export function ConditionCard({
   onOperatorChange,
   onValueChange,
   onRemove,
+  conditionType,
 }: ConditionCardProps) {
+  // 조건 타입에 따른 배경색 결정
+  const bgColor = conditionType === "buy" ? "bg-brand-primary" : "bg-accent-primary";
+
   return (
     <div className="flex items-center gap-3">
       {/* 조건식 표시 영역 */}
       <div className="relative w-[31.25rem] h-12 flex items-center gap-3 rounded-md border-[0.5px]">
         {/* 조건식 ID */}
-        <div className="w-12 h-12 rounded-tl-md rounded-bl-md flex items-center justify-center bg-brand-primary text-white">
+        <div className={`w-12 h-12 rounded-tl-md rounded-bl-md flex items-center justify-center ${bgColor} text-white`}>
           {condition.id}
         </div>
 

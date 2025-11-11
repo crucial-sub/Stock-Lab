@@ -19,7 +19,6 @@ class CompanyBasicInfo(BaseModel):
 
     # 주가 정보
     current_price: Optional[int] = Field(None, serialization_alias="currentPrice", description="현재가(종가)")
-    vs_previous: Optional[int] = Field(None, serialization_alias="vsPrevious", description="전일대비")
     trade_date: Optional[str] = Field(None, serialization_alias="tradeDate", description="기준일자")
     previous_close: Optional[int] = Field(None, serialization_alias="previousClose", description="전일 종가")
     change_vs_1d: Optional[int] = Field(None, serialization_alias="changevs1d", description="1일 전일대비")
@@ -44,8 +43,8 @@ class CompanyBasicInfo(BaseModel):
     industry: Optional[str] = None
 
     # 점수
-    momentum_score: Optional[float] = Field(None, serialization_alias="momentumScore")
-    fundamental_score: Optional[float] = Field(None, serialization_alias="fundamentalScore")
+    # momentum_score: Optional[float] = Field(None, serialization_alias="momentumScore")
+    # fundamental_score: Optional[float] = Field(None, serialization_alias="fundamentalScore")
 
     # 관심종목 여부
     is_favorite: bool = Field(False, serialization_alias="isFavorite", description="관심종목 여부")

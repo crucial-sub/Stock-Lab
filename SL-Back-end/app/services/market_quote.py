@@ -71,7 +71,7 @@ class MarketQuoteService:
                 Company.stock_code,
                 Company.stock_name,
                 StockPrice.close_price,
-                StockPrice.vs_previous,
+                StockPrice.change_vs_1d,
                 StockPrice.fluctuation_rate,
                 StockPrice.volume,
                 StockPrice.trading_value,
@@ -79,12 +79,7 @@ class MarketQuoteService:
                 StockPrice.trade_date
             )
             .join(StockPrice, Company.company_id == StockPrice.company_id)
-            .where(
-                and_(
-                    Company.is_active == 1,
-                    StockPrice.trade_date == latest_trade_date
-                )
-            )
+            .where(StockPrice.trade_date == latest_trade_date)
             .order_by(order_func(sort_column))
             .offset(offset)
             .limit(page_size + 1)  # has_next 판단을 위해 1개 더 조회
@@ -103,12 +98,7 @@ class MarketQuoteService:
             select(func.count())
             .select_from(Company)
             .join(StockPrice, Company.company_id == StockPrice.company_id)
-            .where(
-                and_(
-                    Company.is_active == 1,
-                    StockPrice.trade_date == latest_trade_date
-                )
-            )
+            .where(StockPrice.trade_date == latest_trade_date)
         )
         count_result = await self.db.execute(count_query)
         total = count_result.scalar()
@@ -122,22 +112,23 @@ class MarketQuoteService:
             favorite_result = await self.db.execute(favorite_query)
             favorite_stock_codes = {row[0] for row in favorite_result.all()}
 
-        # 7. 응답 데이터 생성
+        # 7. 응답 데이터 생성 (rank 추가)
+        offset = (page - 1) * page_size
         items = [
             {
-                "stock_code": row.stock_code,
-                "stock_name": row.stock_name,
-                "current_price": row.close_price,
-                "previous_close": self._calculate_previous_close(row.close_price, row.vs_previous),
-                "vs_previous": row.vs_previous or 0,
+                "rank": offset + idx + 1,  # 페이지 기준 순위 계산
+                "name": row.stock_name,
+                "code": row.stock_code,
+                "price": row.close_price or 0,
+                "change_amount": row.change_vs_1d or 0,
                 "change_rate": row.fluctuation_rate or 0.0,
+                "trend": self._get_trend(row.fluctuation_rate),
                 "volume": row.volume or 0,
                 "trading_value": row.trading_value or 0,
                 "market_cap": row.market_cap,
-                "trade_date": row.trade_date.isoformat(),
                 "is_favorite": row.stock_code in favorite_stock_codes
             }
-            for row in rows
+            for idx, row in enumerate(rows)
         ]
 
         return {
@@ -171,11 +162,8 @@ class MarketQuoteService:
         return sort_map.get(sort_by, StockPrice.market_cap)
 
     @staticmethod
-    def _calculate_previous_close(
-        close_price: Optional[int],
-        vs_previous: Optional[int]
-    ) -> Optional[int]:
-        """전일 종가 계산"""
-        if close_price is None or vs_previous is None:
-            return None
-        return close_price - vs_previous
+    def _get_trend(change_rate: Optional[float]) -> str:
+        """등락 추세 판단"""
+        if change_rate is None or change_rate == 0:
+            return "flat"
+        return "up" if change_rate > 0 else "down"

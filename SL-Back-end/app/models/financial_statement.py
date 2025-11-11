@@ -36,11 +36,6 @@ class FinancialStatement(Base):
     )
     fs_div = Column(String(3), nullable=True, comment="재무제표 구분 (CFS:연결, OFS:개별)")
 
-    # 공시 연동
-    rcept_no = Column(String(20), nullable=True, comment="DART 접수번호")
-    reprt_nm = Column(String(100), nullable=True, comment="보고서명")
-    report_date = Column(Date, nullable=True, comment="보고서 제출일")
-
     # Timestamp
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False, comment="생성일시")
 

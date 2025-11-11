@@ -10,6 +10,7 @@ from sqlalchemy import select, and_
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 import uuid
 import logging
 import asyncio
@@ -63,7 +64,7 @@ class SellConditions(BaseModel):
 class BacktestRequest(BaseModel):
     """백테스트 실행 요청 - 프론트엔드 스키마에 맞춤"""
     # 기본 설정
-    user_id: str
+    user_id: UUID
     strategy_name: str
     is_day_or_month: str  # "daily" or "monthly"
     start_date: str  # YYYYMMDD

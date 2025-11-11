@@ -1,11 +1,12 @@
 import { Title } from "@/components/common";
+import { ConditionCard, FieldPanel, SectionHeader, UnderlineInput } from "@/components/quant/common";
+import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 import { useBuyConditionManager } from "@/hooks/quant";
+import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
-import { useState } from "react";
-import { ConditionCard, FieldPanel, SectionHeader, UnderlineInput } from "@/components/quant/common";
-import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
+import { useEffect, useState } from "react";
 
 /**
  * 매수 조건식 설정 섹션
@@ -18,6 +19,19 @@ export function BuyConditionsSection() {
     useBacktestConfigStore();
 
   const { data: subFactors = [] } = useSubFactorsQuery();
+  const { data: factors = [] } = useFactorsQuery();
+
+  // 우선순위 팩터 기본값 설정 (최초 1회만)
+  useEffect(() => {
+    if (!priority_factor && factors.length > 0) {
+      // PER 팩터를 기본값으로 설정
+      const defaultFactor = factors.find(f => f.name === 'per') || factors[0];
+      if (defaultFactor) {
+        setPriorityFactor(`{${defaultFactor.display_name}}`);
+        setPriorityFactorDisplay(defaultFactor.display_name);
+      }
+    }
+  }, [factors, priority_factor, setPriorityFactor]);
 
   const {
     buyConditions,

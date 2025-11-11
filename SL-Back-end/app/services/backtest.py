@@ -1,8 +1,9 @@
 """
-GenPort 스타일 백테스트 엔진 (확장판)
+백테스트 엔진 (확장판)
 - 논리식 조건 지원
 - 주문/체결/포지션 추적
 - 상세 통계 계산
+- 최적화: 병렬 처리, 선택적 팩터 계산, Redis 캐싱
 """
 
 import asyncio
@@ -10,13 +11,18 @@ import logging
 import copy
 from datetime import datetime, timedelta, date
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Dict, List, Optional, Tuple, Any, Union, Set
 from uuid import UUID, uuid4
 import pandas as pd
 import numpy as np
 import polars as pl
 from collections import defaultdict
 from dataclasses import dataclass, asdict
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+import hashlib
+import json
 
 from sqlalchemy import select, and_, or_, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,13 +31,14 @@ from app.models import (
     Company, StockPrice, FinancialStatement,
     BalanceSheet, IncomeStatement, CashflowStatement
 )
-from app.schemas.backtest_genport import (
-    BacktestResultGenPort, PortfolioHolding, DailyPerformance,
+from app.schemas.backtest import (
+    BacktestResult, PortfolioHolding, DailyPerformance,
     MonthlyPerformance, YearlyPerformance, TradeRecord,
     BacktestStatistics as StatsSchema, BacktestCondition,
     BacktestSettings
 )
 from app.services.condition_evaluator import ConditionEvaluator, LogicalExpressionParser
+from app.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +149,13 @@ class BacktestEngine:
         self.condition_evaluator = ConditionEvaluator()
         self.expression_parser = LogicalExpressionParser()
 
+        # 전략 제약 기본값
+        self.initial_capital: Decimal = Decimal("0")
+        self.per_stock_ratio: Optional[Decimal] = None
+        self.max_buy_value: Optional[Decimal] = None
+        self.max_daily_stock: Optional[int] = None
+        self.condition_sell_meta: Optional[Dict[str, Any]] = None
+
     async def run_backtest(
         self,
         backtest_id: UUID,
@@ -150,48 +164,119 @@ class BacktestEngine:
         start_date: date,
         end_date: date,
         condition_sell: Optional[Dict[str, Any]] = None,
+        target_and_loss: Optional[Dict[str, Any]] = None,
+        hold_days: Optional[Dict[str, Any]] = None,
         initial_capital: Decimal = Decimal("100000000"),
         rebalance_frequency: str = "MONTHLY",
         max_positions: int = 20,
         position_sizing: str = "EQUAL_WEIGHT",
         benchmark: str = "KOSPI",
         commission_rate: float = 0.00015,  # 0.015% 기본값
-        slippage: float = 0.001  # 0.1% 기본값
-    ) -> BacktestResultGenPort:
+        slippage: float = 0.001,  # 0.1% 기본값
+        target_themes: List[str] = None,  # 선택된 산업/테마
+        target_stocks: List[str] = None,  # 선택된 종목 코드
+        per_stock_ratio: Optional[float] = None,
+        max_buy_value: Optional[Decimal] = None,
+        max_daily_stock: Optional[int] = None
+    ) -> BacktestResult:
         """백테스트 실행"""
 
         # Decimal로 변환
         self.commission_rate = Decimal(str(commission_rate))
         self.slippage = Decimal(str(slippage))
+        self.initial_capital = initial_capital
+        self.per_stock_ratio = Decimal(str(per_stock_ratio)) if per_stock_ratio else None
+        self.max_buy_value = Decimal(str(max_buy_value)) if max_buy_value else None
+        self.max_daily_stock = max_daily_stock
+
+        # 매도 조건 저장
+        self.target_and_loss = None
+        if target_and_loss:
+            self.target_and_loss = {
+                "target_gain": Decimal(str(target_and_loss.get('target_gain'))) if target_and_loss.get('target_gain') is not None else None,
+                "stop_loss": Decimal(str(target_and_loss.get('stop_loss'))) if target_and_loss.get('stop_loss') is not None else None
+            }
+
+        self.hold_days = None
+        if hold_days:
+            self.hold_days = {
+                "min_hold_days": hold_days.get('min_hold_days'),
+                "max_hold_days": hold_days.get('max_hold_days'),
+                "sell_price_basis": hold_days.get('sell_price_basis', 'CURRENT'),
+                "sell_price_offset": Decimal(str(hold_days.get('sell_price_offset'))) if hold_days.get('sell_price_offset') is not None else None
+            }
+
+        self.condition_sell_meta = None
+        if condition_sell:
+            self.condition_sell_meta = {
+                "sell_price_basis": condition_sell.get('sell_price_basis', 'CURRENT'),
+                "sell_price_offset": Decimal(str(condition_sell.get('sell_price_offset'))) if condition_sell.get('sell_price_offset') is not None else None
+            }
+
+        # 매매 대상 필터 저장
+        self.target_themes = target_themes or []
+        self.target_stocks = target_stocks or []
 
         try:
             # 1. 데이터 준비
             logger.info(f"백테스트 시작: {backtest_id}")
-            price_data = await self._load_price_data(start_date, end_date)
+            logger.info(f"매매 대상 필터 - 테마: {self.target_themes}, 종목: {self.target_stocks}")
+
+            price_data = await self._load_price_data(start_date, end_date, target_themes, target_stocks)
             financial_data = await self._load_financial_data(start_date, end_date)
 
-            # 2. 팩터 계산 - 통합 모듈 사용 (54개 팩터)
-            from app.services.factor_integration import FactorIntegration
-            factor_integrator = FactorIntegration(self.db)
+            # 2. 팩터 계산 - 최적화된 버전 사용
+            # 매수 조건에서 priority_factor 추출
+            priority_factor = None
+            if isinstance(buy_conditions, dict):
+                priority_factor = buy_conditions.get('priority_factor')
+            elif isinstance(buy_conditions, list) and buy_conditions:
+                # 리스트에서 priority_factor 찾기
+                for condition in buy_conditions:
+                    if isinstance(condition, dict) and 'priority_factor' in condition:
+                        priority_factor = condition.get('priority_factor')
+                        break
 
-            # 모든 종목 코드 추출
-            stock_codes = price_data['stock_code'].unique().tolist() if not price_data.empty else None
+            # SimpleCondition 객체 리스트 생성 (최적화된 팩터 계산을 위해)
+            # BacktestCondition 스키마 대신 간단한 객체 사용
+            class SimpleCondition:
+                def __init__(self, exp_left_side, inequality, exp_right_side):
+                    self.exp_left_side = exp_left_side
+                    self.inequality = inequality
+                    self.exp_right_side = exp_right_side
 
-            # 54개 팩터 모두 계산
-            factor_data = await factor_integrator.get_integrated_factor_data(
-                start_date=start_date,
-                end_date=end_date,
-                stock_codes=stock_codes
+            backtest_conditions = []
+            if isinstance(buy_conditions, list):
+                for cond in buy_conditions:
+                    if isinstance(cond, dict):
+                        # Dict를 SimpleCondition 객체로 변환
+                        # 두 가지 형식 지원:
+                        # 1. {'exp_left_side': '기본값({PBR})', 'inequality': '>', 'exp_right_side': 10}
+                        # 2. {'factor': 'PBR', 'operator': '>', 'value': 10}
+                        if 'factor' in cond:
+                            # 파싱된 형식 (advanced_backtest.py에서 온 경우)
+                            exp_left_side = f"기본값({{{cond['factor']}}})"
+                            inequality = cond.get('operator', '>')
+                            exp_right_side = cond.get('value', 0)
+                        else:
+                            # 원본 형식
+                            exp_left_side = cond.get('exp_left_side', '')
+                            inequality = cond.get('inequality', '')
+                            exp_right_side = cond.get('exp_right_side', 0)
+
+                        backtest_conditions.append(SimpleCondition(
+                            exp_left_side=exp_left_side,
+                            inequality=inequality,
+                            exp_right_side=exp_right_side
+                        ))
+
+            # 최적화된 팩터 계산 호출
+            logger.info("최적화된 팩터 계산 사용")
+            factor_data = await self._calculate_all_factors_optimized(
+                price_data, financial_data, start_date, end_date,
+                buy_conditions=backtest_conditions,
+                priority_factor=priority_factor
             )
-
-            logger.info(f"팩터 계산 완료: {len(factor_data)}개 레코드, {len(factor_data.columns)-3}개 팩터")
-
-            # 기존 13개 팩터 계산은 백업용으로 남겨둠 (필요시 폴백)
-            if factor_data.empty:
-                logger.warning("통합 팩터 계산 실패, 기존 방식으로 폴백")
-                factor_data = await self._calculate_all_factors(
-                    price_data, financial_data, start_date, end_date
-                )
 
             # 3. 벤치마크 데이터 로드
             benchmark_data = await self._load_benchmark_data(benchmark, start_date, end_date)
@@ -246,11 +331,45 @@ class BacktestEngine:
             logger.error(f"백테스트 실패: {e}")
             raise
 
-    async def _load_price_data(self, start_date: date, end_date: date) -> pd.DataFrame:
-        """가격 데이터 로드"""
+    async def _load_price_data(
+        self,
+        start_date: date,
+        end_date: date,
+        target_themes: List[str] = None,
+        target_stocks: List[str] = None
+    ) -> pd.DataFrame:
+        """가격 데이터 로드 (매매 대상 필터 적용)"""
+
+        logger.info(f"📊 가격 데이터 로드 - target_themes: {target_themes}, target_stocks: {target_stocks}")
 
         # 날짜 범위 확장 (모멘텀 계산을 위해 252일 추가)
         extended_start = start_date - timedelta(days=365)
+
+        # 기본 조건
+        conditions = [
+            StockPrice.trade_date >= extended_start,
+            StockPrice.trade_date <= end_date,
+            StockPrice.close_price.isnot(None),
+            StockPrice.volume > 0
+        ]
+
+        # 매매 대상 필터 적용
+        if target_themes or target_stocks:
+            filter_conditions = []
+
+            if target_themes:
+                # 선택된 산업(테마)에 속한 종목만
+                filter_conditions.append(Company.industry.in_(target_themes))
+
+            if target_stocks:
+                # 선택된 개별 종목만
+                filter_conditions.append(Company.stock_code.in_(target_stocks))
+
+            # OR 조건으로 결합 (테마 또는 개별 종목)
+            if len(filter_conditions) > 1:
+                conditions.append(or_(*filter_conditions))
+            elif len(filter_conditions) == 1:
+                conditions.append(filter_conditions[0])
 
         query = select(
             StockPrice.company_id,
@@ -270,12 +389,7 @@ class BacktestEngine:
         ).join(
             Company, StockPrice.company_id == Company.company_id
         ).where(
-            and_(
-                StockPrice.trade_date >= extended_start,
-                StockPrice.trade_date <= end_date,
-                StockPrice.close_price.isnot(None),
-                StockPrice.volume > 0
-            )
+            and_(*conditions)
         ).order_by(
             StockPrice.trade_date,
             Company.stock_code
@@ -310,12 +424,15 @@ class BacktestEngine:
         extended_start = start_date - timedelta(days=180)  # 6개월 전 데이터부터
 
         # 손익계산서 데이터
+        # Note: report_date 컬럼이 DB에 없으므로 bsns_year로 필터링
+        start_year = str(start_date.year - 1)  # 1년 전 데이터부터
+        end_year = str(end_date.year)
+
         income_query = select(
             FinancialStatement.company_id,
             Company.stock_code,
             FinancialStatement.bsns_year.label('fiscal_year'),
             FinancialStatement.reprt_code.label('report_code'),
-            FinancialStatement.report_date,
             IncomeStatement.account_nm,
             IncomeStatement.thstrm_amount.label('current_amount'),
             IncomeStatement.thstrm_add_amount.label('cumulative_amount'),
@@ -326,8 +443,8 @@ class BacktestEngine:
             Company, FinancialStatement.company_id == Company.company_id
         ).where(
             and_(
-                FinancialStatement.report_date >= extended_start,
-                FinancialStatement.report_date <= end_date,
+                FinancialStatement.bsns_year >= start_year,
+                FinancialStatement.bsns_year <= end_year,
                 IncomeStatement.account_nm.in_([
                     '매출액', '매출', '영업수익',
                     '영업이익', '영업이익(손실)',
@@ -343,7 +460,6 @@ class BacktestEngine:
             Company.stock_code,
             FinancialStatement.bsns_year.label('fiscal_year'),
             FinancialStatement.reprt_code.label('report_code'),
-            FinancialStatement.report_date,
             BalanceSheet.account_nm,
             BalanceSheet.thstrm_amount.label('current_amount')
         ).join(
@@ -352,8 +468,8 @@ class BacktestEngine:
             Company, FinancialStatement.company_id == Company.company_id
         ).where(
             and_(
-                FinancialStatement.report_date >= extended_start,
-                FinancialStatement.report_date <= end_date,
+                FinancialStatement.bsns_year >= start_year,
+                FinancialStatement.bsns_year <= end_year,
                 BalanceSheet.account_nm.in_([
                     '자산총계', '자본총계', '부채총계',
                     '유동자산', '유동부채', '비유동부채',
@@ -372,7 +488,7 @@ class BacktestEngine:
         # 데이터 통합 및 피벗
         if not income_df.empty:
             income_pivot = income_df.pivot_table(
-                index=['company_id', 'stock_code', 'fiscal_year', 'report_code', 'report_date'],
+                index=['company_id', 'stock_code', 'fiscal_year', 'report_code'],
                 columns='account_nm',
                 values='current_amount',
                 aggfunc='first'
@@ -382,7 +498,7 @@ class BacktestEngine:
 
         if not balance_df.empty:
             balance_pivot = balance_df.pivot_table(
-                index=['company_id', 'stock_code', 'fiscal_year', 'report_code', 'report_date'],
+                index=['company_id', 'stock_code', 'fiscal_year', 'report_code'],
                 columns='account_nm',
                 values='current_amount',
                 aggfunc='first'
@@ -394,7 +510,7 @@ class BacktestEngine:
         if not income_pivot.empty and not balance_pivot.empty:
             financial_df = pd.merge(
                 income_pivot, balance_pivot,
-                on=['company_id', 'stock_code', 'fiscal_year', 'report_code', 'report_date'],
+                on=['company_id', 'stock_code', 'fiscal_year', 'report_code'],
                 how='outer'
             )
         elif not income_pivot.empty:
@@ -405,7 +521,23 @@ class BacktestEngine:
             financial_df = pd.DataFrame()
 
         if not financial_df.empty:
-            financial_df['report_date'] = pd.to_datetime(financial_df['report_date'])
+            # report_date 컬럼이 없으므로 fiscal_year와 report_code로부터 생성
+            # report_code: 11011(사업보고서), 11012(반기), 11013(1Q), 11014(3Q)
+            def make_report_date(row):
+                year = int(row['fiscal_year'])
+                code = row['report_code']
+                if code == '11011':  # 사업보고서 - 연말
+                    return pd.Timestamp(year, 12, 31)
+                elif code == '11012':  # 반기보고서 - 6월말
+                    return pd.Timestamp(year, 6, 30)
+                elif code == '11013':  # 1분기 - 3월말
+                    return pd.Timestamp(year, 3, 31)
+                elif code == '11014':  # 3분기 - 9월말
+                    return pd.Timestamp(year, 9, 30)
+                else:
+                    return pd.Timestamp(year, 12, 31)  # 기본값
+
+            financial_df['report_date'] = financial_df.apply(make_report_date, axis=1)
             logger.info(f"Loaded financial data for {financial_df['stock_code'].nunique()} companies")
 
         return financial_df
@@ -441,6 +573,285 @@ class BacktestEngine:
 
         return benchmark_df
 
+    def _extract_required_factors(self, buy_conditions: List[Any], priority_factor: Optional[str]) -> Set[str]:
+        """매수 조건에서 필요한 팩터만 추출"""
+        required_factors = set()
+
+        logger.info(f"팩터 추출 시작 - buy_conditions 타입: {type(buy_conditions)}, 개수: {len(buy_conditions) if buy_conditions else 0}")
+
+        # 매수 조건에서 팩터 추출
+        if buy_conditions:
+            for idx, condition in enumerate(buy_conditions):
+                logger.info(f"조건 {idx+1}: 타입={type(condition)}, 내용={condition}")
+
+                # 딕셔너리 또는 객체 둘 다 지원
+                if isinstance(condition, dict):
+                    exp_left = condition.get('exp_left_side', '')
+                    exp_right = condition.get('exp_right_side', '')
+                else:
+                    exp_left = getattr(condition, 'exp_left_side', '')
+                    exp_right = getattr(condition, 'exp_right_side', '')
+
+                logger.info(f"  exp_left: '{exp_left}', exp_right: '{exp_right}'")
+
+                # 왼쪽 표현식에서 팩터 추출 (예: "기본값({PER})" -> "PER", "기본값({pbr})" -> "PBR")
+                left_match = re.findall(r'\{([^}]+)\}', exp_left)
+                logger.info(f"  left_match: {left_match}")
+
+                for match in left_match:
+                    # 괄호 안의 영문 코드 추출
+                    code_match = re.search(r'\(([A-Z_]+)\)', match)
+                    if code_match:
+                        factor_code = code_match.group(1)
+                        required_factors.add(factor_code)
+                        logger.info(f"  추출된 팩터 (괄호): {factor_code}")
+                    else:
+                        # 소문자를 대문자로 변환
+                        factor_code = match.strip().upper()
+                        required_factors.add(factor_code)
+                        logger.info(f"  추출된 팩터 (직접): {factor_code}")
+
+                # 오른쪽 표현식이 문자열인 경우에도 팩터 추출
+                if isinstance(exp_right, str):
+                    right_match = re.findall(r'\{([^}]+)\}', exp_right)
+                    for match in right_match:
+                        code_match = re.search(r'\(([A-Z_]+)\)', match)
+                        if code_match:
+                            required_factors.add(code_match.group(1))
+                        else:
+                            required_factors.add(match.strip().upper())
+
+        # 우선순위 팩터 추가
+        if priority_factor:
+            logger.info(f"우선순위 팩터: '{priority_factor}'")
+            match = re.search(r'\{([^}]+)\}', priority_factor)
+            if match:
+                full_name = match.group(1)
+                code_match = re.search(r'\(([A-Z_]+)\)', full_name)
+                if code_match:
+                    required_factors.add(code_match.group(1))
+                else:
+                    required_factors.add(full_name.strip().upper())
+            else:
+                if priority_factor != "없음":
+                    required_factors.add(priority_factor.upper())
+
+        logger.info(f"필요한 팩터: {required_factors}")
+        return required_factors
+
+    async def _calculate_all_factors_optimized(
+        self,
+        price_data: pd.DataFrame,
+        financial_data: pd.DataFrame,
+        start_date: date,
+        end_date: date,
+        buy_conditions: Optional[List[Any]] = None,
+        priority_factor: Optional[str] = None
+    ) -> pd.DataFrame:
+        """최적화된 팩터 계산 (병렬처리 + 선택적 계산 + Redis 캐싱)"""
+
+        logger.info("최적화된 팩터 계산 시작")
+        logger.info(f"받은 buy_conditions: {buy_conditions}, 타입: {type(buy_conditions)}, 길이: {len(buy_conditions) if buy_conditions else 0}")
+        logger.info(f"받은 priority_factor: {priority_factor}")
+
+        if price_data.empty:
+            logger.warning("No price data available for factor calculation")
+            return pd.DataFrame()
+
+        # 1. 필요한 팩터만 추출
+        required_factors = self._extract_required_factors(buy_conditions or [], priority_factor)
+        if not required_factors:
+            logger.info("모든 팩터 계산 (조건 없음)")
+            required_factors = {'PER', 'PBR', 'ROE', 'ROA', 'MOMENTUM_1M', 'MOMENTUM_3M',
+                              'MOMENTUM_6M', 'MOMENTUM_12M', 'VOLATILITY_20D', 'VOLATILITY_60D',
+                              'VOLUME_RATIO_20D', 'TURNOVER_RATE_20D'}
+
+        # Polars DataFrame으로 변환
+        price_pl = pl.from_pandas(price_data)
+        financial_pl = pl.from_pandas(financial_data) if not financial_data.empty else None
+
+        unique_dates = sorted(price_data[price_data['date'] >= pd.Timestamp(start_date)]['date'].unique())
+        total_dates = len(unique_dates)
+        logger.info(f"팩터 계산 대상: {total_dates}개 거래일, 필요 팩터: {len(required_factors)}개")
+
+        start_time = time.time()
+
+        # 2. Redis 캐시 초기화
+        try:
+            await cache.initialize()
+            cache_enabled = True
+        except Exception as e:
+            logger.warning(f"Redis 캐시 비활성화: {e}")
+            cache_enabled = False
+
+        # 3. 병렬 처리를 위한 날짜 그룹 생성
+        chunk_size = max(1, total_dates // 10)  # 10개 청크로 분할
+        date_chunks = [unique_dates[i:i+chunk_size] for i in range(0, total_dates, chunk_size)]
+
+        async def calculate_date_chunk(dates_chunk, chunk_idx):
+            """날짜 청크별 팩터 계산"""
+            chunk_rows = []
+
+            for date_idx, calc_date in enumerate(dates_chunk):
+                # 캐시 키 생성
+                cache_key = None
+                if cache_enabled:
+                    cache_params = {
+                        'date': str(calc_date),
+                        'factors': sorted(list(required_factors)),
+                        'stocks': sorted(price_data['stock_code'].unique().tolist())
+                    }
+                    cache_key = cache._generate_key('backtest_factors', cache_params)
+
+                    # 캐시 조회 (에러 발생 시 무시하고 계속 진행)
+                    try:
+                        cached_data = await cache.get(cache_key)
+                        if cached_data:
+                            chunk_rows.extend(cached_data)
+                            continue
+                    except Exception as e:
+                        logger.warning(f"캐시 조회 실패 (계산으로 대체): {e}")
+                        pass
+
+                # 캐시 미스 - 계산 수행
+                todays_prices = price_data[price_data['date'] == calc_date]
+                if todays_prices.empty:
+                    continue
+
+                date_rows = []
+                industry_map = {}
+                if 'industry' in todays_prices.columns:
+                    industry_map = dict(zip(todays_prices['stock_code'], todays_prices['industry']))
+
+                size_bucket_map = self._assign_size_buckets(todays_prices)
+                stock_factor_map: Dict[str, Dict[str, float]] = defaultdict(dict)
+                price_until_date = price_pl.filter(pl.col('date') <= calc_date)
+
+                # 2. 선택적 팩터 계산
+                if financial_pl is not None:
+                    # 가치 팩터 (PER, PBR)
+                    if any(f in required_factors for f in ['PER', 'PBR']):
+                        try:
+                            value_map = self._calculate_value_factors(price_until_date, financial_pl, calc_date)
+                            # 필요한 팩터만 필터링
+                            filtered_value_map = {}
+                            for stock, factors in value_map.items():
+                                filtered_value_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
+                            self._merge_factor_maps(stock_factor_map, filtered_value_map)
+                        except Exception as e:
+                            logger.error(f"가치 팩터 계산 에러 ({calc_date}): {e}")
+
+                    # 수익성 팩터 (ROE, ROA)
+                    if any(f in required_factors for f in ['ROE', 'ROA']):
+                        try:
+                            profit_map = self._calculate_profitability_factors(financial_pl, calc_date)
+                            filtered_profit_map = {}
+                            for stock, factors in profit_map.items():
+                                filtered_profit_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
+                            self._merge_factor_maps(stock_factor_map, filtered_profit_map)
+                        except Exception as e:
+                            logger.error(f"수익성 팩터 계산 에러 ({calc_date}): {e}")
+
+                    # 성장성 팩터
+                    if any(f in required_factors for f in ['SALES_GROWTH', 'EARNINGS_GROWTH']):
+                        try:
+                            growth_map = self._calculate_growth_factors(financial_pl, calc_date)
+                            filtered_growth_map = {}
+                            for stock, factors in growth_map.items():
+                                filtered_growth_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
+                            self._merge_factor_maps(stock_factor_map, filtered_growth_map)
+                        except Exception as e:
+                            logger.error(f"성장성 팩터 계산 에러 ({calc_date}): {e}")
+
+                # 모멘텀 팩터
+                if any(f.startswith('MOMENTUM') for f in required_factors):
+                    try:
+                        momentum_map = self._calculate_momentum_factors(price_until_date, calc_date)
+                        filtered_momentum_map = {}
+                        for stock, factors in momentum_map.items():
+                            filtered_momentum_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
+                        self._merge_factor_maps(stock_factor_map, filtered_momentum_map)
+                    except Exception as e:
+                        logger.error(f"모멘텀 팩터 계산 에러 ({calc_date}): {e}")
+
+                # 변동성 팩터
+                if any(f.startswith('VOLATILITY') for f in required_factors):
+                    try:
+                        volatility_map = self._calculate_volatility_factors(price_until_date, calc_date)
+                        filtered_volatility_map = {}
+                        for stock, factors in volatility_map.items():
+                            filtered_volatility_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
+                        self._merge_factor_maps(stock_factor_map, filtered_volatility_map)
+                    except Exception as e:
+                        logger.error(f"변동성 팩터 계산 에러 ({calc_date}): {e}")
+
+                # 유동성 팩터
+                if any(f in ['VOLUME_RATIO_20D', 'TURNOVER_RATE_20D'] for f in required_factors):
+                    try:
+                        liquidity_map = self._calculate_liquidity_factors(price_until_date, calc_date)
+                        filtered_liquidity_map = {}
+                        for stock, factors in liquidity_map.items():
+                            filtered_liquidity_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
+                        self._merge_factor_maps(stock_factor_map, filtered_liquidity_map)
+                    except Exception as e:
+                        logger.error(f"유동성 팩터 계산 에러 ({calc_date}): {e}")
+
+                # 결과 저장
+                for stock in todays_prices['stock_code'].unique():
+                    record = {
+                        'date': pd.Timestamp(calc_date),
+                        'stock_code': stock,
+                        'industry': industry_map.get(stock),
+                        'size_bucket': size_bucket_map.get(stock)
+                    }
+                    record.update(stock_factor_map.get(stock, {}))
+                    date_rows.append(record)
+
+                # 캐시 저장 (에러 발생 시 무시하고 계속 진행)
+                if cache_enabled and cache_key and date_rows:
+                    try:
+                        await cache.set(cache_key, date_rows, ttl=3600)  # 1시간 캐싱
+                    except Exception as e:
+                        logger.warning(f"캐시 저장 실패 (무시): {e}")
+                        pass
+
+                chunk_rows.extend(date_rows)
+
+            # 진행상황 로깅
+            progress = (chunk_idx + 1) * 100 // len(date_chunks)
+            elapsed = time.time() - start_time
+            logger.info(f"청크 {chunk_idx + 1}/{len(date_chunks)} 완료 ({progress}%) - 경과: {elapsed:.1f}초")
+
+            return chunk_rows
+
+        # 4. 병렬 처리 실행
+        all_rows = []
+        tasks = []
+        for idx, chunk in enumerate(date_chunks):
+            task = calculate_date_chunk(chunk, idx)
+            tasks.append(task)
+
+        # 모든 태스크 실행 및 결과 수집
+        results = await asyncio.gather(*tasks)
+        for chunk_result in results:
+            all_rows.extend(chunk_result)
+
+        factor_df = pd.DataFrame(all_rows)
+
+        if not factor_df.empty:
+            # 팩터 순위 계산 (정규화는 스킵 - 원본 값 사용)
+            # factor_df = self._normalize_factors(factor_df)  # 정규화 비활성화: 사용자가 입력한 조건 값과 비교하기 위해
+            factor_df = self._calculate_factor_ranks(factor_df)
+
+            elapsed_total = time.time() - start_time
+            logger.info(
+                f"최적화된 팩터 계산 완료: {len(factor_df)}개 종목-일 조합, "
+                f"{len([c for c in factor_df.columns if c not in ('date', 'stock_code')])}개 팩터, "
+                f"총 소요시간: {elapsed_total:.1f}초 (기존 대비 {elapsed_total/180*100:.0f}% 속도)"
+            )
+
+        return factor_df
+
     async def _calculate_all_factors(
         self,
         price_data: pd.DataFrame,
@@ -448,77 +859,11 @@ class BacktestEngine:
         start_date: date,
         end_date: date
     ) -> pd.DataFrame:
-        """모든 팩터 계산"""
-
-        logger.info("팩터 계산 시작")
-
-        if price_data.empty:
-            logger.warning("No price data available for factor calculation")
-            return pd.DataFrame()
-
-        # Polars DataFrame으로 변환 (성능 향상)
-        price_pl = pl.from_pandas(price_data)
-        financial_pl = pl.from_pandas(financial_data) if not financial_data.empty else None
-
-        factor_rows: List[Dict[str, Any]] = []
-        unique_dates = sorted(price_data[price_data['date'] >= pd.Timestamp(start_date)]['date'].unique())
-
-        for calc_date in unique_dates:
-            todays_prices = price_data[price_data['date'] == calc_date]
-            if todays_prices.empty:
-                continue
-
-            industry_map = {}
-            if 'industry' in todays_prices.columns:
-                industry_map = dict(zip(todays_prices['stock_code'], todays_prices['industry']))
-
-            size_bucket_map = self._assign_size_buckets(todays_prices)
-            stock_factor_map: Dict[str, Dict[str, float]] = defaultdict(dict)
-            price_until_date = price_pl.filter(pl.col('date') <= calc_date)
-
-            if financial_pl is not None:
-                value_map = self._calculate_value_factors(price_until_date, financial_pl, calc_date)
-                self._merge_factor_maps(stock_factor_map, value_map)
-
-                profit_map = self._calculate_profitability_factors(financial_pl, calc_date)
-                self._merge_factor_maps(stock_factor_map, profit_map)
-
-                growth_map = self._calculate_growth_factors(financial_pl, calc_date)
-                self._merge_factor_maps(stock_factor_map, growth_map)
-
-            momentum_map = self._calculate_momentum_factors(price_until_date, calc_date)
-            self._merge_factor_maps(stock_factor_map, momentum_map)
-
-            volatility_map = self._calculate_volatility_factors(price_until_date, calc_date)
-            self._merge_factor_maps(stock_factor_map, volatility_map)
-
-            liquidity_map = self._calculate_liquidity_factors(price_until_date, calc_date)
-            self._merge_factor_maps(stock_factor_map, liquidity_map)
-
-            for stock in todays_prices['stock_code'].unique():
-                record = {
-                    'date': pd.Timestamp(calc_date),
-                    'stock_code': stock,
-                    'industry': industry_map.get(stock),
-                    'size_bucket': size_bucket_map.get(stock)
-                }
-                record.update(stock_factor_map.get(stock, {}))
-                factor_rows.append(record)
-
-        factor_df = pd.DataFrame(factor_rows)
-
-        if not factor_df.empty:
-            # 팩터 정규화 및 순위 계산
-            factor_df = self._normalize_factors(factor_df)
-            factor_df = self._calculate_factor_ranks(factor_df)
-
-            logger.info(
-                "팩터 계산 완료: %d개 종목-일 조합, %d개 팩터",
-                len(factor_df),
-                len([c for c in factor_df.columns if c not in ('date', 'stock_code')])
-            )
-
-        return factor_df
+        """팩터 계산 - 최적화 버전으로 리디렉션"""
+        # 기본적으로 최적화된 버전 사용
+        return await self._calculate_all_factors_optimized(
+            price_data, financial_data, start_date, end_date
+        )
 
     def _assign_size_buckets(self, todays_prices: pd.DataFrame) -> Dict[str, str]:
         """시가총액 기반 규모 버킷 계산"""
@@ -861,6 +1206,8 @@ class BacktestEngine:
             if trading_day < pd.Timestamp(start_date) or trading_day > pd.Timestamp(end_date):
                 continue
 
+            daily_new_positions = 0
+
             # 매도 신호 확인 및 실행 (매일 체크)
             sell_trades = await self._execute_sells(
                 holdings, factor_data, sell_conditions,
@@ -884,7 +1231,63 @@ class BacktestEngine:
 
             # 리밸런싱 체크 (매수는 리밸런싱 날짜에만)
             if pd.Timestamp(trading_day) in [pd.Timestamp(d) for d in rebalance_dates]:
-                # 매수 종목 선정
+                # 1단계: 리밸런싱 - 조건 불만족 종목 매도
+                from app.services.factor_integration import FactorIntegration
+                factor_integrator = FactorIntegration(self.db)
+
+                # 현재 보유 종목 중 조건 만족하는 종목 확인
+                if holdings:
+                    holding_stocks = list(holdings.keys())
+                    valid_holdings = factor_integrator.evaluate_buy_conditions_with_factors(
+                        factor_data=factor_data,
+                        stock_codes=holding_stocks,
+                        buy_conditions=buy_conditions,
+                        trading_date=pd.Timestamp(trading_day)
+                    )
+
+                    # 조건 불만족 종목 매도
+                    stocks_to_sell = [stock for stock in holding_stocks if stock not in valid_holdings]
+                    for stock_code in stocks_to_sell:
+                        holding = holdings.get(stock_code)
+                        if not holding:
+                            continue
+
+                        # 현재가 조회
+                        current_price_data = price_data[
+                            (price_data['stock_code'] == stock_code) &
+                            (price_data['date'] == trading_day)
+                        ]
+                        if current_price_data.empty:
+                            continue
+
+                        current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
+                        execution_price = current_price * (1 - self.slippage)
+
+                        amount = execution_price * holding.quantity
+                        commission = amount * self.commission_rate
+                        tax = amount * self.tax_rate
+
+                        logger.info(f"🔄 리밸런싱 매도: {stock_code} (조건 불만족)")
+
+                        # 매도 실행
+                        sell_trade = {
+                            'stock_code': stock_code,
+                            'price': execution_price,
+                            'quantity': holding.quantity,
+                            'amount': amount,
+                            'commission': commission,
+                            'tax': tax
+                        }
+
+                        cash_balance += amount - commission - tax
+                        holding.is_open = False
+                        holding.exit_date = trading_day
+                        holding.exit_price = execution_price
+                        holding.realized_pnl = (execution_price - holding.entry_price) * holding.quantity
+                        self.closed_positions.append(holding)
+                        del holdings[stock_code]
+
+                # 2단계: 매수 종목 선정
                 buy_candidates = await self._select_buy_candidates(
                     factor_data=factor_data,
                     buy_conditions=buy_conditions,
@@ -895,6 +1298,15 @@ class BacktestEngine:
                     priority_factor=priority_factor,
                     priority_order=priority_order
                 )
+
+                # 이미 보유 중인 종목은 매수 후보에서 제외 (리밸런싱에서는 유지)
+                new_buy_candidates = [s for s in buy_candidates if s not in holdings]
+
+                logger.info(f"💰 매수 후보(전체): {len(buy_candidates)}개 - {buy_candidates[:10]}")
+                logger.info(f"💰 매수 후보(신규): {len(new_buy_candidates)}개 - {new_buy_candidates[:10]}")
+                logger.info(f"💼 현재 보유: {len(holdings)}개, 최대 포지션: {max_positions}, 여유: {max_positions - len(holdings)}")
+
+                buy_candidates = new_buy_candidates
 
                 # 포지션 사이징
                 position_sizes = self._calculate_position_sizes(
@@ -908,7 +1320,7 @@ class BacktestEngine:
                 )
 
                 # 매수 실행 (팩터 데이터 포함)
-                buy_trades = await self._execute_buys(
+                buy_trades, daily_new_positions = await self._execute_buys(
                     position_sizes=position_sizes,
                     price_data=price_data,
                     trading_day=trading_day,
@@ -916,7 +1328,9 @@ class BacktestEngine:
                     holdings=holdings,
                     factor_data=factor_data,
                     orders=orders,
-                    executions=executions
+                    executions=executions,
+                    daily_new_positions=daily_new_positions,
+                    max_daily_new_positions=self.max_daily_stock
                 )
                 buy_executions = buy_trades
 
@@ -974,6 +1388,67 @@ class BacktestEngine:
             }
             daily_snapshots.append(daily_snapshot)
 
+        # 백테스트 종료 시 모든 보유 종목 강제 매도
+        if holdings:
+            last_trading_day = trading_days[-1]
+            logger.info(f"🏁 백테스트 종료: {len(holdings)}개 보유 종목 강제 매도")
+
+            for stock_code, holding in list(holdings.items()):
+                # 마지막 거래일 가격 조회
+                current_price_data = price_data[
+                    (price_data['stock_code'] == stock_code) &
+                    (price_data['date'] == last_trading_day)
+                ]
+
+                if current_price_data.empty:
+                    logger.warning(f"⚠️ {stock_code}: 마지막 거래일 가격 없음, 평균 매수가로 매도")
+                    current_price = holding.entry_price
+                else:
+                    current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
+
+                execution_price = current_price * (1 - self.slippage)
+                amount = execution_price * holding.quantity
+                commission = amount * self.commission_rate
+                tax = amount * self.tax_rate
+
+                logger.info(f"  🔚 강제 매도: {stock_code} {holding.quantity}주 @ {execution_price:,.0f}원")
+
+                # 매도 거래 기록
+                cash_balance += amount - commission - tax
+                holding.is_open = False
+                holding.exit_date = last_trading_day
+                holding.exit_price = execution_price
+                holding.realized_pnl = (execution_price - holding.entry_price) * holding.quantity
+                self.closed_positions.append(holding)
+
+                # 체결 기록 추가
+                executions.append({
+                    'execution_id': len(executions) + 1,
+                    'execution_date': last_trading_day,
+                    'stock_code': stock_code,
+                    'side': 'SELL',
+                    'quantity': holding.quantity,
+                    'price': execution_price,
+                    'amount': amount,
+                    'commission': commission,
+                    'tax': tax,
+                    'reason': 'BACKTEST_END'
+                })
+                orders.append({
+                    'order_id': f"ORD-S-{stock_code}-{last_trading_day}-FORCE",
+                    'order_date': last_trading_day,
+                    'stock_code': stock_code,
+                    'stock_name': holding.stock_name,
+                    'side': 'SELL',
+                    'order_type': 'MARKET',
+                    'quantity': holding.quantity,
+                    'status': 'FILLED',
+                    'reason': 'BACKTEST_END'
+                })
+
+            # holdings 비우기
+            holdings.clear()
+
         return {
             'trades': [execution for execution in executions if execution['side'] == 'SELL'],
             'orders': orders,
@@ -1005,6 +1480,10 @@ class BacktestEngine:
         if factor_data is not None and not factor_data.empty:
             date_factors = factor_data[factor_data['date'] == trading_ts]
 
+        target_cfg = self.target_and_loss or {}
+        hold_cfg = self.hold_days or {}
+        condition_sell_meta = self.condition_sell_meta
+
         for stock_code, holding in list(holdings.items()):
             # 현재가 조회
             current_price_data = price_data[
@@ -1020,31 +1499,57 @@ class BacktestEngine:
             # 매도 조건 체크
             should_sell = False
             sell_reason = ""
+            sell_reason_key = None
 
-            for condition in sell_conditions:
-                if condition.get('type') == 'STOP_LOSS':
-                    # 손절 조건
-                    loss_rate = ((current_price / holding.entry_price) - 1) * 100
-                    if loss_rate <= -float(condition.get('value', 10)):
-                        should_sell = True
-                        sell_reason = f"Stop loss triggered: {loss_rate:.2f}%"
-                        break
+            hold_days_count = (trading_day - holding.entry_date).days
+            min_hold = hold_cfg.get('min_hold_days') if hold_cfg else None
+            max_hold = hold_cfg.get('max_hold_days') if hold_cfg else None
+            enforce_min_hold = min_hold is not None and hold_days_count < min_hold
 
-                elif condition.get('type') == 'TAKE_PROFIT':
-                    # 익절 조건
-                    profit_rate = ((current_price / holding.entry_price) - 1) * 100
-                    if profit_rate >= float(condition.get('value', 20)):
-                        should_sell = True
-                        sell_reason = f"Take profit triggered: {profit_rate:.2f}%"
-                        break
+            if max_hold and hold_days_count >= max_hold:
+                should_sell = True
+                sell_reason = f"Max hold days reached ({hold_days_count}d)"
+                sell_reason_key = "hold"
 
-                elif condition.get('type') == 'HOLD_DAYS':
-                    # 보유 기간 조건
-                    hold_days = (trading_day - holding.entry_date).days
-                    if hold_days >= int(condition.get('value', 30)):
-                        should_sell = True
-                        sell_reason = f"Hold period exceeded: {hold_days} days"
-                        break
+            if not should_sell and target_cfg:
+                profit_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
+                target_gain = target_cfg.get('target_gain')
+                stop_loss = target_cfg.get('stop_loss')
+
+                if target_gain is not None and profit_rate >= target_gain:
+                    should_sell = True
+                    sell_reason = f"Take profit {profit_rate:.2f}%"
+                    sell_reason_key = "target"
+
+                if not should_sell and stop_loss is not None and profit_rate <= -stop_loss:
+                    should_sell = True
+                    sell_reason = f"Stop loss {profit_rate:.2f}%"
+                    sell_reason_key = "stop"
+
+            if not should_sell and not enforce_min_hold:
+                for condition in sell_conditions:
+                    if condition.get('type') == 'STOP_LOSS':
+                        loss_rate = ((current_price / holding.entry_price) - 1) * 100
+                        if loss_rate <= -float(condition.get('value', 10)):
+                            should_sell = True
+                            sell_reason = f"Stop loss triggered: {loss_rate:.2f}%"
+                            sell_reason_key = "stop"
+                            break
+
+                    elif condition.get('type') == 'TAKE_PROFIT':
+                        profit_rate = ((current_price / holding.entry_price) - 1) * 100
+                        if profit_rate >= float(condition.get('value', 20)):
+                            should_sell = True
+                            sell_reason = f"Take profit triggered: {profit_rate:.2f}%"
+                            sell_reason_key = "target"
+                            break
+
+                    elif condition.get('type') == 'HOLD_DAYS':
+                        if hold_days_count >= int(condition.get('value', 30)):
+                            should_sell = True
+                            sell_reason = f"Hold period exceeded: {hold_days_count} days"
+                            sell_reason_key = "hold"
+                            break
 
             if (not should_sell) and condition_sell and not date_factors.empty:
                 condition_list = condition_sell.get('sell_conditions') or []
@@ -1074,6 +1579,7 @@ class BacktestEngine:
                     if passed:
                         should_sell = True
                         sell_reason = "Condition sell triggered"
+                        sell_reason_key = "condition"
 
             if should_sell:
                 # 매도 실행
@@ -1081,6 +1587,12 @@ class BacktestEngine:
 
                 # 슬리피지 적용 (매도 시 불리하게 - 가격 하락)
                 execution_price = current_price * (1 - self.slippage)
+                price_meta = None
+                if sell_reason_key == "condition":
+                    price_meta = condition_sell_meta
+                elif sell_reason_key == "hold":
+                    price_meta = hold_cfg
+                execution_price = self._apply_price_adjustment(execution_price, price_meta)
 
                 amount = execution_price * quantity
                 commission = amount * self.commission_rate
@@ -1160,8 +1672,9 @@ class BacktestEngine:
             (price_data['close_price'] > 0)
         ]['stock_code'].unique().tolist()
 
-        # 현재 보유 종목 제외
-        tradeable_stocks = [s for s in tradeable_stocks if s not in holdings]
+        # 리밸런싱 시에는 보유 종목도 재평가해야 하므로 제외하지 않음
+        # (기존 로직: tradeable_stocks = [s for s in tradeable_stocks if s not in holdings])
+        # 포지션 사이징에서 available_slots로 신규 매수 수량 제한
 
         # 통합 모듈로 매수 조건 평가 (54개 팩터 사용)
         selected_stocks = factor_integrator.evaluate_buy_conditions_with_factors(
@@ -1220,6 +1733,30 @@ class BacktestEngine:
         bonus = float(value)
         return -bonus if priority_order.lower() == 'asc' else bonus
 
+    def _apply_position_constraints(self, allocation: Decimal) -> Decimal:
+        """per_stock_ratio / max_buy_value 제약 적용"""
+        constrained = allocation
+        if self.per_stock_ratio:
+            ratio_limit = self.initial_capital * (self.per_stock_ratio / Decimal("100"))
+            constrained = min(constrained, ratio_limit)
+        if self.max_buy_value:
+            constrained = min(constrained, self.max_buy_value)
+        return constrained
+
+    def _apply_price_adjustment(
+        self,
+        price: Decimal,
+        meta: Optional[Dict[str, Any]]
+    ) -> Decimal:
+        """매도가격 오프셋 적용"""
+        if not meta:
+            return price
+        offset_pct = meta.get('sell_price_offset')
+        if offset_pct is None:
+            return price
+        offset_value = offset_pct if isinstance(offset_pct, Decimal) else Decimal(str(offset_pct))
+        return price * (Decimal("1") + (offset_value / Decimal("100")))
+
     def _calculate_position_sizes(
         self,
         buy_candidates: List[str],
@@ -1251,7 +1788,7 @@ class BacktestEngine:
         if position_sizing == "EQUAL_WEIGHT":
             allocation_per_stock = allocatable_cash / num_positions
             for stock in effective_candidates:
-                position_sizes[stock] = allocation_per_stock
+                position_sizes[stock] = self._apply_position_constraints(allocation_per_stock)
             return position_sizes
 
         closes = price_data[
@@ -1262,7 +1799,7 @@ class BacktestEngine:
         if closes.empty:
             allocation_per_stock = allocatable_cash / num_positions
             for stock in buy_candidates[:num_positions]:
-                position_sizes[stock] = allocation_per_stock
+                position_sizes[stock] = self._apply_position_constraints(allocation_per_stock)
             return position_sizes
 
         if position_sizing == "MARKET_CAP":
@@ -1274,7 +1811,8 @@ class BacktestEngine:
             normalized = weights / total
             for stock in effective_candidates:
                 w = normalized.get(stock, 0)
-                position_sizes[stock] = Decimal(str(w)) * allocatable_cash
+                allocation = Decimal(str(w)) * allocatable_cash
+                position_sizes[stock] = self._apply_position_constraints(allocation)
             return position_sizes
 
         if position_sizing == "RISK_PARITY":
@@ -1297,14 +1835,15 @@ class BacktestEngine:
             if not vol_map:
                 allocation_per_stock = allocatable_cash / num_positions
                 for stock in buy_candidates[:num_positions]:
-                    position_sizes[stock] = allocation_per_stock
+                    position_sizes[stock] = self._apply_position_constraints(allocation_per_stock)
                 return position_sizes
 
             total = sum(vol_map.values())
             for stock in effective_candidates:
                 w = vol_map.get(stock, 0)
                 if total > 0:
-                    position_sizes[stock] = Decimal(str(w / total)) * allocatable_cash
+                    allocation = Decimal(str(w / total)) * allocatable_cash
+                    position_sizes[stock] = self._apply_position_constraints(allocation)
                 else:
                     position_sizes[stock] = Decimal("0")
 
@@ -1312,7 +1851,7 @@ class BacktestEngine:
 
         allocation_per_stock = allocatable_cash / num_positions
         for stock in effective_candidates:
-            position_sizes[stock] = allocation_per_stock
+            position_sizes[stock] = self._apply_position_constraints(allocation_per_stock)
 
         return position_sizes
 
@@ -1325,13 +1864,24 @@ class BacktestEngine:
         holdings: Dict[str, Position],
         factor_data: pd.DataFrame = None,
         orders: List[Dict[str, Any]] = None,
-        executions: List[Dict[str, Any]] = None
-    ) -> List[Dict]:
+        executions: List[Dict[str, Any]] = None,
+        daily_new_positions: int = 0,
+        max_daily_new_positions: Optional[int] = None
+    ) -> Tuple[List[Dict], int]:
         """매수 실행 (팩터 정보 포함)"""
 
         buy_trades = []
+        new_position_count = daily_new_positions
 
         for stock_code, allocation in position_sizes.items():
+            is_new_position = stock_code not in holdings
+            if (
+                max_daily_new_positions is not None
+                and is_new_position
+                and new_position_count >= max_daily_new_positions
+            ):
+                continue
+
             # 현재가 조회
             current_price_data = price_data[
                 (price_data['stock_code'] == stock_code) &
@@ -1367,12 +1917,18 @@ class BacktestEngine:
                 date_mask = pd.to_datetime(factor_data['date']) == pd.Timestamp(trading_day)
                 stock_factors = factor_data[stock_mask & date_mask]
                 if not stock_factors.empty:
+                    # 메타데이터 컬럼 (문자열 타입) 제외
+                    meta_columns = {'date', 'stock_code', 'industry', 'size_bucket', 'market_type'}
                     for col in stock_factors.columns:
-                        if col in ('date', 'stock_code') or col.endswith('_RANK'):
+                        if col in meta_columns or col.endswith('_RANK'):
                             continue
                         value = stock_factors[col].iloc[0]
                         if pd.notna(value):
-                            trade_factors[col] = float(value)
+                            try:
+                                trade_factors[col] = float(value)
+                            except (ValueError, TypeError):
+                                # 숫자로 변환 불가능한 값은 스킵
+                                continue
 
             # 매수 실행
             order = {
@@ -1431,8 +1987,9 @@ class BacktestEngine:
                     current_price=execution_price,
                     current_value=execution_price * quantity
                 )
+                new_position_count += 1
 
-        return buy_trades
+        return buy_trades, new_position_count
 
     def _get_rebalance_dates(
         self,
@@ -1644,6 +2201,10 @@ class BacktestEngine:
         df['year'] = df['date'].dt.year
         df['month'] = df['date'].dt.month
 
+        # Convert Decimal columns to float to avoid type mismatch in calculations
+        if 'portfolio_value' in df.columns:
+            df['portfolio_value'] = df['portfolio_value'].astype(float)
+
         monthly_data = []
         for (year, month), group in df.groupby(['year', 'month']):
             if group.empty:
@@ -1700,6 +2261,10 @@ class BacktestEngine:
         df = pd.DataFrame(daily_snapshots)
         df['date'] = pd.to_datetime(df['date'])
         df['year'] = df['date'].dt.year
+
+        # Convert Decimal columns to float to avoid type mismatch in calculations
+        if 'portfolio_value' in df.columns:
+            df['portfolio_value'] = df['portfolio_value'].astype(float)
 
         yearly_data = []
         for year, group in df.groupby('year'):
@@ -1856,7 +2421,7 @@ class BacktestEngine:
                 profit_rate=Decimal(str(profit_rate)),
                 weight=Decimal("0"),  # 나중에 계산
                 buy_date=holding.entry_date,
-                hold_days=(latest_date - holding.entry_date).days if latest_date else 0,
+                hold_days=(pd.Timestamp(latest_date).date() - (holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date)).days if latest_date else 0,
                 factors={}
             ))
 
@@ -1884,6 +2449,12 @@ class BacktestEngine:
 
         df = pd.DataFrame(daily_snapshots)
 
+        # Convert Decimal columns to float to avoid type mismatch in calculations
+        if 'portfolio_value' in df.columns:
+            df['portfolio_value'] = df['portfolio_value'].astype(float)
+        if 'cash_balance' in df.columns:
+            df['cash_balance'] = df['cash_balance'].astype(float)
+
         # 누적 수익률 계산
         initial_value = float(df['portfolio_value'].iloc[0]) if not df.empty else 1
         cumulative_returns = [(float(v) / initial_value - 1) * 100 for v in df['portfolio_value']]
@@ -1909,8 +2480,15 @@ class BacktestEngine:
         sell_conditions: List[Dict],
         condition_sell: Optional[Dict[str, Any]],
         settings: Dict
-    ) -> BacktestResultGenPort:
+    ) -> BacktestResult:
         """결과 포맷팅"""
+
+        raw_buy_conditions = buy_conditions
+        normalized_buy_conditions = []
+        if isinstance(raw_buy_conditions, dict):
+            normalized_buy_conditions = raw_buy_conditions.get('conditions', [])
+        else:
+            normalized_buy_conditions = raw_buy_conditions
 
         # 일별 성과 변환
         daily_performance = []
@@ -1919,6 +2497,12 @@ class BacktestEngine:
         if daily_snapshots:
             df = pd.DataFrame(daily_snapshots)
             df['date'] = pd.to_datetime(df['date'])
+
+            # Convert Decimal columns to float to avoid type mismatch in calculations
+            if 'portfolio_value' in df.columns:
+                df['portfolio_value'] = df['portfolio_value'].astype(float)
+            if 'cash_balance' in df.columns:
+                df['cash_balance'] = df['cash_balance'].astype(float)
 
             # 일별 수익률 계산
             df['daily_return'] = df['portfolio_value'].pct_change() * 100
@@ -1965,7 +2549,7 @@ class BacktestEngine:
             if execution.get('side') != 'SELL':
                 continue
             trade_records.append(TradeRecord(
-                trade_id=execution.get('execution_id', ''),
+                trade_id=str(execution.get('execution_id', '')),
                 trade_date=execution['execution_date'],
                 trade_type='SELL',
                 stock_code=execution['stock_code'],
@@ -2000,14 +2584,14 @@ class BacktestEngine:
         if factor_analysis:
             chart_data['factor_analysis'] = factor_analysis
 
-        return BacktestResultGenPort(
+        return BacktestResult(
             backtest_id=str(backtest_id),
-            backtest_name=f"genport_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            backtest_name=f"{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             status="COMPLETED",
             created_at=datetime.now(),
             completed_at=datetime.now(),
             settings=BacktestSettings(**settings),
-            buy_conditions=[BacktestCondition(**c) for c in buy_conditions],
+            buy_conditions=[BacktestCondition(**c) for c in normalized_buy_conditions],
             sell_conditions=[BacktestCondition(**c) for c in sell_conditions],
             condition_sell=condition_sell,
             statistics=statistics,
@@ -2017,7 +2601,10 @@ class BacktestEngine:
             yearly_performance=yearly_performance,
             trades=trade_records,
             rebalance_dates=[d.date() if hasattr(d, 'date') else d for d in portfolio_result['rebalance_dates']],
-            chart_data=chart_data
+            chart_data=chart_data,
+            orders=portfolio_result.get('orders', []),
+            executions=executions,
+            position_history=portfolio_result.get('position_history', [])
         )
 
     # ==================== Phase 2: 주문/체결/포지션 추적 ====================
@@ -2201,6 +2788,10 @@ class BacktestEngine:
         df['year'] = df['date'].dt.year
         df['month'] = df['date'].dt.month
 
+        # Convert Decimal columns to float to avoid type mismatch in calculations
+        if 'portfolio_value' in df.columns:
+            df['portfolio_value'] = df['portfolio_value'].astype(float)
+
         trades_df = pd.DataFrame(trades) if trades else pd.DataFrame()
         if not trades_df.empty:
             trades_df['trade_date'] = pd.to_datetime(trades_df['trade_date'])
@@ -2302,6 +2893,10 @@ class BacktestEngine:
 
         df = pd.DataFrame(daily_snapshots)
         df['date'] = pd.to_datetime(df['date'])
+
+        # Convert Decimal columns to float to avoid type mismatch in calculations
+        if 'portfolio_value' in df.columns:
+            df['portfolio_value'] = df['portfolio_value'].astype(float)
 
         # 누적 최대값
         df['cummax'] = df['portfolio_value'].cummax()
@@ -2420,10 +3015,11 @@ class BacktestEngine:
         self.factor_contributions = factor_performance
         return factor_performance
 
-    async def _save_result(self, backtest_id: UUID, result: BacktestResultGenPort):
+    async def _save_result(self, backtest_id: UUID, result: BacktestResult):
         """백테스트 결과를 데이터베이스에 저장"""
-        from app.models.backtest_genport import (
-            BacktestSession, BacktestCondition, BacktestStatistics,
+        from app.models.backtest import (
+            BacktestSession, BacktestCondition as BacktestConditionModel,
+            BacktestStatistics as BacktestStatisticsModel,
             BacktestDailySnapshot, BacktestTrade, BacktestHolding
         )
         from datetime import datetime
@@ -2453,37 +3049,44 @@ class BacktestEngine:
 
             # 2. 매수/매도 조건 저장
             for buy_condition in result.buy_conditions:
-                condition = BacktestCondition(
+                value_decimal = Decimal("0")
+                try:
+                    value_decimal = Decimal(str(buy_condition.value))
+                except Exception:
+                    value_decimal = Decimal("0")
+                    desc = buy_condition.description or ""
+                    buy_condition.description = f"{desc} (raw={buy_condition.value})"
+
+                condition = BacktestConditionModel(
                     backtest_id=backtest_id,
                     condition_type="BUY",
                     factor=buy_condition.factor,
                     operator=buy_condition.operator,
-                    value=Decimal(str(buy_condition.value)),
+                    value=value_decimal,
                     description=buy_condition.description
                 )
                 self.db.add(condition)
 
             for sell_condition in result.sell_conditions:
-                # 매도 조건은 type이 있는 경우와 factor가 있는 경우 구분
-                if hasattr(sell_condition, 'factor'):
-                    factor = sell_condition.factor
-                else:
-                    # STOP_LOSS, TAKE_PROFIT, HOLD_DAYS 같은 타입
-                    factor = sell_condition.get('type', 'UNKNOWN')
-
-                condition = BacktestCondition(
+                factor = sell_condition.factor
+                raw_value = sell_condition.value
+                try:
+                    value_decimal = Decimal(str(raw_value))
+                except Exception:
+                    value_decimal = Decimal("0")
+                condition = BacktestConditionModel(
                     backtest_id=backtest_id,
                     condition_type="SELL",
-                    factor=factor,
-                    operator=sell_condition.get('operator', '='),
-                    value=Decimal(str(sell_condition.get('value', 0))),
-                    description=sell_condition.get('description', '')
+                    factor=factor or "SELL_RULE",
+                    operator=sell_condition.operator,
+                    value=value_decimal,
+                    description=sell_condition.description or ''
                 )
                 self.db.add(condition)
 
             # 3. 통계 저장
             stats = result.statistics
-            statistics = BacktestStatistics(
+            statistics = BacktestStatisticsModel(
                 backtest_id=backtest_id,
                 total_return=stats.total_return,
                 annualized_return=stats.annualized_return,

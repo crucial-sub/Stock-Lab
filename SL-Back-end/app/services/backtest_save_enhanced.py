@@ -27,7 +27,7 @@ class EnhancedBacktestSaver:
     async def save_complete_result(
         self,
         backtest_id: UUID,
-        result: Any,  # BacktestResultGenPort
+        result: Any,  # BacktestResult
         buy_conditions: Any,  # 논리식 또는 일반 조건
         sell_conditions: List[Dict],
         orders: List[Any] = None,
@@ -91,7 +91,7 @@ class EnhancedBacktestSaver:
         sell_conditions: List[Dict]
     ):
         """확장 세션 정보 저장"""
-        from app.models.backtest_genport_extended import BacktestSessionExtended
+        from app.models.backtest_extended import BacktestSessionExtended
 
         # 논리식 조건 처리
         buy_expression = None
@@ -136,7 +136,7 @@ class EnhancedBacktestSaver:
 
     async def _save_orders(self, backtest_id: UUID, orders: List[Any]):
         """주문 데이터 저장"""
-        from app.models.backtest_genport_extended import BacktestOrder
+        from app.models.backtest_extended import BacktestOrder
 
         for order_data in orders:
             order = BacktestOrder(
@@ -161,7 +161,7 @@ class EnhancedBacktestSaver:
 
     async def _save_executions(self, backtest_id: UUID, executions: List[Any]):
         """체결 데이터 저장"""
-        from app.models.backtest_genport_extended import BacktestExecution
+        from app.models.backtest_extended import BacktestExecution
 
         for exec_data in executions:
             execution = BacktestExecution(
@@ -186,7 +186,7 @@ class EnhancedBacktestSaver:
 
     async def _save_positions(self, backtest_id: UUID, positions: List[Any]):
         """포지션 데이터 저장"""
-        from app.models.backtest_genport_extended import BacktestPosition
+        from app.models.backtest_extended import BacktestPosition
 
         for pos_data in positions:
             position = BacktestPosition(
@@ -216,7 +216,7 @@ class EnhancedBacktestSaver:
 
     async def _save_position_history(self, backtest_id: UUID, position_history: List[Any]):
         """포지션 히스토리 저장"""
-        from app.models.backtest_genport_extended import BacktestPositionHistory
+        from app.models.backtest_extended import BacktestPositionHistory
 
         for hist_data in position_history:
             history = BacktestPositionHistory(
@@ -241,7 +241,7 @@ class EnhancedBacktestSaver:
 
     async def _save_monthly_stats(self, backtest_id: UUID, monthly_stats: List[Dict]):
         """월별 통계 저장"""
-        from app.models.backtest_genport_extended import BacktestMonthlyStats
+        from app.models.backtest_extended import BacktestMonthlyStats
 
         for stat in monthly_stats:
             monthly = BacktestMonthlyStats(
@@ -267,7 +267,7 @@ class EnhancedBacktestSaver:
 
     async def _save_yearly_stats(self, backtest_id: UUID, yearly_stats: List[Dict]):
         """연도별 통계 저장"""
-        from app.models.backtest_genport_extended import BacktestYearlyStats
+        from app.models.backtest_extended import BacktestYearlyStats
 
         for stat in yearly_stats:
             yearly = BacktestYearlyStats(
@@ -292,7 +292,7 @@ class EnhancedBacktestSaver:
 
     async def _save_drawdown_periods(self, backtest_id: UUID, drawdown_periods: List[Dict]):
         """낙폭 기간 저장"""
-        from app.models.backtest_genport_extended import BacktestDrawdownPeriod
+        from app.models.backtest_extended import BacktestDrawdownPeriod
 
         for period in drawdown_periods:
             drawdown = BacktestDrawdownPeriod(
@@ -313,7 +313,7 @@ class EnhancedBacktestSaver:
 
     async def _save_factor_contributions(self, backtest_id: UUID, factor_contributions: Dict[str, Dict]):
         """팩터 기여도 저장"""
-        from app.models.backtest_genport_extended import BacktestFactorContribution
+        from app.models.backtest_extended import BacktestFactorContribution
 
         for factor_name, contrib in factor_contributions.items():
             factor = BacktestFactorContribution(
@@ -335,7 +335,7 @@ class EnhancedBacktestSaver:
 
     async def _save_legacy_tables(self, backtest_id: UUID, result: Any):
         """기존 테이블 저장 (하위 호환성)"""
-        from app.models.backtest_genport import (
+        from app.models.backtest import (
             BacktestSession, BacktestCondition, BacktestStatistics,
             BacktestDailySnapshot, BacktestTrade, BacktestHolding
         )

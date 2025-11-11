@@ -18,7 +18,7 @@
 
 ### 1.1 백테스트 시작 (`run_backtest`)
 ```python
-async def run_backtest(...) -> BacktestResultGenPort:
+async def run_backtest(...) -> BacktestResult:
     # Step 1: 데이터 로드
     price_data = await self._load_price_data(start_date, end_date)
     financial_data = await self._load_financial_data(start_date, end_date)

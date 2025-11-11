@@ -2,13 +2,13 @@
 
 ## 완료된 작업
 
-### 1. GenPort 스타일 백테스트 시스템 설계 ✅
+### 1. 백테스트 시스템 설계 ✅
 
 **생성된 파일:**
 - `/SL-Back-end/docs/FACTOR_TABLE_DESIGN.md` - 팩터 테이블 설계
-- `/SL-Back-end/app/schemas/backtest_genport.py` - GenPort 스타일 스키마
-- `/SL-Back-end/app/services/backtest_genport_engine.py` - GenPort 백테스트 엔진
-- `/SL-Back-end/docs/API_SPECIFICATION_GENPORT.md` - 새로운 API 명세서
+- `/SL-Back-end/app/schemas/backtest.py` - 스타일 스키마
+- `/SL-Back-end/app/services/backtest__engine.py` - 백테스트 엔진
+- `/SL-Back-end/docs/API_SPECIFICATION.md` - 새로운 API 명세서
 
 **핵심 내용:**
 - 스크린샷 기반 UI 요구사항 분석 완료
@@ -36,6 +36,33 @@
 ---
 
 ## 사용 방법
+
+### ⚠️ 백테스트 실행 시 주의사항
+
+백테스트는 백그라운드 Task로 실행되므로, **실행 중에 코드 파일을 저장하면 앱이 재시작되어 백테스트가 중단됩니다.**
+
+**해결 방법:**
+
+1. **백테스트 실행 중에는 파일 저장하지 않기** (가장 간단)
+   - 백테스트 완료까지 약 5분 소요
+   - 코드 수정 → 저장 → 백테스트 실행 순서로 진행
+
+2. **백테스트 파일을 reload 감지에서 제외**
+   ```bash
+   cd SL-Back-end
+   uvicorn app.main:app --reload \
+     --reload-exclude "app/services/backtest.py" \
+     --reload-exclude "app/services/advanced_backtest.py"
+   ```
+
+3. **테스트 시에만 reload 끄기**
+   ```bash
+   # 백테스트 테스트용 (reload 없음)
+   uvicorn app.main:app --port 8000
+
+   # 일반 개발용 (reload 있음)
+   uvicorn app.main:app --reload --port 8000
+   ```
 
 ### 첫 설정 (최초 1회)
 
@@ -249,13 +276,13 @@ aws ec2 describe-instances --instance-ids i-xxxxx
    - DB 마이그레이션 완료 후 팩터 테이블 생성
    - 팩터 계산 배치 작업 구현
 
-2. **GenPort 백테스트 엔진 완성**
+2. **백테스트 엔진 완성**
    - 더미 메서드들 실제 구현
    - 벤치마크 비교 로직 추가
    - 월별/연도별 성과 집계 완성
 
 3. **API 엔드포인트 연결**
-   - GenPort 엔진과 API 연결
+   - 엔진과 API 연결
    - WebSocket 실시간 업데이트 구현
 
 4. **프론트엔드 통합**
@@ -269,7 +296,7 @@ aws ec2 describe-instances --instance-ids i-xxxxx
 - [SSH 터널링 상세 가이드](aws-deployment/SSH_TUNNEL_SETUP.md)
 - [SSH 터널링 빠른 시작](SL-Back-end/TUNNEL_QUICK_START.md)
 - [팩터 테이블 설계](SL-Back-end/docs/FACTOR_TABLE_DESIGN.md)
-- [GenPort API 명세서](SL-Back-end/docs/API_SPECIFICATION_GENPORT.md)
+- [API 명세서](SL-Back-end/docs/API_SPECIFICATION.md)
 - [백테스트 분석 문서](BACKTEST_ANALYSIS.md)
 
 ---
@@ -280,8 +307,7 @@ aws ec2 describe-instances --instance-ids i-xxxxx
 
 1. ✅ **로컬에서 프로덕션 RDS 접근** - SSH 터널링으로 VPC 우회
 2. ✅ **빠른 개발 & 테스트** - 배포 없이 실시간 테스트
-3. ✅ **GenPort 스타일 백테스트** - 스크린샷과 동일한 UI 지원
-4. ✅ **환경 쉽게 전환** - local/tunnel/production 모드 전환
+3. ✅ **환경 쉽게 전환** - local/tunnel/production 모드 전환
 
 **개발 속도가 10배 빨라집니다!** 🚀
 

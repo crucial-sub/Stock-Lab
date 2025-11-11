@@ -174,7 +174,7 @@ export default function TargetSelectionTab() {
       console.log(JSON.stringify(response, null, 2));
       console.log("========================");
 
-      router.push(`/quant/${response.backtestId}`);
+      router.push(`/quant/result/${response.backtestId}`);
     } catch (err: any) {
       console.error("=== 백테스트 실행 실패 ===");
       console.error("Error:", err);

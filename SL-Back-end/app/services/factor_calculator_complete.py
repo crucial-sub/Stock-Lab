@@ -7,8 +7,14 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func, text
+from sqlalchemy import select, and_, func, text
 import logging
+
+from app.models.company import Company
+from app.models.stock_price import StockPrice
+from app.models.financial_statement import FinancialStatement
+from app.models.income_statement import IncomeStatement
+from app.models.balance_sheet import BalanceSheet
 
 logger = logging.getLogger(__name__)
 
@@ -24,130 +30,242 @@ class CompleteFactorCalculator:
         stock_codes: List[str],
         date: datetime
     ) -> pd.DataFrame:
-        """모든 54개 팩터 계산"""
+        """현재 스키마 기반 팩터 계산"""
 
-        # 1. 가치 지표 (Value) - 14개
-        value_factors = await self._calculate_value_factors(stock_codes, date)
+        price_df = await self._fetch_price_history(stock_codes, date)
+        if price_df.empty:
+            logger.warning("가격 데이터가 없어 팩터 계산을 건너뜁니다")
+            return pd.DataFrame()
 
-        # 2. 수익성 지표 (Quality) - 10개
-        quality_factors = await self._calculate_quality_factors(stock_codes, date)
+        financial_df = await self._fetch_financial_snapshot(stock_codes, date)
+        factor_df = self._build_factor_frame(price_df, financial_df, date)
+        if factor_df.empty:
+            return factor_df
 
-        # 3. 성장성 지표 (Growth) - 8개
-        growth_factors = await self._calculate_growth_factors(stock_codes, date)
+        factor_df = self._attach_ranks(factor_df)
+        return factor_df
 
-        # 4. 모멘텀 지표 (Momentum) - 8개
-        momentum_factors = await self._calculate_momentum_factors(stock_codes, date)
+    async def _fetch_price_history(
+        self,
+        stock_codes: Optional[List[str]],
+        as_of: datetime
+    ) -> pd.DataFrame:
+        start_window = as_of - timedelta(days=400)
 
-        # 5. 안정성 지표 (Stability) - 8개
-        stability_factors = await self._calculate_stability_factors(stock_codes, date)
+        query = (
+            select(
+                Company.stock_code,
+                Company.company_name.label('stock_name'),
+                Company.industry,
+                StockPrice.trade_date,
+                StockPrice.close_price,
+                StockPrice.market_cap,
+                StockPrice.trading_value,
+                StockPrice.volume,
+                StockPrice.listed_shares
+            )
+            .join(Company, StockPrice.company_id == Company.company_id)
+            .where(
+                and_(
+                    StockPrice.trade_date >= start_window.date(),
+                    StockPrice.trade_date <= as_of.date()
+                )
+            )
+            .order_by(StockPrice.trade_date)
+        )
 
-        # 6. 기술적 지표 (Technical) - 6개
-        technical_factors = await self._calculate_technical_factors(stock_codes, date)
+        if stock_codes:
+            query = query.where(Company.stock_code.in_(stock_codes))
 
-        # 모든 팩터 병합
-        all_factors = pd.concat([
-            value_factors,
-            quality_factors,
-            growth_factors,
-            momentum_factors,
-            stability_factors,
-            technical_factors
-        ], axis=1)
+        result = await self.db.execute(query)
+        rows = result.mappings().all()
+        df = pd.DataFrame(rows)
+        if not df.empty:
+            df['trade_date'] = pd.to_datetime(df['trade_date'])
+        return df
 
-        # 랭킹 계산
-        all_factors = self._calculate_rankings(all_factors)
+    async def _fetch_financial_snapshot(
+        self,
+        stock_codes: Optional[List[str]],
+        as_of: datetime
+    ) -> pd.DataFrame:
+        start_year = str(as_of.year - 1)
+        end_year = str(as_of.year)
 
-        return all_factors
+        base_filters = [
+            FinancialStatement.bsns_year >= start_year,
+            FinancialStatement.bsns_year <= end_year,
+            FinancialStatement.report_date <= as_of.date()
+        ]
 
-    async def _calculate_value_factors(self, stock_codes: List[str], date: datetime) -> pd.DataFrame:
-        """가치 지표 계산 (14개)"""
-        query = text("""
-        SELECT
-            s.stock_code,
-            s.stock_name,
+        if stock_codes:
+            base_filters.append(Company.stock_code.in_(stock_codes))
 
-            -- 1. PER (Price to Earnings Ratio)
-            CASE WHEN f.net_income_ttm > 0
-                THEN p.close_price * s.shares_outstanding / f.net_income_ttm
-                ELSE NULL END AS PER,
+        income_accounts = [
+            '당기순이익', '영업이익', '매출액'
+        ]
+        balance_accounts = [
+            '자산총계', '자본총계', '부채총계'
+        ]
 
-            -- 2. PBR (Price to Book Ratio)
-            CASE WHEN f.total_equity > 0
-                THEN p.close_price * s.shares_outstanding / f.total_equity
-                ELSE NULL END AS PBR,
+        income_query = select(
+            Company.stock_code,
+            FinancialStatement.bsns_year.label('fiscal_year'),
+            FinancialStatement.reprt_code.label('report_code'),
+            IncomeStatement.account_nm,
+            IncomeStatement.thstrm_amount.label('current_amount')
+        ).join(
+            IncomeStatement, FinancialStatement.stmt_id == IncomeStatement.stmt_id
+        ).join(
+            Company, FinancialStatement.company_id == Company.company_id
+        ).where(
+            and_(*base_filters, IncomeStatement.account_nm.in_(income_accounts))
+        )
 
-            -- 3. PSR (Price to Sales Ratio)
-            CASE WHEN f.revenue_ttm > 0
-                THEN p.close_price * s.shares_outstanding / f.revenue_ttm
-                ELSE NULL END AS PSR,
+        balance_query = select(
+            Company.stock_code,
+            FinancialStatement.bsns_year.label('fiscal_year'),
+            FinancialStatement.reprt_code.label('report_code'),
+            BalanceSheet.account_nm,
+            BalanceSheet.thstrm_amount.label('current_amount')
+        ).join(
+            BalanceSheet, FinancialStatement.stmt_id == BalanceSheet.stmt_id
+        ).join(
+            Company, FinancialStatement.company_id == Company.company_id
+        ).where(
+            and_(*base_filters, BalanceSheet.account_nm.in_(balance_accounts))
+        )
 
-            -- 4. PCR (Price to Cash Flow Ratio)
-            CASE WHEN f.operating_cash_flow > 0
-                THEN p.close_price * s.shares_outstanding / f.operating_cash_flow
-                ELSE NULL END AS PCR,
+        income_df = pd.DataFrame((await self.db.execute(income_query)).mappings().all())
+        balance_df = pd.DataFrame((await self.db.execute(balance_query)).mappings().all())
 
-            -- 5. PEG (Price/Earnings to Growth)
-            CASE WHEN f.net_income_ttm > 0 AND f.earnings_growth_3y > 0
-                THEN (p.close_price * s.shares_outstanding / f.net_income_ttm) / f.earnings_growth_3y
-                ELSE NULL END AS PEG,
+        if income_df.empty and balance_df.empty:
+            return pd.DataFrame()
 
-            -- 6. EV/EBITDA
-            CASE WHEN f.ebitda > 0
-                THEN (p.close_price * s.shares_outstanding + f.total_debt - f.cash) / f.ebitda
-                ELSE NULL END AS EV_EBITDA,
+        def _pivot(df: pd.DataFrame) -> pd.DataFrame:
+            if df.empty:
+                return pd.DataFrame()
+            pivoted = df.pivot_table(
+                index=['stock_code', 'fiscal_year', 'report_code'],
+                columns='account_nm',
+                values='current_amount',
+                aggfunc='first'
+            ).reset_index()
+            numeric_cols = [col for col in pivoted.columns if col not in ('stock_code', 'fiscal_year', 'report_code')]
+            pivoted[numeric_cols] = pivoted[numeric_cols].apply(pd.to_numeric, errors='coerce')
+            return pivoted
 
-            -- 7. EV/Sales
-            CASE WHEN f.revenue_ttm > 0
-                THEN (p.close_price * s.shares_outstanding + f.total_debt - f.cash) / f.revenue_ttm
-                ELSE NULL END AS EV_SALES,
+        income_pivot = _pivot(income_df)
+        balance_pivot = _pivot(balance_df)
 
-            -- 8. EV/FCF (Enterprise Value to Free Cash Flow)
-            CASE WHEN f.free_cash_flow > 0
-                THEN (p.close_price * s.shares_outstanding + f.total_debt - f.cash) / f.free_cash_flow
-                ELSE NULL END AS EV_FCF,
+        if income_pivot.empty:
+            merged = balance_pivot
+        elif balance_pivot.empty:
+            merged = income_pivot
+        else:
+            merged = pd.merge(
+                income_pivot,
+                balance_pivot,
+                on=['stock_code', 'fiscal_year', 'report_code'],
+                how='outer'
+            )
 
-            -- 9. Dividend Yield
-            CASE WHEN p.close_price > 0
-                THEN f.dividends_per_share / p.close_price * 100
-                ELSE 0 END AS DIVIDEND_YIELD,
+        if merged.empty:
+            return merged
 
-            -- 10. Earnings Yield (E/P)
-            CASE WHEN p.close_price * s.shares_outstanding > 0
-                THEN f.net_income_ttm / (p.close_price * s.shares_outstanding) * 100
-                ELSE NULL END AS EARNINGS_YIELD,
+        def _report_date(row):
+            year = int(row['fiscal_year'])
+            code = row['report_code']
+            if code == '11011':
+                return datetime(year, 12, 31)
+            if code == '11012':
+                return datetime(year, 6, 30)
+            if code == '11013':
+                return datetime(year, 3, 31)
+            if code == '11014':
+                return datetime(year, 9, 30)
+            return datetime(year, 12, 31)
 
-            -- 11. FCF Yield
-            CASE WHEN p.close_price * s.shares_outstanding > 0
-                THEN f.free_cash_flow / (p.close_price * s.shares_outstanding) * 100
-                ELSE NULL END AS FCF_YIELD,
+        merged['report_date'] = merged.apply(_report_date, axis=1)
 
-            -- 12. Book to Market Ratio
-            CASE WHEN p.close_price * s.shares_outstanding > 0
-                THEN f.total_equity / (p.close_price * s.shares_outstanding)
-                ELSE NULL END AS BOOK_TO_MARKET,
+        latest = merged.sort_values('report_date', ascending=False).drop_duplicates(subset=['stock_code'])
+        return latest
 
-            -- 13. CAPE Ratio (Cyclically Adjusted PE)
-            CASE WHEN f.avg_earnings_10y > 0
-                THEN p.close_price * s.shares_outstanding / f.avg_earnings_10y
-                ELSE NULL END AS CAPE_RATIO,
+    def _build_factor_frame(
+        self,
+        price_df: pd.DataFrame,
+        financial_df: pd.DataFrame,
+        snapshot_date: datetime
+    ) -> pd.DataFrame:
+        if price_df.empty:
+            return pd.DataFrame()
 
-            -- 14. Price to Tangible Book Value
-            CASE WHEN (f.total_equity - f.intangible_assets) > 0
-                THEN p.close_price * s.shares_outstanding / (f.total_equity - f.intangible_assets)
-                ELSE NULL END AS PTBV
+        latest_prices = price_df[price_df['trade_date'] == pd.Timestamp(snapshot_date.date())].copy()
+        if latest_prices.empty:
+            logger.warning("스냅샷 날짜에 해당하는 가격이 없습니다.")
+            return pd.DataFrame()
 
-        FROM stocks s
-        INNER JOIN stock_prices p ON s.stock_code = p.stock_code
-        LEFT JOIN financial_summary f ON s.stock_code = f.stock_code
-        WHERE s.stock_code IN :stock_codes
-        AND p.date = :date
-        AND f.date <= :date
-        ORDER BY f.date DESC
-        LIMIT 1
-        """)
+        merged = latest_prices.merge(financial_df, on='stock_code', how='left', suffixes=('', '_fin'))
 
-        result = await self.db.execute(query, {"stock_codes": stock_codes, "date": date})
-        df = pd.DataFrame(result.fetchall())
+        def _safe_ratio(numerator, denominator):
+            if numerator is None or denominator is None:
+                return None
+            if denominator == 0:
+                return None
+            return float(numerator) / float(denominator)
+
+        merged['PER'] = merged.apply(lambda row: _safe_ratio(row['market_cap'], row.get('당기순이익')), axis=1)
+        merged['PBR'] = merged.apply(lambda row: _safe_ratio(row['market_cap'], row.get('자본총계')), axis=1)
+        merged['ROE'] = merged.apply(lambda row: _safe_ratio(row.get('당기순이익'), row.get('자본총계')) * 100 if _safe_ratio(row.get('당기순이익'), row.get('자본총계')) is not None else None, axis=1)
+        merged['ROA'] = merged.apply(lambda row: _safe_ratio(row.get('당기순이익'), row.get('자산총계')) * 100 if _safe_ratio(row.get('당기순이익'), row.get('자산총계')) is not None else None, axis=1)
+        merged['DEBT_RATIO'] = merged.apply(lambda row: _safe_ratio(row.get('부채총계'), row.get('자본총계')) * 100 if _safe_ratio(row.get('부채총계'), row.get('자본총계')) is not None else None, axis=1)
+
+        recent_window = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=20)]
+        avg_trading = recent_window.groupby('stock_code')['trading_value'].mean().rename('AVG_TRADING_VALUE')
+        turnover = recent_window.groupby('stock_code').apply(
+            lambda g: _safe_ratio(g['volume'].mean(), g['listed_shares'].iloc[0]) * 100 if g['listed_shares'].iloc[0] else None
+        ).rename('TURNOVER_RATE')
+
+        momentum_window = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=120)]
+        momentum = momentum_window.groupby('stock_code').apply(
+            lambda g: _safe_ratio(
+                g[g['trade_date'] == g['trade_date'].max()]['close_price'].iloc[0],
+                g.sort_values('trade_date').iloc[0]['close_price']
+            ) - 1 if not g.empty and g[g['trade_date'] == g['trade_date'].max()].size > 0 and g.sort_values('trade_date').iloc[0]['close_price'] else None
+        ).rename('MOM_3M')
+
+        pct_returns = price_df.sort_values('trade_date').groupby('stock_code')['close_price'].pct_change()
+        price_df = price_df.assign(daily_return=pct_returns)
+        vol_window = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=90)]
+        volatility = vol_window.groupby('stock_code')['daily_return'].std().rename('VOLATILITY_90')
+
+        merged = merged.merge(avg_trading, on='stock_code', how='left')
+        merged = merged.merge(turnover, on='stock_code', how='left')
+        merged = merged.merge(momentum, on='stock_code', how='left')
+        merged = merged.merge(volatility, on='stock_code', how='left')
+
+        merged['date'] = snapshot_date
+        return merged
+
+    def _attach_ranks(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df.empty:
+            return df
+
+        higher_better = ['ROE', 'ROA', 'MOM_3M', 'AVG_TRADING_VALUE']
+        lower_better = ['PER', 'PBR', 'DEBT_RATIO', 'VOLATILITY_90']
+
+        for col in higher_better:
+            if col in df.columns:
+                df[f'{col}_RANK'] = df[col].rank(ascending=False, method='dense')
+
+        for col in lower_better:
+            if col in df.columns:
+                df[f'{col}_RANK'] = df[col].rank(ascending=True, method='dense')
+
+        rank_columns = [c for c in df.columns if c.endswith('_RANK')]
+        if rank_columns:
+            df['COMPOSITE_SCORE'] = df[rank_columns].mean(axis=1)
+            df['COMPOSITE_RANK'] = df['COMPOSITE_SCORE'].rank(ascending=True, method='dense')
 
         return df
 

@@ -51,6 +51,11 @@ export function FactorSelectionModal({
 
   const handleFactorSelect = (factor: Factor) => {
     setSelectedFactor(factor);
+    // 바로 서브팩터 탭으로 이동하지 않음 (사용자가 "선택 완료" 버튼 클릭 시 이동)
+  };
+
+  const handleFactorConfirm = () => {
+    if (!selectedFactor) return;
     setCurrentTab("subfactor");
   };
 
@@ -318,17 +323,17 @@ export function FactorSelectionModal({
         {/* 모달 푸터 */}
         <div className="border-t border-gray-200 px-6 py-4 flex justify-center gap-3">
           <button
-            onClick={handleClose}
+            onClick={currentTab === "factor" ? handleClose : () => setCurrentTab("factor")}
             className="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
           >
-            이전 단계
+            {currentTab === "factor" ? "취소" : "이전 단계"}
           </button>
           <button
-            onClick={handleConfirm}
-            disabled={!isConfirmEnabled()}
+            onClick={currentTab === "factor" ? handleFactorConfirm : handleConfirm}
+            disabled={currentTab === "factor" ? !selectedFactor : !isConfirmEnabled()}
             className="px-6 py-2 bg-brand-primary text-white rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            선택 완료
+            {currentTab === "factor" ? "다음 단계" : "선택 완료"}
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { Dropdown, Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
 import { FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
+import ActiveConditionBtn from "../common/ActiveConditionBtn";
 
 /**
  * 보유 기간 섹션
@@ -50,11 +51,11 @@ export function HoldPeriodSection() {
     <div id="section-hold-period" className="space-y-3">
       <SectionHeader
         title="보유 기간"
-        description="최소 보유일 만큼 시 매수 후 일정 기간 이상 매매 어떤 상황에도 매도되지 않습니다. 최대 보유일 경과 시 매매 주 후에도 주문을 합니다."
+        description="최소 보유일 입력 시 매수 후 입력 기간 동안 어떤 상황에도 매도하지 않고, 최대 보유일 입력 시 매수 후 입력 기간 후 매도 주문을 합니다."
         action={<ToggleSwitch checked={isOpen} onChange={setIsOpen} />}
       />
 
-      {isOpen && (
+      {isOpen ? (
         <FieldPanel conditionType="sell">
           <div className="grid grid-cols-[128fr_128fr_344fr] gap-x-[3.75rem]">
             {/* 최소 종목 보유일 */}
@@ -119,6 +120,8 @@ export function HoldPeriodSection() {
             </div>
           </div>
         </FieldPanel>
+      ) : (
+        <ActiveConditionBtn checked={isOpen} onChange={setIsOpen} />
       )}
     </div>
   );

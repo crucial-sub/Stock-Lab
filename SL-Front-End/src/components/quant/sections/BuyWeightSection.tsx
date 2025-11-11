@@ -1,7 +1,7 @@
 import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useState } from "react";
-import { FormField, SectionHeader, FieldPanel, ToggleSwitch } from "../common";
+import { FieldPanel, FormField, SectionHeader, ToggleSwitch } from "../common";
 
 /**
  * 매수 비중 설정 섹션
@@ -27,7 +27,9 @@ export function BuyWeightSection() {
 
   return (
     <div id="section-buy-weight" className="space-y-3">
-      <SectionHeader title="매수 비중 설정" />
+      <SectionHeader title="매수 비중 설정"
+        description="종목 당 비중과 보유 종목 수 등을 조정하여, 매수할 종목에 대한 비중을 설정합니다."
+      />
 
       <FieldPanel conditionType="buy">
         <div className="grid grid-cols-4 gap-6">

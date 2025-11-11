@@ -2,6 +2,7 @@ import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
 import { FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
+import ActiveConditionBtn from "../common/ActiveConditionBtn";
 
 /**
  * 목표가 / 손절가 섹션
@@ -48,13 +49,13 @@ export function TargetLossSection() {
     <div id="section-target-loss" className="space-y-3">
       <SectionHeader
         title="목표가 / 손절가"
-        description="설사리 감사에 따라 목표 기준에서의 매수가 / 손절가에 도달 시 매도 주문을 합니다."
+        description="실시간 감시에 따라 일정 기준에서의 목표가 / 손절가에 도달 시 매도 주문을 합니다."
         action={
           <ToggleSwitch checked={isOpen} onChange={setIsOpen} />
         }
       />
 
-      {isOpen && (
+      {isOpen ? (
         <FieldPanel conditionType="sell">
           <div className="grid grid-cols-2 gap-6">
             {/* 목표가 */}
@@ -85,7 +86,7 @@ export function TargetLossSection() {
 
             {/* 손절가 */}
             <div className="space-y-2">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-5">
                 <Title variant="subtitle">손절가</Title>
                 <ToggleSwitch
                   checked={stopLossEnabled}
@@ -110,6 +111,8 @@ export function TargetLossSection() {
             </div>
           </div>
         </FieldPanel>
+      ) : (
+        <ActiveConditionBtn checked={isOpen} onChange={setIsOpen} />
       )}
     </div>
   );

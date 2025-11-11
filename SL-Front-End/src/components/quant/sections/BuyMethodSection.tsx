@@ -27,7 +27,9 @@ export function BuyMethodSection() {
 
   return (
     <div id="section-buy-method" className="space-y-3">
-      <SectionHeader title="매수 방법 선택" />
+      <SectionHeader title="매수 방법 선택"
+        description="매수 조건에 부합한 종목들을 매수할 때, 매수 방법을 선택합니다."
+      />
 
       <FieldPanel conditionType="buy">
         <Title variant="subtitle" className="mb-3">

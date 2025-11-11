@@ -1,6 +1,6 @@
 import { Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
-import { FormField, SectionHeader, UnderLineInput, FieldPanel } from "../common";
+import { FieldPanel, FormField, SectionHeader, UnderLineInput } from "../common";
 
 /**
  * 일반 조건 설정 섹션
@@ -40,7 +40,7 @@ export function GeneralSettingsSection() {
         </div>
 
         {/* 투자 설정 */}
-        <div className="grid grid-cols-4 gap-6">
+        <div className="grid grid-cols-5 gap-6">
           <FormField
             label="투자 금액"
             type="number"

@@ -24,7 +24,7 @@ export function SectionHeader({
       <div className="flex items-center gap-3">
         <Title>{title}</Title>
         {description && (
-          <p className="text-sm text-text-body">{description}</p>
+          <p className="text-[0.75rem] self-end mb-1">{description}</p>
         )}
       </div>
       {action && <div>{action}</div>}

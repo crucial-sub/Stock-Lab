@@ -4,6 +4,7 @@ import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ConditionCard, FieldPanel, SectionHeader, ToggleSwitch, UnderLineInput } from "../common";
+import ActiveConditionBtn from "../common/ActiveConditionBtn";
 import { FactorSelectionModal } from "../FactorSelectionModal";
 
 /**
@@ -31,7 +32,7 @@ export function ConditionalSellSection() {
 
   const [isOpen, setIsOpen] = useState(condition_sell !== null);
   const [sellLogic, setSellLogic] = useState<string>(
-    condition_sell?.sell_logic ?? "A and B"
+    condition_sell?.sell_logic || ""
   );
   const [sellPriceBasis, setSellPriceBasis] = useState<string>(
     condition_sell?.sell_price_basis ?? "전일 종가"
@@ -94,11 +95,11 @@ export function ConditionalSellSection() {
     <div id="section-conditional-sell" className="space-y-3">
       <SectionHeader
         title="조건 매도"
-        description="변경된 상영한 조건식을 충족했을 때도 주문을 합니다."
+        description="본인이 설정한 조건식을 충족했을 때, 매도 주문을 합니다."
         action={<ToggleSwitch checked={isOpen} onChange={setIsOpen} />}
       />
 
-      {isOpen && (
+      {isOpen ? (
         <FieldPanel conditionType="sell">
           <div className="space-y-10">
             {/* 매도 조건식 설정 */}
@@ -198,6 +199,8 @@ export function ConditionalSellSection() {
             </div>
           </div>
         </FieldPanel>
+      ) : (
+        <ActiveConditionBtn checked={isOpen} onChange={setIsOpen} />
       )}
 
       {/* 매도 조건식 팩터 선택 모달 */}

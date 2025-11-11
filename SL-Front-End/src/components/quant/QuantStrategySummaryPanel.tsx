@@ -114,14 +114,14 @@ export default function QuantStrategySummaryPanel({
           </div>
 
           {/* 탭 버튼 */}
-          <div className="flex gap-2 mb-6 w-full">
+          <div className="flex gap-3 px-4 mb-6 w-full justify-center">
             <button
               onClick={() => setSelectedSummaryTab("buy")}
               className={`
-                px-4 py-2 rounded text-sm font-medium transition-colors
+                px-5 py-2 rounded-md text-[1.25rem] font-semibold transition-colors
                 ${selectedSummaryTab === "buy"
                   ? "bg-brand-primary text-white"
-                  : "bg-bg-surface-hover text-text-body hover:bg-bg-surface-active"
+                  : "bg-bg-surface-hover  hover:bg-bg-surface-active"
                 }
               `}
             >
@@ -130,10 +130,10 @@ export default function QuantStrategySummaryPanel({
             <button
               onClick={() => setSelectedSummaryTab("sell")}
               className={`
-                px-4 py-2 rounded text-sm font-medium transition-colors
+                px-5 py-2 rounded-md text-[1.25rem] font-semibold transition-colors
                 ${selectedSummaryTab === "sell"
-                  ? "bg-brand-primary text-white"
-                  : "bg-bg-surface-hover text-text-body hover:bg-bg-surface-active"
+                  ? "bg-accent-primary text-white"
+                  : ""
                 }
               `}
             >
@@ -142,10 +142,10 @@ export default function QuantStrategySummaryPanel({
             <button
               onClick={() => setSelectedSummaryTab("target")}
               className={`
-                px-4 py-2 rounded text-sm font-medium transition-colors
+                px-5 py-2 rounded-md text-[1.25rem] font-semibold transition-colors
                 ${selectedSummaryTab === "target"
-                  ? "bg-brand-primary text-white"
-                  : "bg-bg-surface-hover text-text-body hover:bg-bg-surface-active"
+                  ? "bg-[#f0f0f0]"
+                  : "bg-bg-surface-hover  hover:bg-bg-surface-active"
                 }
               `}
             >
@@ -154,12 +154,12 @@ export default function QuantStrategySummaryPanel({
           </div>
 
           {/* 요약 내용 */}
-          <div className="px-6 py-6 space-y-8">
+          <div className="px-10 space-y-8">
             {selectedSummaryTab === "buy" && (
               <>
                 {/* 일반 조건 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-accent-primary">일반 조건</h3>
+                  <h3 className="text-base font-bold text-brand-primary">일반 조건</h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <SummaryItem
                       label="백테스트 데이터"
@@ -190,11 +190,11 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 매수 조건 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-accent-primary">매수 조건</h3>
+                  <h3 className="text-base font-bold text-brand-primary">매수 조건</h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <div>
-                      <div className="text-xs mb-1 text-text-muted">매수 조건식</div>
-                      <div className="text-sm text-text-body">
+                      <div className="text-base mb-1 text-tag-neutral">매수 조건식</div>
+                      <div className="text-sm ">
                         {buy_conditions.length > 0 ? (
                           <div className="space-y-1">
                             {buy_conditions.map((c, idx) => (
@@ -224,7 +224,7 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 매수 비중 설정 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-accent-primary">매수 비중 설정</h3>
+                  <h3 className="text-base font-bold text-brand-primary">매수 비중 설정</h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <SummaryItem
                       label="종목당 매수 비중"
@@ -253,7 +253,7 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 매수 방법 설정 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-accent-primary">매수 방법 설정</h3>
+                  <h3 className="text-base font-bold text-brand-primary">매수 방법 설정</h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <div className="col-span-2">
                       <SummaryItem
@@ -270,7 +270,7 @@ export default function QuantStrategySummaryPanel({
               <>
                 {/* 목표가/손절가 설정 */}
                 <div className="space-y-4">
-                  <h3 className={`text-base font-bold ${target_and_loss ? "text-brand-primary" : "text-text-muted"}`}>
+                  <h3 className={`text-base font-bold ${target_and_loss ? "text-accent-primary" : "text-tag-neutral"}`}>
                     목표가 / 손절가 설정
                   </h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
@@ -293,7 +293,7 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 보유 기간 */}
                 <div className="space-y-4">
-                  <h3 className={`text-base font-bold ${hold_days ? "text-brand-primary" : "text-text-muted"}`}>
+                  <h3 className={`text-base font-bold ${hold_days ? "text-accent-primary" : "text-tag-neutral"}`}>
                     보유 기간
                   </h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
@@ -321,15 +321,15 @@ export default function QuantStrategySummaryPanel({
 
                 {/* 조건 매도 */}
                 <div className="space-y-4">
-                  <h3 className={`text-base font-bold ${condition_sell ? "text-brand-primary" : "text-text-muted"}`}>
+                  <h3 className={`text-base font-bold ${condition_sell ? "text-accent-primary" : "text-tag-neutral"}`}>
                     조건 매도
                   </h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                     <div>
-                      <div className={`text-xs mb-1 ${!condition_sell ? "text-text-muted" : "text-text-muted"}`}>
+                      <div className={`text-base mb-1 ${!condition_sell ? "text-tag-neutral" : "text-tag-neutral"}`}>
                         매도 조건식
                       </div>
-                      <div className={`text-sm ${!condition_sell ? "text-text-muted" : "text-text-body"}`}>
+                      <div className={`text-base ${!condition_sell ? "text-tag-neutral" : ""}`}>
                         {condition_sell && condition_sell.sell_conditions.length > 0 ? (
                           <div className="space-y-1">
                             {condition_sell.sell_conditions.map((c, idx) => (
@@ -367,44 +367,44 @@ export default function QuantStrategySummaryPanel({
               <>
                 {/* 매매 대상 */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-brand-primary">매매 대상</h3>
+                  <h3 className="text-base font-bold">매매 대상</h3>
                   <div className="space-y-4">
                     <div>
-                      <div className="text-xs text-text-muted mb-2">유니버스</div>
+                      <div className="text-xs text-tag-neutral mb-2">유니버스</div>
                       {trade_targets.selected_universes.length > 0 ? (
-                        <ul className="list-disc list-inside text-sm text-text-body space-y-1">
+                        <ul className="list-disc list-inside text-sm  space-y-1">
                           {trade_targets.selected_universes.map((universe, index) => (
                             <li key={index}>{universe}</li>
                           ))}
                         </ul>
                       ) : (
-                        <div className="text-sm text-text-body">선택 안 함</div>
+                        <div className="text-sm ">선택 안 함</div>
                       )}
                     </div>
                     <div>
-                      <div className="text-xs text-text-muted mb-2">테마</div>
+                      <div className="text-xs text-tag-neutral mb-2">테마</div>
                       {trade_targets.selected_themes.length > 0 ? (
                         <div className="grid grid-cols-3 gap-2">
                           {trade_targets.selected_themes.map((theme, index) => (
-                            <div key={index} className="text-sm text-text-body">
+                            <div key={index} className="text-sm ">
                               {theme}
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="text-sm text-text-body">선택 안 함</div>
+                        <div className="text-sm ">선택 안 함</div>
                       )}
                     </div>
                     <div>
-                      <div className="text-xs text-text-muted mb-2">개별 종목</div>
+                      <div className="text-xs text-tag-neutral mb-2">개별 종목</div>
                       {trade_targets.selected_stocks.length > 0 ? (
-                        <ul className="list-disc list-inside text-sm text-text-body space-y-1">
+                        <ul className="list-disc list-inside text-sm  space-y-1">
                           {trade_targets.selected_stocks.map((stock, index) => (
                             <li key={index}>{stock}</li>
                           ))}
                         </ul>
                       ) : (
-                        <div className="text-sm text-text-body">선택 안 함</div>
+                        <div className="text-sm ">선택 안 함</div>
                       )}
                     </div>
                   </div>
@@ -430,10 +430,10 @@ interface SummaryItemProps {
 function SummaryItem({ label, value, disabled = false }: SummaryItemProps) {
   return (
     <div>
-      <div className={`text-xs mb-1 ${disabled ? "text-text-muted" : "text-text-muted"}`}>
+      <div className={`mb-1 ${disabled ? "text-tag-neutral" : "text-text-strong"}`}>
         {label}
       </div>
-      <div className={`text-sm ${disabled ? "text-text-muted" : "text-text-body"} whitespace-pre-line`}>
+      <div className={`font-semibold ${disabled ? "text-tag-neutral" : "text-text-strong"} whitespace-pre-line`}>
         {value}
       </div>
     </div>

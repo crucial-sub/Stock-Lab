@@ -139,7 +139,7 @@ class UserStockService:
             *price_columns
         ).where(UserFavoriteStock.user_id == user_id).order_by(desc(UserFavoriteStock.created_at))
 
-        if join_condition:
+        if join_condition is not None:
             query = query.outerjoin(StockPrice, join_condition)
 
         result = await self.db.execute(query)
@@ -269,7 +269,7 @@ class UserStockService:
             .limit(limit)
         )
 
-        if join_condition:
+        if join_condition is not None:
             query = query.outerjoin(StockPrice, join_condition)
 
         result = await self.db.execute(query)

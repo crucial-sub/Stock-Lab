@@ -7,17 +7,19 @@ import { Button } from "./common";
 
 interface HeaderProps {
   userName?: string;
-  onLogout?: () => void;
 }
 
 export function Header({
   userName = "은따거",
-  onLogout,
 }: HeaderProps) {
   const router = useRouter();
 
   const handleCreateStrategy = () => {
     router.push("/quant/new");
+  };
+
+  const handleLogin = () => {
+    router.push("/login");
   };
 
   return (
@@ -46,8 +48,8 @@ export function Header({
             <Button variant="primary" size="md" onClick={handleCreateStrategy}>
               새 전략 만들기
             </Button>
-            <Button variant="secondary" size="md" onClick={onLogout}>
-              로그아웃
+            <Button variant="secondary" size="md" onClick={handleLogin}>
+              로그인
             </Button>
           </div>
         </div>

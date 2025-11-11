@@ -71,7 +71,7 @@ class MarketQuoteService:
                 Company.stock_code,
                 Company.stock_name,
                 StockPrice.close_price,
-                StockPrice.vs_previous,
+                StockPrice.change_vs_1d,
                 StockPrice.fluctuation_rate,
                 StockPrice.volume,
                 StockPrice.trading_value,
@@ -118,8 +118,8 @@ class MarketQuoteService:
                 "stock_code": row.stock_code,
                 "stock_name": row.stock_name,
                 "current_price": row.close_price,
-                "previous_close": self._calculate_previous_close(row.close_price, row.vs_previous),
-                "vs_previous": row.vs_previous or 0,
+                "previous_close": self._calculate_previous_close(row.close_price, row.change_vs_1d),
+                "change_vs_1d": row.change_vs_1d or 0,
                 "change_rate": row.fluctuation_rate or 0.0,
                 "volume": row.volume or 0,
                 "trading_value": row.trading_value or 0,
@@ -163,9 +163,9 @@ class MarketQuoteService:
     @staticmethod
     def _calculate_previous_close(
         close_price: Optional[int],
-        vs_previous: Optional[int]
+        change_vs_1d: Optional[int]
     ) -> Optional[int]:
         """전일 종가 계산"""
-        if close_price is None or vs_previous is None:
+        if close_price is None or change_vs_1d is None:
             return None
-        return close_price - vs_previous
+        return close_price - change_vs_1d

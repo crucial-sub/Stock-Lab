@@ -98,7 +98,6 @@ class CompanyInfoService:
                 "market_type": company.market_type,
                 # 주가 정보
                 "current_price": latest_price.close_price if latest_price else None,
-                "vs_previous": latest_price.vs_previous if latest_price else None,
                 "previous_close": previous_close,
                 "fluctuation_rate": latest_price.fluctuation_rate if latest_price else None,
                 "trade_date": latest_price.trade_date.isoformat() if latest_price and latest_price.trade_date else None,
@@ -118,9 +117,9 @@ class CompanyInfoService:
                 "ceo_name": company.ceo_name,
                 "listed_date": company.est_dt,
                 "industry": company.industry,
-                # 점수
-                "momentum_score": company.momentum_score,
-                "fundamental_score": company.fundamental_score,
+                # # 점수
+                # "momentum_score": company.momentum_score,
+                # "fundamental_score": company.fundamental_score,
                 # 관심종목 여부
                 "is_favorite": is_favorite
             },
@@ -651,9 +650,9 @@ class CompanyInfoService:
         """전일 종가 계산"""
         if not latest_price or latest_price.close_price is None:
             return None
-        if latest_price.vs_previous is None:
+        if latest_price.change_vs_1d is None:
             return None
-        return latest_price.close_price - latest_price.vs_previous
+        return latest_price.close_price - latest_price.change_vs_1d
 
     def _calculate_change_amount(
         self,

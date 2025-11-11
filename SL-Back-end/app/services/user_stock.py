@@ -121,7 +121,7 @@ class UserStockService:
         if latest_trade_date:
             price_columns = [
                 StockPrice.close_price,
-                StockPrice.vs_previous,
+                StockPrice.change_vs_1d,
                 StockPrice.fluctuation_rate,
                 StockPrice.volume,
                 StockPrice.trading_value,
@@ -153,7 +153,7 @@ class UserStockService:
                 "change_rate": getattr(row, "fluctuation_rate", None),
                 "previous_close": self._calculate_previous_close_value(
                     getattr(row, "close_price", None),
-                    getattr(row, "vs_previous", None)
+                    getattr(row, "change_vs_1d", None)
                 ),
                 "volume": getattr(row, "volume", None),
                 "trading_value": getattr(row, "trading_value", None),
@@ -246,7 +246,7 @@ class UserStockService:
         if latest_trade_date:
             price_columns = [
                 StockPrice.close_price,
-                StockPrice.vs_previous,
+                StockPrice.change_vs_1d,
                 StockPrice.fluctuation_rate,
                 StockPrice.volume,
                 StockPrice.trading_value,
@@ -283,7 +283,7 @@ class UserStockService:
                 "change_rate": getattr(row, "fluctuation_rate", None),
                 "previous_close": self._calculate_previous_close_value(
                     getattr(row, "close_price", None),
-                    getattr(row, "vs_previous", None)
+                    getattr(row, "change_vs_1d", None)
                 ),
                 "volume": getattr(row, "volume", None),
                 "trading_value": getattr(row, "trading_value", None),
@@ -327,9 +327,9 @@ class UserStockService:
     @staticmethod
     def _calculate_previous_close_value(
         close_price: Optional[int],
-        vs_previous: Optional[int]
+        change_vs_1d: Optional[int]
     ) -> Optional[int]:
         """전일 종가 계산"""
-        if close_price is None or vs_previous is None:
+        if close_price is None or change_vs_1d is None:
             return None
-        return close_price - vs_previous
+        return close_price - change_vs_1d

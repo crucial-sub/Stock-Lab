@@ -32,7 +32,7 @@ class MarketQuoteItem(BaseModel):
     stock_name: str = Field(..., serialization_alias="stockName", description="종목명")
     current_price: int = Field(..., serialization_alias="currentPrice", description="현재가")
     previous_close: Optional[int] = Field(None, serialization_alias="previousClose", description="전일 종가")
-    vs_previous: int = Field(..., serialization_alias="vsPrevious", description="전일대비")
+    change_vs_1d: int = Field(..., serialization_alias="changevs1d", description="1일 전일대비")
     change_rate: float = Field(..., serialization_alias="changeRate", description="등락률(%)")
     volume: int = Field(..., description="거래량")
     trading_value: int = Field(..., serialization_alias="tradingValue", description="거래대금")

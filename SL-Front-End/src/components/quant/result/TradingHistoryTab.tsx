@@ -66,16 +66,16 @@ export function TradingHistoryTab({ trades }: TradingHistoryTabProps) {
                 {trade.stockName}
               </div>
               <div className="text-text-body text-right">
-                {trade.buyPrice.toLocaleString()}
+                {Math.round(trade.buyPrice).toLocaleString()}
               </div>
               <div className="text-text-body text-right">
-                {Math.round(trade.valuation / trade.buyPrice).toLocaleString()}
+                {trade.quantity?.toLocaleString() || 0}
               </div>
               <div
                 className={`text-right font-semibold ${
                   trade.profitRate >= 0
-                    ? "text-accent-primary"
-                    : "text-brand-primary"
+                    ? "text-brand-primary"
+                    : "text-accent-primary"
                 }`}
               >
                 {trade.profitRate > 0 ? "+" : ""}
@@ -87,7 +87,7 @@ export function TradingHistoryTab({ trades }: TradingHistoryTabProps) {
                 {trade.weight.toFixed(2)}
               </div>
               <div className="text-text-body text-right">
-                {trade.valuation.toLocaleString()}
+                {Math.round(trade.valuation).toLocaleString()}
               </div>
             </div>
           ))

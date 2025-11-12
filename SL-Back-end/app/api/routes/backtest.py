@@ -169,6 +169,18 @@ class BacktestStatusResponse(BaseModel):
     started_at: Optional[datetime] = Field(None, serialization_alias="startedAt")
     completed_at: Optional[datetime] = Field(None, serialization_alias="completedAt")
     error_message: Optional[str] = Field(None, serialization_alias="errorMessage")
+    # 백테스트 기간
+    start_date: Optional[str] = Field(None, serialization_alias="startDate")
+    end_date: Optional[str] = Field(None, serialization_alias="endDate")
+    # 실시간 통계 (백테스트 진행 중에만 제공)
+    current_date: Optional[str] = Field(None, serialization_alias="currentDate")
+    buy_count: Optional[int] = Field(None, serialization_alias="buyCount")
+    sell_count: Optional[int] = Field(None, serialization_alias="sellCount")
+    current_return: Optional[float] = Field(None, serialization_alias="currentReturn")
+    current_capital: Optional[float] = Field(None, serialization_alias="currentCapital")
+    current_mdd: Optional[float] = Field(None, serialization_alias="currentMdd")
+    # 차트 데이터 (진행 중에도 제공)
+    yield_points: Optional[list] = Field(None, serialization_alias="yieldPoints")
 
 
 class BacktestResultStatistics(BaseModel):
@@ -199,6 +211,7 @@ class BacktestTrade(BaseModel):
     sell_date: str = Field(..., serialization_alias="sellDate")
     weight: float = Field(..., serialization_alias="weight")
     valuation: float = Field(..., serialization_alias="valuation")
+    quantity: int = Field(..., serialization_alias="quantity")
 
 
 class BacktestYieldPoint(BaseModel):
@@ -212,6 +225,8 @@ class BacktestYieldPoint(BaseModel):
     daily_return: float = Field(..., serialization_alias="dailyReturn")  # 일간 수익률
     cumulative_return: float = Field(..., serialization_alias="cumulativeReturn")  # 누적 수익률
     value: float  # 차트용 (cumulative_return과 동일, 하위 호환성)
+    buy_count: int = Field(default=0, serialization_alias="buyCount")  # 당일 매수 횟수
+    sell_count: int = Field(default=0, serialization_alias="sellCount")  # 당일 매도 횟수
 
 
 class BacktestResultResponse(BaseModel):
@@ -481,6 +496,50 @@ async def get_backtest_status(
 
     if backtest_session:
         # BacktestSession이 존재하면 완료된 것으로 간주
+        # 스냅샷 및 거래 데이터 조회
+        from app.models.backtest import BacktestDailySnapshot, BacktestTrade
+        from collections import defaultdict
+
+        yield_points_data = []
+
+        # 스냅샷 조회
+        snapshots_query = select(BacktestDailySnapshot).where(
+            BacktestDailySnapshot.backtest_id == backtest_id
+        ).order_by(BacktestDailySnapshot.snapshot_date)
+        snapshots_result = await db.execute(snapshots_query)
+        snapshots = snapshots_result.scalars().all()
+
+        # 거래 내역 조회 (일별 매수/매도 횟수 계산용)
+        trades_query = select(BacktestTrade).where(
+            BacktestTrade.backtest_id == backtest_id
+        ).order_by(BacktestTrade.trade_date)
+        trades_result = await db.execute(trades_query)
+        trades = trades_result.scalars().all()
+
+        # 일별 거래 횟수 집계
+        daily_trade_counts = defaultdict(lambda: {"buy": 0, "sell": 0})
+        for trade in trades:
+            trade_date = trade.trade_date.isoformat()
+            if trade.trade_type == "BUY":
+                daily_trade_counts[trade_date]["buy"] += 1
+            elif trade.trade_type == "SELL":
+                daily_trade_counts[trade_date]["sell"] += 1
+
+        # yieldPoints 생성
+        for snap in snapshots:
+            date_str = snap.snapshot_date.isoformat()
+            yield_points_data.append({
+                "date": date_str,
+                "value": float(snap.cumulative_return),
+                "portfolioValue": int(snap.portfolio_value),
+                "cash": int(snap.cash_balance),
+                "positionValue": int(snap.invested_amount),
+                "dailyReturn": float(snap.daily_return),
+                "cumulativeReturn": float(snap.cumulative_return),
+                "buyCount": daily_trade_counts[date_str]["buy"],
+                "sellCount": daily_trade_counts[date_str]["sell"],
+            })
+
         return BacktestStatusResponse(
             backtest_id=str(backtest_session.backtest_id),
             status="completed",
@@ -488,7 +547,10 @@ async def get_backtest_status(
             message="백테스트 완료",
             started_at=backtest_session.start_date,
             completed_at=backtest_session.end_date,
-            error_message=None
+            error_message=None,
+            start_date=backtest_session.start_date.strftime("%Y-%m-%d") if backtest_session.start_date else None,
+            end_date=backtest_session.end_date.strftime("%Y-%m-%d") if backtest_session.end_date else None,
+            yield_points=yield_points_data if yield_points_data else None
         )
 
     # 없으면 SimulationSession에서 조회 (실행 중인 경우)
@@ -506,7 +568,16 @@ async def get_backtest_status(
         message=f"진행률: {session.progress}%",
         started_at=session.started_at,
         completed_at=session.completed_at,
-        error_message=session.error_message
+        error_message=session.error_message,
+        start_date=session.start_date.strftime("%Y-%m-%d") if session.start_date else None,
+        end_date=session.end_date.strftime("%Y-%m-%d") if session.end_date else None,
+        current_date=session.current_date.isoformat() if session.current_date else None,
+        buy_count=session.buy_count or 0,
+        sell_count=session.sell_count or 0,
+        current_return=float(session.current_return) if session.current_return else None,
+        current_capital=float(session.current_capital) if session.current_capital else None,
+        current_mdd=float(session.current_mdd) if session.current_mdd else None,
+        yield_points=None
     )
 
 
@@ -532,23 +603,52 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
     snapshots_result = await db.execute(snapshots_query)
     snapshots = snapshots_result.scalars().all()
 
+    # BUY 거래를 종목별로 정리 (FIFO 방식)
+    buy_trades_by_stock = {}
+    for trade in trades:
+        if trade.trade_type == "BUY":
+            if trade.stock_code not in buy_trades_by_stock:
+                buy_trades_by_stock[trade.stock_code] = []
+            buy_trades_by_stock[trade.stock_code].append(trade)
+
     # 거래 내역 변환 (SELL 거래만)
     trade_list = []
     for trade in trades:
         if trade.trade_type == "SELL":
+            # 해당 종목의 BUY 거래 큐에서 가장 오래된 것(첫 번째) 가져오기 (FIFO)
+            buy_trades = buy_trades_by_stock.get(trade.stock_code, [])
+            buy_trade = buy_trades.pop(0) if buy_trades else None
+
+            # amount와 initial_capital이 None일 수 있으므로 안전하게 처리
+            amount = float(trade.amount) if trade.amount else 0
+            initial_capital = float(session.initial_capital) if session.initial_capital else 1
+
             trade_list.append(BacktestTrade(
                 stock_name=trade.stock_name,  # 이미 테이블에 저장되어 있음
                 stock_code=trade.stock_code,
-                buy_price=0,  # BacktestTrade 테이블에는 buy_price가 없음
+                buy_price=float(buy_trade.price) if buy_trade else 0,
                 sell_price=float(trade.price),
                 profit=float(trade.profit) if trade.profit else 0,
                 profit_rate=float(trade.profit_rate) if trade.profit_rate else 0,
-                buy_date="",  # BacktestTrade 테이블에는 buy_date가 없음
+                buy_date=buy_trade.trade_date.isoformat() if buy_trade else "",
                 sell_date=trade.trade_date.isoformat(),
-                quantity=trade.quantity
+                weight=float(amount / initial_capital * 100) if initial_capital > 0 else 0,
+                valuation=int(amount),  # 소수점 제거
+                quantity=int(trade.quantity) if trade.quantity else 0
             ))
 
-    # 수익률 포인트 변환
+    # 일별 매수/매도 횟수 집계
+    from collections import defaultdict
+    daily_trade_counts = defaultdict(lambda: {"buy": 0, "sell": 0})
+
+    for trade in trades:
+        trade_date = trade.trade_date.isoformat()
+        if trade.trade_type == "BUY":
+            daily_trade_counts[trade_date]["buy"] += 1
+        elif trade.trade_type == "SELL":
+            daily_trade_counts[trade_date]["sell"] += 1
+
+    # 수익률 포인트 변환 (매수/매도 횟수 포함)
     yield_points = [
         {
             "date": snap.snapshot_date.isoformat(),
@@ -557,7 +657,9 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
             "position_value": int(snap.invested_amount),
             "daily_return": float(snap.daily_return),
             "cumulative_return": float(snap.cumulative_return),
-            "value": float(snap.cumulative_return)
+            "value": float(snap.cumulative_return),
+            "buy_count": daily_trade_counts[snap.snapshot_date.isoformat()]["buy"],
+            "sell_count": daily_trade_counts[snap.snapshot_date.isoformat()]["sell"]
         }
         for snap in snapshots
     ]
@@ -688,6 +790,10 @@ async def get_backtest_result(
             buy_trades = buy_trades_by_stock.get(trade.stock_code, [])
             buy_trade = buy_trades.pop(0) if buy_trades else None
 
+            # amount와 initial_capital이 None일 수 있으므로 안전하게 처리
+            amount = float(trade.amount) if trade.amount else 0
+            initial_capital = float(session.initial_capital) if session.initial_capital else 1
+
             trade_list.append(BacktestTrade(
                 stock_name=stock_name_map.get(trade.stock_code, trade.stock_code),
                 stock_code=trade.stock_code,
@@ -697,8 +803,9 @@ async def get_backtest_result(
                 profit_rate=float(trade.return_pct) if trade.return_pct else 0,
                 buy_date=buy_trade.trade_date.isoformat() if buy_trade else "",
                 sell_date=trade.trade_date.isoformat(),
-                weight=float(trade.amount / session.initial_capital * 100) if session.initial_capital else 0,
-                valuation=float(trade.amount)
+                weight=float(amount / initial_capital * 100) if initial_capital > 0 else 0,
+                valuation=amount,
+                quantity=int(trade.quantity) if trade.quantity else 0
             ))
 
     yield_points = [

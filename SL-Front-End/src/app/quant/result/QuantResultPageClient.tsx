@@ -9,10 +9,12 @@
  * - 통계/차트/탭 네비게이션 컴포넌트 분리
  * - 기존 UI/UX 완전 보존
  * - 백테스트 진행 상태 실시간 폴링 및 로딩 UI 표시
+ * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useBacktestResultQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
+import { useQueryClient } from "@tanstack/react-query";
 import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
 import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
@@ -36,6 +38,8 @@ export function QuantResultPageClient({
   backtestId,
 }: QuantResultPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("history");
+  const queryClient = useQueryClient();
+  const previousStatusRef = useRef<string | undefined>();
 
   // Mock 모드 체크
   const isMockMode = backtestId.startsWith("mock");
@@ -53,8 +57,36 @@ export function QuantResultPageClient({
     !isMockMode && statusData?.status === "completed"
   );
 
+  // 백테스트 완료 시 결과 데이터 자동 갱신
+  useEffect(() => {
+    if (!isMockMode && statusData?.status === "completed") {
+      // 상태가 running → completed로 변경되었을 때만 invalidate
+      if (previousStatusRef.current === "running") {
+        console.log("✅ 백테스트 완료 감지 - 결과 데이터 자동 갱신");
+        queryClient.invalidateQueries({
+          queryKey: ["backtest", "detail", backtestId],
+        });
+      }
+      previousStatusRef.current = statusData.status;
+    } else if (statusData?.status) {
+      previousStatusRef.current = statusData.status;
+    }
+  }, [statusData?.status, backtestId, isMockMode, queryClient]);
+
   // Mock 데이터 또는 실제 데이터 사용
   const finalResult = isMockMode ? mockBacktestResult : result;
+
+  // 상태 데이터 로딩 중이거나 아직 데이터가 없는 경우
+  if (!isMockMode && !statusData) {
+    return (
+      <div className="min-h-screen bg-bg-app flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary mx-auto" />
+          <p className="text-text-body">백테스트 상태 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   // 백테스트가 아직 실행 중인 경우
   if (!isMockMode && statusData && (statusData.status === "pending" || statusData.status === "running")) {
@@ -63,6 +95,15 @@ export function QuantResultPageClient({
         backtestId={backtestId}
         status={statusData.status}
         progress={statusData.progress || 0}
+        buyCount={statusData.buyCount}
+        sellCount={statusData.sellCount}
+        currentReturn={statusData.currentReturn}
+        currentCapital={statusData.currentCapital}
+        currentDate={statusData.currentDate}
+        currentMdd={statusData.currentMdd}
+        startDate={statusData.startDate}
+        endDate={statusData.endDate}
+        yieldPoints={statusData.yieldPoints}
       />
     );
   }
@@ -167,6 +208,7 @@ export function QuantResultPageClient({
           statistics={finalResult.statistics}
           initialCapital={initialCapital}
           periodReturns={periodReturns}
+          yieldPoints={finalResult.yieldPoints}
         />
 
         {/* 탭 네비게이션 */}

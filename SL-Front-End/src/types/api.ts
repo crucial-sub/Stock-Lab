@@ -139,6 +139,8 @@ export interface BacktestResult {
     weight: number;
     /** 평가 금액 */
     valuation: number;
+    /** 수량 */
+    quantity: number;
   }[];
   /** 수익률 차트 데이터 */
   yieldPoints: {
@@ -149,6 +151,8 @@ export interface BacktestResult {
     positionValue?: number;
     dailyReturn?: number;
     cumulativeReturn?: number;
+    buyCount?: number;
+    sellCount?: number;
   }[];
   /** 생성 시간 */
   createdAt: string;

@@ -34,10 +34,11 @@ const ReturnsTab = dynamic(
   { loading: () => <div className="text-center py-10">수익률 차트를 불러오는 중...</div> }
 );
 
-const StatisticsTabWrapper = dynamic(
-  () => import("@/components/quant/result/StatisticsTabWrapper").then(mod => ({ default: mod.StatisticsTabWrapper })),
-  { loading: () => <div className="text-center py-10">통계 데이터를 불러오는 중...</div> }
-);
+// TODO: amcharts5로 재작성 필요
+// const StatisticsTabWrapper = dynamic(
+//   () => import("@/components/quant/result/StatisticsTabWrapper").then(mod => ({ default: mod.StatisticsTabWrapper })),
+//   { loading: () => <div className="text-center py-10">통계 데이터를 불러오는 중...</div> }
+// );
 
 const SettingsTab = dynamic(
   () => import("@/components/quant/result/SettingsTab").then(mod => ({ default: mod.SettingsTab })),
@@ -203,7 +204,9 @@ export function QuantResultPageClient({
           <ReturnsTab yieldPoints={finalResult.yieldPoints} />
         )}
         {activeTab === "statistics" && (
-          <StatisticsTabWrapper statistics={finalResult.statistics} />
+          <div className="bg-bg-surface rounded-lg shadow-card p-6 text-center py-10">
+            <p className="text-text-muted">통계 차트 (amcharts5로 재작성 예정)</p>
+          </div>
         )}
         {activeTab === "settings" && (
           <SettingsTab

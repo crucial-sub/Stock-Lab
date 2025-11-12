@@ -1,7 +1,7 @@
 """
 기업 마스터 테이블 모델
 """
-from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, Index, Float
+from sqlalchemy import Column, Integer, String, TIMESTAMP, Index, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -41,12 +41,12 @@ class Company(Base):
     market_type = Column(String(20), nullable=True, comment="시장 구분 (KOSPI/KOSDAQ/KONEX)")
     industry = Column(String(100), nullable=True, comment="업종")
     ceo_name = Column(String(100), nullable=True, comment="대표이사명")
-    listed_date = Column(Date, nullable=True, comment="상장일")
-    is_active = Column(Integer, default=1, comment="활성 상태 (1:상장중, 0:상장폐지)")
+    est_dt = Column(String(8), nullable=True, comment="상장일 (YYYYMMDD)")
 
     # 모멘텀 점수(매일 업데이트), 펀더멘탈 점수(분기별 업데이트)
-    momentum_score = Column(Float, nullable=True, comment="0~100 모멘텀 점수")
-    fundamental_score = Column(Float, nullable=True, comment="0~100 펀더멘털 점수")
+    # TODO: DB에 컬럼 추가 후 주석 해제
+    # momentum_score = Column(Float, nullable=True, comment="0~100 모멘텀 점수")
+    # fundamental_score = Column(Float, nullable=True, comment="0~100 펀더멘털 점수")
 
     # Timestamps
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False, comment="생성일시")
@@ -59,7 +59,6 @@ class Company(Base):
 
     # Indexes (복합 인덱스)
     __table_args__ = (
-        Index('idx_company_active_market', 'is_active', 'market_type'),
         Index('idx_company_industry', 'industry'),
         {"comment": "기업 마스터 테이블 - 모든 데이터의 중앙 허브"}
     )

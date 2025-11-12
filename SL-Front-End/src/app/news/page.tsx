@@ -1,51 +1,20 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
 import type { NextPage } from "next";
+import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
 import { NewsDetailModal } from "@/components/news/NewsDetailModal";
-import { useDebounce, useNewsDetailQuery, useNewsListQuery } from "@/hooks";
+import { useAvailableThemesQuery, useDebounce, useNewsDetailQuery, useNewsListQuery } from "@/hooks";
 import type { NewsListParams } from "@/types/news";
-
-const newsThemes = [
-  "전체",
-  "건설",
-  "금속",
-  "기계 / 장비",
-  "농업 / 어업 / 임업",
-  "보험",
-  "부동산",
-  "비금속",
-  "섬유 / 의류",
-  "오락 / 문화",
-  "운송 / 창고",
-  "운송장비 / 부품",
-  "유통",
-  "은행",
-  "음식료 / 담배",
-  "의료 / 정밀기기",
-  "일반 서비스",
-  "전기 / 가스 / 수도",
-  "전기 / 전자",
-  "제약",
-  "종이 / 목재",
-  "증권",
-  "출판 / 매체 복제",
-  "통신",
-  "화학",
-  "IT 서비스",
-  "기타 금융",
-  "기타 제조",
-  "기타",
-];
 
 const NewsPage: NextPage = () => {
   const [selectedThemes, setSelectedThemes] = useState<string[]>(["전체"]);
   const [keyword, setKeyword] = useState("");
   const [filter, setFilter] = useState("all");
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
+  const [displayThemes, setDisplayThemes] = useState<string[]>([]);
 
   const debouncedKeyword = useDebounce(keyword, 300);
 
@@ -56,6 +25,15 @@ const NewsPage: NextPage = () => {
     themes: themes.length ? themes : undefined,
     filter,
   };
+  // Fetch available themes from database
+  const { data: availableThemes = [] } = useAvailableThemesQuery();
+
+  // Update display themes when available themes change
+  useEffect(() => {
+    if (availableThemes.length > 0) {
+      setDisplayThemes(["전체", ...availableThemes]);
+    }
+  }, [availableThemes]);
 
   const {
     data: newsList = [],
@@ -112,18 +90,17 @@ const NewsPage: NextPage = () => {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        {newsThemes.map((theme) => {
+        {displayThemes.map((theme: string) => {
           const isActive = selectedThemes.includes(theme);
           return (
             <button
               key={theme}
               type="button"
               onClick={() => handleToggleTheme(theme)}
-              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${
-                isActive
-                  ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
-                  : "border-border-default bg-white text-text-body"
-              }`}
+              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${isActive
+                ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
+                : "border-border-default bg-white text-text-body"
+                }`}
             >
               {theme}
             </button>
@@ -140,10 +117,18 @@ const NewsPage: NextPage = () => {
 
       {!isLoading && !isError && (
         <div className="grid gap-4 md:grid-cols-3">
-          {newsList.map((item) => (
+          {newsList.map((item, index: number) => (
             <NewsCard
-              key={item.id}
-              {...item}
+              key={`${item.id}-${index}`}
+              id={item.id}
+              title={item.title}
+              summary={item.content || item.title}
+              tickerLabel={item.stock_name || item.stock_code || "종목"}
+              themeName={item.themeName}
+              sentiment="neutral"
+              publishedAt={typeof item.date === 'string' ? item.date : item.date?.display || ''}
+              source={item.source}
+              link={item.link}
               onClick={() => setSelectedNewsId(item.id)}
             />
           ))}

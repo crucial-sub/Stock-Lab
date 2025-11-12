@@ -1,153 +1,80 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { Icon } from "@/components/common/Icon";
 import { StockInfoCard } from "@/components/market-price/StockInfoCard";
+import { marketQuoteApi, type SortBy } from "@/lib/api/market-quote";
 
-const marketTabs = [
-  "최근 본 주식",
-  "체결량 순",
-  "등락률 순",
-  "거래 대금 순",
-  "시가총액 순",
-];
-
-const mockMarketRows = [
-  {
-    rank: 1,  // 순위
-    name: "크래프톤",  // 종목 명
-    code: "002200",  // 종목 코드
-    price: "263,500원", // 전일 종가
-    change: "+5.55%", // 전일 등락률
-    trend: "up" as const, // +, - 여부
-    volume: "304,016주",  // 전일 체결량
-    tradingValue: "439억원",  // 전일 거래대금
-    marketCap: "439억원", // 시총
-    isFavorite: false // 즐겨찾기 여부
-  },
-  {
-    rank: 2,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: true,
-  },
-  {
-    rank: 3,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 4,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 5,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 6,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 7,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 8,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 9,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "+5.55%",
-    trend: "up" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
-  {
-    rank: 10,
-    name: "크래프톤",
-    code: "KRAFTON",
-    price: "263,500원",
-    change: "-5.55%",
-    trend: "down" as const,
-    volume: "304,016주",
-    tradingValue: "439억원",
-    marketCap: "439억원",
-    isFavorite: false,
-  },
+const marketTabs: { label: string; sortBy: SortBy }[] = [
+  { label: "시가총액 순", sortBy: "market_cap" },
+  { label: "체결량 순", sortBy: "volume" },
+  { label: "등락률 순", sortBy: "change_rate" },
+  { label: "거래 대금 순", sortBy: "trading_value" },
+  
 ];
 
 const columnTemplate = "grid grid-cols-[2.6fr,1fr,1fr,1fr,1fr,1fr] gap-4";
 
+type MarketRow = {
+  rank: number;
+  name: string;
+  code: string;
+  price: string;
+  change: string;
+  trend: "up" | "down" | "flat";
+  volume: string;
+  tradingValue: string;
+  marketCap: string;
+  isFavorite: boolean;
+};
+
 export default function MarketPricePage() {
-  const [selectedTab, setSelectedTab] = useState(marketTabs[0]);
-  const [rows, setRows] = useState(mockMarketRows);
-  const [selectedRow, setSelectedRow] =
-    useState<(typeof mockMarketRows)[number] | null>(null);
+  const [selectedTab, setSelectedTab] = useState(marketTabs[0]); // 시가총액 순 기본값
+  const [rows, setRows] = useState<MarketRow[]>([]);
+  const [selectedRow, setSelectedRow] = useState<MarketRow | null>(null);
   const todayLabel = new Date().toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
+
+  // API 데이터 fetch
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await marketQuoteApi.getMarketQuotes({
+          sortBy: selectedTab.sortBy,
+          sortOrder: "desc",
+          page: 1,
+          pageSize: 50,
+        });
+
+        console.log("API Response:", response);
+
+        // API 데이터를 표시 형식으로 변환
+        const formattedRows = response.items.map((item) => ({
+          rank: item.rank,
+          name: item.name,
+          code: item.code,
+          price: `${item.price.toLocaleString()}원`,
+          change: `${item.changeRate > 0 ? "+" : ""}${item.changeRate.toFixed(2)}%`,
+          trend: item.trend as "up" | "down" | "flat",
+          volume: `${item.volume.toLocaleString()}주`,
+          tradingValue: `${Math.floor(item.tradingValue / 100000000)}억원`,
+          marketCap: item.marketCap ? `${Math.floor(item.marketCap / 100000000)}억원` : "-",
+          isFavorite: item.isFavorite,
+        }));
+
+        console.log("Formatted Rows:", formattedRows);
+        setRows(formattedRows);
+      } catch (error) {
+        console.error("시세 데이터 조회 실패:", error);
+      }
+    };
+
+    fetchData();
+  }, [selectedTab]);
 
   const handleToggleFavorite = (rank: number) => {
     setRows((prev) =>
@@ -166,10 +93,10 @@ export default function MarketPricePage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-wrap gap-2">
               {marketTabs.map((tab) => {
-                const isActive = tab === selectedTab;
+                const isActive = tab.sortBy === selectedTab.sortBy;
                 return (
                   <button
-                    key={tab}
+                    key={tab.sortBy}
                     type="button"
                     onClick={() => setSelectedTab(tab)}
                     className={`rounded-[8px] px-[1.5rem] py-[0.5rem] text-[1.25rem] font-semibold transition ${isActive
@@ -177,7 +104,7 @@ export default function MarketPricePage() {
                       : "text-text-body font-normal"
                       }`}
                   >
-                    {tab}
+                    {tab.label}
                   </button>
                 );
               })}

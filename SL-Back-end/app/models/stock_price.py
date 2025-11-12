@@ -39,7 +39,7 @@ class StockPrice(Base):
     trading_value = Column(BigInteger, nullable=True, comment="거래대금 (원)")
 
     # 변동 정보
-    vs_previous = Column(Integer, nullable=True, comment="전일 대비 (원)")
+    change_vs_1d = Column(Integer, nullable=True, comment="1일 전일대비 (원)")
     fluctuation_rate = Column(Float, nullable=True, comment="등락률 (%)")
 
     # 시가총액 정보
@@ -68,6 +68,12 @@ class StockPrice(Base):
 
         # 거래량 상위 종목 조회용
         Index('idx_stock_prices_date_volume', 'trade_date', 'volume'),
+
+        # 등락률 정렬 조회용
+        Index('idx_stock_prices_date_fluctuation', 'trade_date', 'fluctuation_rate'),
+
+        # 거래대금 정렬 조회용
+        Index('idx_stock_prices_date_trading_value', 'trade_date', 'trading_value'),
 
         {"comment": "주식 시세 테이블 - 일별 OHLCV 데이터"}
     )

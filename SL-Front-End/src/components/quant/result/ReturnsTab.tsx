@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ReturnsChartWrapper } from "@/components/quant/result/ReturnsChartWrapper";
+// TODO: amcharts5로 재작성 필요
+// import { ReturnsChartWrapper } from "@/components/quant/result/ReturnsChartWrapper";
 import type { BacktestResult } from "@/types/api";
 
 /**
@@ -101,7 +102,9 @@ export function ReturnsTab({ yieldPoints }: ReturnsTabProps) {
 
         {/* 차트 렌더링 */}
         {activeChartTab === "cumulative" && (
-          <ReturnsChartWrapper yieldPoints={yieldPoints} className="w-full" />
+          <div className="w-full h-96 bg-bg-app rounded-lg border border-border-default flex items-center justify-center">
+            <p className="text-text-muted">누적 수익률 차트 (amcharts5로 재작성 예정)</p>
+          </div>
         )}
 
         {activeChartTab !== "cumulative" && (

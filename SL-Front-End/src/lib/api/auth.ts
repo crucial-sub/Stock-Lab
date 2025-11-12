@@ -41,14 +41,8 @@ export const authApi = {
    * 로그인
    */
   login: async (credentials: LoginRequest): Promise<Token> => {
-    const formData = new URLSearchParams();
-    formData.append("email", credentials.email);
-    formData.append("password", credentials.password);
-
-    const response = await axiosInstance.post<Token>("/auth/login", formData, {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+    const response = await axiosInstance.post<Token>("/auth/login", null, {
+      params: credentials, // 쿼리 파라미터로 전달
     });
     return response.data;
   },

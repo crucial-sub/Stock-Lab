@@ -134,7 +134,6 @@ export default function QuantStrategySidebar({
   return (
     <div
       className={`relative
-        min-h-full
         transition-all duration-300 ease-in-out
         ${isOpen ? "w-[12.5rem]" : "w-10"}
       `}

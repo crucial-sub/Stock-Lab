@@ -115,7 +115,6 @@ export default function QuantStrategySummaryPanel({
 
   return (
     <div className={`relative
-        min-h-full
         transition-all duration-300 ease-in-out
         ${isOpen ? "w-[26.25rem]" : "w-10"}
       `}>
@@ -135,7 +134,7 @@ export default function QuantStrategySummaryPanel({
 
       {/* 요약 패널 컨텐츠 - 열린 상태에서만 표시 */}
       {isOpen && (
-        <div className="">
+        <div className="mb-10">
           {/* 요약보기 / AI 헬퍼 탭 */}
           <div className="h-16 border-b border-tag-neutral mb-5">
             <div className="flex pl-16">

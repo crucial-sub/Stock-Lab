@@ -9,18 +9,19 @@
  * - 커스텀 훅으로 비즈니스 로직 분리
  */
 
-import { useBacktestConfigStore } from "@/stores";
-import { useState, useEffect } from "react";
-import { runBacktest } from "@/lib/api/backtest";
-import { getIndustries, getStocksByIndustries, searchStocks, type StockInfo } from "@/lib/api/industries";
-import { useRouter } from "next/navigation";
-import { useTradeTargetSelection } from "@/hooks/quant";
+import { Title } from "@/components/common";
 import {
-  TradeTargetHeader,
   StockCount,
-  UniverseThemeSelection,
-  StockSearchAndTable,
-} from "./sections";
+  TradeTargetHeader,
+  UniverseThemeSelection
+} from "@/components/quant/sections";
+import { useTradeTargetSelection } from "@/hooks/quant";
+import { runBacktest } from "@/lib/api/backtest";
+import { getIndustries, searchStocks, type StockInfo } from "@/lib/api/industries";
+import { useBacktestConfigStore } from "@/stores";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { FieldPanel } from "../ui";
 
 export default function TargetSelectionTab() {
   const { getBacktestRequest } = useBacktestConfigStore();
@@ -202,7 +203,7 @@ export default function TargetSelectionTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div id="section-trade-target" className="space-y-6">
       {/* 헤더 */}
       <TradeTargetHeader
         selectedCount={finalSelectedCount}
@@ -210,7 +211,7 @@ export default function TargetSelectionTab() {
       />
 
       {/* 매매 대상 종목 */}
-      <div className="bg-bg-surface rounded-lg shadow-card p-6">
+      <FieldPanel conditionType="target">
         <StockCount
           selectedCount={finalSelectedCount}
           totalCount={totalStockCount}
@@ -224,14 +225,14 @@ export default function TargetSelectionTab() {
           onToggleIndustry={toggleIndustry}
           onToggleAllIndustries={toggleAllIndustries}
         />
-      </div>
+      </FieldPanel>
 
       {/* 종목 검색 및 테이블 */}
-      <div className="bg-bg-surface rounded-lg shadow-card p-6">
-        <h3 className="text-lg font-semibold mb-4">종목 검색</h3>
+      <FieldPanel conditionType="target">
+        <Title variant="subtitle">종목 검색</Title>
 
         {/* 검색 입력 */}
-        <div className="mb-4">
+        <div className="my-4">
           <input
             type="text"
             value={searchQuery}
@@ -313,7 +314,7 @@ export default function TargetSelectionTab() {
             </div>
           </div>
         )}
-      </div>
+      </FieldPanel>
 
       {/* 에러 메시지 */}
       {error && (
@@ -327,11 +328,10 @@ export default function TargetSelectionTab() {
         <button
           onClick={handleStartBacktest}
           disabled={isRunning}
-          className={`px-12 py-4 rounded-lg text-lg font-bold transition-opacity ${
-            isRunning
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-accent-primary text-white hover:opacity-90"
-          }`}
+          className={`px-12 py-4 rounded-lg text-lg font-bold transition-opacity ${isRunning
+            ? "bg-gray-400 cursor-not-allowed"
+            : "bg-accent-primary text-white hover:opacity-90"
+            }`}
         >
           {isRunning ? "백테스트 실행 중..." : "백테스트 시작하기"}
         </button>

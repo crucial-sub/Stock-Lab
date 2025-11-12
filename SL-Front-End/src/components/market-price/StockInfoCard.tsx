@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { companyApi, CompanyInfoResponse } from "@/lib/api/company";
+import { StockPriceChart } from "./StockPriceChart";
 
 interface StockInfoCardProps {
   name: string;
@@ -17,6 +18,17 @@ const periodTabs = [
   "2년",
   "3년",
 ];
+
+/**
+ * 기간 텍스트를 일 단위 숫자로 변환
+ */
+function periodToDays(period: string): number {
+  if (period.includes("년")) {
+    const years = parseInt(period);
+    return years * 365;
+  }
+  return parseInt(period);
+}
 
 export function StockInfoCard({ name, code }: StockInfoCardProps) {
   const [activePeriod, setActivePeriod] = useState(periodTabs[0]);
@@ -40,11 +52,7 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
   }, [code]);
 
   if (loading || !companyData) {
-    return (
-      <article className="flex flex-col gap-[1.25rem] bg-white p-[2rem] text-text-strong">
-        <p className="text-center text-text-muted">로딩 중...</p>
-      </article>
-    );
+    return <StockInfoSkeleton />;
   }
 
   const { basicInfo, investmentIndicators } = companyData;
@@ -134,7 +142,11 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
           );
         })}
       </div>
-      <GraphPlaceholder />
+      <StockPriceChart
+        data={companyData.priceHistory}
+        period={periodToDays(activePeriod)}
+        isRising={(basicInfo.changevs1d || 0) >= 0}
+      />
       <Divider />
       <p className="text-[1rem] text-start font-semibold">
         주가가 일주일 전에 비해{" "}
@@ -230,22 +242,6 @@ function Divider() {
   );
 }
 
-function GraphPlaceholder() {
-  return (
-    <svg viewBox="0 0 400 100" className="h-32 w-full" role="img" aria-label="주가 추세 그래프">
-      <rect width="100%" height="100%" fill="#FFFFFF" />
-      <path
-        d="M0 60 Q20 50, 40 55 T80 50 T120 52 T160 58 T200 40 T240 35 T280 50 T320 70 T360 80 T400 90"
-        fill="none"
-        stroke="#FF6464"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <line x1="0" y1="95" x2="400" y2="95" stroke="#FF6464" strokeDasharray="4 4" strokeWidth="1" />
-    </svg>
-  );
-}
 
 interface SectionHeaderProps {
   title: string;
@@ -308,5 +304,82 @@ function DiagnosisCircle({ score, delta }: DiagnosisCircleProps) {
         <p className="text-[0.8rem] font-normal text-text-muted">전일 대비 {delta}점</p>
       </div>
     </div>
+  );
+}
+
+/**
+ * 스켈레톤 UI - 데이터 로딩 중에도 실제 콘텐츠와 비슷한 크기의 뼈대를 표시
+ */
+function StockInfoSkeleton() {
+  return (
+    <article className="flex flex-col gap-[1.25rem] bg-white p-[2rem] text-text-strong w-[600px]">
+      {/* 헤더 스켈레톤 */}
+      <header className="text-start">
+        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-2" />
+        <div className="h-8 w-48 bg-gray-300 rounded animate-pulse mb-2" />
+        <div className="h-8 w-40 bg-gray-300 rounded animate-pulse mb-1" />
+        <div className="h-6 w-36 bg-gray-200 rounded animate-pulse mb-1" />
+        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
+      </header>
+
+      {/* 기간 탭 스켈레톤 */}
+      <div className="flex flex-wrap justify-center gap-3">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="h-8 w-16 bg-gray-200 rounded-[8px] animate-pulse" />
+        ))}
+      </div>
+
+      {/* 그래프 스켈레톤 */}
+      <div className="h-32 w-full bg-gray-100 rounded animate-pulse" />
+
+      <Divider />
+
+      {/* 주가 변동 텍스트 스켈레톤 */}
+      <div className="h-6 w-full bg-gray-200 rounded animate-pulse" />
+
+      {/* 가격 변동 통계 스켈레톤 */}
+      <div className="grid md:grid-cols-3 pt-[0.5rem] gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="flex flex-col gap-1">
+            <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+            <div className="h-6 w-32 bg-gray-300 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      <Divider />
+
+      {/* 종목 진단 점수 스켈레톤 */}
+      <section className="rounded-[8px] bg-white">
+        <div className="h-7 w-40 bg-gray-300 rounded animate-pulse mb-4" />
+        <div className="py-[1rem] flex items-center justify-center">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </section>
+
+      <Divider />
+
+      {/* 개요 스켈레톤 */}
+      <section className="rounded-[8px]">
+        <div className="h-7 w-24 bg-gray-300 rounded animate-pulse mb-2" />
+        <div className="h-4 w-full bg-gray-200 rounded animate-pulse mb-4" />
+        <div className="grid md:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex flex-col gap-1">
+              <div className="h-4 w-16 bg-gray-200 rounded animate-pulse" />
+              <div className="h-6 w-24 bg-gray-300 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <Divider />
+
+      {/* 수급점수 스켈레톤 */}
+      <section className="pt-[1rem]">
+        <div className="h-7 w-32 bg-gray-300 rounded animate-pulse mb-2" />
+        <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+      </section>
+    </article>
   );
 }

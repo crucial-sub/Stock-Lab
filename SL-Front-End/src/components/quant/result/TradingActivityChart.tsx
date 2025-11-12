@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import * as am5 from "@amcharts/amcharts5";
-import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
+import * as am5xy from "@amcharts/amcharts5/xy";
+import { useEffect, useRef } from "react";
 
 /**
  * 매수/매도 활동 차트 컴포넌트

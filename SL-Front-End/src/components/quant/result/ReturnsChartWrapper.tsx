@@ -1,7 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import type { BacktestResult } from "@/types/api";
+import dynamic from "next/dynamic";
 
 /**
  * ReturnsChart를 dynamic import로 감싸는 래퍼 컴포넌트

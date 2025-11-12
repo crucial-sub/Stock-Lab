@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+import { Dropdown, Title } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
-import { SectionHeader, ToggleSwitch } from "../common";
+import { useEffect, useState } from "react";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
+import { ToggleSwitch, UnderlineInput } from "@/components/common";
+import ActivateConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 
 /**
  * 보유 기간 섹션
@@ -46,67 +49,80 @@ export function HoldPeriodSection() {
   ]);
 
   return (
-    <div className="space-y-3">
+    <div id="section-hold-period" className="space-y-3">
       <SectionHeader
         title="보유 기간"
-        description="최소 보유일 만큼 시 매수 후 일정 기간 이상 매매 어떤 상황에도 매도되지 않습니다. 최대 보유일 경과 시 매매 주 후에도 주문을 합니다."
+        description="최소 보유일 입력 시 매수 후 입력 기간 동안 어떤 상황에도 매도하지 않고, 최대 보유일 입력 시 매수 후 입력 기간 후 매도 주문을 합니다."
         action={<ToggleSwitch checked={isOpen} onChange={setIsOpen} />}
       />
 
-      {isOpen && (
-        <div className="bg-bg-surface rounded-lg shadow-card p-6 border-l-4 border-accent-secondary">
-          <div className="flex items-center gap-6">
+      {isOpen ? (
+        <FieldPanel conditionType="sell">
+          <div className="grid grid-cols-[128fr_128fr_344fr] gap-x-[3.75rem]">
             {/* 최소 종목 보유일 */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+            <div className="flex flex-col justify-center gap-3">
+              <Title variant="subtitle" className="mb-3">
                 최소 종목 보유일
-              </span>
-              <input
-                type="number"
-                value={minHoldDays}
-                onChange={(e) => setMinHoldDays(Number(e.target.value))}
-                className="w-24 px-3 py-2 bg-transparent border border-border-default rounded-sm text-text-strong"
-              />
-              <span className="text-sm text-text-body">일</span>
+              </Title>
+              <div className="relative max-w-32">
+                <UnderlineInput
+                  value={minHoldDays}
+                  onChange={(e) => setMinHoldDays(Number(e.target.value))}
+                  className="!h-full"
+                />
+                <span className="absolute right-0 top-[5px]">
+                  일
+                </span>
+              </div>
             </div>
 
             {/* 최대 종목 보유일 */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+            <div className="flex flex-col justify-center gap-3">
+              <Title variant="subtitle" className="mb-3">
                 최대 종목 보유일
-              </span>
-              <input
-                type="number"
-                value={maxHoldDays}
-                onChange={(e) => setMaxHoldDays(Number(e.target.value))}
-                className="w-24 px-3 py-2 bg-transparent border border-border-default rounded-sm text-text-strong"
-              />
-              <span className="text-sm text-text-body">일</span>
+              </Title>
+              <div className="relative max-w-32">
+                <UnderlineInput
+                  value={maxHoldDays}
+                  onChange={(e) => setMaxHoldDays(Number(e.target.value))}
+                  className="!h-full"
+                />
+                <span className="absolute right-0 top-[5px]">
+                  일
+                </span>
+              </div>
             </div>
 
             {/* 매도 가격 기준 */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-text-strong whitespace-nowrap">
+            <div className="flex flex-col justify-center gap-3">
+              <Title variant="subtitle" className="mb-3">
                 매도 가격 기준
-              </span>
-              <select
-                value={sellPriceBasis}
-                onChange={(e) => setSellPriceBasis(e.target.value)}
-                className="px-3 py-2 bg-transparent border border-border-default rounded-sm text-text-strong appearance-none cursor-pointer"
-              >
-                <option value="전일 종가">전일 종가</option>
-                <option value="당일 시가">당일 시가</option>
-              </select>
-              <input
-                type="number"
-                value={sellPriceOffset}
-                onChange={(e) => setSellPriceOffset(Number(e.target.value))}
-                className="w-24 px-3 py-2 bg-transparent border border-border-default rounded-sm text-text-strong"
-              />
-              <span className="text-sm text-text-body">%</span>
+              </Title>
+              <div className="flex gap-4">
+                <Dropdown
+                  value={sellPriceBasis}
+                  onChange={setSellPriceBasis}
+                  options={[
+                    { value: "전일 종가", label: "전일 종가" },
+                    { value: "당일 시가", label: "당일 시가" },
+                  ]}
+                />
+                <div className="relative">
+                  <UnderlineInput
+                    value={sellPriceOffset}
+                    onChange={(e) => setSellPriceOffset(Number(e.target.value))}
+                    className=" !h-full"
+                  />
+                  <span className="absolute right-0 top-[5px]">
+                    %
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </FieldPanel>
+      ) : (
+        <ActivateConditionBtn checked={isOpen} onChange={setIsOpen} />
       )}
     </div>
   );

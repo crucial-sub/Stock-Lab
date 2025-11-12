@@ -20,13 +20,13 @@ import { lazy, Suspense } from "react";
  * - lazy loading으로 필요할 때만 로드하여 초기 로딩 속도 대폭 개선
  */
 const BuyConditionTab = lazy(
-  () => import("@/components/quant/BuyConditionTab"),
+  () => import("@/components/quant/tabs/BuyConditionTab"),
 );
 const SellConditionTab = lazy(
-  () => import("@/components/quant/SellConditionTab"),
+  () => import("@/components/quant/tabs/SellConditionTab"),
 );
 const TargetSelectionTab = lazy(
-  () => import("@/components/quant/TargetSelectionTab"),
+  () => import("@/components/quant/tabs/TargetSelectionTab"),
 );
 
 /**
@@ -63,9 +63,11 @@ export function QuantNewPageClient() {
           </div>
         }
       >
-        {activeTab === "buy" && <BuyConditionTab />}
-        {activeTab === "sell" && <SellConditionTab />}
-        {activeTab === "target" && <TargetSelectionTab />}
+        <div className="pb-12">
+          {activeTab === "buy" && <BuyConditionTab />}
+          {activeTab === "sell" && <SellConditionTab />}
+          {activeTab === "target" && <TargetSelectionTab />}
+        </div>
       </Suspense>
     </div>
   );

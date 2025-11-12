@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { Title, ToggleSwitch, UnderlineInput } from "@/components/common";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
+import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { useBacktestConfigStore } from "@/stores";
-import { SectionHeader, ToggleSwitch } from "../common";
+import { useEffect, useState } from "react";
 
 /**
  * 목표가 / 손절가 섹션
@@ -44,67 +46,73 @@ export function TargetLossSection() {
   ]);
 
   return (
-    <div className="space-y-3">
+    <div id="section-target-loss" className="space-y-3">
       <SectionHeader
         title="목표가 / 손절가"
-        description="설사리 감사에 따라 목표 기준에서의 매수가 / 손절가에 도달 시 매도 주문을 합니다."
+        description="실시간 감시에 따라 일정 기준에서의 목표가 / 손절가에 도달 시 매도 주문을 합니다."
         action={
           <ToggleSwitch checked={isOpen} onChange={setIsOpen} />
         }
       />
 
-      {isOpen && (
-        <div className="bg-bg-surface rounded-lg shadow-card p-6 border-l-4 border-accent-secondary">
+      {isOpen ? (
+        <FieldPanel conditionType="sell">
           <div className="grid grid-cols-2 gap-6">
             {/* 목표가 */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <h4 className="text-base font-semibold text-text-strong">
-                  목표가
-                </h4>
+            <div className="space-y-2">
+              <div className="flex items-center gap-5">
+                <Title variant="subtitle">목표가</Title>
                 <ToggleSwitch
                   checked={profitTargetEnabled}
                   onChange={setProfitTargetEnabled}
                 />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-text-body">매수가 대비</span>
-                <input
-                  type="number"
-                  value={targetGain}
-                  onChange={(e) => setTargetGain(Number(e.target.value))}
-                  disabled={!profitTargetEnabled}
-                  className="w-24 px-3 py-2 border border-border-default rounded-sm text-text-strong disabled:opacity-50"
-                />
-                <span className="text-sm text-text-body">% 상승 시 매도 주문</span>
+                <span className={`${profitTargetEnabled ? "" : "text-tag-neutral"}`}>매수가 대비</span>
+                <div className="relative">
+                  <UnderlineInput
+                    value={targetGain}
+                    onChange={(e) => setTargetGain(Number(e.target.value))}
+                    className="w-[3.75rem] !h-full"
+                    disabled={!profitTargetEnabled}
+                  />
+                  <span className={`absolute right-0 top-0 ${profitTargetEnabled ? "" : "text-tag-neutral"}`}>
+                    %
+                  </span>
+                </div>
+                <span className={`${profitTargetEnabled ? "" : "text-tag-neutral"}`}>상승 시 매도 주문</span>
               </div>
             </div>
 
             {/* 손절가 */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <h4 className="text-base font-semibold text-text-strong">
-                  손절가
-                </h4>
+            <div className="space-y-2">
+              <div className="flex items-center gap-5">
+                <Title variant="subtitle">손절가</Title>
                 <ToggleSwitch
                   checked={stopLossEnabled}
                   onChange={setStopLossEnabled}
                 />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-text-body">매수가 대비</span>
-                <input
-                  type="number"
-                  value={stopLoss}
-                  onChange={(e) => setStopLoss(Number(e.target.value))}
-                  disabled={!stopLossEnabled}
-                  className="w-24 px-3 py-2 border border-border-default rounded-sm text-text-strong disabled:opacity-50"
-                />
-                <span className="text-sm text-text-body">% 하락 시 매도 주문</span>
+                <span className={`${stopLossEnabled ? "" : "text-tag-neutral"}`}>매수가 대비</span>
+                <div className="relative">
+                  <UnderlineInput
+                    value={stopLoss}
+                    onChange={(e) => setStopLoss(Number(e.target.value))}
+                    className="w-[3.75rem] !h-full"
+                    disabled={!stopLossEnabled}
+                  />
+                  <span className={`absolute right-0 top-[5px] ${stopLossEnabled ? "" : "text-tag-neutral"}`}>
+                    %
+                  </span>
+                </div>
+                <span className={`${stopLossEnabled ? "" : "text-tag-neutral"}`}>% 하락 시 매도 주문</span>
               </div>
             </div>
           </div>
-        </div>
+        </FieldPanel>
+      ) : (
+        <ActiveConditionBtn checked={isOpen} onChange={setIsOpen} />
       )}
     </div>
   );

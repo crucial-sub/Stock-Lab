@@ -1,12 +1,12 @@
 ﻿"use client";
 
-import { useMemo, useState, useEffect } from "react";
 import type { NextPage } from "next";
+import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
 import { NewsDetailModal } from "@/components/news/NewsDetailModal";
-import { useDebounce, useNewsDetailQuery, useNewsListQuery, useAvailableThemesQuery } from "@/hooks";
+import { useAvailableThemesQuery, useDebounce, useNewsDetailQuery, useNewsListQuery } from "@/hooks";
 import type { NewsListParams } from "@/types/news";
 
 const NewsPage: NextPage = () => {
@@ -18,6 +18,13 @@ const NewsPage: NextPage = () => {
 
   const debouncedKeyword = useDebounce(keyword, 300);
 
+  // React Compiler가 자동으로 메모이제이션 처리
+  const themes = selectedThemes.includes("전체") ? [] : selectedThemes;
+  const newsParams: NewsListParams = {
+    keyword: debouncedKeyword || undefined,
+    themes: themes.length ? themes : undefined,
+    filter,
+  };
   // Fetch available themes from database
   const { data: availableThemes = [] } = useAvailableThemesQuery();
 
@@ -27,15 +34,6 @@ const NewsPage: NextPage = () => {
       setDisplayThemes(["전체", ...availableThemes]);
     }
   }, [availableThemes]);
-
-  const newsParams: NewsListParams = useMemo(() => {
-    const themes = selectedThemes.includes("전체") ? [] : selectedThemes;
-    return {
-      keyword: debouncedKeyword || undefined,
-      themes: themes.length ? themes : undefined,
-      filter,
-    };
-  }, [debouncedKeyword, selectedThemes, filter]);
 
   const {
     data: newsList = [],
@@ -99,11 +97,10 @@ const NewsPage: NextPage = () => {
               key={theme}
               type="button"
               onClick={() => handleToggleTheme(theme)}
-              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${
-                isActive
-                  ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
-                  : "border-border-default bg-white text-text-body"
-              }`}
+              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${isActive
+                ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
+                : "border-border-default bg-white text-text-body"
+                }`}
             >
               {theme}
             </button>

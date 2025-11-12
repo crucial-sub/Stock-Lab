@@ -1,3 +1,5 @@
+import { Title } from "@/components/common";
+
 /**
  * 매매 대상 헤더 섹션
  * - 제목 및 선택된 종목 수 표시
@@ -12,13 +14,10 @@ export function TradeTargetHeader({
   totalCount,
 }: TradeTargetHeaderProps) {
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-text-strong mb-2">
-        매매 대상 설정
-      </h2>
-      <p className="text-sm text-text-body">
-        매매할 대상을 선택합니다. 여러 대상을 한번에길 있는 종목을 배제할 수도
-        있고 종목별로 배제할 수도 있습니다.
+    <div className="flex gap-3">
+      <Title>매매 대상 설정</Title>
+      <p className="text-[0.75rem] self-end mb-1">
+        매매할 대상을 선정합니다. 매매 대상에 포함되지 않는 종목은 매수 조건을 충족했을 때도 매매르 하지 않습니다.
       </p>
     </div>
   );
@@ -32,12 +31,13 @@ export function StockCount({
   totalCount,
 }: TradeTargetHeaderProps) {
   return (
-    <div className="mb-4">
-      <span className="text-lg font-bold text-text-strong">매매 대상 종목</span>
-      <span className="ml-3 text-accent-primary font-bold">
-        {selectedCount} 종목 / {totalCount} 종목
+    <div className="flex items-end mb-5">
+      <Title variant="subtitle">매매 대상 종목</Title>
+      <span className="text-[1.25rem] ml-3 text-brand-primary font-semibold">
+        {selectedCount} 종목
       </span>
-      <span className="ml-2 text-sm text-text-body">(선택 / 전체)</span>
+      <span className="text-[1.25rem] font-semibold">/ {totalCount} 종목</span>
+      <span className="ml-1 mb-1 text-[0.75rem] ">(선택 / 전체)</span>
     </div>
   );
 }

@@ -91,9 +91,8 @@ export function BacktestLoadingState({
               <div className="text-sm text-text-body mb-1">누적 수익률</div>
               {currentReturn !== undefined && currentReturn !== null ? (
                 <div
-                  className={`text-2xl font-bold ${
-                    currentReturn >= 0 ? "text-red-500" : "text-blue-500"
-                  }`}
+                  className={`text-2xl font-bold ${currentReturn >= 0 ? "text-red-500" : "text-blue-500"
+                    }`}
                 >
                   {currentReturn > 0 ? "+" : ""}
                   {currentReturn.toFixed(2)}%
@@ -109,9 +108,8 @@ export function BacktestLoadingState({
             <div className="text-center">
               <div className="text-sm text-text-body mb-1">MDD</div>
               {currentMdd !== undefined && currentMdd !== null ? (
-                <div className={`text-2xl font-bold ${
-                  currentMdd >= 0 ? "text-accent-error" : "text-blue-500"
-                }`}>
+                <div className={`text-2xl font-bold ${currentMdd >= 0 ? "text-accent-error" : "text-blue-500"
+                  }`}>
                   {currentMdd.toFixed(2)}%
                 </div>
               ) : (

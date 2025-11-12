@@ -12,21 +12,21 @@
  * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
-import { useState, useEffect, useRef } from "react";
-import { useBacktestResultQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
-import { useQueryClient } from "@tanstack/react-query";
-import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
+import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
-import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
 import { SettingsTab } from "@/components/quant/result/SettingsTab";
+import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
+import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import {
   PageHeader,
-  TabNavigation,
   StatisticsSection,
+  TabNavigation,
 } from "@/components/quant/result/sections";
-import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
-import type { BacktestRunRequest } from "@/types/api";
+import { useBacktestResultQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
 import { mockBacktestResult } from "@/mocks/backtestResult";
+import type { BacktestRunRequest } from "@/types/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 
 interface QuantResultPageClientProps {
   backtestId: string;

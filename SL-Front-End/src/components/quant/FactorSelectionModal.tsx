@@ -4,6 +4,7 @@ import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import type { Factor, SubFactor } from "@/types/api";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 interface FactorSelectionModalProps {
   isOpen: boolean;
@@ -38,6 +39,9 @@ export function FactorSelectionModal({
   const [selectedArgument, setSelectedArgument] = useState<string>("");
 
   if (!isOpen) return null;
+
+  // SSR 환경에서 document가 없을 수 있음
+  if (typeof window === 'undefined') return null;
 
   // 카테고리별로 팩터 그룹화
   const groupedFactors = factors.reduce((acc, factor) => {
@@ -119,13 +123,15 @@ export function FactorSelectionModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center"
+      style={{ zIndex: 99999 }}
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-lg shadow-2xl w-[700px] max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-lg shadow-2xl w-[700px] max-h-[90vh] overflow-hidden flex flex-col relative"
+        style={{ zIndex: 100000 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 모달 헤더 */}
@@ -325,6 +331,7 @@ export function FactorSelectionModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

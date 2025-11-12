@@ -979,30 +979,135 @@ async def get_backtest_trades(
 async def list_backtests(
     limit: int = 10,
     offset: int = 0,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """백테스트 목록 조회"""
-    query = (
-        select(SimulationSession)
-        .order_by(SimulationSession.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    result = await db.execute(query)
-    sessions = result.scalars().all()
+    """
+    로그인된 사용자의 백테스트(전략) 목록 조회
+    - JWT 토큰으로 인증된 사용자의 portfolio_strategies만 조회
+    - 페이지네이션 지원
+    """
+    try:
+        # 1. 사용자의 전략 조회 (portfolio_strategies 테이블 기준)
+        strategies_query = (
+            select(PortfolioStrategy)
+            .where(PortfolioStrategy.user_id == current_user.user_id)
+            .order_by(PortfolioStrategy.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        strategies_result = await db.execute(strategies_query)
+        strategies = strategies_result.scalars().all()
 
-    return [
-        {
-            "backtest_id": s.session_id,
-            "status": s.status.lower() if s.status else "pending",
-            "progress": s.progress or 0,
-            "start_date": s.start_date.isoformat(),
-            "end_date": s.end_date.isoformat(),
-            "created_at": s.created_at,
-            "completed_at": s.completed_at
+        # 2. 각 전략에 대한 가장 최근 백테스트 세션 조회
+        response_data = []
+        for strategy in strategies:
+            # 해당 전략의 가장 최근 완료된 백테스트 세션 조회
+            session_query = (
+                select(SimulationSession)
+                .where(
+                    and_(
+                        SimulationSession.strategy_id == strategy.strategy_id,
+                        SimulationSession.status == "COMPLETED"
+                    )
+                )
+                .order_by(SimulationSession.created_at.desc())
+                .limit(1)
+            )
+            session_result = await db.execute(session_query)
+            latest_session = session_result.scalar_one_or_none()
+
+            # BacktestSession도 확인 (새로운 백테스트)
+            backtest_query = (
+                select(BacktestSession)
+                .where(BacktestSession.strategy_id == strategy.strategy_id)
+                .order_by(BacktestSession.created_at.desc())
+                .limit(1)
+            )
+            backtest_result = await db.execute(backtest_query)
+            latest_backtest = backtest_result.scalar_one_or_none()
+
+            # 통계 조회 (SimulationStatistics 또는 BacktestStatistics)
+            cumulative_return = 0.0
+            max_drawdown = 0.0
+            daily_return = 0.0
+
+            if latest_backtest:
+                # BacktestStatistics에서 조회
+                from app.models.backtest import BacktestStatistics as NewBacktestStatistics
+                stats_query = select(NewBacktestStatistics).where(
+                    NewBacktestStatistics.backtest_id == latest_backtest.backtest_id
+                )
+                stats_result = await db.execute(stats_query)
+                stats = stats_result.scalar_one_or_none()
+
+                if stats:
+                    cumulative_return = float(stats.total_return) if stats.total_return else 0.0
+                    max_drawdown = float(stats.max_drawdown) if stats.max_drawdown else 0.0
+                    # 일평균 수익률 = 연환산 수익률 / 252
+                    daily_return = float(stats.annualized_return / 252) if stats.annualized_return else 0.0
+
+                response_data.append({
+                    "id": latest_backtest.backtest_id,
+                    "strategy_name": strategy.strategy_name,
+                    "daily_return": round(daily_return, 2),
+                    "cumulative_return": round(cumulative_return, 2),
+                    "max_drawdown": round(max_drawdown, 2),
+                    "created_at": latest_backtest.created_at.strftime("%Y.%m.%d") if latest_backtest.created_at else ""
+                })
+            elif latest_session:
+                # SimulationStatistics에서 조회
+                stats_query = select(SimulationStatistics).where(
+                    SimulationStatistics.session_id == latest_session.session_id
+                )
+                stats_result = await db.execute(stats_query)
+                stats = stats_result.scalar_one_or_none()
+
+                if stats:
+                    cumulative_return = float(stats.total_return) if stats.total_return else 0.0
+                    max_drawdown = float(stats.max_drawdown) if stats.max_drawdown else 0.0
+                    daily_return = float(stats.annualized_return / 252) if stats.annualized_return else 0.0
+
+                response_data.append({
+                    "id": latest_session.session_id,
+                    "strategy_name": strategy.strategy_name,
+                    "daily_return": round(daily_return, 2),
+                    "cumulative_return": round(cumulative_return, 2),
+                    "max_drawdown": round(max_drawdown, 2),
+                    "created_at": latest_session.created_at.strftime("%Y.%m.%d") if latest_session.created_at else ""
+                })
+            else:
+                # 백테스트 세션이 없는 경우 (전략만 생성됨)
+                response_data.append({
+                    "id": strategy.strategy_id,
+                    "strategy_name": strategy.strategy_name,
+                    "daily_return": 0.0,
+                    "cumulative_return": 0.0,
+                    "max_drawdown": 0.0,
+                    "created_at": strategy.created_at.strftime("%Y.%m.%d") if strategy.created_at else ""
+                })
+
+        # 전체 개수 조회
+        count_query = (
+            select(func.count(PortfolioStrategy.strategy_id))
+            .where(PortfolioStrategy.user_id == current_user.user_id)
+        )
+        count_result = await db.execute(count_query)
+        total_count = count_result.scalar()
+
+        return {
+            "data": response_data,
+            "pagination": {
+                "page": (offset // limit) + 1,
+                "limit": limit,
+                "total": total_count,
+                "total_pages": (total_count + limit - 1) // limit
+            }
         }
-        for s in sessions
-    ]
+
+    except Exception as e:
+        logger.error(f"전략 목록 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 async def execute_backtest_wrapper(

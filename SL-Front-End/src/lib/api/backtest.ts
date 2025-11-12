@@ -55,9 +55,9 @@ export async function getBacktestResult(
 }
 
 /**
- * 백테스트 목록 조회
- * - GET /backtest
- * - 사용자의 백테스트 목록을 조회합니다
+ * 백테스트(전략) 목록 조회
+ * - GET /backtest/list
+ * - 로그인된 사용자의 portfolio_strategies 목록을 조회합니다
  *
  * @param params - 페이지네이션 파라미터
  * @param isServer - 서버 사이드 요청 여부
@@ -70,7 +70,7 @@ export async function getBacktestList(
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
   const response = await axios.get<PaginatedResponse<BacktestResult>>(
-    "/backtest",
+    "/backtest/list",
     { params },
   );
   return response.data;

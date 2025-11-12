@@ -145,6 +145,19 @@ export interface BacktestStatus {
   currentReturn?: number;
   currentCapital?: number;
   currentMdd?: number;
+  startDate?: string;
+  endDate?: string;
+  yieldPoints?: Array<{
+    date: string;
+    buyCount?: number;
+    sellCount?: number;
+    cumulativeReturn?: number;
+    portfolioValue?: number;
+    cash?: number;
+    positionValue?: number;
+    dailyReturn?: number;
+    value?: number;
+  }>;
 }
 
 export async function getBacktestStatus(backtestId: string): Promise<BacktestStatus> {

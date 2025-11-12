@@ -189,6 +189,8 @@ class BacktestEngine:
         self.max_buy_value = Decimal(str(max_buy_value)) if max_buy_value else None
         self.max_daily_stock = max_daily_stock
 
+        logger.info(f"💰 거래 비용 설정 - 수수료: {self.commission_rate*100:.3f}%, 거래세: 0.23%, 슬리피지: {self.slippage*100:.2f}%")
+
         # 매도 조건 저장
         self.target_and_loss = None
         if target_and_loss:
@@ -196,6 +198,10 @@ class BacktestEngine:
                 "target_gain": Decimal(str(target_and_loss.get('target_gain'))) if target_and_loss.get('target_gain') is not None else None,
                 "stop_loss": Decimal(str(target_and_loss.get('stop_loss'))) if target_and_loss.get('stop_loss') is not None else None
             }
+            logger.info(f"🎯 목표가/손절가 설정 확인: 입력값={target_and_loss}")
+            logger.info(f"🎯 목표가/손절가 파싱 결과: 목표가={self.target_and_loss.get('target_gain')}%, 손절가={self.target_and_loss.get('stop_loss')}%")
+        else:
+            logger.info(f"⚠️ 목표가/손절가 설정 없음: target_and_loss={target_and_loss}")
 
         self.hold_days = None
         if hold_days:
@@ -246,7 +252,29 @@ class BacktestEngine:
                     self.exp_right_side = exp_right_side
 
             backtest_conditions = []
-            if isinstance(buy_conditions, list):
+
+            # buy_conditions가 딕셔너리 형식인 경우 (새로운 형식)
+            if isinstance(buy_conditions, dict) and 'conditions' in buy_conditions:
+                conditions_list = buy_conditions.get('conditions', [])
+                for cond in conditions_list:
+                    if isinstance(cond, dict):
+                        if 'factor' in cond:
+                            exp_left_side = f"기본값({{{cond['factor']}}})"
+                            inequality = cond.get('operator', '>')
+                            exp_right_side = cond.get('value', 0)
+                        else:
+                            exp_left_side = cond.get('exp_left_side', '')
+                            inequality = cond.get('inequality', '')
+                            exp_right_side = cond.get('exp_right_side', 0)
+
+                        backtest_conditions.append(SimpleCondition(
+                            exp_left_side=exp_left_side,
+                            inequality=inequality,
+                            exp_right_side=exp_right_side
+                        ))
+
+            # buy_conditions가 리스트 형식인 경우 (기존 형식)
+            elif isinstance(buy_conditions, list):
                 for cond in buy_conditions:
                     if isinstance(cond, dict):
                         # Dict를 SimpleCondition 객체로 변환
@@ -596,45 +624,87 @@ class BacktestEngine:
 
         # 매수 조건에서 팩터 추출
         if buy_conditions:
-            for idx, condition in enumerate(buy_conditions):
-                logger.info(f"조건 {idx+1}: 타입={type(condition)}, 내용={condition}")
+            # buy_conditions가 딕셔너리일 경우 (새로운 형식)
+            if isinstance(buy_conditions, dict):
+                conditions_list = buy_conditions.get('conditions', [])
+                logger.info(f"딕셔너리 형식 감지 - conditions: {conditions_list}")
 
-                # 딕셔너리 또는 객체 둘 다 지원
-                if isinstance(condition, dict):
-                    exp_left = condition.get('exp_left_side', '')
-                    exp_right = condition.get('exp_right_side', '')
-                else:
-                    exp_left = getattr(condition, 'exp_left_side', '')
-                    exp_right = getattr(condition, 'exp_right_side', '')
+                for idx, condition in enumerate(conditions_list):
+                    logger.info(f"조건 {idx+1}: {condition}")
 
-                logger.info(f"  exp_left: '{exp_left}', exp_right: '{exp_right}'")
-
-                # 왼쪽 표현식에서 팩터 추출 (예: "기본값({PER})" -> "PER", "기본값({pbr})" -> "PBR")
-                left_match = re.findall(r'\{([^}]+)\}', exp_left)
-                logger.info(f"  left_match: {left_match}")
-
-                for match in left_match:
-                    # 괄호 안의 영문 코드 추출
-                    code_match = re.search(r'\(([A-Z_]+)\)', match)
-                    if code_match:
-                        factor_code = code_match.group(1)
+                    # 'factor' 필드에서 직접 팩터 추출
+                    if isinstance(condition, dict) and 'factor' in condition:
+                        factor_code = condition['factor'].upper()
                         required_factors.add(factor_code)
-                        logger.info(f"  추출된 팩터 (괄호): {factor_code}")
-                    else:
-                        # 소문자를 대문자로 변환
-                        factor_code = match.strip().upper()
-                        required_factors.add(factor_code)
-                        logger.info(f"  추출된 팩터 (직접): {factor_code}")
+                        logger.info(f"  추출된 팩터: {factor_code}")
 
-                # 오른쪽 표현식이 문자열인 경우에도 팩터 추출
-                if isinstance(exp_right, str):
-                    right_match = re.findall(r'\{([^}]+)\}', exp_right)
-                    for match in right_match:
-                        code_match = re.search(r'\(([A-Z_]+)\)', match)
-                        if code_match:
-                            required_factors.add(code_match.group(1))
+            # buy_conditions가 리스트일 경우 (기존 형식)
+            elif isinstance(buy_conditions, list):
+                for idx, condition in enumerate(buy_conditions):
+                    logger.info(f"조건 {idx+1}: 타입={type(condition)}, 내용={condition}")
+
+                    # 딕셔너리 또는 객체 둘 다 지원
+                    if isinstance(condition, dict):
+                        # 새로운 형식: 'factor' 필드 확인
+                        if 'factor' in condition:
+                            factor_code = condition['factor'].upper()
+                            required_factors.add(factor_code)
+                            logger.info(f"  추출된 팩터 (factor 필드): {factor_code}")
                         else:
-                            required_factors.add(match.strip().upper())
+                            # 기존 형식: exp_left_side, exp_right_side
+                            exp_left = condition.get('exp_left_side', '')
+                            exp_right = condition.get('exp_right_side', '')
+
+                            logger.info(f"  exp_left: '{exp_left}', exp_right: '{exp_right}'")
+
+                            # 왼쪽 표현식에서 팩터 추출
+                            left_match = re.findall(r'\{([^}]+)\}', exp_left)
+                            logger.info(f"  left_match: {left_match}")
+
+                            for match in left_match:
+                                code_match = re.search(r'\(([A-Z_]+)\)', match)
+                                if code_match:
+                                    factor_code = code_match.group(1)
+                                    required_factors.add(factor_code)
+                                    logger.info(f"  추출된 팩터 (괄호): {factor_code}")
+                                else:
+                                    factor_code = match.strip().upper()
+                                    required_factors.add(factor_code)
+                                    logger.info(f"  추출된 팩터 (직접): {factor_code}")
+
+                            # 오른쪽 표현식에서도 팩터 추출
+                            if isinstance(exp_right, str):
+                                right_match = re.findall(r'\{([^}]+)\}', exp_right)
+                                for match in right_match:
+                                    code_match = re.search(r'\(([A-Z_]+)\)', match)
+                                    if code_match:
+                                        required_factors.add(code_match.group(1))
+                                    else:
+                                        required_factors.add(match.strip().upper())
+                    else:
+                        exp_left = getattr(condition, 'exp_left_side', '')
+                        exp_right = getattr(condition, 'exp_right_side', '')
+
+                        logger.info(f"  exp_left: '{exp_left}', exp_right: '{exp_right}'")
+
+                        left_match = re.findall(r'\{([^}]+)\}', exp_left)
+                        for match in left_match:
+                            code_match = re.search(r'\(([A-Z_]+)\)', match)
+                            if code_match:
+                                factor_code = code_match.group(1)
+                                required_factors.add(factor_code)
+                            else:
+                                factor_code = match.strip().upper()
+                                required_factors.add(factor_code)
+
+                        if isinstance(exp_right, str):
+                            right_match = re.findall(r'\{([^}]+)\}', exp_right)
+                            for match in right_match:
+                                code_match = re.search(r'\(([A-Z_]+)\)', match)
+                                if code_match:
+                                    required_factors.add(code_match.group(1))
+                                else:
+                                    required_factors.add(match.strip().upper())
 
         # 우선순위 팩터 추가
         if priority_factor:
@@ -679,7 +749,8 @@ class BacktestEngine:
             logger.info("모든 팩터 계산 (조건 없음)")
             required_factors = {'PER', 'PBR', 'ROE', 'ROA', 'MOMENTUM_1M', 'MOMENTUM_3M',
                               'MOMENTUM_6M', 'MOMENTUM_12M', 'VOLATILITY_20D', 'VOLATILITY_60D',
-                              'VOLUME_RATIO_20D', 'TURNOVER_RATE_20D'}
+                              'VOLUME_RATIO_20D', 'TURNOVER_RATE_20D', 'BOLLINGER_POSITION',
+                              'BOLLINGER_WIDTH', 'RSI', 'MACD'}
 
         # Polars DataFrame으로 변환
         price_pl = pl.from_pandas(price_data)
@@ -811,6 +882,25 @@ class BacktestEngine:
                         self._merge_factor_maps(stock_factor_map, filtered_liquidity_map)
                     except Exception as e:
                         logger.error(f"유동성 팩터 계산 에러 ({calc_date}): {e}")
+
+                # 기술적 지표 팩터 (볼린저 밴드, RSI, MACD 등)
+                technical_factors = ['BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'RSI', 'MACD', 'MACD_SIGNAL', 'MACD_HISTOGRAM']
+                needs_technical = any(f in technical_factors for f in required_factors)
+                logger.info(f"🎯 기술적 지표 필요 여부: {needs_technical}, required_factors: {required_factors}")
+
+                if needs_technical:
+                    try:
+                        logger.info(f"🔧 기술적 지표 계산 시작 - 날짜: {calc_date}")
+                        technical_map = self._calculate_technical_indicators(price_until_date, calc_date)
+                        logger.info(f"✅ 기술적 지표 계산 완료 - {len(technical_map)}개 종목")
+
+                        filtered_technical_map = {}
+                        for stock, factors in technical_map.items():
+                            filtered_technical_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
+                        self._merge_factor_maps(stock_factor_map, filtered_technical_map)
+                        logger.info(f"✅ 기술적 지표 병합 완료")
+                    except Exception as e:
+                        logger.error(f"❌ 기술적 지표 팩터 계산 에러 ({calc_date}): {e}", exc_info=True)
 
                 # 결과 저장
                 for stock in todays_prices['stock_code'].unique():
@@ -1133,6 +1223,86 @@ class BacktestEngine:
                 listed_shares = stock_data.select('listed_shares').to_pandas().iloc[0, 0]
                 if avg_volume and listed_shares and listed_shares > 0:
                     entry['TURNOVER_RATE'] = float(avg_volume) / float(listed_shares) * 100
+
+        return factors
+
+    def _calculate_technical_indicators(self, price_pl: pl.DataFrame, calc_date) -> Dict[str, Dict[str, float]]:
+        """기술적 지표 계산 (볼린저 밴드, RSI, MACD 등)"""
+        factors: Dict[str, Dict[str, float]] = {}
+        lookback = 60  # 60일 데이터 필요 (볼린저 밴드 20일 + 여유)
+        past_date = calc_date - pd.Timedelta(days=lookback * 2)
+
+        period_prices = price_pl.filter(
+            (pl.col('date') >= past_date) &
+            (pl.col('date') <= calc_date)
+        )
+
+        if period_prices.is_empty():
+            return factors
+
+        for stock in period_prices.select('stock_code').unique().to_pandas()['stock_code']:
+            stock_data = period_prices.filter(pl.col('stock_code') == stock).sort('date')
+            if stock_data.is_empty():
+                continue
+
+            # Pandas로 변환하여 계산
+            stock_pd = stock_data.to_pandas()
+            if len(stock_pd) < 20:  # 최소 20일 데이터 필요
+                continue
+
+            entry = factors.setdefault(stock, {})
+
+            try:
+                # 볼린저 밴드 (20일 이동평균, 2 표준편차)
+                closes = stock_pd['close_price'].values
+                ma_20 = pd.Series(closes).rolling(window=20).mean()
+                std_20 = pd.Series(closes).rolling(window=20).std()
+
+                current_price = closes[-1]
+                current_ma = ma_20.iloc[-1]
+                current_std = std_20.iloc[-1]
+
+                if pd.notna(current_ma) and pd.notna(current_std) and current_std > 0:
+                    # 볼린저 밴드 포지션: -1 (하단) ~ 0 (중간) ~ 1 (상단)
+                    bollinger_position = (current_price - current_ma) / (2 * current_std)
+                    entry['BOLLINGER_POSITION'] = float(bollinger_position)
+
+                    # 볼린저 밴드 폭 (변동성 지표)
+                    bb_width = (4 * current_std) / current_ma * 100
+                    entry['BOLLINGER_WIDTH'] = float(bb_width)
+
+                # RSI (14일)
+                if len(closes) >= 14:
+                    delta = pd.Series(closes).diff()
+                    gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+
+                    current_gain = gain.iloc[-1]
+                    current_loss = loss.iloc[-1]
+
+                    if pd.notna(current_gain) and pd.notna(current_loss) and current_loss != 0:
+                        rs = current_gain / current_loss
+                        rsi = 100 - (100 / (1 + rs))
+                        entry['RSI'] = float(rsi)
+
+                # MACD (12, 26, 9)
+                if len(closes) >= 26:
+                    ema_12 = pd.Series(closes).ewm(span=12, adjust=False).mean()
+                    ema_26 = pd.Series(closes).ewm(span=26, adjust=False).mean()
+                    macd_line = ema_12 - ema_26
+                    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+
+                    current_macd = macd_line.iloc[-1]
+                    current_signal = signal_line.iloc[-1]
+
+                    if pd.notna(current_macd) and pd.notna(current_signal):
+                        entry['MACD'] = float(current_macd)
+                        entry['MACD_SIGNAL'] = float(current_signal)
+                        entry['MACD_HISTOGRAM'] = float(current_macd - current_signal)
+
+            except Exception as e:
+                logger.warning(f"기술적 지표 계산 실패 [{stock}]: {e}")
+                continue
 
         return factors
 
@@ -1461,7 +1631,7 @@ class BacktestEngine:
                     current_mdd = drawdown
                 # SimulationSession 업데이트
                 from sqlalchemy import update
-                from app.models.simulation import SimulationSession
+                from app.models.simulation import SimulationSession, SimulationDailyValue, SimulationTrade
 
                 stmt = (
                     update(SimulationSession)
@@ -1477,9 +1647,67 @@ class BacktestEngine:
                     )
                 )
                 await self.db.execute(stmt)
+
+                # 실시간 차트를 위해 현재까지의 일별 데이터를 DB에 저장
+                # 기존 데이터 삭제 후 재저장 (간단한 방식)
+                from sqlalchemy import delete
+                delete_stmt = delete(SimulationDailyValue).where(
+                    SimulationDailyValue.session_id == str(backtest_id)
+                )
+                await self.db.execute(delete_stmt)
+
+                # 현재까지의 모든 daily_snapshots를 DB에 저장
+                # daily_return과 cumulative_return 계산
+                prev_portfolio_value = None
+                for idx, snapshot in enumerate(daily_snapshots):
+                    portfolio_value = float(snapshot['portfolio_value'])
+
+                    # daily_return 계산
+                    if prev_portfolio_value is not None and prev_portfolio_value > 0:
+                        daily_ret = ((portfolio_value - prev_portfolio_value) / prev_portfolio_value) * 100
+                    else:
+                        daily_ret = 0.0
+
+                    # cumulative_return 계산
+                    cumulative_ret = ((portfolio_value - float(initial_capital)) / float(initial_capital)) * 100
+
+                    daily_value = SimulationDailyValue(
+                        session_id=str(backtest_id),
+                        date=snapshot['date'].date() if hasattr(snapshot['date'], 'date') else snapshot['date'],
+                        portfolio_value=portfolio_value,
+                        cash=float(snapshot['cash_balance']),
+                        position_value=float(snapshot['invested_amount']),
+                        daily_return=daily_ret,
+                        cumulative_return=cumulative_ret
+                    )
+                    self.db.add(daily_value)
+                    prev_portfolio_value = portfolio_value
+
+                # 현재까지의 거래 내역도 저장 (매수/매도 횟수 집계용)
+                delete_trades_stmt = delete(SimulationTrade).where(
+                    SimulationTrade.session_id == str(backtest_id)
+                )
+                await self.db.execute(delete_trades_stmt)
+
+                for execution in executions:
+                    trade = SimulationTrade(
+                        session_id=str(backtest_id),
+                        trade_date=execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
+                        stock_code=execution['stock_code'],
+                        trade_type=execution['trade_type'],  # BUY or SELL
+                        quantity=int(execution['quantity']),
+                        price=float(execution['price']),
+                        amount=float(execution['amount']),
+                        commission=float(execution['commission']),
+                        tax=float(execution.get('tax', 0)),
+                        realized_pnl=float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
+                        return_pct=float(execution.get('return_pct', 0)) if execution.get('return_pct') else None
+                    )
+                    self.db.add(trade)
+
                 await self.db.commit()
 
-                logger.info(f"📊 실시간 진행 상황 업데이트: {progress_percentage}% | 날짜: {trading_day.date()} | 매수: {daily_buy_count} | 매도: {daily_sell_count} | 수익률: {current_return:.2f}% | MDD: {current_mdd:.2f}%")
+                logger.info(f"📊 실시간 진행 상황 업데이트: {progress_percentage}% | 날짜: {trading_day.date()} | 매수: {daily_buy_count} | 매도: {daily_sell_count} | 수익률: {current_return:.2f}% | MDD: {current_mdd:.2f}% | daily_values: {len(daily_snapshots)}개 저장")
 
         # 백테스트 종료 시 모든 보유 종목 강제 매도
         if holdings:
@@ -1577,6 +1805,10 @@ class BacktestEngine:
         hold_cfg = self.hold_days or {}
         condition_sell_meta = self.condition_sell_meta
 
+        # 디버깅: 매도 로직 진입 시 설정 확인
+        if len(holdings) > 0:
+            logger.info(f"💼 [{trading_day}] 매도 체크 시작 - 보유 종목 수: {len(holdings)} | 목표가/손절가 설정: {target_cfg}")
+
         for stock_code, holding in list(holdings.items()):
             # 현재가 조회
             current_price_data = price_data[
@@ -1587,7 +1819,13 @@ class BacktestEngine:
             if current_price_data.empty:
                 continue
 
-            current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
+            # 일중 가격 데이터 (시가/고가/저가/종가)
+            row = current_price_data.iloc[0]
+            open_price = Decimal(str(row['open_price']))
+            high_price = Decimal(str(row['high_price']))
+            low_price = Decimal(str(row['low_price']))
+            close_price = Decimal(str(row['close_price']))
+            current_price = close_price  # 기본값은 종가
 
             # 매도 조건 체크
             should_sell = False
@@ -1605,19 +1843,40 @@ class BacktestEngine:
                 sell_reason_key = "hold"
 
             if not should_sell and target_cfg:
-                profit_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
                 target_gain = target_cfg.get('target_gain')
                 stop_loss = target_cfg.get('stop_loss')
 
-                if target_gain is not None and profit_rate >= target_gain:
-                    should_sell = True
-                    sell_reason = f"Take profit {profit_rate:.2f}%"
-                    sell_reason_key = "target"
+                # 일중 최고가 기준 목표가 체크
+                high_profit_rate = ((high_price / holding.entry_price) - Decimal("1")) * Decimal("100")
+                # 일중 최저가 기준 손절가 체크
+                low_profit_rate = ((low_price / holding.entry_price) - Decimal("1")) * Decimal("100")
+                # 종가 기준 수익률 (로깅용)
+                close_profit_rate = ((close_price / holding.entry_price) - Decimal("1")) * Decimal("100")
 
-                if not should_sell and stop_loss is not None and profit_rate <= -stop_loss:
+                # 디버깅: 일중 가격 범위 로그
+                logger.debug(f"📊 [{trading_day}] {stock_code} | 종가: {close_profit_rate:.2f}% | 고가: {high_profit_rate:.2f}% | 저가: {low_profit_rate:.2f}% | 목표: {target_gain}% | 손절: -{stop_loss}%")
+
+                # 손절가 우선 체크 (저가 기준)
+                if stop_loss is not None and low_profit_rate <= -stop_loss:
                     should_sell = True
-                    sell_reason = f"Stop loss {profit_rate:.2f}%"
+                    # 손절가에 정확히 매도된 것으로 간주
+                    target_stop_price = holding.entry_price * (Decimal("1") - stop_loss / Decimal("100"))
+                    current_price = target_stop_price
+                    actual_loss_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
+                    sell_reason = f"Stop loss {actual_loss_rate:.2f}%"
                     sell_reason_key = "stop"
+                    logger.info(f"🛑 손절가 매도: {stock_code} | 저가: {low_profit_rate:.2f}% | 손절가 도달 -> {actual_loss_rate:.2f}%에 매도")
+
+                # 목표가 체크 (고가 기준)
+                elif target_gain is not None and high_profit_rate >= target_gain:
+                    should_sell = True
+                    # 목표가에 정확히 매도된 것으로 간주
+                    target_gain_price = holding.entry_price * (Decimal("1") + target_gain / Decimal("100"))
+                    current_price = target_gain_price
+                    actual_profit_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
+                    sell_reason = f"Take profit {actual_profit_rate:.2f}%"
+                    sell_reason_key = "target"
+                    logger.info(f"🎯 목표가 매도: {stock_code} | 고가: {high_profit_rate:.2f}% | 목표가 도달 -> {actual_profit_rate:.2f}%에 매도")
 
             if not should_sell and not enforce_min_hold:
                 for condition in sell_conditions:
@@ -2232,6 +2491,16 @@ class BacktestEngine:
         days = (end_date - start_date).days
         years = days / 365.25
         annualized_return = ((final_value / float(initial_capital)) ** (1/years) - 1) * 100 if years > 0 else 0
+
+        # 거래 비용 계산
+        total_trades = len(executions)
+        total_commission = sum(float(t.get('commission', 0)) for t in executions)
+        total_tax = sum(float(t.get('tax', 0)) for t in executions)
+        total_costs = total_commission + total_tax
+
+        # 로깅: 수익률 계산 확인
+        logger.info(f"📊 수익률 계산: 기간={days}일({years:.2f}년) | 누적수익률={total_return:.2f}% | CAGR={annualized_return:.2f}% | MDD={max_drawdown:.2f}%")
+        logger.info(f"💸 거래 비용 분석: 총 거래={total_trades}회 | 수수료={total_commission:,.0f}원 | 거래세={total_tax:,.0f}원 | 총 비용={total_costs:,.0f}원 ({total_costs/float(initial_capital)*100:.2f}%)")
 
         # 변동성
         volatility = df['daily_return'].std() * np.sqrt(252) * 100 if not df['daily_return'].empty else 0

@@ -92,7 +92,7 @@ export function BacktestLoadingState({
               {currentReturn !== undefined && currentReturn !== null ? (
                 <div
                   className={`text-2xl font-bold ${
-                    currentReturn >= 0 ? "text-accent-error" : "text-blue-500"
+                    currentReturn >= 0 ? "text-red-500" : "text-blue-500"
                   }`}
                 >
                   {currentReturn > 0 ? "+" : ""}
@@ -163,7 +163,11 @@ export function BacktestLoadingState({
         {yieldPoints && yieldPoints.length > 0 && (
           <div className="bg-bg-surface rounded-lg shadow-card p-6">
             <h2 className="text-lg font-bold text-text-strong mb-4">매수/매도 활동</h2>
-            <TradingActivityChart yieldPoints={yieldPoints} />
+            <TradingActivityChart
+              yieldPoints={yieldPoints}
+              startDate={startDate}
+              endDate={endDate}
+            />
           </div>
         )}
       </div>

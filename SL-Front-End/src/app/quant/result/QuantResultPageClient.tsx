@@ -90,6 +90,7 @@ export function QuantResultPageClient({
 
   // 백테스트가 아직 실행 중인 경우
   if (!isMockMode && statusData && (statusData.status === "pending" || statusData.status === "running")) {
+    console.log("📊 백테스트 진행 중 - yieldPoints:", statusData.yieldPoints ? statusData.yieldPoints.length : 0);
     return (
       <BacktestLoadingState
         backtestId={backtestId}
@@ -197,6 +198,14 @@ export function QuantResultPageClient({
 
   const periodReturns = calculatePeriodReturns();
 
+  // 백테스트 시작/종료 날짜 추출 (yieldPoints의 첫 번째와 마지막 날짜)
+  const startDate = finalResult.yieldPoints && finalResult.yieldPoints.length > 0
+    ? finalResult.yieldPoints[0].date
+    : undefined;
+  const endDate = finalResult.yieldPoints && finalResult.yieldPoints.length > 0
+    ? finalResult.yieldPoints[finalResult.yieldPoints.length - 1].date
+    : undefined;
+
   return (
     <div className="min-h-screen bg-bg-app py-6 px-6">
       <div className="max-w-[1400px] mx-auto">
@@ -209,6 +218,8 @@ export function QuantResultPageClient({
           initialCapital={initialCapital}
           periodReturns={periodReturns}
           yieldPoints={finalResult.yieldPoints}
+          startDate={startDate}
+          endDate={endDate}
         />
 
         {/* 탭 네비게이션 */}

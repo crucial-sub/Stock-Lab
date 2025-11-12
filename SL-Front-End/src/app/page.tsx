@@ -1,4 +1,7 @@
+"use client";
+
 import type { NextPage } from "next";
+import { useEffect, useState } from "react";
 
 import { FeaturedStrategiesSection } from "@/components/home/FeaturedStrategiesSection";
 import type { MarketTickerCardProps } from "@/components/home/MarketTickerCard";
@@ -6,6 +9,8 @@ import type { NewsItem } from "@/components/home/NewsCard";
 import type { StrategyCardProps } from "@/components/home/StrategyCard";
 import { TodayMarketSection } from "@/components/home/TodayMarketSection";
 import { TodayNewsSection } from "@/components/home/TodayNewsSection";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
+import { marketQuoteApi } from "@/lib/api/market-quote";
 
 const featuredStrategies: StrategyCardProps[] = [
     {
@@ -49,88 +54,6 @@ const featuredStrategies: StrategyCardProps[] = [
     },
 ];
 
-const marketTickers: MarketTickerCardProps[] = [
-    {
-        id: "krafton-1",
-        name: "Krafton",
-        code: "259960",
-        price: "263,500원",
-        change: "+5.55%",
-        trend: "up",
-        logoSrc: "/icons/krafton-logo.svg",
-        graph: "icons/up-graph.svg"
-    },
-    {
-        id: "samsung-1",
-        name: "삼성전자",
-        code: "005930",
-        price: "99,500원",
-        change: "-6.09%",
-        trend: "down",
-        logoSrc: "/icons/samsung-logo.svg",
-        graph: "icons/down-graph.svg"
-    },
-    {
-        id: "krafton-2",
-        name: "Krafton",
-        code: "259960",
-        price: "263,500원",
-        change: "+5.55%",
-        trend: "up",
-        logoSrc: "/icons/krafton-logo.svg",
-        graph: "icons/up-graph.svg"
-    },
-    {
-        id: "samsung-2",
-        name: "삼성전자",
-        code: "005930",
-        price: "99,500원",
-        change: "-6.09%",
-        trend: "down",
-        logoSrc: "/icons/samsung-logo.svg",
-        graph: "icons/down-graph.svg"
-    },
-    {
-        id: "krafton-3",
-        name: "Krafton",
-        code: "259960",
-        price: "263,500원",
-        change: "+5.55%",
-        trend: "up",
-        logoSrc: "/icons/krafton-logo.svg",
-        graph: "icons/up-graph.svg"
-    },
-    {
-        id: "samsung-3",
-        name: "삼성전자",
-        code: "005930",
-        price: "99,500원",
-        change: "-6.09%",
-        trend: "down",
-        logoSrc: "/icons/samsung-logo.svg",
-        graph: "icons/down-graph.svg"
-    },
-    {
-        id: "krafton-4",
-        name: "Krafton",
-        code: "259960",
-        price: "263,500원",
-        change: "+5.55%",
-        trend: "up",
-        logoSrc: "icons/krafton-logo.svg",
-        graph: "icons/up-graph.svg"
-    },
-    {
-        id: "samsung-4",
-        name: "삼성전자",
-        code: "005930",
-        price: "99,500원",
-        change: "-6.09%",
-        trend: "down",
-        logoSrc: "icons/samsung-logo.svg",
-        graph: "icons/down-graph.svg"
-    },
-];
 
 const newsItems: NewsItem[] = [
     {
@@ -166,14 +89,57 @@ const newsItems: NewsItem[] = [
 ];
 
 const HomePage: NextPage = () => {
+    const [marketTickers, setMarketTickers] = useState<MarketTickerCardProps[]>([]);
+    const [selectedStock, setSelectedStock] = useState<{ name: string; code: string } | null>(null);
+
+    useEffect(() => {
+        const fetchMarketData = async () => {
+            try {
+                const response = await marketQuoteApi.getMarketQuotes({
+                    sortBy: "change_rate",
+                    sortOrder: "desc",
+                    page: 1,
+                    pageSize: 20,
+                });
+
+                const formattedTickers: MarketTickerCardProps[] = response.items.map((item) => ({
+                    id: item.code,
+                    name: item.name,
+                    code: item.code,
+                    price: `${item.price.toLocaleString()}원`,
+                    change: `${item.changeRate > 0 ? "+" : ""}${item.changeRate.toFixed(2)}%`,
+                    trend: item.trend === "up" ? "up" : "down",
+                    logoSrc: "/icons/krafton-logo.svg", // 기본 로고 (추후 개선 가능)
+                    graph: item.trend === "up" ? "/icons/up-graph.svg" : "/icons/down-graph.svg",
+                    onDetailClick: () => setSelectedStock({ name: item.name, code: item.code }),
+                }));
+
+                setMarketTickers(formattedTickers);
+            } catch (error) {
+                console.error("시장 데이터 조회 실패:", error);
+            }
+        };
+
+        fetchMarketData();
+    }, []);
+
     return (
-        <div className="">
-            <div className="flex w-full flex-col gap-10 md:px-10 lg:px-0" >
-                <FeaturedStrategiesSection strategies={featuredStrategies} />
-                <TodayMarketSection items={marketTickers} />
-                <TodayNewsSection items={newsItems} />
+        <>
+            <div className="">
+                <div className="flex w-full flex-col gap-10 md:px-10 lg:px-0" >
+                    <FeaturedStrategiesSection strategies={featuredStrategies} />
+                    <TodayMarketSection items={marketTickers} />
+                    <TodayNewsSection items={newsItems} />
+                </div >
             </div >
-        </div >
+
+            <StockDetailModal
+                isOpen={!!selectedStock}
+                onClose={() => setSelectedStock(null)}
+                stockName={selectedStock?.name || ""}
+                stockCode={selectedStock?.code || ""}
+            />
+        </>
     );
 };
 

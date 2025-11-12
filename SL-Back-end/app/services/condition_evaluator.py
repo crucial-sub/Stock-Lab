@@ -98,7 +98,8 @@ class ConditionEvaluator:
     def _normalize_factor_key(name: Optional[str]) -> Optional[str]:
         if not name:
             return None
-        return name.replace("{", "").replace("}", "").strip()
+        # 최종적으로 계산 모듈은 대문자 컬럼을 사용하므로 키를 일관되게 맞춘다
+        return name.replace("{", "").replace("}", "").strip().upper()
 
     def _get_stock_slice(
         self,
@@ -138,11 +139,14 @@ class ConditionEvaluator:
         threshold = condition['value']
         value_type = condition.get('value_type', 'VALUE').upper()
 
+        self.logger.info(f"🔍 [{stock_code}] 조건 평가 시작: {factor_name}({factor_key}) {op} {threshold}")
+
         # 팩터 값 추출
         try:
             stock_data = self._get_stock_slice(factor_data, stock_code, trading_date)
 
             if stock_data.empty:
+                self.logger.info(f"❌ [{stock_code}] stock_data가 비어있음 (날짜: {trading_date})")
                 return ConditionResult(
                     condition_id=condition.get('id', ''),
                     result=False,
@@ -151,19 +155,29 @@ class ConditionEvaluator:
                     operator=op
                 )
 
+            self.logger.info(f"📊 [{stock_code}] stock_data 컬럼: {list(stock_data.columns)[:20]}")
+
             factor_value = None
             if factor_key:
                 if value_type == 'RANK':
                     rank_col = f"{factor_key}_RANK"
                     if rank_col in stock_data.columns:
                         factor_value = float(stock_data[rank_col].iloc[0])
+                        self.logger.info(f"✓ [{stock_code}] {rank_col} = {factor_value}")
+                    else:
+                        self.logger.info(f"❌ [{stock_code}] {rank_col} 컬럼 없음")
                 else:
                     if factor_key in stock_data.columns:
                         factor_value = float(stock_data[factor_key].iloc[0])
+                        self.logger.info(f"✓ [{stock_code}] {factor_key} = {factor_value}")
                     elif f"{factor_key}_RANK" in stock_data.columns:
                         factor_value = float(stock_data[f"{factor_key}_RANK"].iloc[0])
+                        self.logger.info(f"✓ [{stock_code}] {factor_key}_RANK = {factor_value}")
+                    else:
+                        self.logger.info(f"❌ [{stock_code}] {factor_key} 또는 {factor_key}_RANK 컬럼 없음")
 
             if factor_value is None or pd.isna(factor_value):
+                self.logger.info(f"❌ [{stock_code}] factor_value가 None 또는 NaN")
                 return ConditionResult(
                     condition_id=condition.get('id', ''),
                     result=False,
@@ -174,6 +188,7 @@ class ConditionEvaluator:
 
             # 조건 평가
             result = self._evaluate_operator(factor_value, op, threshold)
+            self.logger.info(f"{'✅' if result else '❌'} [{stock_code}] {factor_value} {op} {threshold} = {result}")
 
             return ConditionResult(
                 condition_id=condition.get('id', ''),
@@ -184,7 +199,9 @@ class ConditionEvaluator:
             )
 
         except Exception as e:
-            print(f"Error evaluating condition: {e}")
+            self.logger.error(f"❌ [{stock_code}] Error evaluating condition: {e}")
+            import traceback
+            traceback.print_exc()
             return ConditionResult(
                 condition_id=condition.get('id', ''),
                 result=False,

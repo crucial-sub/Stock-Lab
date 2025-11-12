@@ -14,7 +14,7 @@
 - 손실 확대 가능성
 
 ### 수정 내용
-**파일**: `app/services/backtest_genport_engine.py:671-712`
+**파일**: `app/services/backtest_engine.py:671-712`
 
 ```python
 # Before: 리밸런싱 날짜에만 매도 확인
@@ -60,7 +60,7 @@ if pd.Timestamp(trading_day) in [pd.Timestamp(d) for d in rebalance_dates]:
   - 문제: PER만 만족해도 선택됨
 
 ### 수정 내용
-**파일**: `app/services/backtest_genport_engine.py:855-890`
+**파일**: `app/services/backtest_engine.py:855-890`
 
 ```python
 # Before: OR 로직 (하나라도 만족하면 선택)
@@ -102,7 +102,7 @@ for stock in tradeable_stocks:
 - 실제 거래 비용 과소 평가
 
 ### 수정 내용
-**파일**: `app/services/backtest_genport_engine.py:792-821`
+**파일**: `app/services/backtest_engine.py:792-821`
 
 ```python
 # Before: 슬리피지 없음
@@ -247,7 +247,7 @@ test_cases = [
 ## 변경 파일
 
 ### 수정된 파일
-- `app/services/backtest_genport_engine.py`
+- `app/services/backtest_engine.py`
   - Line 671-712: 매도 조건 일별 체크
   - Line 855-890: AND 로직 구현
   - Line 792-821: 매도 슬리피지 적용

@@ -2,19 +2,19 @@ export interface NewsCardProps {
   id?: string;
   title: string;
   subtitle?: string;
-  summary: string;
+  summary?: string;
   content?: string;
   tickerLabel: string;
   themeName?: string;
   pressName?: string;
-  sentiment: "positive" | "neutral" | "negative";
-  publishedAt: string;
-  source: string;
+  sentiment?: "positive" | "neutral" | "negative";
+  publishedAt?: string;
+  source?: string;
   link?: string;
   onClick?: () => void;
 }
 
-const sentimentColors: Record<NewsCardProps["sentiment"], { bg: string; text: string }> = {
+const sentimentColors: Record<"positive" | "neutral" | "negative", { bg: string; text: string }> = {
   positive: { bg: "bg-[#DDFFE5]", text: "text-[#00CE00]" },
   neutral: { bg: "bg-[#FFF1D6]", text: "text-[#FFAA00]" },
   negative: { bg: "bg-[#FFE5E5]", text: "text-[#FF6464]" },
@@ -26,13 +26,13 @@ export function NewsCard({
   tickerLabel,
   themeName,
   pressName,
-  sentiment,
+  sentiment = "neutral",
   publishedAt,
   source,
   link,
   onClick,
 }: NewsCardProps) {
-  const tone = sentimentColors[sentiment];
+  const tone = sentimentColors[sentiment] || sentimentColors["neutral"];
 
   return (
     <article

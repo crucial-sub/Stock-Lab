@@ -1,7 +1,7 @@
 "use client";
 
-import QuantStrategySidebar from "@/components/quant/QuantStrategySidebar";
-import QuantStrategySummaryPanel from "@/components/quant/QuantStrategySummaryPanel";
+import QuantStrategySidebar from "@/components/quant/layout/QuantStrategySidebar";
+import QuantStrategySummaryPanel from "@/components/quant/layout/QuantStrategySummaryPanel";
 import { useQuantTabStore } from "@/stores";
 import { ReactNode, useState } from "react";
 
@@ -34,6 +34,7 @@ export default function QuantNewLayout({ children }: QuantNewLayoutProps) {
 
       {/* 중앙 메인 컨텐츠 - 고정 위치 (양옆 패널 상태 무관) */}
       <div
+        id="quant-main-content"
         className="fixed top-[6rem] bottom-0 lg:left-[28.75rem] lg:right-[26.25rem] hidden lg:block overflow-y-auto bg-bg-app"
         style={{
           scrollbarWidth: 'none',

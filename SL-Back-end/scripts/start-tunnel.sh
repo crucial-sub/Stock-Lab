@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 # 설정 (실제 값으로 변경 필요)
 SSH_KEY="/Users/a2/Desktop/Keys/Stock-Lab-Dev.pem"
 EC2_HOST="ec2-13-209-198-242.ap-northeast-2.compute.amazonaws.com"
-EC2_USER="luca"
+EC2_USER="ubuntu"
 RDS_ENDPOINT="sl-postgres-db.cl0gcamkufcq.ap-northeast-2.rds.amazonaws.com"
 LOCAL_RDS_PORT=5433
 REMOTE_RDS_PORT=5432

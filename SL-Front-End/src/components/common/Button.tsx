@@ -19,7 +19,7 @@ const VARIANT_STYLES: Record<NonNullable<ButtonProps["variant"]>, string> = {
 
 const SIZE_STYLES: Record<NonNullable<ButtonProps["size"]>, string> = {
   sm: "py-[5px] text-[16px]",
-  md: "py-2 text-xl",
+  md: "py-2 text-base",
   lg: "py-3 text-[16px]",
 };
 
@@ -37,7 +37,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       className={twMerge(
-        "flex items-center justify-center gap-1 overflow-hidden rounded-sm px-6 font-sans font-semibold",
+        "flex items-center justify-center gap-1 overflow-hidden rounded-md px-6 font-sans font-semibold",
         VARIANT_STYLES[variant],
         SIZE_STYLES[size],
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",

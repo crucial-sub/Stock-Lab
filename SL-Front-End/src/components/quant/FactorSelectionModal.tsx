@@ -3,8 +3,8 @@
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import type { Factor, SubFactor } from "@/types/api";
-import Image from "next/image";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 interface FactorSelectionModalProps {
   isOpen: boolean;
@@ -40,6 +40,9 @@ export function FactorSelectionModal({
 
   if (!isOpen) return null;
 
+  // SSR 환경에서 document가 없을 수 있음
+  if (typeof window === 'undefined') return null;
+
   // 카테고리별로 팩터 그룹화
   const groupedFactors = factors.reduce((acc, factor) => {
     if (!acc[factor.category]) {
@@ -51,6 +54,11 @@ export function FactorSelectionModal({
 
   const handleFactorSelect = (factor: Factor) => {
     setSelectedFactor(factor);
+    // 바로 서브팩터 탭으로 이동하지 않음 (사용자가 "선택 완료" 버튼 클릭 시 이동)
+  };
+
+  const handleFactorConfirm = () => {
+    if (!selectedFactor) return;
     setCurrentTab("subfactor");
   };
 
@@ -115,13 +123,15 @@ export function FactorSelectionModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center"
+      style={{ zIndex: 99999 }}
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-lg shadow-2xl w-[700px] max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-lg shadow-2xl w-[700px] max-h-[90vh] overflow-hidden flex flex-col relative"
+        style={{ zIndex: 100000 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 모달 헤더 */}
@@ -129,32 +139,24 @@ export function FactorSelectionModal({
           <div className="flex gap-8">
             <button
               onClick={() => setCurrentTab("factor")}
-              className={`text-base font-semibold pb-1 transition-colors ${
-                currentTab === "factor"
-                  ? "text-brand-primary"
-                  : "text-gray-400"
-              }`}
+              className={`text-base font-semibold pb-1 transition-colors ${currentTab === "factor"
+                ? "text-brand-primary"
+                : "text-gray-400"
+                }`}
             >
               팩터 선택하기
             </button>
             <button
               onClick={() => setCurrentTab("subfactor")}
               disabled={!selectedFactor}
-              className={`text-base font-semibold pb-1 transition-colors ${
-                currentTab === "subfactor" && selectedFactor
-                  ? "text-brand-primary"
-                  : "text-gray-400 disabled:cursor-not-allowed"
-              }`}
+              className={`text-base font-semibold pb-1 transition-colors ${currentTab === "subfactor" && selectedFactor
+                ? "text-brand-primary"
+                : "text-gray-400 disabled:cursor-not-allowed"
+                }`}
             >
               함수 선택하기
             </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <Image src="/icons/close.svg" alt="닫기" width={20} height={20} />
-          </button>
         </div>
 
         {/* 모달 컨텐츠 */}
@@ -178,11 +180,10 @@ export function FactorSelectionModal({
                         <li key={factor.id}>
                           <button
                             onClick={() => handleFactorSelect(factor)}
-                            className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                              selectedFactor?.id === factor.id
-                                ? "bg-brand-primary text-white font-medium"
-                                : "text-gray-700 hover:bg-gray-50"
-                            }`}
+                            className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${selectedFactor?.id === factor.id
+                              ? "bg-brand-primary text-white font-medium"
+                              : "text-gray-700 hover:bg-gray-50"
+                              }`}
                           >
                             • {factor.display_name}
                           </button>
@@ -234,11 +235,10 @@ export function FactorSelectionModal({
                           onChange={() => handleSubFactorSelect(subFactor)}
                           className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
                         />
-                        <span className={`text-sm ${
-                          selectedSubFactor?.id === subFactor.id
-                            ? "text-brand-primary font-medium"
-                            : "text-gray-700 group-hover:text-gray-900"
-                        }`}>
+                        <span className={`text-sm ${selectedSubFactor?.id === subFactor.id
+                          ? "text-brand-primary font-medium"
+                          : "text-gray-700 group-hover:text-gray-900"
+                          }`}>
                           {subFactor.display_name}
                         </span>
                       </label>
@@ -277,11 +277,10 @@ export function FactorSelectionModal({
                                 onChange={() => setSelectedArgument(arg)}
                                 className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
                               />
-                              <span className={`text-sm ${
-                                selectedArgument === arg
-                                  ? "text-brand-primary font-medium"
-                                  : "text-gray-700 group-hover:text-gray-900"
-                              }`}>
+                              <span className={`text-sm ${selectedArgument === arg
+                                ? "text-brand-primary font-medium"
+                                : "text-gray-700 group-hover:text-gray-900"
+                                }`}>
                                 {arg}
                               </span>
                             </label>
@@ -318,20 +317,21 @@ export function FactorSelectionModal({
         {/* 모달 푸터 */}
         <div className="border-t border-gray-200 px-6 py-4 flex justify-center gap-3">
           <button
-            onClick={handleClose}
+            onClick={currentTab === "factor" ? handleClose : () => setCurrentTab("factor")}
             className="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
           >
-            이전 단계
+            {currentTab === "factor" ? "취소" : "이전 단계"}
           </button>
           <button
-            onClick={handleConfirm}
-            disabled={!isConfirmEnabled()}
+            onClick={currentTab === "factor" ? handleFactorConfirm : handleConfirm}
+            disabled={currentTab === "factor" ? !selectedFactor : !isConfirmEnabled()}
             className="px-6 py-2 bg-brand-primary text-white rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            선택 완료
+            {currentTab === "factor" ? "다음 단계" : "선택 완료"}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,10 +1,10 @@
-import { InputHTMLAttributes, ReactNode } from "react";
-import { UnderLineInput } from "./UnderLineInput";
+import { Title, UnderlineInput } from "@/components/common";
+import { InputHTMLAttributes } from "react";
 
 /**
  * 입력 필드 공통 컴포넌트
  * - 라벨, 입력 필드, 후위 텍스트를 포함하는 wrapper
- * - UnderLineInput 사용 (하단 테두리만 있는 디자인)
+ * - UnderlineInput 사용 (하단 테두리만 있는 디자인)
  */
 interface FormFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
   label: string;
@@ -27,18 +27,18 @@ export function FormField({
 }: FormFieldProps) {
   return (
     <div className={containerClassName}>
-      <label className="block text-sm font-medium text-text-strong mb-2">
+      <Title variant="subtitle" className="mb-2">
         {label}
-      </label>
+      </Title>
       <div className="relative">
-        <UnderLineInput
+        <UnderlineInput
           {...inputProps}
           value={value}
           onChange={onChange}
           className={className}
         />
         {suffix && (
-          <span className="absolute right-0 bottom-2 text-text-muted text-sm">
+          <span className="absolute right-0 bottom-[0.625rem]">
             {suffix}
           </span>
         )}
@@ -72,9 +72,9 @@ export function SelectField({
 }: SelectFieldProps) {
   return (
     <div className={containerClassName}>
-      <label className="block text-sm font-medium text-text-strong mb-2">
+      <Title variant="subtitle" className="mb-2">
         {label}
-      </label>
+      </Title>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}

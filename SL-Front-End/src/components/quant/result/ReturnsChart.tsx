@@ -1,16 +1,16 @@
 "use client";
 
+import type { BacktestResult } from "@/types/api";
 import {
-  LineChart,
+  CartesianGrid,
+  Legend,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
 } from "recharts";
-import type { BacktestResult } from "@/types/api";
 
 /**
  * 수익률 차트 컴포넌트

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { companyApi, CompanyInfoResponse } from "@/lib/api/company";
+import { StockPriceChart } from "./StockPriceChart";
 
 interface StockInfoCardProps {
   name: string;
@@ -17,6 +18,17 @@ const periodTabs = [
   "2년",
   "3년",
 ];
+
+/**
+ * 기간 텍스트를 일 단위 숫자로 변환
+ */
+function periodToDays(period: string): number {
+  if (period.includes("년")) {
+    const years = parseInt(period);
+    return years * 365;
+  }
+  return parseInt(period);
+}
 
 export function StockInfoCard({ name, code }: StockInfoCardProps) {
   const [activePeriod, setActivePeriod] = useState(periodTabs[0]);
@@ -130,7 +142,11 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
           );
         })}
       </div>
-      <GraphPlaceholder />
+      <StockPriceChart
+        data={companyData.priceHistory}
+        period={periodToDays(activePeriod)}
+        isRising={(basicInfo.changevs1d || 0) >= 0}
+      />
       <Divider />
       <p className="text-[1rem] text-start font-semibold">
         주가가 일주일 전에 비해{" "}
@@ -226,22 +242,6 @@ function Divider() {
   );
 }
 
-function GraphPlaceholder() {
-  return (
-    <svg viewBox="0 0 400 100" className="h-32 w-full" role="img" aria-label="주가 추세 그래프">
-      <rect width="100%" height="100%" fill="#FFFFFF" />
-      <path
-        d="M0 60 Q20 50, 40 55 T80 50 T120 52 T160 58 T200 40 T240 35 T280 50 T320 70 T360 80 T400 90"
-        fill="none"
-        stroke="#FF6464"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <line x1="0" y1="95" x2="400" y2="95" stroke="#FF6464" strokeDasharray="4 4" strokeWidth="1" />
-    </svg>
-  );
-}
 
 interface SectionHeaderProps {
   title: string;

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import type { BacktestResult } from "@/types/api";
+import { useState } from "react";
 
 /**
  * 매매 내역 탭 컴포넌트
@@ -66,17 +66,16 @@ export function TradingHistoryTab({ trades }: TradingHistoryTabProps) {
                 {trade.stockName}
               </div>
               <div className="text-text-body text-right">
-                {trade.buyPrice.toLocaleString()}
+                {Math.round(trade.buyPrice).toLocaleString()}
               </div>
               <div className="text-text-body text-right">
-                {Math.round(trade.valuation / trade.buyPrice).toLocaleString()}
+                {trade.quantity?.toLocaleString() || 0}
               </div>
               <div
-                className={`text-right font-semibold ${
-                  trade.profitRate >= 0
-                    ? "text-accent-primary"
-                    : "text-brand-primary"
-                }`}
+                className={`text-right font-semibold ${trade.profitRate >= 0
+                    ? "text-brand-primary"
+                    : "text-accent-primary"
+                  }`}
               >
                 {trade.profitRate > 0 ? "+" : ""}
                 {trade.profitRate.toFixed(2)}
@@ -87,7 +86,7 @@ export function TradingHistoryTab({ trades }: TradingHistoryTabProps) {
                 {trade.weight.toFixed(2)}
               </div>
               <div className="text-text-body text-right">
-                {trade.valuation.toLocaleString()}
+                {Math.round(trade.valuation).toLocaleString()}
               </div>
             </div>
           ))
@@ -128,11 +127,10 @@ export function TradingHistoryTab({ trades }: TradingHistoryTabProps) {
                   <button
                     type="button"
                     onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded font-medium transition-colors ${
-                      currentPage === page
+                    className={`w-8 h-8 flex items-center justify-center rounded font-medium transition-colors ${currentPage === page
                         ? "bg-accent-primary text-white"
                         : "text-text-muted hover:text-text-body hover:bg-bg-muted"
-                    }`}
+                      }`}
                   >
                     {page}
                   </button>

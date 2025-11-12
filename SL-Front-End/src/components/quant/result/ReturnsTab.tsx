@@ -36,11 +36,10 @@ export function ReturnsTab({ yieldPoints }: ReturnsTabProps) {
           <button
             key={tab.id}
             onClick={() => setActiveChartTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium rounded-sm transition-colors ${
-              activeChartTab === tab.id
+            className={`px-4 py-2 text-sm font-medium rounded-sm transition-colors ${activeChartTab === tab.id
                 ? "bg-accent-primary text-white"
                 : "text-text-body hover:text-text-strong border border-border-default hover:bg-bg-muted"
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -60,21 +59,19 @@ export function ReturnsTab({ yieldPoints }: ReturnsTabProps) {
             <div className="flex gap-2">
               <button
                 onClick={() => setViewMode("daily")}
-                className={`px-3 py-1 text-sm rounded-sm transition-colors ${
-                  viewMode === "daily"
+                className={`px-3 py-1 text-sm rounded-sm transition-colors ${viewMode === "daily"
                     ? "bg-accent-primary text-white"
                     : "border border-border-default hover:bg-bg-muted text-text-body"
-                }`}
+                  }`}
               >
                 일별
               </button>
               <button
                 onClick={() => setViewMode("log")}
-                className={`px-3 py-1 text-sm rounded-sm transition-colors ${
-                  viewMode === "log"
+                className={`px-3 py-1 text-sm rounded-sm transition-colors ${viewMode === "log"
                     ? "bg-accent-primary text-white"
                     : "border border-border-default hover:bg-bg-muted text-text-body"
-                }`}
+                  }`}
               >
                 로그
               </button>

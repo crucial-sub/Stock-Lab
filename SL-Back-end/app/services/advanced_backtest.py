@@ -188,22 +188,30 @@ async def _run_backtest_async(
                         "description": cond.get('exp_left_side')
                     })
 
-            # 논리식이 없으면 기본적으로 모든 조건을 AND 로 연결
-            expression_text = buy_logic.strip() if buy_logic else ""
-            if not expression_text and parsed_conditions:
-                expression_text = " and ".join([c["id"] for c in parsed_conditions])
+            # 논리식 생성: buy_logic에 따라 조건 ID들을 연결
+            expression_text = ""
+            if parsed_conditions:
+                if buy_logic and buy_logic.upper() == "OR":
+                    expression_text = " or ".join([c["id"] for c in parsed_conditions])
+                else:
+                    # 기본값은 AND
+                    expression_text = " and ".join([c["id"] for c in parsed_conditions])
+
+            logger.info(f"📊 파싱된 조건: {parsed_conditions}")
+            logger.info(f"📊 생성된 expression: {expression_text}")
 
             # 우선순위 팩터 정규화
             normalized_priority_factor = _extract_factor(priority_factor)
 
             buy_condition_payload: Optional[dict] = None
-            if parsed_conditions:
+            if parsed_conditions and expression_text:
                 buy_condition_payload = {
-                    "expression": expression_text or parsed_conditions[0]["id"],
+                    "expression": expression_text,
                     "conditions": parsed_conditions,
                     "priority_factor": normalized_priority_factor,
                     "priority_order": priority_order or "desc"
                 }
+                logger.info(f"📊 최종 buy_condition_payload: {buy_condition_payload}")
 
             # 기능상 SELL condition 리스트는 STOP/TAKE/HOLD 로직에 의해 관리하므로
             # condition_sell 의 factor 조건만 전달 (없으면 빈 리스트)

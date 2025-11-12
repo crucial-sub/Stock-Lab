@@ -9,46 +9,24 @@
  * - 통계/차트/탭 네비게이션 컴포넌트 분리
  * - 기존 UI/UX 완전 보존
  * - 백테스트 진행 상태 실시간 폴링 및 로딩 UI 표시
- * - 무거운 차트 컴포넌트 lazy loading으로 성능 최적화
+ * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
-import { useState } from "react";
-import dynamic from "next/dynamic";
-import { useBacktestResultQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
+import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
+import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
+import { SettingsTab } from "@/components/quant/result/SettingsTab";
+import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
+import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import {
   PageHeader,
-  TabNavigation,
   StatisticsSection,
+  TabNavigation,
 } from "@/components/quant/result/sections";
-import type { BacktestRunRequest } from "@/types/api";
+import { useBacktestResultQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
 import { mockBacktestResult } from "@/mocks/backtestResult";
-
-// 차트 컴포넌트들을 동적 로딩 (코드 스플리팅)
-const TradingHistoryTab = dynamic(
-  () => import("@/components/quant/result/TradingHistoryTab").then(mod => ({ default: mod.TradingHistoryTab })),
-  { loading: () => <div className="text-center py-10">거래 내역을 불러오는 중...</div> }
-);
-
-const ReturnsTab = dynamic(
-  () => import("@/components/quant/result/ReturnsTab").then(mod => ({ default: mod.ReturnsTab })),
-  { loading: () => <div className="text-center py-10">수익률 차트를 불러오는 중...</div> }
-);
-
-// TODO: amcharts5로 재작성 필요
-// const StatisticsTabWrapper = dynamic(
-//   () => import("@/components/quant/result/StatisticsTabWrapper").then(mod => ({ default: mod.StatisticsTabWrapper })),
-//   { loading: () => <div className="text-center py-10">통계 데이터를 불러오는 중...</div> }
-// );
-
-const SettingsTab = dynamic(
-  () => import("@/components/quant/result/SettingsTab").then(mod => ({ default: mod.SettingsTab })),
-  { loading: () => <div className="text-center py-10">설정 정보를 불러오는 중...</div> }
-);
-
-const BacktestLoadingState = dynamic(
-  () => import("@/components/quant/result/BacktestLoadingState").then(mod => ({ default: mod.BacktestLoadingState })),
-  { ssr: false }
-);
+import type { BacktestRunRequest } from "@/types/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 
 interface QuantResultPageClientProps {
   backtestId: string;
@@ -60,6 +38,8 @@ export function QuantResultPageClient({
   backtestId,
 }: QuantResultPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("history");
+  const queryClient = useQueryClient();
+  const previousStatusRef = useRef<string | undefined>();
 
   // Mock 모드 체크
   const isMockMode = backtestId.startsWith("mock");
@@ -77,16 +57,54 @@ export function QuantResultPageClient({
     !isMockMode && statusData?.status === "completed"
   );
 
+  // 백테스트 완료 시 결과 데이터 자동 갱신
+  useEffect(() => {
+    if (!isMockMode && statusData?.status === "completed") {
+      // 상태가 running → completed로 변경되었을 때만 invalidate
+      if (previousStatusRef.current === "running") {
+        console.log("✅ 백테스트 완료 감지 - 결과 데이터 자동 갱신");
+        queryClient.invalidateQueries({
+          queryKey: ["backtest", "detail", backtestId],
+        });
+      }
+      previousStatusRef.current = statusData.status;
+    } else if (statusData?.status) {
+      previousStatusRef.current = statusData.status;
+    }
+  }, [statusData?.status, backtestId, isMockMode, queryClient]);
+
   // Mock 데이터 또는 실제 데이터 사용
   const finalResult = isMockMode ? mockBacktestResult : result;
 
+  // 상태 데이터 로딩 중이거나 아직 데이터가 없는 경우
+  if (!isMockMode && !statusData) {
+    return (
+      <div className="min-h-screen bg-bg-app flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary mx-auto" />
+          <p className="text-text-body">백테스트 상태 확인 중...</p>
+        </div>
+      </div>
+    );
+  }
+
   // 백테스트가 아직 실행 중인 경우
   if (!isMockMode && statusData && (statusData.status === "pending" || statusData.status === "running")) {
+    console.log("📊 백테스트 진행 중 - yieldPoints:", statusData.yieldPoints ? statusData.yieldPoints.length : 0);
     return (
       <BacktestLoadingState
         backtestId={backtestId}
         status={statusData.status}
         progress={statusData.progress || 0}
+        buyCount={statusData.buyCount}
+        sellCount={statusData.sellCount}
+        currentReturn={statusData.currentReturn}
+        currentCapital={statusData.currentCapital}
+        currentDate={statusData.currentDate}
+        currentMdd={statusData.currentMdd}
+        startDate={statusData.startDate}
+        endDate={statusData.endDate}
+        yieldPoints={statusData.yieldPoints}
       />
     );
   }
@@ -140,8 +158,8 @@ export function QuantResultPageClient({
     return null;
   }
 
-  // 실제 데이터에서 초기 투자금 가져오기 (기본값: 5억원)
-  const initialCapital = 50000000;
+  // 실제 데이터에서 초기 투자금 가져오기
+  const initialCapital = finalResult.statistics.initialCapital || 50000000;
 
   // 실제 수익률 데이터 계산 (yieldPoints에서 추출)
   const calculatePeriodReturns = () => {
@@ -180,6 +198,14 @@ export function QuantResultPageClient({
 
   const periodReturns = calculatePeriodReturns();
 
+  // 백테스트 시작/종료 날짜 추출 (yieldPoints의 첫 번째와 마지막 날짜)
+  const startDate = finalResult.yieldPoints && finalResult.yieldPoints.length > 0
+    ? finalResult.yieldPoints[0].date
+    : undefined;
+  const endDate = finalResult.yieldPoints && finalResult.yieldPoints.length > 0
+    ? finalResult.yieldPoints[finalResult.yieldPoints.length - 1].date
+    : undefined;
+
   return (
     <div className="min-h-screen bg-bg-app py-6 px-6">
       <div className="max-w-[1400px] mx-auto">
@@ -191,6 +217,9 @@ export function QuantResultPageClient({
           statistics={finalResult.statistics}
           initialCapital={initialCapital}
           periodReturns={periodReturns}
+          yieldPoints={finalResult.yieldPoints}
+          startDate={startDate}
+          endDate={endDate}
         />
 
         {/* 탭 네비게이션 */}
@@ -204,9 +233,7 @@ export function QuantResultPageClient({
           <ReturnsTab yieldPoints={finalResult.yieldPoints} />
         )}
         {activeTab === "statistics" && (
-          <div className="bg-bg-surface rounded-lg shadow-card p-6 text-center py-10">
-            <p className="text-text-muted">통계 차트 (amcharts5로 재작성 예정)</p>
-          </div>
+          <StatisticsTabWrapper statistics={finalResult.statistics} />
         )}
         {activeTab === "settings" && (
           <SettingsTab

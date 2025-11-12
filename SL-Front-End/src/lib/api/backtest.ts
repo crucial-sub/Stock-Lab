@@ -136,14 +136,32 @@ export async function getBacktestYieldPoints(
  * @param backtestId - 백테스트 ID
  * @returns 백테스트 상태 정보
  */
-export async function getBacktestStatus(backtestId: string): Promise<{
+export interface BacktestStatus {
   status: BacktestResult["status"];
   progress?: number;
-}> {
-  const response = await axiosInstance.get<{
-    status: BacktestResult["status"];
-    progress?: number;
-  }>(`/backtest/${backtestId}/status`);
+  currentDate?: string;
+  buyCount?: number;
+  sellCount?: number;
+  currentReturn?: number;
+  currentCapital?: number;
+  currentMdd?: number;
+  startDate?: string;
+  endDate?: string;
+  yieldPoints?: Array<{
+    date: string;
+    buyCount?: number;
+    sellCount?: number;
+    cumulativeReturn?: number;
+    portfolioValue?: number;
+    cash?: number;
+    positionValue?: number;
+    dailyReturn?: number;
+    value?: number;
+  }>;
+}
+
+export async function getBacktestStatus(backtestId: string): Promise<BacktestStatus> {
+  const response = await axiosInstance.get<BacktestStatus>(`/backtest/${backtestId}/status`);
   return response.data;
 }
 

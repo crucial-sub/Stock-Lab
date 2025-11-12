@@ -9,8 +9,8 @@ import type { NewsItem } from "@/components/home/NewsCard";
 import type { StrategyCardProps } from "@/components/home/StrategyCard";
 import { TodayMarketSection } from "@/components/home/TodayMarketSection";
 import { TodayNewsSection } from "@/components/home/TodayNewsSection";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
 import { marketQuoteApi } from "@/lib/api/market-quote";
-import { StockInfoCard } from "@/components/market-price/StockInfoCard";
 
 const featuredStrategies: StrategyCardProps[] = [
     {
@@ -133,30 +133,12 @@ const HomePage: NextPage = () => {
                 </div >
             </div >
 
-            {selectedStock && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-                    onClick={() => setSelectedStock(null)}
-                >
-                    <div
-                        className="relative rounded-[8px] max-h-[70vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="relative flex items-center shadow-header bg-white px-[0.5rem] py-[0.8rem]">
-                            <h2 className="absolute left-1/2 -translate-x-1/2 text-[0.9rem] font-normal text-text-strong">
-                                {selectedStock.name} 종목 정보
-                            </h2>
-                            <button
-                                type="button"
-                                className="mr-[0.25rem] ml-auto flex h-3 w-3 rounded-full bg-[#FF6464]"
-                                aria-label="닫기"
-                                onClick={() => setSelectedStock(null)}
-                            />
-                        </div>
-                        <StockInfoCard name={selectedStock.name} code={selectedStock.code} />
-                    </div>
-                </div>
-            )}
+            <StockDetailModal
+                isOpen={!!selectedStock}
+                onClose={() => setSelectedStock(null)}
+                stockName={selectedStock?.name || ""}
+                stockCode={selectedStock?.code || ""}
+            />
         </>
     );
 };

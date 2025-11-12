@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 
 import { Icon } from "@/components/common/Icon";
-import { StockInfoCard } from "@/components/market-price/StockInfoCard";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
 import { marketQuoteApi, type SortBy } from "@/lib/api/market-quote";
 
 const marketTabs: { label: string; sortBy: SortBy }[] = [
@@ -202,30 +202,12 @@ export default function MarketPricePage() {
       </div>
     </section>
 
-    {selectedRow && (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        onClick={() => setSelectedRow(null)}
-      >
-        <div
-          className="relative rounded-[8px] max-h-[70vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="relative flex items-center shadow-header bg-white px-[0.5rem] py-[0.8rem]">
-            <h2 className="absolute left-1/2 -translate-x-1/2 text-[0.9rem] font-normal text-text-strong">
-              {selectedRow.name} 종목 정보
-            </h2>
-            <button
-              type="button"
-              className="mr-[0.25rem] ml-auto flex h-3 w-3 rounded-full bg-[#FF6464]"
-              aria-label="닫기"
-              onClick={() => setSelectedRow(null)}
-            />
-          </div>
-          <StockInfoCard name={selectedRow.name} code={selectedRow.code} />
-        </div>
-      </div>
-    )}
+    <StockDetailModal
+      isOpen={!!selectedRow}
+      onClose={() => setSelectedRow(null)}
+      stockName={selectedRow?.name || ""}
+      stockCode={selectedRow?.code || ""}
+    />
     </>
   );
 }

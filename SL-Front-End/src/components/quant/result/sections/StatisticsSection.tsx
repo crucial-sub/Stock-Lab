@@ -19,6 +19,8 @@ interface StatisticsSectionProps {
     sellCount?: number;
     cumulativeReturn?: number;
   }>;
+  startDate?: string;
+  endDate?: string;
 }
 
 export function StatisticsSection({
@@ -26,6 +28,8 @@ export function StatisticsSection({
   initialCapital,
   periodReturns,
   yieldPoints,
+  startDate,
+  endDate,
 }: StatisticsSectionProps) {
   const stats = statistics;
 
@@ -33,8 +37,9 @@ export function StatisticsSection({
   const totalProfit = (stats.finalCapital || initialCapital) - initialCapital;
   const finalAssets = stats.finalCapital || initialCapital;
 
-  // 일 평균 수익률 계산 (총 수익률을 거래일 수로 나눔)
-  const dailyReturn = stats.totalReturn / 252; // 연간 252 거래일 기준
+  // 일 평균 수익률 계산 (CAGR 기반, 연간 252 거래일 기준)
+  // 공식: (1 + CAGR)^(1/252) - 1
+  const dailyReturn = (Math.pow(1 + stats.annualizedReturn / 100, 1 / 252) - 1) * 100;
 
   return (
     <div className="space-y-6 mb-6">
@@ -68,7 +73,7 @@ export function StatisticsSection({
               <StatMetric
                 label="MDD"
                 value={`${Math.abs(stats.maxDrawdown).toFixed(2)}%`}
-                color="text-accent-primary"
+                color="text-red-500"
                 tooltip="최대 낙폭 (Maximum Drawdown)"
               />
             </div>
@@ -106,7 +111,11 @@ export function StatisticsSection({
       {yieldPoints && yieldPoints.length > 0 && (
         <div className="bg-bg-surface rounded-lg shadow-card p-6">
           <h2 className="text-lg font-bold text-text-strong mb-4">매수/매도 활동</h2>
-          <TradingActivityChart yieldPoints={yieldPoints} />
+          <TradingActivityChart
+            yieldPoints={yieldPoints}
+            startDate={startDate}
+            endDate={endDate}
+          />
         </div>
       )}
     </div>

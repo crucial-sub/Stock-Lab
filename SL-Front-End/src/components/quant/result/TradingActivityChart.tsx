@@ -17,10 +17,12 @@ interface TradingActivityChartProps {
     sellCount?: number;
     cumulativeReturn?: number;
   }>;
+  startDate?: string; // YYYY-MM-DD 형식
+  endDate?: string;   // YYYY-MM-DD 형식
   className?: string;
 }
 
-export function TradingActivityChart({ yieldPoints, className = "" }: TradingActivityChartProps) {
+export function TradingActivityChart({ yieldPoints, startDate, endDate, className = "" }: TradingActivityChartProps) {
   const chartDivRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<am5.Root | null>(null);
 
@@ -45,6 +47,15 @@ export function TradingActivityChart({ yieldPoints, className = "" }: TradingAct
       })
     );
 
+    // X축 범위 계산
+    let minDate: number | undefined;
+    let maxDate: number | undefined;
+
+    if (startDate && endDate) {
+      minDate = new Date(startDate).getTime();
+      maxDate = new Date(endDate).getTime();
+    }
+
     // X축 (날짜)
     const xAxis = chart.xAxes.push(
       am5xy.DateAxis.new(root, {
@@ -53,6 +64,10 @@ export function TradingActivityChart({ yieldPoints, className = "" }: TradingAct
           minGridDistance: 50,
         }),
         tooltip: am5.Tooltip.new(root, {}),
+        // X축 범위 고정
+        min: minDate,
+        max: maxDate,
+        strictMinMax: startDate && endDate ? true : false,
       })
     );
 
@@ -184,7 +199,7 @@ export function TradingActivityChart({ yieldPoints, className = "" }: TradingAct
     return () => {
       root.dispose();
     };
-  }, [yieldPoints]);
+  }, [yieldPoints, startDate, endDate]);
 
   return (
     <div className={className}>

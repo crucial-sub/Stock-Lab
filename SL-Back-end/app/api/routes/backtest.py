@@ -561,6 +561,52 @@ async def get_backtest_status(
     if not session:
         raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
 
+    # 실행 중인 백테스트의 실시간 yield_points 조회
+    yield_points_data = []
+    if session.status in ["RUNNING", "COMPLETED"]:
+        # SimulationDailyValue와 SimulationTrade 조회
+        from collections import defaultdict
+
+        # 일별 데이터 조회
+        daily_values_query = select(SimulationDailyValue).where(
+            SimulationDailyValue.session_id == backtest_id
+        ).order_by(SimulationDailyValue.date)
+        daily_values_result = await db.execute(daily_values_query)
+        daily_values = daily_values_result.scalars().all()
+
+        logger.info(f"📊 실시간 yield_points 조회 - session_id: {backtest_id}, status: {session.status}, daily_values 개수: {len(daily_values)}")
+
+        # 거래 내역 조회 (일별 매수/매도 횟수 계산용)
+        trades_query = select(SimulationTrade).where(
+            SimulationTrade.session_id == backtest_id
+        ).order_by(SimulationTrade.trade_date)
+        trades_result = await db.execute(trades_query)
+        trades = trades_result.scalars().all()
+
+        # 일별 거래 횟수 집계
+        daily_trade_counts = defaultdict(lambda: {"buy": 0, "sell": 0})
+        for trade in trades:
+            trade_date = trade.trade_date.isoformat()
+            if trade.trade_type == "BUY":
+                daily_trade_counts[trade_date]["buy"] += 1
+            elif trade.trade_type == "SELL":
+                daily_trade_counts[trade_date]["sell"] += 1
+
+        # yieldPoints 생성
+        for dv in daily_values:
+            date_str = dv.date.isoformat()
+            yield_points_data.append({
+                "date": date_str,
+                "value": float(dv.cumulative_return) if dv.cumulative_return else 0,
+                "portfolioValue": int(dv.portfolio_value) if dv.portfolio_value else 0,
+                "cash": int(dv.cash) if dv.cash else 0,
+                "positionValue": int(dv.position_value) if dv.position_value else 0,
+                "dailyReturn": float(dv.daily_return) if dv.daily_return else 0,
+                "cumulativeReturn": float(dv.cumulative_return) if dv.cumulative_return else 0,
+                "buyCount": daily_trade_counts[date_str]["buy"],
+                "sellCount": daily_trade_counts[date_str]["sell"],
+            })
+
     return BacktestStatusResponse(
         backtest_id=session.session_id,
         status=session.status.lower() if session.status else "pending",
@@ -577,7 +623,7 @@ async def get_backtest_status(
         current_return=float(session.current_return) if session.current_return else None,
         current_capital=float(session.current_capital) if session.current_capital else None,
         current_mdd=float(session.current_mdd) if session.current_mdd else None,
-        yield_points=None
+        yield_points=yield_points_data if yield_points_data else None
     )
 
 

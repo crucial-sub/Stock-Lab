@@ -22,6 +22,7 @@ import type {
   BacktestRunRequest,
   BacktestRunResponse,
   BacktestResult,
+  BacktestStatus,
   PaginatedResponse,
   PaginationParams,
 } from "@/types/api";
@@ -169,10 +170,7 @@ export function useBacktestStatusQuery(
   enabled = true,
   interval = 2000,
 ) {
-  return useQuery<
-    { status: BacktestResult["status"]; progress?: number },
-    Error
-  >({
+  return useQuery<BacktestStatus, Error>({
     queryKey: backtestQueryKey.status(backtestId),
     queryFn: () => getBacktestStatus(backtestId),
     enabled: enabled && !!backtestId,

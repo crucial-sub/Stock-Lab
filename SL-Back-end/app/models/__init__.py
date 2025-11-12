@@ -9,6 +9,7 @@ from app.models.financial_statement import FinancialStatement
 from app.models.balance_sheet import BalanceSheet
 from app.models.income_statement import IncomeStatement
 from app.models.cashflow_statement import CashflowStatement
+from app.models.news import NewsArticle, ThemeSentiment
 from app.models.user import User
 
 # 백테스팅 시뮬레이션 모델
@@ -44,7 +45,9 @@ __all__ = [
     "BalanceSheet",
     "IncomeStatement",
     "CashflowStatement",
-    "User",
+    # 뉴스 모델
+    "NewsArticle",
+    "ThemeSentiment",
     # 시뮬레이션 모델
     "FactorCategory",
     "Factor",

@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { Icon } from "../common/Icon";
 
 export interface MarketTickerCardProps {
@@ -12,6 +11,7 @@ export interface MarketTickerCardProps {
   logoSrc?: string;
   logoAlt?: string;
   graph?: string;
+  onDetailClick?: () => void;
 }
 
 export function MarketTickerCard({
@@ -22,7 +22,8 @@ export function MarketTickerCard({
   trend,
   logoSrc = "",
   logoAlt = "",
-  graph = ""
+  graph = "",
+  onDetailClick
 }: MarketTickerCardProps) {
   const changeColor =
     trend === "up" ? "text-brand-primary" : "text-accent-primary";
@@ -48,10 +49,13 @@ export function MarketTickerCard({
         </div>
       </div>
       <div className="flex flex-shrink-0 items-center">
-        <Link href="#" className="flex items-center gap-1 text-base font-light">
+        <button
+          onClick={onDetailClick}
+          className="flex items-center gap-1 text-base font-light hover:text-brand-primary transition"
+        >
           <span>자세히 보기</span>
           <Icon src="/icons/arrow-right.svg" size={20} />
-        </Link>
+        </button>
       </div>
     </article>
   );

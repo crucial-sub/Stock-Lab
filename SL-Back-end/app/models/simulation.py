@@ -3,6 +3,7 @@
 quant_simulation_design_document.md 기반
 """
 from sqlalchemy import Column, Integer, String, Text, Date, TIMESTAMP, DECIMAL, Boolean, ForeignKey, Index, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -69,6 +70,14 @@ class PortfolioStrategy(Base):
     strategy_type = Column(String(50), nullable=True, comment="전략 유형 (VALUE/GROWTH/MOMENTUM/MULTI)")
     description = Column(Text, nullable=True, comment="전략 설명")
 
+    # 소유자 정보
+    user_id = Column(UUID(as_uuid=True), nullable=True, index=True, comment="전략 생성자 ID (UUID)")
+
+    # 공개 설정
+    is_public = Column(Boolean, default=False, nullable=False, comment="공개 여부 (랭킹 집계)")
+    is_anonymous = Column(Boolean, default=False, nullable=False, comment="익명 여부")
+    hide_strategy_details = Column(Boolean, default=False, nullable=False, comment="전략 내용 숨김 여부")
+
     # 백테스팅 기간
     backtest_start_date = Column(Date, nullable=True, comment="백테스팅 시작일")
     backtest_end_date = Column(Date, nullable=True, comment="백테스팅 종료일")
@@ -92,6 +101,8 @@ class PortfolioStrategy(Base):
 
     __table_args__ = (
         Index('idx_portfolio_strategies_type', 'strategy_type'),
+        Index('idx_portfolio_strategies_user', 'user_id'),
+        Index('idx_portfolio_strategies_public', 'is_public', 'user_id'),
         {"comment": "포트폴리오 전략 테이블"}
     )
 
@@ -189,6 +200,13 @@ class SimulationSession(Base):
         index=True,
         comment="전략 참조 ID"
     )
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.user_id"),
+        nullable=False,
+        index=True,
+        comment="사용자 참조 ID"
+    )
 
     session_name = Column(String(200), nullable=True, comment="세션명")
     start_date = Column(Date, nullable=False, comment="시뮬레이션 시작일")
@@ -203,12 +221,33 @@ class SimulationSession(Base):
     progress = Column(Integer, default=0, comment="진행률 (%)")
     error_message = Column(Text, nullable=True, comment="에러 메시지")
 
+    # 실시간 진행 상황 (백테스트 실행 중에만 사용)
+    current_date = Column("current_date", Date, nullable=True, comment="현재 처리 중인 날짜")
+    buy_count = Column(Integer, default=0, comment="현재까지 매수 횟수")
+    sell_count = Column(Integer, default=0, comment="현재까지 매도 횟수")
+    current_return = Column(DECIMAL(10, 4), nullable=True, comment="현재 수익률 (%)")
+    current_capital = Column(DECIMAL(15, 2), nullable=True, comment="현재 자본금")
+    current_mdd = Column(DECIMAL(10, 4), nullable=True, comment="현재 MDD (%)")
+
+    # 공유 설정
+    is_public = Column(Boolean, default=False, comment="공개 여부 (랭킹 노출)")
+    is_anonymous = Column(Boolean, default=False, comment="익명 공개 여부")
+    show_strategy = Column(Boolean, default=False, comment="전략 상세 공개 여부")
+    description = Column(Text, nullable=True, comment="포트폴리오 설명")
+    share_url = Column(String(100), nullable=True, unique=True, index=True, comment="공유 URL 슬러그")
+
+    # 커뮤니티 기능
+    view_count = Column(Integer, default=0, comment="조회수")
+    like_count = Column(Integer, default=0, comment="좋아요 수")
+
     # 메타데이터
     started_at = Column(TIMESTAMP, nullable=True, comment="실행 시작 시간")
     completed_at = Column(TIMESTAMP, nullable=True, comment="실행 완료 시간")
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False, comment="생성일시")
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), nullable=False, comment="수정일시")
 
     # Relationships
+    user = relationship("User", back_populates="simulation_sessions")
     strategy = relationship("PortfolioStrategy", back_populates="simulation_sessions")
     statistics = relationship("SimulationStatistics", back_populates="session", uselist=False, cascade="all, delete-orphan")
     daily_values = relationship("SimulationDailyValue", back_populates="session", cascade="all, delete-orphan")
@@ -218,6 +257,9 @@ class SimulationSession(Base):
     __table_args__ = (
         Index('idx_simulation_sessions_status', 'status'),
         Index('idx_simulation_sessions_strategy_date', 'strategy_id', 'start_date', 'end_date'),
+        Index('idx_simulation_sessions_user_created', 'user_id', 'created_at'),  # 마이페이지용
+        Index('idx_simulation_sessions_public_created', 'is_public', 'created_at'),  # 랭킹용
+        Index('idx_simulation_sessions_share_url', 'share_url'),  # 공유 URL 조회
         {"comment": "시뮬레이션 세션 테이블"}
     )
 

@@ -1,8 +1,8 @@
+import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
 import type { Tab } from "@/types";
 
 export * from "./factors";
 export * from "./mockData";
-export * from "./subFactors";
 
 // Tab configurations
 export const HOME_SORT_TABS: Tab[] = [
@@ -34,9 +34,9 @@ export const BACKTEST_RESULT_TABS: Tab[] = [
 ];
 
 // Form default values (백테스트 테스트 기준값)
-export const DEFAULT_INVESTMENT_AMOUNT = 5000; // 5000만원
-export const DEFAULT_START_DATE = "250101"; // 2025년 1월 1일
-export const DEFAULT_END_DATE = "251031"; // 2025년 10월 31일
+export const DEFAULT_INVESTMENT_AMOUNT = 5000; // 1000만원
+export const DEFAULT_START_DATE = getOneYearAgo(); // YYYYMMDD 형식
+export const DEFAULT_END_DATE = getCurrentDate(); // YYYYMMDD 형식
 export const DEFAULT_COMMISSION_RATE = 0.015; // 0.015%
 export const DEFAULT_POSITION_SIZE = 10; // 10%
 export const DEFAULT_MAX_POSITIONS = 10; // 최대 10종목

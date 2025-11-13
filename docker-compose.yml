@@ -13,6 +13,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - quant_network
     healthcheck:
@@ -47,10 +48,11 @@ services:
       dockerfile: Dockerfile
     container_name: sl_backend
     env_file:
-      - ./SL-Back-end/.env
+      - ./SL-Back-end/.env.local
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/${POSTGRES_DB:-quant_investment_db}
-      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/${POSTGRES_DB:-quant_investment_db}
+      # 로컬 개발 환경용 데이터베이스 연결 (Docker 네트워크 내부)
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres123@postgres:5432/quant_investment_db
+      DATABASE_SYNC_URL: postgresql://postgres:postgres123@postgres:5432/quant_investment_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
     ports:

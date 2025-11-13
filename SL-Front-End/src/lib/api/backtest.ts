@@ -10,6 +10,9 @@ import type {
   BacktestResult,
   PaginatedResponse,
   PaginationParams,
+  Factor,
+  SubFactor,
+  Themes,
 } from "@/types/api";
 
 /**
@@ -133,14 +136,32 @@ export async function getBacktestYieldPoints(
  * @param backtestId - 백테스트 ID
  * @returns 백테스트 상태 정보
  */
-export async function getBacktestStatus(backtestId: string): Promise<{
+export interface BacktestStatus {
   status: BacktestResult["status"];
   progress?: number;
-}> {
-  const response = await axiosInstance.get<{
-    status: BacktestResult["status"];
-    progress?: number;
-  }>(`/backtest/${backtestId}/status`);
+  currentDate?: string;
+  buyCount?: number;
+  sellCount?: number;
+  currentReturn?: number;
+  currentCapital?: number;
+  currentMdd?: number;
+  startDate?: string;
+  endDate?: string;
+  yieldPoints?: Array<{
+    date: string;
+    buyCount?: number;
+    sellCount?: number;
+    cumulativeReturn?: number;
+    portfolioValue?: number;
+    cash?: number;
+    positionValue?: number;
+    dailyReturn?: number;
+    value?: number;
+  }>;
+}
+
+export async function getBacktestStatus(backtestId: string): Promise<BacktestStatus> {
+  const response = await axiosInstance.get<BacktestStatus>(`/backtest/${backtestId}/status`);
   return response.data;
 }
 
@@ -152,4 +173,29 @@ export async function getBacktestStatus(backtestId: string): Promise<{
  */
 export async function deleteBacktest(backtestId: string): Promise<void> {
   await axiosInstance.delete(`/backtest/${backtestId}`);
+}
+
+/**
+ * 백테스트 초기화 데이터 통합 조회
+ * - GET /initialize
+ * - 팩터, 서브팩터, 테마 목록을 한 번에 조회합니다
+ * - 3번의 HTTP 요청을 1번으로 최적화하여 초기 로딩 성능 개선 (5초 → 1초)
+ *
+ * @param isServer - 서버 사이드 요청 여부 (SSR용)
+ * @returns 팩터, 서브팩터, 테마 목록을 포함한 객체
+ */
+export async function getBacktestInitData(isServer = false): Promise<{
+  factors: Factor[];
+  sub_factors: SubFactor[];
+  themes: Themes[];
+}> {
+  const axios = isServer ? axiosServerInstance : axiosInstance;
+
+  const response = await axios.get<{
+    factors: Factor[];
+    sub_factors: SubFactor[];
+    themes: Themes[];
+  }>("/initialize");
+
+  return response.data;
 }

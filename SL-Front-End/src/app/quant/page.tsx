@@ -1,182 +1,135 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import { MOCK_SCRIPTS } from "@/constants";
 
+import { Title } from "@/components/common/Title";
+import { SearchBar } from "@/components/quant/list/SearchBar";
+import { StrategyActions } from "@/components/quant/list/StrategyActions";
+import { StrategyList } from "@/components/quant/list/StrategyList";
+import { useStrategyList } from "@/hooks/useStrategyList";
+import type { Strategy } from "@/types/strategy";
+
+/**
+ * 퀀트 전략 목록 페이지 (메인)
+ * Figma 디자인: 01.quant_page.png
+ *
+ * 컴포넌트 구조:
+ * - StrategyActions: 새 전략 만들기, 선택 전략 삭제 버튼
+ * - SearchBar: 전략 검색 기능
+ * - StrategyList: 전략 목록 테이블
+ * - GuideCard: 하단 가이드 카드 섹션
+ */
 export default function QuantPage() {
-  const [selectedScripts, setSelectedScripts] = useState<number[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [hoveredScript, setHoveredScript] = useState<number | null>(null);
-  const [sortDescending, setSortDescending] = useState(true);
+  // 더미 데이터 (향후 서버 API로 교체)
+  // React Compiler가 자동으로 메모이제이션 처리
+  const initialStrategies: Strategy[] = Array.from({ length: 10 }, (_, i) => ({
+    id: i + 1,
+    name: "전략 이름은 이렇게 표시",
+    dailyAverageReturn: i % 3 === 0 ? 99.9 : -99.9,
+    cumulativeReturn: i % 3 === 0 ? 99.9 : -99.9,
+    maxDrawdown: i % 3 === 0 ? 99.99 : -99.99,
+    createdAt: "2025.12.31",
+  }));
 
-  const toggleScript = (id: number) => {
-    setSelectedScripts((prev) =>
-      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id],
-    );
-  };
-
-  const toggleSortOrder = () => {
-    setSortDescending((prev) => !prev);
-  };
-
-  const handleDeleteSelected = () => {
-    if (!selectedScripts.length) return;
-    // TODO: Integrate with delete workflow once API is available.
-  };
-
-  const sortedScripts = useMemo(() => {
-    const scripts = [...MOCK_SCRIPTS];
-    return sortDescending ? scripts : scripts.reverse();
-  }, [sortDescending]);
+  // 전략 목록 관리 훅
+  const {
+    strategies,
+    selectedIds,
+    searchKeyword,
+    isLoading,
+    toggleStrategy,
+    toggleAllStrategies,
+    updateSearchKeyword,
+    executeSearch,
+    deleteSelectedStrategies,
+  } = useStrategyList(initialStrategies);
 
   return (
-    <div className="w-[1000px] quant-container pt-[40px] space-y-6">
-      {/* Page Title */}
-      <h1 className="section-title">내가 만든 전략</h1>
-
-      {/* Actions and Search */}
-      <div className="flex items-center justify-between">
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          <Link
-            href="/quant/new"
-            className="quant-button-secondary inline-flex"
-          >
-            전략 새로 만들기
-          </Link>
-          <button
-            type="button"
-            className="quant-button-secondary"
-            onClick={handleDeleteSelected}
-            disabled={selectedScripts.length === 0}
-          >
-            선택 전략 삭제
-          </button>
-          <button
-            type="button"
-            className="quant-button-secondary"
-            onClick={toggleSortOrder}
-          >
-            정렬 순서 바꾸기
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="flex items-center gap-0">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="전략 이름으로 검색"
-            className="search-input w-[180px] mr-[20px]"
+    <div className="min-h-screen bg-background pb-[3.25rem]">
+      <Title className="mb-5">내가 만든 전략 목록</Title>
+      <div className="bg-bg-surface rounded-md p-5">
+        {/* 액션 버튼 (새 전략 만들기, 선택 전략 삭제) */}
+        <div className="flex mb-6 justify-between">
+          <StrategyActions
+            selectedCount={selectedIds.length}
+            onDelete={deleteSelectedStrategies}
           />
-          <button type="button" className="search-button" aria-label="검색">
-            <Image src="/icons/search.svg" alt="" width={20} height={20} />
+          <SearchBar
+            value={searchKeyword}
+            onChange={updateSearchKeyword}
+            onSearch={executeSearch}
+          />
+        </div>
+
+        {/* 전략 테이블 */}
+        <StrategyList
+          strategies={strategies}
+          selectedIds={selectedIds}
+          onToggleAll={toggleAllStrategies}
+          onToggleItem={toggleStrategy}
+        />
+
+        {/* 페이지네이션 */}
+        <div className="h-8 py-1 flex justify-center items-center gap-[22px]">
+          <button className="hover:bg-bg-surface-hover rounded transition-colors">
+            <Image src="/icons/arrow_left.svg" alt="이전" width={24} height={24} />
+          </button>
+          <div>
+            <button className="font-normal">
+              1
+            </button>
+          </div>
+          <button className="hover:bg-bg-surface-hover rounded transition-colors">
+            <Image
+              src="/icons/arrow_right.svg"
+              alt="다음"
+              width={24}
+              height={24}
+            />
           </button>
         </div>
       </div>
-      <div className="px-[12px] pt-[24px] text-[0.9rem] text-text-tertiary">
-        <span className="text-text-tertiary">전략 이름</span>
-        <span className="text-text-tertiary ml-[312px]">일 평균 수익률</span>
-        <span className="text-text-tertiary ml-[88px]">누적 수익률</span>
-        <span className="text-text-tertiary ml-[112px]">최종 수정일</span>
-        <span className="text-text-tertiary ml-[124px]">생성일</span>
+
+      {/* 하단 가이드 카드 */}
+      <div className="mt-5 grid grid-cols-3 gap-6">
+        <GuideCard
+          icon="📈"
+          title="퀀트 투자에 대해 알아보기 #1"
+          descriptions={["퀀트 투자가 처음이라면, 왜? 가이드를 읽어보세요!", "개발자가 퀀트 투자에 대해 자세히 설명해드립니다 😊"]}
+        />
+        <GuideCard
+          icon="📊"
+          title="퀀트 투자에 대해 알아보기 #2"
+          descriptions={["퀀트 투자에 어느 정도 익숙하신가요?", "그렇다면 본격적으로 전략을 짜면 피봇하세요! 😊"]}
+        />
+        <GuideCard
+          icon="🤔"
+          title="퀀트 투자에서 수익을 내려면?"
+          descriptions={["퀀트 투자에서도 많았던 수익을 내기가 너무 어렵다구요?", "왜? 가이드를 통해 같이 수익을 내어보아요! 😎"]}
+        />
       </div>
+    </div>
+  );
+}
 
-      {/* Script List */}
-      <div className="space-y-4">
-        {sortedScripts.map((script) => {
-          const isHovered = hoveredScript === script.id;
-          const isSelected = selectedScripts.includes(script.id);
+/**
+ * 가이드 카드 컴포넌트
+ */
+interface GuideCardProps {
+  icon: string;
+  title: string;
+  descriptions: string[];
+}
 
-          return (
-            <button
-              key={script.id}
-              className={`list-item ${isSelected ? "is-selected" : ""}`}
-              type="button"
-              onMouseEnter={() => setHoveredScript(script.id)}
-              onMouseLeave={() => setHoveredScript(null)}
-              onClick={() => toggleScript(script.id)}
-              aria-pressed={isSelected}
-            >
-              <div className="flex w-full items-center gap-6 px-[0px] text-[1.1rem]">
-                {/* Checkbox */}
-                <div className="flex w-[60px] items-center justify-center">
-                  <Image
-                    src={isSelected ? "/icons/check_box.svg" : "/icons/check_box_outline_blank.svg"}
-                    alt=""
-                    width={24}
-                    height={24}
-                    aria-hidden="true"
-                  />
-                </div>
-
-                {/* Script Name */}
-                <div
-                  className={`flex w-[220px] text-[1.3rem] items-center font-medium ${isHovered ? "text-hover" : "text-normal"}`}
-                >
-                  {script.name}
-                </div>
-
-                {/* 일 평균 수익률 */}
-                <div
-                  className={`flex flex-1 text-[1.3rem] items-center justify-end font-medium ${
-                    script.avgReturn >= 0
-                      ? isHovered
-                        ? "value-positive"
-                        : "value-positive-normal"
-                      : isHovered
-                        ? "value-negative"
-                        : "value-negative-normal"
-                  }`}
-                >
-                  {script.avgReturn >= 0 ? "+" : ""}
-                  {script.avgReturn}%
-                </div>
-
-                {/* 누적 수익률 */}
-                <div
-                  className={`flex flex-1 text-[1.3rem] items-center justify-end font-medium ${
-                    script.totalReturn >= 0
-                      ? isHovered
-                        ? "value-positive"
-                        : "value-positive-normal"
-                      : isHovered
-                        ? "value-negative"
-                        : "value-negative-normal"
-                  }`}
-                >
-                  {script.totalReturn >= 0 ? "+" : ""}
-                  {script.totalReturn}%
-                </div>
-
-                {/* 최종 수정일 */}
-                <div
-                  className={`flex w-[150px] items-center justify-end text-[0.9rem] ${
-                    isHovered ? "text-hover" : "text-normal"
-                  }`}
-                >
-                  {script.editDate}
-                </div>
-
-                {/* 생성일 */}
-                <div
-                  className={`flex w-[150px] items-center justify-end text-[0.9rem] pr-[12px] ${
-                    isHovered ? "text-hover" : "text-normal"
-                  }`}
-                >
-                  {script.createDate}
-                </div>
-              </div>
-            </button>
-          );
-        })}
+function GuideCard({ icon, title, descriptions }: GuideCardProps) {
+  return (
+    <div className="flex flex-col gap-3 bg-bg-surface rounded-md p-6 shadow-card">
+      <h3 className="flex text-[1.5rem] font-semibold">{icon} {title}</h3>
+      <div className="flex flex-col gap-[18px]">
+        {descriptions.map((desc, index) => (
+          <div key={`${desc}-${index}`} className="text-[18px] font-normal">{desc}</div>
+        ))}
       </div>
-
-      {/* Divider */}
-      <div className="h-px bg-border-subtle" />
     </div>
   );
 }

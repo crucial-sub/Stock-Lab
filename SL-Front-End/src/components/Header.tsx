@@ -1,46 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 
-export function Header() {
-  const pathname = usePathname();
+import { Button } from "./common";
 
-  const navItems = [
-    { href: "/", label: "홈" },
-    { href: "/quant", label: "퀀트 투자" },
-    { href: "/mypage", label: "마이페이지" },
-  ];
+interface HeaderProps {
+  userName?: string;
+}
+
+export function Header({
+  userName = "은따거",
+}: HeaderProps) {
+  const router = useRouter();
+
+  const handleCreateStrategy = () => {
+    router.push("/quant/new");
+  };
+
+  const handleLogin = () => {
+    router.push("/login");
+  };
 
   return (
-    <header className="border-border-default">
-      <div className="quant-container flex h-[120px] pb-[8px] items-end justify-start">
+    <header className="fixed inset-x-0 top-0 z-50 h-24 w-full bg-white shadow-header">
+      <div className="relative flex h-full items-center px-12 py-6">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-[1.8rem] font-bold text-brand mb-[-4px]">Stock Lab</span>
+        <Link href="/" className="font-circular">
+          <div className="flex h-12 items-start">
+            <span className="text-3xl font-medium text-brand-primary">stock</span>
+            <span className="self-end text-3xl font-medium text-accent-primary">
+              lab
+            </span>
+          </div>
         </Link>
 
-        {/* Navigation */}
-        <nav className="flex items-center gap-6 pl-[60px]">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`text-[1.2rem] transition-colors ${
-                pathname === item.href
-                  ? "text-text-primary font-semibold hover:text-text-primary"
-                  : "text-text-quarternary hover:text-text-primary hover:font-semibold"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="absolute left-[252px] right-10 flex items-center justify-between">
+          {/* Welcome message */}
+          <div>
+            <p className="font-sans text-xl font-normal text-black">
+              {userName}님, 환영합니다!
+            </p>
+          </div>
 
-        {/* Login Button */}
-        <button type="button" className="ml-auto text-[1.2rem] font-medium text-text-primary">
-          로그인
-        </button>
+          {/* Action buttons */}
+          <div className="flex gap-[21px]">
+            <Button variant="primary" size="md" onClick={handleCreateStrategy}>
+              새 전략 만들기
+            </Button>
+            <Button variant="secondary" size="md" onClick={handleLogin}>
+              로그인
+            </Button>
+          </div>
+        </div>
       </div>
     </header>
   );

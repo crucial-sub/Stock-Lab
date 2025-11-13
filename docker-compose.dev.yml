@@ -45,10 +45,11 @@ services:
       dockerfile: Dockerfile.dev
     container_name: sl_backend_dev
     env_file:
-      - ./SL-Back-end/.env
+      - ./SL-Back-end/.env.local
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/${POSTGRES_DB:-quant_investment_db}
-      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/${POSTGRES_DB:-quant_investment_db}
+      # SSH 터널을 통한 RDS 연결 (실제 데이터가 있는 DB)
+      DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db
+      DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
       DEBUG: "true"
@@ -89,6 +90,8 @@ services:
       # Mount source code for hot-reload
       - ./SL-Front-End/src:/app/src
       - ./SL-Front-End/public:/app/public
+      - ./SL-Front-End/package.json:/app/package.json
+      - ./SL-Front-End/pnpm-lock.yaml:/app/pnpm-lock.yaml
       - ./SL-Front-End/next.config.ts:/app/next.config.ts
       - ./SL-Front-End/tailwind.config.js:/app/tailwind.config.js
       - ./SL-Front-End/tsconfig.json:/app/tsconfig.json

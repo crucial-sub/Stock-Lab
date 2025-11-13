@@ -2,11 +2,48 @@ import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
 import type { BacktestRunRequest } from "@/types/api";
 import { create } from "zustand";
 
+// ========================================
+// UI 전용 조건 타입 정의
+// ========================================
+interface BuyConditionUI {
+  id: string;
+  factorName: string | null;
+  subFactorName: string | null;
+  operator: string;
+  value: string;
+  argument?: string;
+}
+
+interface SellConditionUI {
+  id: string;
+  factorName: string | null;
+  subFactorName: string | null;
+  operator: string;
+  value: string;
+  argument?: string;
+}
+
 /**
  * 백테스트 설정 전역 상태 관리 스토어
  * BacktestRunRequest 타입과 완벽하게 일치하는 형식으로 모든 설정값을 저장합니다.
  */
 interface BacktestConfigStore extends BacktestRunRequest {
+  // UI 전용 상태
+  buyConditionsUI: BuyConditionUI[];
+  sellConditionsUI: SellConditionUI[];
+
+  // Buy 조건 관리 함수
+  addBuyConditionUI: () => void;
+  updateBuyConditionUI: (id: string, updates: Partial<BuyConditionUI>) => void;
+  removeBuyConditionUI: (id: string) => void;
+
+  // Sell 조건 관리 함수
+  addSellConditionUI: () => void;
+  updateSellConditionUI: (id: string, updates: Partial<SellConditionUI>) => void;
+  removeSellConditionUI: (id: string) => void;
+
+  // API 변환 함수
+  syncUIToAPI: () => void;
   // 설정값 업데이트 함수들
   setUserId: (userId: string) => void;
   setStrategyName: (name: string) => void;
@@ -15,6 +52,7 @@ interface BacktestConfigStore extends BacktestRunRequest {
   setEndDate: (date: string) => void;
   setInitialInvestment: (amount: number) => void;
   setCommissionRate: (rate: number) => void;
+  setSlippage: (slippage: number) => void;
 
   // 매수 조건 업데이트
   setBuyConditions: (conditions: BacktestRunRequest["buy_conditions"]) => void;
@@ -25,15 +63,16 @@ interface BacktestConfigStore extends BacktestRunRequest {
   setMaxHoldings: (max: number) => void;
   setMaxBuyValue: (value: number | null) => void;
   setMaxDailyStock: (max: number | null) => void;
-  setBuyCostBasis: (basis: string) => void;
+  setBuyPriceBasis: (basis: string) => void;
+  setBuyPriceOffset: (offset: number) => void;
 
   // 매도 조건 업데이트
   setTargetAndLoss: (value: BacktestRunRequest["target_and_loss"]) => void;
   setHoldDays: (value: BacktestRunRequest["hold_days"]) => void;
   setConditionSell: (value: BacktestRunRequest["condition_sell"]) => void;
 
-
-  // setTargetStocks: (stocks: string[]) => void;
+  // 매매 대상 업데이트
+  setTradeTargets: (value: BacktestRunRequest["trade_targets"]) => void;
 
   // 모든 설정 초기화
   reset: () => void;
@@ -44,17 +83,19 @@ interface BacktestConfigStore extends BacktestRunRequest {
 
 /**
  * 기본 설정값
- * - 날짜는 동적으로 계산 (현재 날짜, 1년 전)
+ * - 날짜는 고정된 초기값 사용 (하이드레이션 이슈 방지)
+ * - 실제 날짜는 클라이언트 사이드에서 설정
  * - 토글 기본값: 목표가/손절가 on, 나머지 off
  */
 const defaultConfig: BacktestRunRequest = {
   user_id: "default_user", // 실제로는 로그인한 사용자 ID를 사용
   strategy_name: "새 전략", // 기본 전략 이름
   is_day_or_month: "daily", // "일봉"
-  start_date: getOneYearAgo(), // 1년 전 날짜 (YYYYMMDD)
-  end_date: getCurrentDate(), // 현재 날짜 (YYYYMMDD)
+  start_date: "", // 초기값 공백 (클라이언트에서 설정)
+  end_date: "", // 초기값 공백 (클라이언트에서 설정)
   initial_investment: 5000, // 5000만원
   commission_rate: 0.1, // 0.1%
+  slippage: 0.0, // 0.0% (슬리피지)
 
   // 매수 조건 기본값
   buy_conditions: [],
@@ -65,7 +106,8 @@ const defaultConfig: BacktestRunRequest = {
   max_holdings: 10, // 10종목
   max_buy_value: null, // null (토글 off)
   max_daily_stock: null, // null (토글 off)
-  buy_cost_basis: "{전일 종가} 0", // 전일 종가, 0%
+  buy_price_basis: "전일 종가", // 매수 가격 기준
+  buy_price_offset: 0, // 기준가 대비 증감값(%)
 
   // 매도 조건 기본값
   target_and_loss: {
@@ -74,7 +116,12 @@ const defaultConfig: BacktestRunRequest = {
   },
   hold_days: null, // 토글 off
   condition_sell: null, // 토글 off
-  target_stocks: [], // 빈 배열 (모든 체크박스 해제)
+  trade_targets: {
+    use_all_stocks: true,
+    selected_universes: [],
+    selected_themes: [],
+    selected_stocks: [],
+  },
 };
 
 /**
@@ -91,6 +138,131 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
   // 초기값 설정
   ...defaultConfig,
 
+  // UI 전용 초기 상태
+  buyConditionsUI: [],
+  sellConditionsUI: [],
+
+  // ========================================
+  // Buy 조건 관리 함수
+  // ========================================
+  addBuyConditionUI: () => set((state) => {
+    const newId = `A${state.buyConditionsUI.length}`;
+    return {
+      buyConditionsUI: [
+        ...state.buyConditionsUI,
+        {
+          id: newId,
+          factorName: null,
+          subFactorName: null,
+          operator: '>',
+          value: '',
+        }
+      ]
+    };
+  }),
+
+  updateBuyConditionUI: (id, updates) => set((state) => ({
+    buyConditionsUI: state.buyConditionsUI.map(c =>
+      c.id === id ? { ...c, ...updates } : c
+    )
+  })),
+
+  removeBuyConditionUI: (id) => set((state) => ({
+    buyConditionsUI: state.buyConditionsUI.filter(c => c.id !== id)
+  })),
+
+  // ========================================
+  // Sell 조건 관리 함수
+  // ========================================
+  addSellConditionUI: () => set((state) => {
+    const newId = `A${state.sellConditionsUI.length}`;
+    return {
+      sellConditionsUI: [
+        ...state.sellConditionsUI,
+        {
+          id: newId,
+          factorName: null,
+          subFactorName: null,
+          operator: '>',
+          value: '',
+        }
+      ]
+    };
+  }),
+
+  updateSellConditionUI: (id, updates) => set((state) => ({
+    sellConditionsUI: state.sellConditionsUI.map(c =>
+      c.id === id ? { ...c, ...updates } : c
+    )
+  })),
+
+  removeSellConditionUI: (id) => set((state) => ({
+    sellConditionsUI: state.sellConditionsUI.filter(c => c.id !== id)
+  })),
+
+  // ========================================
+  // UI → API 변환 및 동기화
+  // ========================================
+  syncUIToAPI: () => {
+    const { buyConditionsUI, sellConditionsUI } = get();
+
+    // Buy 조건 변환
+    const buyConditions = buyConditionsUI
+      .filter(c => c.factorName !== null)
+      .map(c => {
+        let expLeftSide = '';
+        if (c.subFactorName) {
+          expLeftSide = c.argument
+            ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
+            : `${c.subFactorName}({${c.factorName}})`;
+        } else {
+          expLeftSide = `{${c.factorName}}`;
+        }
+
+        return {
+          name: c.id,
+          exp_left_side: expLeftSide,
+          inequality: c.operator,
+          exp_right_side: Number(c.value) || 0, // API 명세 확정 후 수정 예정
+        };
+      });
+
+    // Sell 조건 변환
+    const sellConditions = sellConditionsUI
+      .filter(c => c.factorName !== null)
+      .map(c => {
+        let expLeftSide = '';
+        if (c.subFactorName) {
+          expLeftSide = c.argument
+            ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
+            : `${c.subFactorName}({${c.factorName}})`;
+        } else {
+          expLeftSide = `{${c.factorName}}`;
+        }
+
+        return {
+          name: c.id,
+          exp_left_side: expLeftSide,
+          inequality: c.operator,
+          exp_right_side: Number(c.value) || 0, // API 명세 확정 후 수정 예정
+        };
+      });
+
+    // API 상태 업데이트
+    set({ buy_conditions: buyConditions });
+
+    // Sell 조건도 condition_sell에 반영
+    const currentConditionSell = get().condition_sell;
+    if (currentConditionSell !== null) {
+      set({
+        condition_sell: {
+          ...currentConditionSell,
+          sell_conditions: sellConditions,
+        }
+      });
+    }
+  },
+
   // 기본 설정 업데이트 함수들
   setUserId: (userId) => set({ user_id: userId }),
   setStrategyName: (name) => set({ strategy_name: name }),
@@ -99,6 +271,7 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
   setEndDate: (date) => set({ end_date: date }),
   setInitialInvestment: (amount) => set({ initial_investment: amount }),
   setCommissionRate: (rate) => set({ commission_rate: rate }),
+  setSlippage: (slippage) => set({ slippage: slippage }),
 
   // 매수 조건 업데이트 함수들
   setBuyConditions: (conditions) => set({ buy_conditions: conditions }),
@@ -109,20 +282,25 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
   setMaxHoldings: (max) => set({ max_holdings: max }),
   setMaxBuyValue: (value) => set({ max_buy_value: value }),
   setMaxDailyStock: (max) => set({ max_daily_stock: max }),
-  setBuyCostBasis: (basis) => set({ buy_cost_basis: basis }),
+  setBuyPriceBasis: (basis) => set({ buy_price_basis: basis }),
+  setBuyPriceOffset: (offset) => set({ buy_price_offset: offset }),
 
   // 매도 조건 업데이트 함수들
   setTargetAndLoss: (value) => set({ target_and_loss: value }),
   setHoldDays: (value) => set({ hold_days: value }),
   setConditionSell: (value) => set({ condition_sell: value }),
 
-  // setTargetStocks: (stocks) => set({ target_stocks: stocks }),
+  // 매매 대상 업데이트 함수
+  setTradeTargets: (value) => set({ trade_targets: value }),
 
   // 초기화 함수
   reset: () => set(defaultConfig),
 
   // BacktestRunRequest 형식으로 데이터 반환
   getBacktestRequest: () => {
+    // UI → API 동기화
+    get().syncUIToAPI();
+
     const state = get();
     return {
       user_id: state.user_id,
@@ -132,6 +310,7 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
       end_date: state.end_date,
       initial_investment: state.initial_investment,
       commission_rate: state.commission_rate,
+      slippage: state.slippage,
       buy_conditions: state.buy_conditions,
       buy_logic: state.buy_logic,
       priority_factor: state.priority_factor,
@@ -140,11 +319,12 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
       max_holdings: state.max_holdings,
       max_buy_value: state.max_buy_value,
       max_daily_stock: state.max_daily_stock,
-      buy_cost_basis: state.buy_cost_basis,
+      buy_price_basis: state.buy_price_basis,
+      buy_price_offset: state.buy_price_offset,
       target_and_loss: state.target_and_loss,
       hold_days: state.hold_days,
       condition_sell: state.condition_sell,
-      target_stocks: state.target_stocks,
+      trade_targets: state.trade_targets,
     };
   },
 }));

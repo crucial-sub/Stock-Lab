@@ -75,5 +75,5 @@ temp/
 *.tmp
 
 # Scripts (if not needed in container)
-scripts/
+!scripts/
 check_backtest.py

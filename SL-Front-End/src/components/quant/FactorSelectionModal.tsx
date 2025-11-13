@@ -1,55 +1,27 @@
 "use client";
 
-import { Button, Input } from "@/components/common";
-import type { Factor, SubFactor } from "@/constants";
-import {
-  FACTORS,
-  getFactorsByCategory,
-  searchFactors,
-  SUB_FACTORS,
-} from "@/constants";
-import { useDebounce } from "@/hooks";
-import { useEffect, useState } from "react";
+import { useFactorsQuery } from "@/hooks/useFactorsQuery";
+import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
+import type { Factor, SubFactor } from "@/types/api";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 
-/**
- * 팩터 선택 모달 Props 인터페이스
- */
 interface FactorSelectionModalProps {
-  /** 모달 오픈 여부 */
   isOpen: boolean;
-  /** 모달 닫기 핸들러 */
   onClose: () => void;
-  /**
-   * 팩터와 함수 선택 완료 핸들러
-   * @param factorId 선택된 팩터 ID
-   * @param factorName 선택된 팩터 이름
-   * @param subFactorId 선택된 함수 ID (기본값: "default")
-   */
-  onSelect: (
-    factorId: string,
-    factorName: string,
-    subFactorId: string,
-  ) => void;
-  /** 현재 조건 초기값 (편집 모드) */
+  onSelect: (factorId: string, factorName: string, subFactorId: string, argument?: string) => void;
   initialValues?: {
-    factorId?: string;
-    subFactorId?: string;
+    factorId: string;
+    subFactorId: string;
+    argument?: string;
   };
 }
 
 /**
- * 팩터 선택 모달 컴포넌트
- *
- * 3분할 레이아웃으로 구성:
- * - 왼쪽: 검색 + 카테고리별 팩터 목록
- * - 중앙: 선택된 팩터 정보 (이름, 공식)
- * - 오른쪽: 함수 목록
- *
- * 주요 기능:
- * 1. 실시간 검색 (디바운스 적용, 250ms)
- * 2. 검색 결과의 첫 번째 팩터 자동 선택
- * 3. 카테고리별 팩터 그룹핑
- * 4. 팩터/함수 선택 후 "입력" 버튼으로 확정
+ * 팩터 선택 모달 - 디자인 시안 기반 재구현
+ * 1단계: 팩터 선택
+ * 2단계: 서브팩터(함수) 선택
+ * 3단계: 인자(argument) 선택 (서브팩터가 인자를 가진 경우)
  */
 export function FactorSelectionModal({
   isOpen,
@@ -57,286 +29,309 @@ export function FactorSelectionModal({
   onSelect,
   initialValues,
 }: FactorSelectionModalProps) {
-  // ===== 상태 관리 =====
+  // 서버 데이터 가져오기
+  const { data: factors = [], isLoading: isLoadingFactors } = useFactorsQuery();
+  const { data: subFactors = [], isLoading: isLoadingSubFactors } = useSubFactorsQuery();
 
-  /** 검색어 입력 상태 */
-  const [searchQuery, setSearchQuery] = useState("");
-
-  /** 디바운스가 적용된 검색어 (250ms 지연) */
-  const debouncedQuery = useDebounce(searchQuery, 250);
-
-  /** 현재 선택된 팩터 */
+  const [currentTab, setCurrentTab] = useState<"factor" | "subfactor">("factor");
   const [selectedFactor, setSelectedFactor] = useState<Factor | null>(null);
-
-  /** 현재 선택된 함수 ID (기본값: "default") */
-  const [selectedSubFactorId, setSelectedSubFactorId] = useState(
-    initialValues?.subFactorId || "default",
-  );
-
-  // ===== 검색 로직 및 자동 선택 =====
-
-  /**
-   * 디바운스된 검색어가 변경될 때 자동으로 첫 번째 결과 선택
-   * - 검색어가 비어있으면: 모든 팩터 표시, 자동 선택 없음
-   * - 검색 결과가 있으면: 첫 번째 팩터 자동 선택
-   * - 검색 결과가 없으면: 선택 해제
-   */
-  useEffect(() => {
-    if (debouncedQuery.trim() === "") {
-      // 검색어가 없으면 선택 해제
-      setSelectedFactor(null);
-      return;
-    }
-
-    const results = searchFactors(debouncedQuery);
-    if (results.length > 0) {
-      // 첫 번째 검색 결과 자동 선택
-      setSelectedFactor(results[0]);
-    } else {
-      // 검색 결과 없음
-      setSelectedFactor(null);
-    }
-  }, [debouncedQuery]);
-
-  /**
-   * 모달이 열릴 때 상태 초기화 또는 초기값 설정
-   */
-  useEffect(() => {
-    if (isOpen) {
-      setSearchQuery("");
-
-      // 초기값이 있으면 설정 (편집 모드)
-      if (initialValues?.factorId) {
-        const factor = FACTORS.find((f) => f.id === initialValues.factorId);
-        setSelectedFactor(factor || null);
-      } else {
-        setSelectedFactor(null);
-      }
-
-      setSelectedSubFactorId(initialValues?.subFactorId || "default");
-    }
-  }, [isOpen, initialValues]);
-
-  // ===== 이벤트 핸들러 =====
-
-  /**
-   * 팩터 선택 핸들러
-   * @param factor 선택된 팩터 객체
-   */
-  const handleFactorSelect = (factor: Factor) => {
-    setSelectedFactor(factor);
-  };
-
-  /**
-   * 함수 선택 핸들러
-   * @param subFactorId 선택된 함수 ID
-   */
-  const handleSubFactorSelect = (subFactorId: string) => {
-    setSelectedSubFactorId(subFactorId);
-  };
-
-  /**
-   * "입력" 버튼 클릭 핸들러
-   * 선택된 팩터와 함수를 부모 컴포넌트로 전달
-   */
-  const handleSubmit = () => {
-    if (!selectedFactor) return;
-
-    onSelect(
-      selectedFactor.id,
-      selectedFactor.name,
-      selectedSubFactorId,
-    );
-    onClose();
-  };
-
-  // ===== 데이터 준비 =====
-
-  /** 카테고리별로 그룹핑된 팩터 목록 */
-  const factorsByCategory = getFactorsByCategory();
-
-  /**
-   * 표시할 팩터 목록
-   * - 검색어가 있으면: 검색 결과
-   * - 검색어가 없으면: 카테고리별 전체 팩터
-   */
-  const displayFactors =
-    debouncedQuery.trim() === ""
-      ? factorsByCategory
-      : { 검색결과: searchFactors(debouncedQuery) };
-
-  // ===== 렌더링 =====
+  const [selectedSubFactor, setSelectedSubFactor] = useState<SubFactor | null>(null);
+  const [selectedArgument, setSelectedArgument] = useState<string>("");
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* 배경 오버레이 (클릭 시 모달 닫기) */}
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        aria-label="Close modal"
-      />
+  // SSR 환경에서 document가 없을 수 있음
+  if (typeof window === 'undefined') return null;
 
-      {/* 모달 본체 */}
-      <div className="relative z-10 w-[1000px] h-[769px] rounded-lg border border-border-default bg-[#1f1f1f] p-6 shadow-hard flex flex-col">
-        {/* ===== 헤더 ===== */}
-        <div className="mb-6 flex items-center justify-between border-b border-border-default pb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-brand">⭐</span>
-            <h2 className="text-lg font-semibold text-text-primary">
-              팩터 선택
-            </h2>
+  // 카테고리별로 팩터 그룹화
+  const groupedFactors = factors.reduce((acc, factor) => {
+    if (!acc[factor.category]) {
+      acc[factor.category] = [];
+    }
+    acc[factor.category].push(factor);
+    return acc;
+  }, {} as Record<string, Factor[]>);
+
+  const handleFactorSelect = (factor: Factor) => {
+    setSelectedFactor(factor);
+    // 바로 서브팩터 탭으로 이동하지 않음 (사용자가 "선택 완료" 버튼 클릭 시 이동)
+  };
+
+  const handleFactorConfirm = () => {
+    if (!selectedFactor) return;
+    setCurrentTab("subfactor");
+  };
+
+  const handleSubFactorSelect = (subFactor: SubFactor) => {
+    setSelectedSubFactor(subFactor);
+    // arguments가 있으면 첫 번째를 기본 선택
+    if (subFactor.arguments && subFactor.arguments.length > 0) {
+      setSelectedArgument(subFactor.arguments[0]);
+    } else {
+      setSelectedArgument("");
+    }
+  };
+
+  const handleConfirm = () => {
+    if (!selectedFactor || !selectedSubFactor) return;
+
+    // 서브팩터가 arguments를 가지고 있으면 argument도 함께 전달
+    const hasArguments = selectedSubFactor.arguments && selectedSubFactor.arguments.length > 0;
+
+    onSelect(
+      String(selectedFactor.id),
+      selectedFactor.name,
+      String(selectedSubFactor.id),
+      hasArguments ? selectedArgument : undefined
+    );
+
+    handleClose();
+  };
+
+  const handleClose = () => {
+    // 초기화
+    setSelectedFactor(null);
+    setSelectedSubFactor(null);
+    setSelectedArgument("");
+    setCurrentTab("factor");
+    onClose();
+  };
+
+  // 확인 버튼 활성화 조건
+  const isConfirmEnabled = () => {
+    if (!selectedFactor || !selectedSubFactor) return false;
+
+    // 서브팩터가 arguments를 가지고 있으면 argument도 선택되어야 함
+    if (selectedSubFactor.arguments && selectedSubFactor.arguments.length > 0) {
+      return selectedArgument !== "";
+    }
+
+    return true;
+  };
+
+  // 조건식 미리보기 생성
+  const getPreviewExpression = () => {
+    if (!selectedFactor || !selectedSubFactor) return "";
+
+    const factorName = selectedFactor.display_name;
+    const subFactorName = selectedSubFactor.display_name;
+
+    if (selectedArgument) {
+      return `${subFactorName}(${factorName}, ${selectedArgument})`;
+    } else {
+      return `${subFactorName}(${factorName})`;
+    }
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center"
+      style={{ zIndex: 99999 }}
+      onClick={handleClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-2xl w-[700px] max-h-[90vh] overflow-hidden flex flex-col relative"
+        style={{ zIndex: 100000 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 모달 헤더 */}
+        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div className="flex gap-8">
+            <button
+              onClick={() => setCurrentTab("factor")}
+              className={`text-base font-semibold pb-1 transition-colors ${currentTab === "factor"
+                ? "text-brand-primary"
+                : "text-gray-400"
+                }`}
+            >
+              팩터 선택하기
+            </button>
+            <button
+              onClick={() => setCurrentTab("subfactor")}
+              disabled={!selectedFactor}
+              className={`text-base font-semibold pb-1 transition-colors ${currentTab === "subfactor" && selectedFactor
+                ? "text-brand-primary"
+                : "text-gray-400 disabled:cursor-not-allowed"
+                }`}
+            >
+              함수 선택하기
+            </button>
           </div>
+        </div>
+
+        {/* 모달 컨텐츠 */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {isLoadingFactors || isLoadingSubFactors ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-gray-600">데이터를 불러오는 중...</div>
+            </div>
+          ) : currentTab === "factor" ? (
+            /* === 팩터 선택 탭 === */
+            <div className="grid grid-cols-2 gap-6">
+              {/* 좌측: 팩터 목록 (카테고리별 그룹화) */}
+              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                {Object.entries(groupedFactors).map(([category, categoryFactors]) => (
+                  <div key={category}>
+                    <h3 className="text-sm font-bold text-gray-900 mb-2 sticky top-0 bg-white py-1">
+                      {category}
+                    </h3>
+                    <ul className="space-y-1">
+                      {categoryFactors.map((factor) => (
+                        <li key={factor.id}>
+                          <button
+                            onClick={() => handleFactorSelect(factor)}
+                            className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${selectedFactor?.id === factor.id
+                              ? "bg-brand-primary text-white font-medium"
+                              : "text-gray-700 hover:bg-gray-50"
+                              }`}
+                          >
+                            • {factor.display_name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+
+              {/* 우측: 선택된 팩터 정보 */}
+              <div className="pl-6 border-l border-gray-200">
+                <h3 className="text-sm font-bold text-gray-900 mb-4">
+                  선택된 팩터: <span className="text-brand-primary">{selectedFactor ? selectedFactor.display_name : "-"}</span>
+                </h3>
+                {selectedFactor ? (
+                  <div className="space-y-3">
+                    {selectedFactor.description && (
+                      <div className="text-sm text-gray-700">
+                        <p className="whitespace-pre-line">{selectedFactor.description}</p>
+                      </div>
+                    )}
+                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                      <p className="font-medium text-gray-800 mb-1">일반 범위:</p>
+                      <p>0 ~ 100점 (높을수록 좋음)</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">팩터를 선택해주세요</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* === 서브팩터(함수) 선택 탭 === */
+            <div className="grid grid-cols-2 gap-6">
+              {/* 좌측: 서브팩터 목록 (라디오 버튼 스타일) */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 mb-3">
+                  전년된 함수 목록
+                </h3>
+                <ul className="space-y-2">
+                  {subFactors.map((subFactor) => (
+                    <li key={subFactor.id}>
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input
+                          type="radio"
+                          name="subfactor"
+                          checked={selectedSubFactor?.id === subFactor.id}
+                          onChange={() => handleSubFactorSelect(subFactor)}
+                          className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
+                        />
+                        <span className={`text-sm ${selectedSubFactor?.id === subFactor.id
+                          ? "text-brand-primary font-medium"
+                          : "text-gray-700 group-hover:text-gray-900"
+                          }`}>
+                          {subFactor.display_name}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* 우측: 선택된 서브팩터 정보 + 인자 선택 */}
+              <div className="pl-6 border-l border-gray-200">
+                {selectedSubFactor ? (
+                  <div className="space-y-4">
+                    {/* 함수 설명 */}
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 mb-2">
+                        선택된 함수: <span className="text-brand-primary">{selectedSubFactor.display_name}</span>
+                      </h3>
+                      <p className="text-sm text-gray-700 mb-3">
+                        {selectedSubFactor.description}
+                      </p>
+                    </div>
+
+                    {/* 인자 선택 (arguments가 있는 경우) - 라디오 버튼 스타일 */}
+                    {selectedSubFactor.arguments && selectedSubFactor.arguments.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-gray-800">
+                          인자 선택 <span className="text-brand-primary">*</span>
+                        </p>
+                        <div className="space-y-2">
+                          {selectedSubFactor.arguments.map((arg) => (
+                            <label key={arg} className="flex items-center gap-2 cursor-pointer group">
+                              <input
+                                type="radio"
+                                name="argument"
+                                checked={selectedArgument === arg}
+                                onChange={() => setSelectedArgument(arg)}
+                                className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
+                              />
+                              <span className={`text-sm ${selectedArgument === arg
+                                ? "text-brand-primary font-medium"
+                                : "text-gray-700 group-hover:text-gray-900"
+                                }`}>
+                                {arg}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 조건식 미리보기 */}
+                    {selectedFactor && selectedSubFactor && (
+                      <div className="mt-6 pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                          조건식 미리보기
+                        </h4>
+                        <div className="bg-gray-50 p-3 rounded">
+                          <p className="text-sm font-mono text-brand-primary mb-1">
+                            {getPreviewExpression()}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            입력한 공식으로 팩터 값이 진행됩니다.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">함수를 선택해주세요</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 모달 푸터 */}
+        <div className="border-t border-gray-200 px-6 py-4 flex justify-center gap-3">
           <button
-            type="button"
-            onClick={onClose}
-            className="text-text-tertiary hover:text-text-primary"
+            onClick={currentTab === "factor" ? handleClose : () => setCurrentTab("factor")}
+            className="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
           >
-            ✕
+            {currentTab === "factor" ? "취소" : "이전 단계"}
+          </button>
+          <button
+            onClick={currentTab === "factor" ? handleFactorConfirm : handleConfirm}
+            disabled={currentTab === "factor" ? !selectedFactor : !isConfirmEnabled()}
+            className="px-6 py-2 bg-brand-primary text-white rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            {currentTab === "factor" ? "다음 단계" : "선택 완료"}
           </button>
         </div>
-
-        {/* ===== 3분할 레이아웃 (검색/팩터 목록 | 팩터 정보 | 함수 목록) ===== */}
-        <div className="mb-6 grid grid-cols-[360px_1fr_360px] gap-4 flex-1 overflow-hidden">
-          {/* ===== 왼쪽: 검색 + 팩터 목록 ===== */}
-          <div className="flex flex-col">
-            {/* 검색 입력 */}
-            <div className="mb-3">
-              <Input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="팩터 검색..."
-                className="text-sm"
-              />
-            </div>
-
-            {/* 팩터 목록 (카테고리별 그룹핑) */}
-            <div className="flex-1 space-y-3 overflow-y-auto rounded-lg border border-border-default bg-[#232323] p-3">
-              {Object.entries(displayFactors).map(
-                ([category, factors]) =>
-                  factors.length > 0 && (
-                    <div key={category}>
-                      {/* 카테고리 제목 */}
-                      <h3 className="mb-2 text-xs font-semibold text-brand">
-                        {category}
-                      </h3>
-
-                      {/* 팩터 목록 */}
-                      <div className="space-y-1">
-                        {factors.map((factor) => (
-                          <button
-                            key={factor.id}
-                            type="button"
-                            onClick={() => handleFactorSelect(factor)}
-                            className={`w-full rounded px-2 py-1.5 text-left text-xs transition-colors ${
-                              selectedFactor?.id === factor.id
-                                ? "bg-brand/20 text-brand"
-                                : "text-text-secondary hover:bg-bg-surface hover:text-text-primary"
-                            }`}
-                          >
-                            {factor.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ),
-              )}
-
-              {/* 검색 결과 없음 */}
-              {debouncedQuery.trim() !== "" &&
-                Object.values(displayFactors).every(
-                  (factors) => factors.length === 0,
-                ) && (
-                  <div className="py-8 text-center text-sm text-text-tertiary">
-                    검색 결과가 없습니다
-                  </div>
-                )}
-            </div>
-          </div>
-
-          {/* ===== 중앙: 선택된 팩터 정보 및 조건식 설정 ===== */}
-          <div className="flex flex-col rounded-lg border border-border-default bg-[#232323] p-4">
-            {selectedFactor ? (
-              <>
-                {/* 팩터 이름 */}
-                <div className="mb-4">
-                  <h3 className="mb-1 text-sm font-medium text-brand">
-                    팩터 이름
-                  </h3>
-                  <p className="text-base text-text-primary">
-                    {selectedFactor.name}
-                  </p>
-                </div>
-
-                {/* 팩터 카테고리 */}
-                <div className="mb-4">
-                  <h3 className="mb-1 text-sm font-medium text-brand">
-                    카테고리
-                  </h3>
-                  <p className="text-sm text-text-secondary">
-                    {selectedFactor.category}
-                  </p>
-                </div>
-
-                {/* 계산 공식 */}
-                <div className="flex-1">
-                  <h3 className="mb-2 text-sm font-medium text-brand">
-                    계산 공식
-                  </h3>
-                  <div className="rounded bg-bg-elevated p-3">
-                    <code className="whitespace-pre-wrap text-xs text-text-primary">
-                      {selectedFactor.formula}
-                    </code>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-text-tertiary">
-                팩터를 선택해주세요
-              </div>
-            )}
-          </div>
-
-          {/* ===== 오른쪽: 함수 목록 ===== */}
-          <div className="flex flex-col">
-            <h3 className="mb-3 text-sm font-medium text-text-secondary">
-              함수 선택
-            </h3>
-
-            <div className="flex-1 space-y-1 overflow-y-auto rounded-lg border border-border-default bg-[#232323] p-3">
-              {SUB_FACTORS.map((func: SubFactor) => (
-                <button
-                  key={func.id}
-                  type="button"
-                  onClick={() => handleSubFactorSelect(func.id)}
-                  className={`w-full rounded px-2 py-1.5 text-left text-xs transition-colors ${
-                    selectedSubFactorId === func.id
-                      ? "bg-brand/20 text-brand"
-                      : "text-text-secondary hover:bg-bg-surface hover:text-text-primary"
-                  }`}
-                >
-                  <div className="font-medium">{func.name}</div>
-                  {func.description && (
-                    <div className="mt-0.5 text-xs text-text-tertiary">
-                      {func.description}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ===== 푸터: 입력 버튼 ===== */}
-        <div className="flex justify-center">
-          <Button onClick={handleSubmit} disabled={!selectedFactor}>
-            입력
-          </Button>
-        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

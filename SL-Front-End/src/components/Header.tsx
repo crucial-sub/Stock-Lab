@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { authApi } from "@/lib/api/auth";
 import { Button } from "./common";
 
 interface HeaderProps {
@@ -11,15 +12,37 @@ interface HeaderProps {
 }
 
 export function Header({
-  userName = "은따거",
+  userName,
 }: HeaderProps) {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
   useEffect(() => {
-    // 로그인 상태 확인
-    const token = localStorage.getItem("access_token");
-    setIsLoggedIn(!!token);
+    let mounted = true;
+
+    const fetchCurrentUser = async () => {
+      try {
+        const user = await authApi.getCurrentUser();
+        if (!mounted) {
+          return;
+        }
+        setIsLoggedIn(true);
+        setCurrentUserName(user.name);
+      } catch {
+        if (!mounted) {
+          return;
+        }
+        setIsLoggedIn(false);
+        setCurrentUserName(null);
+      }
+    };
+
+    fetchCurrentUser();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleCreateStrategy = () => {
@@ -30,11 +53,14 @@ export function Header({
     router.push("/login");
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
+  const handleLogout = async () => {
+    await authApi.logout();
     setIsLoggedIn(false);
+    setCurrentUserName(null);
     router.push("/");
   };
+
+  const displayName = currentUserName ?? userName ?? "사용자";
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-24 w-full bg-white shadow-header">
@@ -53,7 +79,7 @@ export function Header({
           {/* Welcome message */}
           <div>
             <p className="font-sans text-xl font-normal text-black">
-              {userName}님, 환영합니다!
+              {displayName}님, 환영합니다!
             </p>
           </div>
 

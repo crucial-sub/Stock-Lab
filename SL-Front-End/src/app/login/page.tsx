@@ -62,8 +62,7 @@ export default function LoginPage() {
     if (Object.keys(nextErrors).length === 0) {
       setIsSubmitting(true);
       try {
-        const token = await authApi.login({ email, password });
-        localStorage.setItem("access_token", token.access_token);
+        await authApi.login({ email, password });
         router.push("/");
       } catch (error) {
         setErrors({

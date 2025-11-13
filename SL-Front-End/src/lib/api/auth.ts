@@ -1,4 +1,5 @@
 import { axiosInstance } from "../axios";
+import { clearAuthTokenCookie, setAuthTokenCookie } from "../auth/token";
 
 export interface UserCreate {
   name: string;
@@ -44,7 +45,16 @@ export const authApi = {
     const response = await axiosInstance.post<Token>("/auth/login", null, {
       params: credentials, // 쿼리 파라미터로 전달
     });
+
+    setAuthTokenCookie(response.data.access_token);
     return response.data;
+  },
+
+  /**
+   * 로그아웃
+   */
+  logout: async (): Promise<void> => {
+    clearAuthTokenCookie();
   },
 
   /**

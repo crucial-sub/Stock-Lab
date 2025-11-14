@@ -1,221 +1,270 @@
 """
-News repository for database queries.
+뉴스 Repository - DB 조회 전용
 
-Handles search and filtering of news articles.
 """
-from __future__ import annotations
-
-from typing import Dict, List, Optional
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-
-from sqlalchemy import select, or_, desc, distinct
+from typing import List, Dict, Optional, Tuple
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.news import NewsArticle, ThemeSentiment
-from app.models.company import Company
+from loguru import logger
+import html
+from datetime import datetime
+from pytz import UTC, timezone
+
+# Theme mapping: English (DB) -> Korean (Frontend)
+THEME_MAPPING = {
+    "other": "기타",
+    "chemical": "화학",
+    "other_finance": "기타금융",
+    "electronics": "전기·전자",
+    "distribution": "유통",
+    "transport_equipment": "운송장비·부품",
+    "metal": "금속",
+    "pharma": "제약",
+    "food": "음식료·담배",
+    "construction": "건설",
+    "service": "일반서비스",
+    "machinery": "기계·장비",
+    "textile": "섬유·의류",
+    "securities": "증권",
+    "transport": "운송·창고",
+    "it_service": "IT 서비스",
+    "real_estate": "부동산",
+    "non_metal": "비금속",
+    "paper": "종이·목재",
+    "insurance": "보험",
+    "entertainment": "오락·문화",
+    "utility": "전기·가스·수도",
+    "other_manufacturing": "기타제조",
+    "medical": "의료·정밀기기",
+    "telecom": "통신",
+    "bank": "은행",
+    "agriculture": "농업, 임업 및 어업",
+    "finance": "금융",
+    "publishing": "출판·매체복제",
+}
+
+# Stock code to company name mapping
+STOCK_CODE_MAPPING = {
+    "005930": "삼성전자",
+    "051910": "LG화학",
+    "035720": "카카오",
+    "007670": "SK텔레콤",
+    "068270": "셀트리온",
+    "207940": "삼성바이오로직스",
+    "012330": "현대모비스",
+    "028260": "삼성물산",
+    "055550": "신한지주",
+    "316140": "우리금융지주",
+    "005380": "현대차",
+    "000270": "기아",
+    "247540": "에코프로",
+    "247950": "인코스페이스",
+    "066570": "LG전자",
+    "010140": "삼성중공업",
+    "034730": "SK",
+    "032830": "삼성생명",
+    "030200": "KT",
+    "011200": "HMM",
+    "015760": "한국전력",
+    "018260": "삼성SDS",
+    "036570": "엔씨소프트",
+    "044820": "쿠팡",
+    "032640": "LG우",
+}
 
 
 class NewsRepository:
-    @staticmethod
-    def _format_kst(dt: Optional[datetime]) -> Dict[str, str]:
-        """Return ISO and display strings in KST for a given UTC or naive-UTC datetime."""
-        if not dt:
-            return {"iso": "", "display": ""}
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        kst_dt = dt.astimezone(ZoneInfo("Asia/Seoul"))
-        return {"iso": kst_dt.isoformat(), "display": kst_dt.strftime("%Y.%m.%d %H:%M")}
-
-    @staticmethod
-    async def search_news_in_db(
-        db: AsyncSession,
-        keyword: str,
-        limit: int = 20,
-    ) -> List[Dict]:
-        """검색 키워드로 뉴스 조회 (제목/내용/종목코드/회사명 포함)."""
-        a = NewsArticle
-        c = Company
-        q = (
-            select(a.id, a.title, a.content, a.link, a.news_date, a.source, a.stock_code, c.stock_name)
-            .outerjoin(c, a.stock_code == c.stock_code)
-            .where(or_(
-                a.title.ilike(f"%{keyword}%"),
-                a.content.ilike(f"%{keyword}%"),
-                a.stock_code.ilike(f"%{keyword}%"),
-                a.company_name.ilike(f"%{keyword}%")
-            ))
-            .order_by(desc(a.news_date), desc(a.id))
-            .limit(limit)
-        )
-        res = await db.execute(q)
-        rows = res.all()
-        items: List[Dict] = []
-        for r in rows:
-            items.append(
-                {
-                    "id": str(r.id),
-                    "stock_code": r.stock_code or "unknown",
-                    "stock_name": r.stock_name or "종목",
-                    "title": r.title or "",
-                    "content": r.content or "",
-                    "source": r.source or "뉴스DB",
-                    "date": NewsRepository._format_kst(r.news_date),
-                    "link": r.link or "",
-                    "themeName": None,
-                }
-            )
-        return items
-
-    @staticmethod
-    async def search_news_by_theme(
-        db: AsyncSession,
-        theme: str,
-        limit: int = 20,
-    ) -> List[Dict]:
-        """테마별 뉴스 조회."""
-        a = NewsArticle
-        c = Company
-        q = (
-            select(a.id, a.title, a.content, a.link, a.news_date, a.source, a.stock_code, a.theme, c.stock_name)
-            .outerjoin(c, a.stock_code == c.stock_code)
-            .where(a.theme == theme)
-            .order_by(desc(a.news_date), desc(a.id))
-            .limit(limit)
-        )
-        res = await db.execute(q)
-        rows = res.all()
-        items: List[Dict] = []
-        for r in rows:
-            items.append(
-                {
-                    "id": str(r.id),
-                    "stock_code": r.stock_code or "unknown",
-                    "stock_name": r.stock_name or "종목",
-                    "title": r.title or "",
-                    "content": r.content or "",
-                    "source": r.source or "뉴스DB",
-                    "date": NewsRepository._format_kst(r.news_date),
-                    "link": r.link or "",
-                    "themeName": r.theme,
-                }
-            )
-        return items
-
-    @staticmethod
-    async def get_news_by_id(
-        db: AsyncSession,
-        news_id: int,
-    ) -> Optional[Dict]:
-        """ID로 뉴스 단건 조회."""
-        a = NewsArticle
-        q = select(a).where(a.id == news_id)
-        res = await db.execute(q)
-        article = res.scalar_one_or_none()
-
-        if not article:
-            return None
-
-        return {
-            "id": str(article.id),
-            "stock_code": article.stock_code or "unknown",
-            "stock_name": article.stock_code or "종목",
-            "title": article.title or "",
-            "content": article.content or "",
-            "source": article.source or "뉴스DB",
-            "date": NewsRepository._format_kst(article.news_date),
-            "link": article.link or "",
-            "themeName": article.theme,
-        }
+    """뉴스 DB 조회 레포지토리"""
 
     @staticmethod
     async def get_latest_news_by_stock(
         db: AsyncSession,
         stock_code: str,
-        limit: int = 20,
+        limit: int = 1000
     ) -> List[Dict]:
-        """종목별 최신 뉴스 조회."""
-        a = NewsArticle
-        c = Company
-        q = (
-            select(a.id, a.title, a.content, a.link, a.news_date, a.source, a.stock_code, c.stock_name)
-            .outerjoin(c, a.stock_code == c.stock_code)
-            .where(a.stock_code == stock_code)
-            .order_by(desc(a.news_date), desc(a.id))
-            .limit(limit)
-        )
-        res = await db.execute(q)
-        rows = res.all()
-        items: List[Dict] = []
-        for r in rows:
-            items.append(
-                {
-                    "id": str(r.id),
-                    "stock_code": r.stock_code or "unknown",
-                    "stock_name": r.stock_name or "종목",
-                    "title": r.title or "",
-                    "content": r.content or "",
-                    "source": r.source or "뉴스DB",
-                    "date": NewsRepository._format_kst(r.news_date),
-                    "link": r.link or "",
-                    "themeName": None,
-                }
+        """
+        특정 종목의 최신 뉴스 조회
+
+        Args:
+            db: 데이터베이스 세션
+            stock_code: 종목코드
+            limit: 조회 제한 수
+
+        Returns:
+            뉴스 리스트
+        """
+        try:
+            query = select(NewsArticle).where(
+                NewsArticle.stock_code == stock_code
+            ).order_by(
+                NewsArticle.news_date.desc()
+            ).limit(limit)
+
+            result = await db.execute(query)
+            articles = result.scalars().all()
+
+            return [_serialize_news(article) for article in articles]
+        except Exception as e:
+            logger.error(f"Failed to get news for {stock_code}: {e}")
+            return []
+
+    @staticmethod
+    async def search_news_in_db(
+        db: AsyncSession,
+        keyword: str,
+        limit: int = 1000
+    ) -> List[Dict]:
+        """
+        키워드로 뉴스 검색 (제목, 내용, 회사명, 종목코드)
+
+        Args:
+            db: 데이터베이스 세션
+            keyword: 검색 키워드 (회사명, 종목코드, 제목, 내용)
+            limit: 조회 제한 수
+
+        Returns:
+            뉴스 리스트
+        """
+        try:
+            query = select(NewsArticle).where(
+                or_(
+                    NewsArticle.title.contains(keyword),
+                    NewsArticle.content.contains(keyword),
+                    NewsArticle.company_name.contains(keyword),  # 회사명으로 검색
+                    NewsArticle.stock_code.contains(keyword)  # 종목코드로 검색
+                )
+            ).order_by(
+                NewsArticle.analyzed_at.desc()  # analyzed_at으로 정렬
+            ).limit(limit)
+
+            result = await db.execute(query)
+            articles = result.scalars().all()
+
+            return [_serialize_news(article) for article in articles]
+        except Exception as e:
+            logger.error(f"Failed to search news for '{keyword}': {e}")
+            return []
+
+    @staticmethod
+    async def search_news_by_theme(
+        db: AsyncSession,
+        theme: str,
+        limit: int = 1000
+    ) -> List[Dict]:
+        """
+        테마별 뉴스 조회
+
+        Args:
+            db: 데이터베이스 세션
+            theme: 테마명
+            limit: 조회 제한 수
+
+        Returns:
+            뉴스 리스트
+        """
+        try:
+            query = select(NewsArticle).where(
+                NewsArticle.theme == theme
+            ).order_by(
+                NewsArticle.news_date.desc()
+            ).limit(limit)
+
+            result = await db.execute(query)
+            articles = result.scalars().all()
+
+            return [_serialize_news(article) for article in articles]
+        except Exception as e:
+            logger.error(f"Failed to search news by theme '{theme}': {e}")
+            return []
+
+    @staticmethod
+    async def get_available_themes(db: AsyncSession) -> List[str]:
+        """
+        DB에 실제로 존재하는 테마 목록 조회
+
+        Args:
+            db: 데이터베이스 세션
+
+        Returns:
+            테마 목록
+        """
+        try:
+            query = select(NewsArticle.theme).distinct().where(
+                NewsArticle.theme.isnot(None)
             )
-        return items
 
-    @staticmethod
-    async def save_news_list_for_stock(
-        db: AsyncSession,
-        stock_code: Optional[str],
-        stock_name: Optional[str],
-        news_list: List[Dict],
-    ) -> None:
-        """뉴스 목록을 데이터베이스에 저장합니다."""
-        if not news_list:
-            return
+            result = await db.execute(query)
+            themes = result.scalars().all()
 
-        # 1. 모든 뉴스의 링크를 한 번에 조회하여 이미 존재하는 링크를 확인 (N+1 문제 해결)
-        links_to_check = [news.get("link") for news in news_list if news.get("link")]
-        if not links_to_check:
-            return
+            return list(themes) if themes else []
+        except Exception as e:
+            logger.error(f"Failed to get available themes: {e}")
+            return []
 
-        existing_links_query = select(NewsArticle.link).where(NewsArticle.link.in_(links_to_check))
-        existing_links_result = await db.execute(existing_links_query)
-        existing_links = {link for link, in existing_links_result}
 
-        articles_to_add = []
-        for news in news_list:
-            link = news.get("link")
-            if not link or link in existing_links:
-                continue
+def _serialize_news(article: NewsArticle) -> Dict:
+    """뉴스 기사를 직렬화 - 프론트 스키마에 맞게"""
+    # 날짜 선택 (우선순위: analyzed_at(실제 업로드 날짜, UTC) > crawled_at > news_date)
+    published_at = ""
 
-            articles_to_add.append(NewsArticle(
-                stock_code=stock_code,
-                company_name=stock_name,
-                title=news.get("title", ""),
-                content=news.get("content", ""),
-                source=news.get("source"),
-                link=link,
-                original_link=news.get("original_link"),
-                news_date=news.get("news_date"),
-                theme=news.get("theme"),
-            ))
+    # analyzed_at이 실제 뉴스 업로드 날짜이므로 우선순위를 높임
+    date_obj = article.analyzed_at or article.crawled_at or article.news_date
 
-        if articles_to_add:
-            db.add_all(articles_to_add)
-        await db.commit()
+    if date_obj:
+        try:
+            # datetime인 경우 UTC -> KST 변환
+            if isinstance(date_obj, datetime):
+                # UTC 타임존 추가 (naive datetime인 경우)
+                if date_obj.tzinfo is None:
+                    date_obj = UTC.localize(date_obj)
+                # KST로 변환
+                kst = timezone('Asia/Seoul')
+                date_obj = date_obj.astimezone(kst)
+                published_at = date_obj.strftime('%Y.%m.%d')
+            else:
+                # Date 타입인 경우 직접 문자열로 변환
+                published_at = date_obj.strftime('%Y.%m.%d') if hasattr(date_obj, 'strftime') else str(date_obj)
+        except Exception as e:
+            logger.debug(f"Failed to convert date for article {article.id}: {e}")
+            # 실패 시 빈 문자열 유지
+            pass
 
-    @staticmethod
-    async def get_available_themes(
-        db: AsyncSession,
-    ) -> List[str]:
-        """DB에 실제로 존재하는 테마 목록 조회 (뉴스가 있는 테마만)."""
-        q = (
-            select(distinct(NewsArticle.theme))
-            .where(NewsArticle.theme.isnot(None))
-            .where(NewsArticle.theme != "")
-            .order_by(NewsArticle.theme)
-        )
-        res = await db.execute(q)
-        rows = res.scalars().all()
-        return [r for r in rows if r]  # Filter out None values
+    # sentiment_label을 sentiment로 매핑
+    sentiment_map = {
+        "positive": "positive",
+        "negative": "negative",
+        "neutral": "neutral",
+        "POSITIVE": "positive",
+        "NEGATIVE": "negative",
+        "NEUTRAL": "neutral",
+        None: "neutral"
+    }
+    sentiment = sentiment_map.get(article.sentiment_label, "neutral")
+
+    # 테마명을 영어(DB) -> 한국어(프론트) 매핑
+    theme_name = None
+    if article.theme:
+        # DB에 저장된 값이 영어 코드이므로 매핑을 통해 한국어로 변환
+        theme_name = THEME_MAPPING.get(article.theme.lower(), article.theme)
+
+    # 종목명 결정: company_name > stock_code 매핑 > 빈 문자열
+    ticker_label = article.company_name or ""
+    if not ticker_label and article.stock_code:
+        ticker_label = STOCK_CODE_MAPPING.get(article.stock_code, "")
+
+    return {
+        "id": str(article.id) if article.id else None,
+        "title": html.unescape(article.title) if article.title else "",
+        "subtitle": None,
+        "summary": html.unescape(article.content[:200]) if article.content else "",  # 처음 200자를 summary로
+        "content": html.unescape(article.content) if article.content else "",
+        "tickerLabel": ticker_label,  # 종목명
+        "stockCode": article.stock_code or None,  # 종목코드
+        "themeName": theme_name,  # 테마명
+        "sentiment": sentiment,
+        "publishedAt": published_at,  # analyzed_at(UTC) -> KST로 변환된 날짜
+        "source": article.source or "",
+        "link": article.link or "",
+        "pressName": None
+    }

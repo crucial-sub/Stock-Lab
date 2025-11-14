@@ -1,0 +1,62 @@
+{
+  "category": "beginner_guide",
+  "category_name": "초심자 가이드",
+  "category_description": "초보 투자자를 위한 쉬운 설명과 기본 개념",
+  "priority": "⭐⭐⭐⭐⭐",
+  "documents": [
+    {
+      "id": "beginner_what_is_factor",
+      "name": "팩터란 뭐예요?",
+      "type": "beginner_guide",
+      "file": "what_is_factor.md",
+      "priority": "⭐⭐⭐⭐⭐",
+      "keywords": ["팩터", "기초", "개념", "초심자", "쉬운설명"],
+      "summary": "투자 팩터의 기본 개념을 쉽게 설명합니다.",
+      "difficulty": "beginner",
+      "reading_time": "5분",
+      "last_updated": "2025-11-14",
+      "version": "1.0"
+    },
+    {
+      "id": "beginner_financial_basics",
+      "name": "금융 초심자 가이드",
+      "type": "beginner_guide",
+      "file": "financial_basics.md",
+      "priority": "⭐⭐⭐⭐⭐",
+      "keywords": ["기본", "용어", "초심자", "주식", "채권", "배당"],
+      "summary": "금융 투자의 기본 용어와 개념을 쉽게 설명합니다.",
+      "difficulty": "beginner",
+      "reading_time": "10분",
+      "last_updated": "2025-11-14",
+      "version": "1.0"
+    },
+    {
+      "id": "beginner_investment_types",
+      "name": "투자 타입 비교",
+      "type": "beginner_guide",
+      "file": "investment_types.md",
+      "priority": "⭐⭐⭐⭐",
+      "keywords": ["투자타입", "비교", "선택", "리스크", "수익"],
+      "summary": "가치, 성장, 배당 등 투자 타입을 비교합니다.",
+      "difficulty": "beginner",
+      "reading_time": "10분",
+      "last_updated": "2025-11-14",
+      "version": "1.0"
+    },
+    {
+      "id": "beginner_how_to_start",
+      "name": "투자 시작하기",
+      "type": "beginner_guide",
+      "file": "how_to_start.md",
+      "priority": "⭐⭐⭐⭐",
+      "keywords": ["시작", "단계", "절차", "준비", "실행"],
+      "summary": "투자를 시작하기 위한 단계별 가이드입니다.",
+      "difficulty": "beginner",
+      "reading_time": "15분",
+      "last_updated": "2025-11-14",
+      "version": "1.0"
+    }
+  ],
+  "last_updated": "2025-11-14",
+  "version": "1.0"
+}

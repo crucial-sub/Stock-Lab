@@ -23,8 +23,9 @@ class OptimizedCacheManager:
 
     def __init__(self):
         self.cache_prefix = "backtest_optimized"
-        # TTL: 7일 (기존 1시간 → 7일로 연장)
-        self.default_ttl = 7 * 24 * 3600
+        # 🚀 EXTREME OPTIMIZATION: TTL 30일로 연장 (완전 메모리 캐싱)
+        # 팩터 데이터는 거의 변하지 않으므로 장기 캐싱
+        self.default_ttl = 30 * 24 * 3600  # 7일 → 30일
 
     def _generate_factor_cache_key(
         self,
@@ -74,8 +75,14 @@ class OptimizedCacheManager:
             }
 
             # 2. Redis MGET으로 일괄 조회
+            from app.core.cache import get_redis
+            redis_client = get_redis()
+            if not redis_client:
+                logger.warning("Redis 클라이언트 없음, 캐시 조회 스킵")
+                return {d: None for d in dates}
+
             redis_keys = list(cache_keys.values())
-            cached_values = await cache.redis.mget(*redis_keys)
+            cached_values = await redis_client.mget(*redis_keys)
 
             # 3. 결과 매핑
             result = {}
@@ -129,10 +136,16 @@ class OptimizedCacheManager:
                 cache_dict[cache_key] = compressed
 
             # 2. Redis MSET으로 일괄 저장
-            await cache.redis.mset(cache_dict)
+            from app.core.cache import get_redis
+            redis_client = get_redis()
+            if not redis_client:
+                logger.warning("Redis 클라이언트 없음, 캐시 저장 스킵")
+                return False
+
+            await redis_client.mset(cache_dict)
 
             # 3. TTL 설정 (일괄)
-            pipeline = cache.redis.pipeline()
+            pipeline = redis_client.pipeline()
             for cache_key in cache_dict.keys():
                 pipeline.expire(cache_key, self.default_ttl)
             await pipeline.execute()
@@ -199,11 +212,17 @@ class OptimizedCacheManager:
         """팩터 캐시 무효화 (날짜 범위)"""
         try:
             # 패턴 매칭으로 삭제
+            from app.core.cache import get_redis
+            redis_client = get_redis()
+            if not redis_client:
+                logger.warning("Redis 클라이언트 없음, 캐시 무효화 스킵")
+                return 0
+
             pattern = f"{self.cache_prefix}:factors:*"
-            keys = await cache.redis.keys(pattern)
+            keys = await redis_client.keys(pattern)
 
             if keys:
-                deleted = await cache.redis.delete(*keys)
+                deleted = await redis_client.delete(*keys)
                 logger.info(f"팩터 캐시 무효화: {deleted}개 삭제")
                 return deleted
 

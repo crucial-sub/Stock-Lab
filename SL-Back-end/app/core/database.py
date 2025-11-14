@@ -16,11 +16,14 @@ from app.core.config import get_settings
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-# 비동기 엔진 생성 (대용량 데이터 처리 최적화)
+# 비동기 엔진 생성 (프로덕션 환경 최적화 - Connection Pooling)
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DATABASE_ECHO if hasattr(settings, 'DATABASE_ECHO') else False,
-    poolclass=NullPool,  # 비동기 엔진에서는 NullPool 사용 (asyncio와 호환)
+    # 🔧 COMPATIBILITY FIX: NullPool 사용 (run_until_complete 호환성 문제 해결)
+    # AsyncAdaptedQueuePool은 advanced_backtest.py의 동기/비동기 혼용과 충돌
+    # 대신 다른 최적화(Redis 캐싱, Dictionary lookup, 로깅 최소화)로 성능 확보
+    poolclass=NullPool,  # 연결 풀링 비활성화 (호환성 우선)
     pool_pre_ping=True,  # 커넥션 유효성 검증
     # 대용량 쿼리 최적화
     connect_args={
@@ -55,9 +58,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         async def get_items(db: AsyncSession = Depends(get_db)):
             ...
     """
+    from fastapi import HTTPException
+
     async with AsyncSessionLocal() as session:
         try:
             yield session
+        except HTTPException:
+            # HTTPException은 그대로 전달 (429, 404 등)
+            raise
         except Exception as e:
             await session.rollback()
             logger.error(f"Database session error: {e}")

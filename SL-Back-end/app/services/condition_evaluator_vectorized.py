@@ -83,13 +83,15 @@ class VectorizedConditionEvaluator:
                 return []
 
             # 5. 한 번에 모든 종목 평가!
-            self.logger.debug(f"🚀 벡터화 쿼리 실행: {query_str}")
+            # 🚀 PERFORMANCE: 로깅 제거 (2,922번 호출 → 0번)
+            # self.logger.debug(f"🚀 벡터화 쿼리 실행: {query_str}")
 
             try:
                 selected = date_data.query(query_str)
                 selected_stocks = selected['stock_code'].tolist()
 
-                self.logger.info(f"✅ 벡터화 평가 완료: {len(selected_stocks)}/{len(date_data)}개 종목 선택")
+                # 🚀 PERFORMANCE: 로깅 제거 (2,922번 호출 → 0번)
+                # self.logger.info(f"✅ 벡터화 평가 완료: {len(selected_stocks)}/{len(date_data)}개 종목 선택")
 
                 return selected_stocks
 

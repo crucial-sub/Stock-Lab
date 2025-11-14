@@ -303,8 +303,33 @@ async def run_backtest(
     백테스트 실행
     - 비동기로 백그라운드 실행
     - 세션 ID 즉시 반환
+    - 🚀 PRODUCTION: 사용자당 동시 1개 백테스트 제한
     """
     try:
+        # 🚀 PRODUCTION OPTIMIZATION: Rate Limiting (사용자당 동시 1개 백테스트)
+        try:
+            from app.core.cache import get_redis
+            redis_client = get_redis()
+            if redis_client:
+                rate_limit_key = f"backtest:running:{current_user.user_id}"
+                running_count = await redis_client.get(rate_limit_key)
+
+                if running_count and int(running_count) > 0:
+                    raise HTTPException(
+                        status_code=429,
+                        detail="이미 실행 중인 백테스트가 있습니다. 완료 후 다시 시도해주세요."
+                    )
+
+                # 실행 중인 백테스트 카운터 증가 (TTL: 1시간)
+                await redis_client.setex(rate_limit_key, 3600, 1)
+                logger.info(f"🚦 Rate Limit 체크 통과: user_id={current_user.user_id}")
+        except HTTPException:
+            # 429 에러는 그대로 전달
+            raise
+        except Exception as e:
+            # Redis 에러는 무시하고 계속 진행 (Rate Limiting 없이)
+            logger.warning(f"Rate Limiting 스킵 (Redis 에러): {e}")
+
         # 1. 세션 ID 생성
         session_id = str(uuid.uuid4())
 
@@ -519,7 +544,8 @@ async def run_backtest(
                 request.hold_days.model_dump() if request.hold_days else None,
                 request.condition_sell.model_dump() if request.condition_sell else None,
                 request.max_buy_value,
-                request.max_daily_stock
+                request.max_daily_stock,
+                str(current_user.user_id)  # 🚀 PRODUCTION: Rate Limiting용 user_id
             )
         )
 
@@ -530,6 +556,9 @@ async def run_backtest(
             created_at=datetime.now()
         )
 
+    except HTTPException:
+        # HTTPException은 그대로 전달 (429, 404 등)
+        raise
     except Exception as e:
         logger.error(f"백테스트 실행 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -1340,7 +1369,8 @@ async def execute_backtest_wrapper(
     hold_days: dict = None,
     condition_sell: dict = None,
     max_buy_value: Optional[float] = None,
-    max_daily_stock: Optional[int] = None
+    max_daily_stock: Optional[int] = None,
+    user_id: str = None  # 🚀 PRODUCTION: Rate Limiting용
 ):
     """백테스트 비동기 실행 래퍼 (고도화된 백테스트 용)"""
     try:
@@ -1384,6 +1414,19 @@ async def execute_backtest_wrapper(
 
     except Exception as e:
         logger.error(f"백테스트 래퍼 오류: {e}", exc_info=True)
+    finally:
+        # 🚀 PRODUCTION OPTIMIZATION: Rate Limit 해제 (완료 또는 실패 시)
+        if user_id:
+            try:
+                from app.core.cache import get_redis
+                redis_client = get_redis()
+                if redis_client:
+                    rate_limit_key = f"backtest:running:{user_id}"
+                    await redis_client.delete(rate_limit_key)
+                    logger.info(f"🚦 Rate Limit 해제: user_id={user_id}")
+            except Exception as e:
+                # Redis 에러는 무시 (이미 백테스트는 완료됨)
+                logger.warning(f"Rate Limit 해제 실패 (무시): {e}")
 
 
 async def update_session_status_internal(

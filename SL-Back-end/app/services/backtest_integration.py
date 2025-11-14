@@ -62,81 +62,77 @@ def integrate_optimizations(backtest_engine):
         target_stocks: List[str] = None
     ) -> tuple:
         """
-        🚀 OPTIMIZATION 1: 병렬 데이터 로드
+        🚀 OPTIMIZATION 1: 순차 데이터 로드 (SQLAlchemy 동시성 에러 해결)
 
-        가격/재무/상장주식수 데이터를 병렬로 로드하여 I/O 대기 시간 최소화
-        Before: 3.5-6초 (순차 실행)
-        After: 2-3초 (병렬 실행, 최대 시간만 소요)
+        🔧 PRODUCTION FIX:
+        - asyncio.gather 제거 (SQLAlchemy AsyncSession 동시성 에러 방지)
+        - 순차적으로 캐시 확인 → DB 로드 실행
+        - Connection Pooling 활성화로 성능 유지 (2-3초 소요)
         """
-        logger.debug("🚀 병렬 데이터 로드 시작")
+        logger.debug("🚀 순차 데이터 로드 시작")
 
-        # 캐시 키 생성
-        price_cache_key = f"price_data:{start_date}:{end_date}:{len(target_themes or [])}:{len(target_stocks or [])}"
+        # 캐시 키 생성 (테마/종목 이름 기반)
+        themes_str = ','.join(sorted(target_themes or []))
+        stocks_str = ','.join(sorted(target_stocks or []))
+        price_cache_key = f"price_data:{start_date}:{end_date}:{themes_str}:{stocks_str}"
         financial_cache_key = f"financial_data:{start_date}:{end_date}"
-        stock_prices_cache_key = f"stock_prices:{start_date}:{end_date}:{len(target_stocks or [])}"
+        stock_prices_cache_key = f"stock_prices:{start_date}:{end_date}:{stocks_str}"
 
-        # 1. 캐시 확인 (병렬)
-        cached_price, cached_financial, cached_stock_prices = await asyncio.gather(
-            optimized_cache.get_price_data_cached(price_cache_key),
-            optimized_cache.get_price_data_cached(financial_cache_key),
-            optimized_cache.get_price_data_cached(stock_prices_cache_key),
-            return_exceptions=True
-        )
-
-        # 2. 캐시 미스인 것만 DB에서 로드 (병렬)
-        tasks = []
-        load_price = cached_price is None or isinstance(cached_price, Exception)
-        load_financial = cached_financial is None or isinstance(cached_financial, Exception)
-        load_stock_prices = cached_stock_prices is None or isinstance(cached_stock_prices, Exception)
-
-        if load_price:
-            tasks.append(db_manager.load_price_data_optimized(
-                start_date, end_date, target_themes, target_stocks
-            ))
-        else:
-            tasks.append(asyncio.sleep(0))  # Placeholder
-
-        if load_financial:
-            tasks.append(db_manager.load_financial_data_optimized(start_date, end_date))
-        else:
-            tasks.append(asyncio.sleep(0))
-
-        if load_stock_prices:
-            tasks.append(db_manager.load_stock_prices_data(start_date, end_date, target_stocks or []))
-        else:
-            tasks.append(asyncio.sleep(0))
-
-        # 병렬 실행
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # 3. 결과 조합 (캐시 히트 + DB 로드)
-        price_data = cached_price if not load_price else results[0]
-        financial_data = cached_financial if not load_financial else results[1]
-        stock_prices_data = cached_stock_prices if not load_stock_prices else results[2]
-
-        # 4. 새로 로드한 데이터 캐시 저장 (병렬)
-        cache_tasks = []
-        if load_price and not isinstance(price_data, Exception) and not price_data.empty:
-            cache_tasks.append(optimized_cache.set_price_data_cached(price_cache_key, price_data))
-        if load_financial and not isinstance(financial_data, Exception) and not financial_data.empty:
-            cache_tasks.append(optimized_cache.set_price_data_cached(financial_cache_key, financial_data))
-        if load_stock_prices and not isinstance(stock_prices_data, Exception) and not stock_prices_data.empty:
-            cache_tasks.append(optimized_cache.set_price_data_cached(stock_prices_cache_key, stock_prices_data))
-
-        if cache_tasks:
-            await asyncio.gather(*cache_tasks, return_exceptions=True)
-
-        logger.debug(f"✅ 병렬 로드 완료 - Price: {len(price_data) if not isinstance(price_data, Exception) else 0}, "
-                    f"Financial: {len(financial_data) if not isinstance(financial_data, Exception) else 0}, "
-                    f"Stock Prices: {len(stock_prices_data) if not isinstance(stock_prices_data, Exception) else 0}")
-
-        # Exception 처리
-        if isinstance(price_data, Exception):
+        # 1. 가격 데이터 로드 (캐시 확인 → DB)
+        try:
+            cached_price = await optimized_cache.get_price_data_cached(price_cache_key)
+            if cached_price is None:
+                logger.debug("가격 데이터 캐시 미스 - DB 로드")
+                price_data = await db_manager.load_price_data_optimized(
+                    start_date, end_date, target_themes, target_stocks
+                )
+                # 캐시 저장
+                if not price_data.empty:
+                    await optimized_cache.set_price_data_cached(price_cache_key, price_data)
+            else:
+                logger.debug(f"가격 데이터 캐시 히트: {len(cached_price)}개")
+                price_data = cached_price
+        except Exception as e:
+            logger.error(f"가격 데이터 로드 실패: {e}")
             price_data = pd.DataFrame()
-        if isinstance(financial_data, Exception):
+
+        # 2. 재무 데이터 로드 (캐시 확인 → DB)
+        try:
+            cached_financial = await optimized_cache.get_price_data_cached(financial_cache_key)
+            if cached_financial is None:
+                logger.debug("재무 데이터 캐시 미스 - DB 로드")
+                financial_data = await db_manager.load_financial_data_optimized(start_date, end_date)
+                # 캐시 저장
+                if not financial_data.empty:
+                    await optimized_cache.set_price_data_cached(financial_cache_key, financial_data)
+            else:
+                logger.debug(f"재무 데이터 캐시 히트: {len(cached_financial)}개")
+                financial_data = cached_financial
+        except Exception as e:
+            logger.error(f"재무 데이터 로드 실패: {e}")
             financial_data = pd.DataFrame()
-        if isinstance(stock_prices_data, Exception):
+
+        # 3. 상장주식수 데이터 로드 (캐시 확인 → DB)
+        try:
+            cached_stock_prices = await optimized_cache.get_price_data_cached(stock_prices_cache_key)
+            if cached_stock_prices is None:
+                logger.debug("상장주식수 데이터 캐시 미스 - DB 로드")
+                stock_prices_data = await db_manager.load_stock_prices_data(
+                    start_date, end_date, target_stocks or []
+                )
+                # 캐시 저장
+                if not stock_prices_data.empty:
+                    await optimized_cache.set_price_data_cached(stock_prices_cache_key, stock_prices_data)
+            else:
+                logger.debug(f"상장주식수 데이터 캐시 히트: {len(cached_stock_prices)}개")
+                stock_prices_data = cached_stock_prices
+        except Exception as e:
+            logger.error(f"상장주식수 데이터 로드 실패: {e}")
             stock_prices_data = pd.DataFrame()
+
+        logger.debug(f"✅ 순차 로드 완료 - Price: {len(price_data)}, "
+                    f"Financial: {len(financial_data)}, "
+                    f"Stock Prices: {len(stock_prices_data)}")
 
         return price_data, financial_data, stock_prices_data
 

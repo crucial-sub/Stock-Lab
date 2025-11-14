@@ -194,11 +194,11 @@ SL-Chatbot/rag/documents/
 - ✅ investment_types.md (완료)
 - ✅ how_to_start.md (완료)
 
-### Policies (0/4)
-- ⏳ investment_advisory.md
-- ⏳ risk_warnings.md
-- ⏳ prohibited_phrases.txt
-- ⏳ user_protection.md
+### Policies (4/4 완료)
+- ✅ investment_advisory.md (완료)
+- ✅ risk_warnings.md (완료)
+- ✅ prohibited_phrases.txt (완료)
+- ✅ user_protection.md (완료)
 
 ---
 

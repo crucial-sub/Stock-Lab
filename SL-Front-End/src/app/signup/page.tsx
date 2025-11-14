@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Input } from "@/components/common/Input";
+import { authApi } from "@/lib/api/auth";
 
 interface SignUpErrors {
   name?: string;
@@ -53,16 +54,25 @@ export default function SignUpPage() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
-    // TODO: 실제 회원가입 API 연동
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await authApi.register({
+        name: form.name,
+        email: form.email,
+        phone_number: form.phone,
+        password: form.password,
+      });
       router.push("/login");
-    }, 800);
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.detail || "회원가입에 실패했습니다.";
+      setErrors({ email: errorMessage });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const labelClass = (hasError?: string) =>

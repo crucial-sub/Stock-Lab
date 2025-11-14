@@ -47,7 +47,6 @@ yarn-error.log*
 next-env.d.ts
 
 #etc
-/docs
 /.claude
 *.log
 /.playwright-mcp

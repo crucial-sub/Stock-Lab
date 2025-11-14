@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { Dropdown, Title, UnderlineInput } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
-import { SelectField, FormField, SectionHeader } from "../common";
+import { useEffect, useState } from "react";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
 
 /**
  * 매수 방법 선택 섹션
@@ -25,30 +26,37 @@ export function BuyMethodSection() {
   }, [buyCostBasisSelect, buyCostBasisValue, setBuyPriceBasis, setBuyPriceOffset]);
 
   return (
-    <div className="space-y-3">
-      <SectionHeader title="매수 방법 선택" />
+    <div id="section-buy-method" className="space-y-3">
+      <SectionHeader title="매수 방법 선택"
+        description="매수 조건에 부합한 종목들을 매수할 때, 매수 방법을 선택합니다."
+      />
 
-      <div className="bg-bg-surface rounded-lg shadow-card p-8 border-l-4 border-brand-primary">
-        <div className="grid grid-cols-2 gap-6">
-        <SelectField
-          label="매수 가격 기준"
-          value={buyCostBasisSelect}
-          onChange={setBuyCostBasisSelect}
-          options={[
-            { value: "{전일 종가}", label: "전일 종가" },
-            { value: "{당일 시가}", label: "당일 시가" },
-          ]}
-        />
-
-        <FormField
-          label="가격 조정"
-          type="number"
-          value={buyCostBasisValue}
-          onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
-          suffix="%"
-        />
-      </div>
-      </div>
+      <FieldPanel conditionType="buy">
+        <Title variant="subtitle" className="mb-3">
+          매수 조건식 설정
+        </Title>
+        <div className="flex gap-4 items-center">
+          <Dropdown
+            value={buyCostBasisSelect}
+            options={[
+              { value: "전일 종가", label: "전일 종가" },
+              { value: "당일 시가", label: "당일 시가" },
+            ]}
+            onChange={setBuyCostBasisSelect}
+            variant="medium"
+          />
+          <div className="relative">
+            <UnderlineInput
+              value={buyCostBasisValue}
+              onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
+              className="w-32"
+            />
+            <span className="absolute right-0 bottom-[0.625rem]">
+              %
+            </span>
+          </div>
+        </div>
+      </FieldPanel>
     </div>
   );
 }

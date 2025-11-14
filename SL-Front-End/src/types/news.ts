@@ -7,6 +7,7 @@ export interface NewsItem {
   summary: string;
   content: string;
   tickerLabel: string;
+  stockCode?: string;
   themeName?: string;
   sentiment: NewsSentiment;
   publishedAt: string;

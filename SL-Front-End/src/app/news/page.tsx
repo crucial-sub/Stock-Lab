@@ -1,23 +1,30 @@
 ﻿"use client";
 
-import { useMemo, useState, useEffect } from "react";
 import type { NextPage } from "next";
+import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
 import { NewsDetailModal } from "@/components/news/NewsDetailModal";
-import { useDebounce, useNewsDetailQuery, useNewsListQuery, useAvailableThemesQuery } from "@/hooks";
-import type { NewsListParams } from "@/types/news";
+import { useAvailableThemesQuery, useDebounce, useNewsListQuery } from "@/hooks";
+import type { NewsListParams, NewsItem } from "@/types/news";
 
 const NewsPage: NextPage = () => {
   const [selectedThemes, setSelectedThemes] = useState<string[]>(["전체"]);
-  const [keyword, setKeyword] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [keyword, setKeyword] = useState<string>("");
+  const [filter, setFilter] = useState<string>("all");
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
   const [displayThemes, setDisplayThemes] = useState<string[]>([]);
 
   const debouncedKeyword = useDebounce(keyword, 300);
 
+  // React Compiler가 자동으로 메모이제이션 처리
+  const themes = selectedThemes.includes("전체") ? [] : selectedThemes;
+  const newsParams: NewsListParams = {
+    keyword: debouncedKeyword || undefined,
+    themes: themes.length ? themes : undefined,
+    filter,
+  };
   // Fetch available themes from database
   const { data: availableThemes = [] } = useAvailableThemesQuery();
 
@@ -28,22 +35,16 @@ const NewsPage: NextPage = () => {
     }
   }, [availableThemes]);
 
-  const newsParams: NewsListParams = useMemo(() => {
-    const themes = selectedThemes.includes("전체") ? [] : selectedThemes;
-    return {
-      keyword: debouncedKeyword || undefined,
-      themes: themes.length ? themes : undefined,
-      filter,
-    };
-  }, [debouncedKeyword, selectedThemes, filter]);
-
   const {
     data: newsList = [],
     isLoading,
     isError,
   } = useNewsListQuery(newsParams);
 
-  const { data: selectedNews } = useNewsDetailQuery(selectedNewsId ?? undefined);
+  // 목록 데이터에서 직접 상세 뉴스 찾기 (이미 전체 데이터가 포함되어 있음)
+  const selectedNews: NewsItem | undefined = selectedNewsId
+    ? newsList.find((item: NewsItem) => item.id === selectedNewsId)
+    : undefined;
 
   const handleToggleTheme = (theme: string) => {
     if (theme === "전체") {
@@ -99,11 +100,10 @@ const NewsPage: NextPage = () => {
               key={theme}
               type="button"
               onClick={() => handleToggleTheme(theme)}
-              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${
-                isActive
-                  ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
-                  : "border-border-default bg-white text-text-body"
-              }`}
+              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${isActive
+                ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
+                : "border-border-default bg-white text-text-body"
+                }`}
             >
               {theme}
             </button>
@@ -125,13 +125,14 @@ const NewsPage: NextPage = () => {
               key={`${item.id}-${index}`}
               id={item.id}
               title={item.title}
-              summary={item.content || item.title}
-              tickerLabel={item.stock_name || item.stock_code || "종목"}
+              summary={item.summary || ""}
+              tickerLabel={item.tickerLabel || item.stockCode || "종목"}
               themeName={item.themeName}
-              sentiment="neutral"
-              publishedAt={typeof item.date === 'string' ? item.date : item.date?.display || ''}
-              source={item.source}
-              link={item.link}
+              pressName={item.pressName}
+              sentiment={(item.sentiment as "positive" | "negative" | "neutral") || "neutral"}
+              publishedAt={item.publishedAt || ""}
+              source={item.source || ""}
+              link={item.link || ""}
               onClick={() => setSelectedNewsId(item.id)}
             />
           ))}

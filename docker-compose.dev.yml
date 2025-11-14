@@ -90,6 +90,8 @@ services:
       # Mount source code for hot-reload
       - ./SL-Front-End/src:/app/src
       - ./SL-Front-End/public:/app/public
+      - ./SL-Front-End/package.json:/app/package.json
+      - ./SL-Front-End/pnpm-lock.yaml:/app/pnpm-lock.yaml
       - ./SL-Front-End/next.config.ts:/app/next.config.ts
       - ./SL-Front-End/tailwind.config.js:/app/tailwind.config.js
       - ./SL-Front-End/tsconfig.json:/app/tsconfig.json

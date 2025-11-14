@@ -1,4 +1,4 @@
-import { StatMetric, PeriodReturnsChart } from "../common";
+import { PeriodReturnsChart, StatMetric } from "../common";
 import { TradingActivityChart } from "../TradingActivityChart";
 
 /**

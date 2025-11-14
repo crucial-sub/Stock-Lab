@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { Title, ToggleSwitch } from "@/components/common";
 import { useBacktestConfigStore } from "@/stores";
-import { FormField, SectionHeader } from "../common";
+import { useState } from "react";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
+import { FormField } from "@/components/quant/common";
 
 /**
  * 매수 비중 설정 섹션
@@ -25,82 +27,78 @@ export function BuyWeightSection() {
   const [enableMaxDailyStock, setEnableMaxDailyStock] = useState(max_daily_stock !== null);
 
   return (
-    <div className="space-y-3">
-      <SectionHeader title="매수 비중 설정" />
+    <div id="section-buy-weight" className="space-y-3">
+      <SectionHeader title="매수 비중 설정"
+        description="종목 당 비중과 보유 종목 수 등을 조정하여, 매수할 종목에 대한 비중을 설정합니다."
+      />
 
-      <div className="bg-bg-surface rounded-lg shadow-card p-8 border-l-4 border-brand-primary">
+      <FieldPanel conditionType="buy">
         <div className="grid grid-cols-4 gap-6">
-        <FormField
-          label="종목당 매수 비중"
-          type="number"
-          value={per_stock_ratio}
-          onChange={(e) => setPerStockRatio(Number(e.target.value))}
-          step={1}
-          suffix="%"
-        />
-
-        <FormField
-          label="최대 보유 종목 수"
-          type="number"
-          value={max_holdings}
-          onChange={(e) => setMaxHoldings(Number(e.target.value))}
-          step={1}
-          suffix="종목"
-        />
-
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <label className="text-sm font-medium text-text-strong">
-              종목당 최대 매수 금액
-            </label>
-            <input
-              type="checkbox"
-              checked={enableMaxBuyValue}
-              onChange={(e) => {
-                setEnableMaxBuyValue(e.target.checked);
-                if (!e.target.checked) setMaxBuyValue(null);
-                else setMaxBuyValue(0);
-              }}
-              className="w-5 h-5 accent-brand-primary"
-            />
-          </div>
           <FormField
+            label="종목당 매수 비중"
             type="number"
-            value={max_buy_value ?? 0}
-            onChange={(e) => setMaxBuyValue(Number(e.target.value))}
-            disabled={!enableMaxBuyValue}
-            suffix="만원"
-            label=""
+            value={per_stock_ratio}
+            onChange={(e) => setPerStockRatio(Number(e.target.value))}
+            step={1}
+            suffix="%"
           />
-        </div>
 
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <label className="text-sm font-medium text-text-strong">
-              1일 최대 매수 종목 수
-            </label>
-            <input
-              type="checkbox"
-              checked={enableMaxDailyStock}
-              onChange={(e) => {
-                setEnableMaxDailyStock(e.target.checked);
-                if (!e.target.checked) setMaxDailyStock(null);
-                else setMaxDailyStock(0);
-              }}
-              className="w-5 h-5 accent-brand-primary"
-            />
-          </div>
           <FormField
+            label="최대 보유 종목 수"
             type="number"
-            value={max_daily_stock ?? 0}
-            onChange={(e) => setMaxDailyStock(Number(e.target.value))}
-            disabled={!enableMaxDailyStock}
+            value={max_holdings}
+            onChange={(e) => setMaxHoldings(Number(e.target.value))}
+            step={1}
             suffix="종목"
-            label=""
           />
+
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <Title variant="subtitle">종목당 최대 매수 금액</Title>
+              <ToggleSwitch
+                checked={enableMaxBuyValue}
+                onChange={(checked) => {
+                  setEnableMaxBuyValue(checked);
+                  if (!checked) setMaxBuyValue(null);
+                  else setMaxBuyValue(0);
+                }}
+                variant="buy"
+              />
+            </div>
+            <FormField
+              type="number"
+              value={max_buy_value ?? 0}
+              onChange={(e) => setMaxBuyValue(Number(e.target.value))}
+              disabled={!enableMaxBuyValue}
+              suffix="만원"
+              label=""
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <Title variant="subtitle">1일 최대 매수 종목 수</Title>
+              <ToggleSwitch
+                checked={enableMaxDailyStock}
+                onChange={(checked) => {
+                  setEnableMaxDailyStock(checked);
+                  if (!checked) setMaxDailyStock(null);
+                  else setMaxDailyStock(0);
+                }}
+                variant="buy"
+              />
+            </div>
+            <FormField
+              type="number"
+              value={max_daily_stock ?? 0}
+              onChange={(e) => setMaxDailyStock(Number(e.target.value))}
+              disabled={!enableMaxDailyStock}
+              suffix="종목"
+              label=""
+            />
+          </div>
         </div>
-      </div>
-      </div>
+      </FieldPanel>
     </div>
   );
 }

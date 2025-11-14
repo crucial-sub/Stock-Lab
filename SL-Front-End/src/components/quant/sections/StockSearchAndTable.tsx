@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Image from "next/image";
+import { FieldPanel } from "@/components/quant/ui";
 
 /**
  * 종목 검색 및 테이블 섹션
@@ -41,7 +42,7 @@ export function StockSearchAndTable({ stocks }: StockSearchAndTableProps) {
       </div>
 
       {/* 종목 테이블 */}
-      <div className="bg-bg-surface rounded-lg shadow-card overflow-hidden">
+      <FieldPanel conditionType="target" className="p-0 overflow-hidden">
         {/* 테이블 헤더 */}
         <div className="grid grid-cols-[60px_1fr_200px_150px_150px_150px_150px] gap-4 px-6 py-4 bg-bg-muted border-b border-border-subtle">
           <div className="text-sm font-medium text-text-muted">선택</div>
@@ -109,7 +110,7 @@ export function StockSearchAndTable({ stocks }: StockSearchAndTableProps) {
             );
           })}
         </div>
-      </div>
+      </FieldPanel>
     </>
   );
 }

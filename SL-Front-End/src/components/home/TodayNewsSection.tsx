@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Title } from "@/components/common/Title";
 import { NewsCard, type NewsItem } from "./NewsCard";
 
 interface TodayNewsSectionProps {
@@ -10,7 +11,7 @@ export function TodayNewsSection({ items, className = "" }: TodayNewsSectionProp
   return (
     <section className={`flex flex-col gap-5 ${className}`}>
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-semibold">오늘의 뉴스</h2>
+        <Title>오늘의 뉴스</Title>
         <Link
           href='#'
           className="text-xl font-light transition"

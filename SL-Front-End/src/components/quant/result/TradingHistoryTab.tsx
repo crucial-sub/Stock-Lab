@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import type { BacktestResult } from "@/types/api";
+import { useState } from "react";
 
 /**
  * 매매 내역 탭 컴포넌트
@@ -72,11 +72,10 @@ export function TradingHistoryTab({ trades }: TradingHistoryTabProps) {
                 {trade.quantity?.toLocaleString() || 0}
               </div>
               <div
-                className={`text-right font-semibold ${
-                  trade.profitRate >= 0
+                className={`text-right font-semibold ${trade.profitRate >= 0
                     ? "text-brand-primary"
                     : "text-accent-primary"
-                }`}
+                  }`}
               >
                 {trade.profitRate > 0 ? "+" : ""}
                 {trade.profitRate.toFixed(2)}
@@ -128,11 +127,10 @@ export function TradingHistoryTab({ trades }: TradingHistoryTabProps) {
                   <button
                     type="button"
                     onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded font-medium transition-colors ${
-                      currentPage === page
+                    className={`w-8 h-8 flex items-center justify-center rounded font-medium transition-colors ${currentPage === page
                         ? "bg-accent-primary text-white"
                         : "text-text-muted hover:text-text-body hover:bg-bg-muted"
-                    }`}
+                      }`}
                   >
                     {page}
                   </button>

@@ -1,0 +1,59 @@
+{
+  "category": "policies",
+  "category_name": "정책 및 안전",
+  "category_description": "투자 조언 금지, 리스크 안내, 윤리 정책",
+  "priority": "⭐⭐⭐⭐⭐",
+  "enforcement": "매우 엄격",
+  "documents": [
+    {
+      "id": "policy_investment_advisory",
+      "name": "투자 조언 금지 정책",
+      "type": "policy",
+      "file": "investment_advisory.md",
+      "priority": "⭐⭐⭐⭐⭐",
+      "keywords": ["투자조언금지", "종목추천금지", "매수매도금지", "책임"],
+      "summary": "특정 종목의 매수/매도를 직접 권장할 수 없다는 정책입니다.",
+      "enforcement_level": "critical",
+      "last_updated": "2025-11-14",
+      "version": "1.0"
+    },
+    {
+      "id": "policy_risk_warnings",
+      "name": "리스크 안내 정책",
+      "type": "policy",
+      "file": "risk_warnings.md",
+      "priority": "⭐⭐⭐⭐⭐",
+      "keywords": ["리스크", "손실", "경고", "안내", "주의"],
+      "summary": "모든 답변에 포함해야 하는 리스크 안내 사항입니다.",
+      "enforcement_level": "high",
+      "last_updated": "2025-11-14",
+      "version": "1.0"
+    },
+    {
+      "id": "policy_prohibited_phrases",
+      "name": "금지 문구 목록",
+      "type": "policy",
+      "file": "prohibited_phrases.txt",
+      "priority": "⭐⭐⭐⭐⭐",
+      "keywords": ["금지", "금언", "문구", "필터", "블랙리스트"],
+      "summary": "절대 사용할 수 없는 금지 문구 목록입니다.",
+      "enforcement_level": "critical",
+      "last_updated": "2025-11-14",
+      "version": "1.0"
+    },
+    {
+      "id": "policy_user_protection",
+      "name": "사용자 보호 정책",
+      "type": "policy",
+      "file": "user_protection.md",
+      "priority": "⭐⭐⭐⭐",
+      "keywords": ["사용자보호", "개인정보", "사기방지", "윤리"],
+      "summary": "사용자 정보 보호 및 부정행위 방지 정책입니다.",
+      "enforcement_level": "high",
+      "last_updated": "2025-11-14",
+      "version": "1.0"
+    }
+  ],
+  "last_updated": "2025-11-14",
+  "version": "1.0"
+}

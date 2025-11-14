@@ -188,17 +188,17 @@ SL-Chatbot/rag/documents/
 - ⏳ pbr.md
 - ⏳ dividend_yield.md
 
-### Beginner Guide (0/4)
-- ⏳ what_is_factor.md
-- ⏳ financial_basics.md
-- ⏳ investment_types.md
-- ⏳ how_to_start.md
+### Beginner Guide (4/4 완료)
+- ✅ what_is_factor.md (완료)
+- ✅ financial_basics.md (완료)
+- ✅ investment_types.md (완료)
+- ✅ how_to_start.md (완료)
 
-### Policies (0/4)
-- ⏳ investment_advisory.md
-- ⏳ risk_warnings.md
-- ⏳ prohibited_phrases.txt
-- ⏳ user_protection.md
+### Policies (4/4 완료)
+- ✅ investment_advisory.md (완료)
+- ✅ risk_warnings.md (완료)
+- ✅ prohibited_phrases.txt (완료)
+- ✅ user_protection.md (완료)
 
 ---
 

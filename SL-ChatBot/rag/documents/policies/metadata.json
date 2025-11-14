@@ -1,7 +1,7 @@
 {
   "category": "policies",
   "category_name": "정책 및 안전",
-  "category_description": "투자 조언 금지, 리스크 안내, 윤리 정책",
+  "category_description": "투자 조언 금지, 리스크 안내, 사용자 보호를 위한 필수 정책 문서",
   "priority": "⭐⭐⭐⭐⭐",
   "enforcement": "매우 엄격",
   "documents": [
@@ -11,21 +11,72 @@
       "type": "policy",
       "file": "investment_advisory.md",
       "priority": "⭐⭐⭐⭐⭐",
-      "keywords": ["투자조언금지", "종목추천금지", "매수매도금지", "책임"],
-      "summary": "특정 종목의 매수/매도를 직접 권장할 수 없다는 정책입니다.",
+      "keywords": [
+        "투자조언",
+        "금지",
+        "자본시장법",
+        "법적규제",
+        "종목추천",
+        "매매시점",
+        "수익보장",
+        "금융규제",
+        "컴플라이언스",
+        "법적책임",
+        "투자조언금지",
+        "종목추천금지",
+        "매수매도금지"
+      ],
+      "summary": "법적 규제에 따른 투자 조언 금지 사항과 허용 범위를 명확히 정의합니다",
+      "legal_basis": [
+        "자본시장과 금융투자업에 관한 법률",
+        "금융소비자보호법"
+      ],
+      "key_restrictions": [
+        "특정 종목 추천 금지",
+        "매매 타이밍 조언 금지",
+        "수익률 보장 금지",
+        "개인화된 투자 조언 금지"
+      ],
       "enforcement_level": "critical",
       "last_updated": "2025-11-14",
       "version": "1.0"
     },
     {
       "id": "policy_risk_warnings",
-      "name": "리스크 안내 정책",
+      "name": "투자 위험 안내",
       "type": "policy",
       "file": "risk_warnings.md",
       "priority": "⭐⭐⭐⭐⭐",
-      "keywords": ["리스크", "손실", "경고", "안내", "주의"],
-      "summary": "모든 답변에 포함해야 하는 리스크 안내 사항입니다.",
-      "enforcement_level": "high",
+      "keywords": [
+        "투자위험",
+        "리스크",
+        "원금손실",
+        "시장위험",
+        "변동성",
+        "손실가능성",
+        "위험고지",
+        "위험관리",
+        "투자자보호",
+        "위험등급",
+        "손실",
+        "경고",
+        "안내",
+        "주의"
+      ],
+      "summary": "모든 투자의 위험성을 명확히 안내하고 사용자가 충분한 인지 하에 결정하도록 돕습니다",
+      "risk_categories": [
+        "시장 위험",
+        "개별 종목 위험",
+        "유동성 위험",
+        "환율 위험",
+        "금리 위험"
+      ],
+      "required_warnings": [
+        "원금 손실 가능성",
+        "과거 성과 미보장",
+        "투자자 책임 원칙"
+      ],
+      "enforcement_level": "critical",
       "last_updated": "2025-11-14",
       "version": "1.0"
     },
@@ -35,8 +86,34 @@
       "type": "policy",
       "file": "prohibited_phrases.txt",
       "priority": "⭐⭐⭐⭐⭐",
-      "keywords": ["금지", "금언", "문구", "필터", "블랙리스트"],
-      "summary": "절대 사용할 수 없는 금지 문구 목록입니다.",
+      "keywords": [
+        "금지문구",
+        "필터링",
+        "차단",
+        "검열",
+        "블랙리스트",
+        "자동차단",
+        "부적절표현",
+        "금지",
+        "금언",
+        "문구",
+        "필터"
+      ],
+      "summary": "챗봇 응답에서 자동으로 필터링되어야 할 금지 문구와 표현들의 목록",
+      "categories": [
+        "직접적인 투자 권유",
+        "특정 종목 추천",
+        "수익 보장 표현",
+        "시급성 조장",
+        "가격 목표 제시",
+        "과도한 긍정",
+        "맹신 유도",
+        "개인화 조언",
+        "비현실적 수익률",
+        "불법 행위 암시"
+      ],
+      "filter_type": "real-time",
+      "total_phrases": 250,
       "enforcement_level": "critical",
       "last_updated": "2025-11-14",
       "version": "1.0"
@@ -46,14 +123,69 @@
       "name": "사용자 보호 정책",
       "type": "policy",
       "file": "user_protection.md",
-      "priority": "⭐⭐⭐⭐",
-      "keywords": ["사용자보호", "개인정보", "사기방지", "윤리"],
-      "summary": "사용자 정보 보호 및 부정행위 방지 정책입니다.",
-      "enforcement_level": "high",
+      "priority": "⭐⭐⭐⭐⭐",
+      "keywords": [
+        "사용자보호",
+        "개인정보",
+        "프라이버시",
+        "데이터보호",
+        "금융피해예방",
+        "취약계층",
+        "투자자권익",
+        "보안",
+        "사기예방",
+        "분쟁해결",
+        "사기방지",
+        "윤리"
+      ],
+      "summary": "사용자의 개인정보, 재산, 투자 안전을 종합적으로 보호하기 위한 정책",
+      "protection_areas": [
+        "개인정보 보호",
+        "금융 피해 예방",
+        "투자자 권익 보호",
+        "취약 계층 보호",
+        "시스템 보안"
+      ],
+      "compliance": [
+        "개인정보보호법",
+        "전자금융거래법",
+        "정보통신망법"
+      ],
+      "enforcement_level": "critical",
       "last_updated": "2025-11-14",
       "version": "1.0"
     }
   ],
+  "enforcement_rules": {
+    "priority_order": [
+      "policy_prohibited_phrases",
+      "policy_investment_advisory",
+      "policy_risk_warnings",
+      "policy_user_protection"
+    ],
+    "violation_handling": {
+      "automatic_block": "금지 문구 감지 시 즉시 차단",
+      "warning_message": "정책 위반 가능성 시 경고",
+      "log_and_review": "모든 위반 시도 기록 및 검토",
+      "escalation": "반복 위반 시 서비스 제한"
+    }
+  },
+  "integration_guidelines": {
+    "rag_processing": "모든 응답 생성 전 정책 문서 우선 검토",
+    "filter_chain": "prohibited_phrases → advisory → warnings → protection",
+    "override_prevention": "정책은 다른 모든 콘텐츠보다 우선",
+    "continuous_monitoring": "실시간 정책 준수 모니터링"
+  },
+  "update_schedule": {
+    "regular_review": "분기별 정기 검토",
+    "legal_updates": "법규 변경 시 즉시 업데이트",
+    "incident_driven": "사고 발생 시 긴급 개정"
+  },
+  "compliance_metrics": {
+    "filter_effectiveness": "금지 문구 차단율 99% 이상",
+    "false_positive_rate": "오탐율 1% 미만",
+    "response_compliance": "정책 준수율 100% 목표"
+  },
   "last_updated": "2025-11-14",
-  "version": "1.0"
+  "version": "1.1"
 }

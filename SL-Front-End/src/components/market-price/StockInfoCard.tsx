@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { companyApi, CompanyInfoResponse } from "@/lib/api/company";
+import { useEffect, useState } from "react";
 import { StockPriceChart } from "./StockPriceChart";
 
 interface StockInfoCardProps {
@@ -92,7 +92,7 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
   ];
 
   return (
-    <article className="flex flex-col gap-[1.25rem] bg-white p-[2rem] text-text-strong">
+    <article className="flex flex-col min-w-[50rem] gap-[1.25rem] bg-white p-[2rem] text-text-strong">
       <header className="text-start">
         <p className="text-[0.8rem] text-text-muted font-normal">
           {basicInfo.marketType || "코스피"} | {code}
@@ -102,13 +102,12 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
           {basicInfo.currentPrice ? `${basicInfo.currentPrice.toLocaleString()}원` : "-"}
         </div>
         <p
-          className={`font-semibold ${
-            (basicInfo.changevs1d || 0) > 0
-              ? "text-brand-primary"
-              : (basicInfo.changevs1d || 0) < 0
-                ? "text-accent-primary"
-                : "text-text-muted"
-          }`}
+          className={`font-semibold ${(basicInfo.changevs1d || 0) > 0
+            ? "text-brand-primary"
+            : (basicInfo.changevs1d || 0) < 0
+              ? "text-accent-primary"
+              : "text-text-muted"
+            }`}
         >
           {basicInfo.changevs1d
             ? `${basicInfo.changevs1d > 0 ? "+" : ""}${basicInfo.changevs1d.toLocaleString()}원 (${basicInfo.fluctuationRate?.toFixed(2) || 0}%)`
@@ -117,10 +116,10 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         <p className="pt-[0.25rem] text-[0.8rem] text-text-muted font-normal">
           {basicInfo.tradeDate
             ? new Date(basicInfo.tradeDate).toLocaleDateString("ko-KR", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })
             : "-"}{" "}
           기준
         </p>
@@ -132,9 +131,8 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
             <button
               key={tab}
               type="button"
-              className={`rounded-[8px] px-[0.75rem] py-[0.25rem] text-[1rem] font-normal transition ${
-                isActive ? "bg-brand-primary text-white font-semibold" : "text-text-body font-normal"
-              }`}
+              className={`rounded-[8px] px-[0.75rem] py-[0.25rem] text-[1rem] font-normal transition ${isActive ? "bg-brand-primary text-white font-semibold" : "text-text-body font-normal"
+                }`}
               onClick={() => setActivePeriod(tab)}
             >
               {tab}
@@ -203,8 +201,8 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
               index === 0
                 ? "items-start text-left"
                 : index === 1
-                ? "items-center text-center"
-                : "items-end text-right";
+                  ? "items-center text-center"
+                  : "items-end text-right";
             return (
               <div
                 key={stat.label}
@@ -312,7 +310,7 @@ function DiagnosisCircle({ score, delta }: DiagnosisCircleProps) {
  */
 function StockInfoSkeleton() {
   return (
-    <article className="flex flex-col gap-[1.25rem] bg-white p-[2rem] text-text-strong w-[600px]">
+    <article className="flex flex-col gap-[1.25rem] bg-white p-[2rem] text-text-strong w-[800px]">
       {/* 헤더 스켈레톤 */}
       <header className="text-start">
         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-2" />

@@ -14,10 +14,15 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - STOCK_LAB_API_URL=${STOCK_LAB_API_URL:-http://localhost:8000}
+      - STOCK_LAB_API_URL=${STOCK_LAB_API_URL:-http://host.docker.internal:8000}
       - API_HOST=0.0.0.0
       - API_PORT=8001
       - ENVIRONMENT=standalone
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-ap-northeast-2}
+      - BEDROCK_EMBEDDING_MODEL_ID=${BEDROCK_EMBEDDING_MODEL_ID:-apac.amazon.titan-embed-text-v2:0}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-anthropic.claude-3-haiku-20240307-v1:0}
     volumes:
       - ./api:/app
       - ./chatbot:/chatbot

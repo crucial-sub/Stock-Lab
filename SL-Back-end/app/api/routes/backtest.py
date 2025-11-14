@@ -243,7 +243,7 @@ class BacktestResultResponse(BaseModel):
 @router.post("/backtest/run", response_model=BacktestResponse)
 async def run_backtest(
     request: BacktestRequest,
-    current_user: User = Depends(get_current_user_optional), 
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -412,13 +412,11 @@ async def run_backtest(
             else:
                 logger.warning(f"우선순위 팩터 '{priority_factor_name}'가 DB에 없습니다. 무시합니다.")
 
-        # 7. 세션 생성 (admin 사용자 UUID 사용)
-        admin_user_id = uuid.UUID('00000000-0000-0000-0000-000000000001')  # admin 사용자
-
+        # 7. 세션 생성 (현재 로그인한 사용자 ID 사용)
         session = SimulationSession(
             session_id=session_id,
             strategy_id=strategy_id,
-            user_id=admin_user_id,  # admin 사용자 ID 추가
+            user_id=current_user.user_id,  # 현재 로그인한 사용자 ID
             start_date=start_date,
             end_date=end_date,
             initial_capital=initial_capital,

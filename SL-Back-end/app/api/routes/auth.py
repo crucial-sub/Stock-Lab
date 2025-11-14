@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.core.dependencies import get_current_user, get_current_active_user
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token
+from app.schemas.user import UserCreate, UserResponse, Token, UserDeleteRequest
 
 router = APIRouter()
 
@@ -172,3 +172,70 @@ async def get_user_by_id(
         )
 
     return user
+
+
+@router.delete("/delete-account", status_code=status.HTTP_200_OK)
+async def delete_account(
+    delete_request: UserDeleteRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    회원탈퇴
+
+    Args:
+        delete_request: 회원탈퇴 요청 정보 (email, password, phone_number)
+        db: 데이터베이스 세션
+
+    Returns:
+        dict: 회원탈퇴 성공 메시지
+
+    Raises:
+        HTTPException: 인증 실패 또는 유저를 찾을 수 없는 경우
+    """
+    # 이메일로 유저 조회
+    result = await db.execute(select(User).where(User.email == delete_request.email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="존재하지 않는 계정입니다"
+        )
+
+    # 비밀번호 확인
+    if not verify_password(delete_request.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="비밀번호가 올바르지 않습니다"
+        )
+
+    # 전화번호 확인
+    if user.phone_number != delete_request.phone_number:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="전화번호가 올바르지 않습니다"
+        )
+
+    # 이미 비활성화된 계정인지 확인
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 탈퇴된 계정입니다"
+        )
+
+    try:
+        # 계정 삭제 (실제로는 소프트 삭제: is_active를 False로 설정)
+        user.is_active = False
+        await db.commit()
+
+        return {
+            "message": "회원탈퇴가 정상적으로 처리되었습니다",
+            "email": user.email
+        }
+    except Exception as e:
+        
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="회원탈퇴 처리 중 오류가 발생했습니다"
+        )

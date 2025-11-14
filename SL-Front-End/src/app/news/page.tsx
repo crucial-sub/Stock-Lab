@@ -6,13 +6,13 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
 import { NewsDetailModal } from "@/components/news/NewsDetailModal";
-import { useAvailableThemesQuery, useDebounce, useNewsDetailQuery, useNewsListQuery } from "@/hooks";
-import type { NewsListParams } from "@/types/news";
+import { useAvailableThemesQuery, useDebounce, useNewsListQuery } from "@/hooks";
+import type { NewsListParams, NewsItem } from "@/types/news";
 
 const NewsPage: NextPage = () => {
   const [selectedThemes, setSelectedThemes] = useState<string[]>(["전체"]);
-  const [keyword, setKeyword] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [keyword, setKeyword] = useState<string>("");
+  const [filter, setFilter] = useState<string>("all");
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
   const [displayThemes, setDisplayThemes] = useState<string[]>([]);
 
@@ -41,7 +41,10 @@ const NewsPage: NextPage = () => {
     isError,
   } = useNewsListQuery(newsParams);
 
-  const { data: selectedNews } = useNewsDetailQuery(selectedNewsId ?? undefined);
+  // 목록 데이터에서 직접 상세 뉴스 찾기 (이미 전체 데이터가 포함되어 있음)
+  const selectedNews: NewsItem | undefined = selectedNewsId
+    ? newsList.find((item: NewsItem) => item.id === selectedNewsId)
+    : undefined;
 
   const handleToggleTheme = (theme: string) => {
     if (theme === "전체") {
@@ -122,13 +125,14 @@ const NewsPage: NextPage = () => {
               key={`${item.id}-${index}`}
               id={item.id}
               title={item.title}
-              summary={item.content || item.title}
-              tickerLabel={item.stock_name || item.stock_code || "종목"}
+              summary={item.summary || ""}
+              tickerLabel={item.tickerLabel || item.stockCode || "종목"}
               themeName={item.themeName}
-              sentiment="neutral"
-              publishedAt={typeof item.date === 'string' ? item.date : item.date?.display || ''}
-              source={item.source}
-              link={item.link}
+              pressName={item.pressName}
+              sentiment={(item.sentiment as "positive" | "negative" | "neutral") || "neutral"}
+              publishedAt={item.publishedAt || ""}
+              source={item.source || ""}
+              link={item.link || ""}
               onClick={() => setSelectedNewsId(item.id)}
             />
           ))}

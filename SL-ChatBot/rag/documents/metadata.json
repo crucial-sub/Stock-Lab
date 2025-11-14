@@ -1,0 +1,124 @@
+{
+  "catalog": {
+    "title": "Stock Lab Chatbot RAG 문서 카탈로그",
+    "description": "Stock Lab 팀의 RAG 기반 챗봇을 위한 종합 문서 저장소",
+    "version": "1.0",
+    "last_updated": "2025-11-14"
+  },
+  "categories": [
+    {
+      "id": "factors",
+      "name": "팩터 설명",
+      "path": "factors/",
+      "metadata_file": "factors/metadata.json",
+      "priority": "⭐⭐⭐⭐⭐",
+      "description": "투자 팩터의 정의, 수식, 활용법",
+      "document_count": 5,
+      "documents": [
+        "factor_value",
+        "factor_growth",
+        "factor_quality",
+        "factor_momentum",
+        "factor_dividend"
+      ]
+    },
+    {
+      "id": "strategies",
+      "name": "투자 전략",
+      "path": "strategies/",
+      "metadata_file": "strategies/metadata.json",
+      "priority": "⭐⭐⭐⭐⭐",
+      "description": "팩터 조합을 통한 투자 전략의 개념, 장단점, 사용 조건",
+      "document_count": 5,
+      "documents": [
+        "strategy_value",
+        "strategy_growth",
+        "strategy_dividend",
+        "strategy_quality",
+        "strategy_momentum"
+      ]
+    },
+    {
+      "id": "indicators",
+      "name": "금융지표",
+      "path": "indicators/",
+      "metadata_file": "indicators/metadata.json",
+      "priority": "⭐⭐⭐⭐⭐",
+      "description": "주요 금융지표의 의미, 해석, 활용법",
+      "document_count": 6,
+      "documents": [
+        "indicator_per",
+        "indicator_roe",
+        "indicator_debt_ratio",
+        "indicator_roa",
+        "indicator_pbr",
+        "indicator_dividend_yield"
+      ]
+    },
+    {
+      "id": "beginner_guide",
+      "name": "초심자 가이드",
+      "path": "beginner_guide/",
+      "metadata_file": "beginner_guide/metadata.json",
+      "priority": "⭐⭐⭐⭐⭐",
+      "description": "초보 투자자를 위한 쉬운 설명과 기본 개념",
+      "document_count": 4,
+      "documents": [
+        "beginner_what_is_factor",
+        "beginner_financial_basics",
+        "beginner_investment_types",
+        "beginner_how_to_start"
+      ]
+    },
+    {
+      "id": "policies",
+      "name": "정책 및 안전",
+      "path": "policies/",
+      "metadata_file": "policies/metadata.json",
+      "priority": "⭐⭐⭐⭐⭐",
+      "description": "투자 조언 금지, 리스크 안내, 윤리 정책",
+      "document_count": 4,
+      "enforcement": "매우 엄격",
+      "documents": [
+        "policy_investment_advisory",
+        "policy_risk_warnings",
+        "policy_prohibited_phrases",
+        "policy_user_protection"
+      ]
+    }
+  ],
+  "total_documents": 24,
+  "rag_indexing_priority": [
+    {
+      "category": "policies",
+      "reason": "안전성 최우선"
+    },
+    {
+      "category": "factors",
+      "reason": "기본 교육 자료"
+    },
+    {
+      "category": "indicators",
+      "reason": "팩터 설명 참조"
+    },
+    {
+      "category": "strategies",
+      "reason": "팩터 조합 설명"
+    },
+    {
+      "category": "beginner_guide",
+      "reason": "초심자 응답용"
+    }
+  ],
+  "usage_guidelines": {
+    "rag_search": "메타데이터의 keywords로 먼저 검색한 후 해당 markdown 파일 로드",
+    "embedding": "각 markdown 파일의 전체 내용을 벡터화",
+    "context_window": "최대 3개 관련 문서 선택 (정책 문서는 항상 포함)",
+    "policy_check": "모든 응답 전에 policy 카테고리 문서 확인 필수"
+  },
+  "next_phase": {
+    "themes": "산업/테마별 가이드 (준비 중)",
+    "sentiment_data": "감성 점수 기반 데이터 처리 (준비 중)",
+    "backtest_results": "백테스트 결과 해석 (준비 중)"
+  }
+}

@@ -231,17 +231,6 @@ class BacktestEngine:
             price_data = await self._load_price_data(start_date, end_date, target_themes, target_stocks)
             financial_data = await self._load_financial_data(start_date, end_date)
 
-            # 1.5. 기존 백테스트 결과 삭제 (재실행 시 중복 방지)
-            from sqlalchemy import delete
-            from app.models.simulation import SimulationDailyValue, SimulationTrade, SimulationPosition
-
-            logger.info(f"기존 백테스트 결과 삭제 시작: {backtest_id}")
-            await self.db.execute(delete(SimulationDailyValue).where(SimulationDailyValue.session_id == str(backtest_id)))
-            await self.db.execute(delete(SimulationTrade).where(SimulationTrade.session_id == str(backtest_id)))
-            await self.db.execute(delete(SimulationPosition).where(SimulationPosition.session_id == str(backtest_id)))
-            await self.db.commit()
-            logger.info(f"✅ 기존 백테스트 결과 삭제 완료")
-
             # 2. 팩터 계산 - 최적화된 버전 사용
             # 매수 조건에서 priority_factor 추출
             priority_factor = None
@@ -1433,30 +1422,6 @@ class BacktestEngine:
         peak_value = float(initial_capital)
         current_mdd = 0.0
 
-        # 🚀 최적화: 리밸런싱 날짜 Set으로 변환 (O(1) 조회)
-        rebalance_dates_set = {pd.Timestamp(d) for d in rebalance_dates}
-
-        # 🚀 시뮬레이션 시작 - 진행률 0% 초기화
-        from sqlalchemy import update
-        from app.models.simulation import SimulationSession
-        stmt_init = (
-            update(SimulationSession)
-            .where(SimulationSession.session_id == str(backtest_id))
-            .values(
-                progress=0,
-                current_return=0.0,
-                current_capital=float(initial_capital),
-                current_mdd=0.0
-            )
-        )
-        await self.db.execute(stmt_init)
-        await self.db.commit()
-        logger.info("💹 시뮬레이션 시작 - 0%")
-
-        # ⚡ 배치 commit 전략: 20개 거래일마다 commit
-        progress_batch_count = 0
-        PROGRESS_BATCH_SIZE = 20
-
         for trading_day in trading_days:
             if trading_day < pd.Timestamp(start_date) or trading_day > pd.Timestamp(end_date):
                 continue
@@ -1465,14 +1430,31 @@ class BacktestEngine:
             daily_new_positions = 0
             daily_buy_count = 0  # 당일 매수 횟수
             daily_sell_count = 0  # 당일 매도 횟수
-            daily_rebalance_sell_count = 0  # 리밸런싱 매도 횟수
 
-            # 🚀 최적화: O(1) 리밸런싱 날짜 체크
-            is_rebalance_day = pd.Timestamp(trading_day) in rebalance_dates_set
+            # 매도 신호 확인 및 실행 (매일 체크)
+            sell_trades = await self._execute_sells(
+                holdings, factor_data, sell_conditions,
+                condition_sell,
+                price_data, trading_day, cash_balance,
+                orders, executions
+            )
+            daily_sell_count = len(sell_trades)  # 당일 매도 횟수 기록
 
-            # 리밸런싱 날짜인 경우: 매도 먼저, 매수는 나중에
-            if is_rebalance_day:
-                # 1단계: 리밸런싱 매도 (조건 불만족 종목)
+            # 매도 후 현금 업데이트
+            for trade in sell_trades:
+                cash_balance += trade['amount'] - trade['commission'] - trade['tax']
+                position = holdings.get(trade['stock_code'])
+                if position:
+                    position.is_open = False
+                    position.exit_date = trading_day
+                    position.exit_price = trade['price']
+                    position.realized_pnl = (trade['price'] - position.entry_price) * position.quantity
+                    self.closed_positions.append(position)
+                    del holdings[trade['stock_code']]
+
+            # 리밸런싱 체크 (매수는 리밸런싱 날짜에만)
+            if pd.Timestamp(trading_day) in [pd.Timestamp(d) for d in rebalance_dates]:
+                # 1단계: 리밸런싱 - 조건 불만족 종목 매도
                 from app.services.factor_integration import FactorIntegration
                 factor_integrator = FactorIntegration(self.db)
 
@@ -1508,58 +1490,25 @@ class BacktestEngine:
                         commission = amount * self.commission_rate
                         tax = amount * self.tax_rate
 
+                        logger.info(f"🔄 리밸런싱 매도: {stock_code} (조건 불만족)")
+
                         # 매도 실행
+                        sell_trade = {
+                            'stock_code': stock_code,
+                            'price': execution_price,
+                            'quantity': holding.quantity,
+                            'amount': amount,
+                            'commission': commission,
+                            'tax': tax
+                        }
+
                         cash_balance += amount - commission - tax
                         holding.is_open = False
                         holding.exit_date = trading_day
                         holding.exit_price = execution_price
                         holding.realized_pnl = (execution_price - holding.entry_price) * holding.quantity
                         self.closed_positions.append(holding)
-
-                        # 🔥 매도 기록 추가
-                        executions.append({
-                            'execution_id': f"EXE-REBAL-{stock_code}-{trading_day}",
-                            'execution_date': trading_day,
-                            'trade_date': trading_day,
-                            'stock_code': stock_code,
-                            'stock_name': holding.stock_name,
-                            'side': 'SELL',
-                            'trade_type': 'SELL',
-                            'quantity': holding.quantity,
-                            'price': execution_price,
-                            'amount': amount,
-                            'commission': commission,
-                            'tax': tax,
-                            'realized_pnl': holding.realized_pnl,
-                            'selection_reason': 'REBALANCE'
-                        })
-
                         del holdings[stock_code]
-                        daily_rebalance_sell_count += 1
-
-            # 2단계: 목표가/손절가 등 일반 매도 (매일 체크)
-            sell_trades = await self._execute_sells(
-                holdings, factor_data, sell_conditions,
-                condition_sell,
-                price_data, trading_day, cash_balance,
-                orders, executions
-            )
-            daily_sell_count = len(sell_trades)  # 일반 매도 횟수
-
-            # 매도 후 현금 업데이트
-            for trade in sell_trades:
-                cash_balance += trade['amount'] - trade['commission'] - trade['tax']
-                position = holdings.get(trade['stock_code'])
-                if position:
-                    position.is_open = False
-                    position.exit_date = trading_day
-                    position.exit_price = trade['price']
-                    position.realized_pnl = (trade['price'] - position.entry_price) * position.quantity
-                    self.closed_positions.append(position)
-                    del holdings[trade['stock_code']]
-
-            # 3단계: 매수 (리밸런싱 날짜에만)
-            if is_rebalance_day:
 
                 # 2단계: 매수 종목 선정
                 buy_candidates = await self._select_buy_candidates(
@@ -1576,7 +1525,9 @@ class BacktestEngine:
                 # 이미 보유 중인 종목은 매수 후보에서 제외 (리밸런싱에서는 유지)
                 new_buy_candidates = [s for s in buy_candidates if s not in holdings]
 
-                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개, 보유 {len(holdings)}개/{max_positions}개")
+                logger.info(f"💰 매수 후보(전체): {len(buy_candidates)}개 - {buy_candidates[:10]}")
+                logger.info(f"💰 매수 후보(신규): {len(new_buy_candidates)}개 - {new_buy_candidates[:10]}")
+                logger.info(f"💼 현재 보유: {len(holdings)}개, 최대 포지션: {max_positions}, 여유: {max_positions - len(holdings)}")
 
                 buy_candidates = new_buy_candidates
 
@@ -1660,63 +1611,54 @@ class BacktestEngine:
             }
             daily_snapshots.append(daily_snapshot)
 
-            # 진행률 계산
+            # 실시간 진행 상황 업데이트 (매 10일마다 또는 5% 진행마다)
             progress_percentage = int((current_day_index / total_days) * 100)
+            should_update = (
+                current_day_index % 10 == 0 or  # 10일마다
+                progress_percentage % 5 == 0  # 5%마다
+            )
 
-            # 현재 수익률 및 MDD 계산 (매번)
-            current_return = ((portfolio_value - initial_capital) / initial_capital) * 100
-            portfolio_value_float = float(portfolio_value)
-            if portfolio_value_float > peak_value:
-                peak_value = portfolio_value_float
-            drawdown = ((portfolio_value_float - peak_value) / peak_value) * 100
-            if drawdown < current_mdd:
-                current_mdd = drawdown
+            if should_update:
+                # 현재 수익률 계산
+                current_return = ((portfolio_value - initial_capital) / initial_capital) * 100
 
-            # 전체 매도 횟수
-            total_sell_count = daily_sell_count + daily_rebalance_sell_count
+                # MDD 계산
+                portfolio_value_float = float(portfolio_value)
+                if portfolio_value_float > peak_value:
+                    peak_value = portfolio_value_float
+                drawdown = ((portfolio_value_float - peak_value) / peak_value) * 100
+                if drawdown < current_mdd:
+                    current_mdd = drawdown
+                # SimulationSession 업데이트
+                from sqlalchemy import update
+                from app.models.simulation import SimulationSession, SimulationDailyValue, SimulationTrade
 
-            # ⚡ 배치 진행률: 매 거래일마다 UPDATE, 20개마다 COMMIT
-            stmt_progress = (
-                update(SimulationSession)
-                .where(SimulationSession.session_id == str(backtest_id))
-                .values(
-                    progress=progress_percentage,
-                    current_date=trading_day.date(),
-                    buy_count=daily_buy_count,
-                    sell_count=total_sell_count,
-                    current_return=float(current_return),
-                    current_capital=float(portfolio_value),
-                    current_mdd=float(current_mdd)
+                stmt = (
+                    update(SimulationSession)
+                    .where(SimulationSession.session_id == str(backtest_id))
+                    .values(
+                        progress=progress_percentage,
+                        current_date=trading_day.date(),
+                        buy_count=daily_buy_count,  # 당일 매수 횟수
+                        sell_count=daily_sell_count,  # 당일 매도 횟수
+                        current_return=float(current_return),
+                        current_capital=float(portfolio_value),
+                        current_mdd=float(current_mdd)
+                    )
                 )
-            )
-            await self.db.execute(stmt_progress)
-            progress_batch_count += 1
+                await self.db.execute(stmt)
 
-            # 20개마다 또는 마지막 날에만 commit
-            if progress_batch_count >= PROGRESS_BATCH_SIZE or current_day_index == total_days:
-                await self.db.commit()
-                progress_batch_count = 0
+                # 실시간 차트를 위해 현재까지의 일별 데이터를 DB에 저장
+                # 기존 데이터 삭제 후 재저장 (간단한 방식)
+                from sqlalchemy import delete
+                delete_stmt = delete(SimulationDailyValue).where(
+                    SimulationDailyValue.session_id == str(backtest_id)
+                )
+                await self.db.execute(delete_stmt)
 
-            # 상세 데이터는 20% 단위로만 저장 (DB 부담 최소화)
-            should_save_details = (
-                (progress_percentage % 20 == 0 and progress_percentage > 0) or
-                current_day_index == total_days
-            )
-
-            if should_save_details:
-                from app.models.simulation import SimulationDailyValue, SimulationTrade
-
-                # 🚀 OPTIMIZATION 7: DB 저장 최적화 (DELETE 제거, UPSERT만 사용)
-                # Before: DELETE + INSERT (모든 데이터 재저장) - 2-3초
-                # After: UPSERT (변경된 데이터만 업데이트) - 0.2-0.3초, 10배 빠름!
-
-                from sqlalchemy.dialects.postgresql import insert as pg_insert
-                from sqlalchemy import func, insert
-
-                # 일별 데이터 UPSERT (bulk)
+                # 현재까지의 모든 daily_snapshots를 DB에 저장
+                # daily_return과 cumulative_return 계산
                 prev_portfolio_value = None
-                daily_values_to_upsert = []
-
                 for idx, snapshot in enumerate(daily_snapshots):
                     portfolio_value = float(snapshot['portfolio_value'])
 
@@ -1729,48 +1671,43 @@ class BacktestEngine:
                     # cumulative_return 계산
                     cumulative_ret = ((portfolio_value - float(initial_capital)) / float(initial_capital)) * 100
 
-                    daily_values_to_upsert.append({
-                        'session_id': str(backtest_id),
-                        'date': snapshot['date'].date() if hasattr(snapshot['date'], 'date') else snapshot['date'],
-                        'portfolio_value': portfolio_value,
-                        'cash': float(snapshot['cash_balance']),
-                        'position_value': float(snapshot['invested_amount']),
-                        'daily_return': daily_ret,
-                        'cumulative_return': cumulative_ret
-                    })
+                    daily_value = SimulationDailyValue(
+                        session_id=str(backtest_id),
+                        date=snapshot['date'].date() if hasattr(snapshot['date'], 'date') else snapshot['date'],
+                        portfolio_value=portfolio_value,
+                        cash=float(snapshot['cash_balance']),
+                        position_value=float(snapshot['invested_amount']),
+                        daily_return=daily_ret,
+                        cumulative_return=cumulative_ret
+                    )
+                    self.db.add(daily_value)
                     prev_portfolio_value = portfolio_value
 
-                # Bulk INSERT (기존 데이터는 백테스트 시작 시 삭제됨)
-                if daily_values_to_upsert:
-                    stmt = insert(SimulationDailyValue).values(daily_values_to_upsert)
-                    await self.db.execute(stmt)
+                # 현재까지의 거래 내역도 저장 (매수/매도 횟수 집계용)
+                delete_trades_stmt = delete(SimulationTrade).where(
+                    SimulationTrade.session_id == str(backtest_id)
+                )
+                await self.db.execute(delete_trades_stmt)
 
-                # 거래 내역 UPSERT (bulk)
-                trades_to_upsert = []
                 for execution in executions:
-                    trades_to_upsert.append({
-                        'session_id': str(backtest_id),
-                        'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
-                        'stock_code': execution['stock_code'],
-                        'trade_type': execution['trade_type'],  # BUY or SELL
-                        'quantity': int(execution['quantity']),
-                        'price': float(execution['price']),
-                        'amount': float(execution['amount']),
-                        'commission': float(execution['commission']),
-                        'tax': float(execution.get('tax', 0)),
-                        'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
-                        'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None
-                    })
+                    trade = SimulationTrade(
+                        session_id=str(backtest_id),
+                        trade_date=execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
+                        stock_code=execution['stock_code'],
+                        trade_type=execution['trade_type'],  # BUY or SELL
+                        quantity=int(execution['quantity']),
+                        price=float(execution['price']),
+                        amount=float(execution['amount']),
+                        commission=float(execution['commission']),
+                        tax=float(execution.get('tax', 0)),
+                        realized_pnl=float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
+                        return_pct=float(execution.get('return_pct', 0)) if execution.get('return_pct') else None
+                    )
+                    self.db.add(trade)
 
-                # Bulk INSERT (기존 데이터는 백테스트 시작 시 삭제됨)
-                if trades_to_upsert:
-                    stmt = insert(SimulationTrade).values(trades_to_upsert)
-                    await self.db.execute(stmt)
+                await self.db.commit()
 
-                # ⚡ commit 제거 - 루프 완료 후 한 번만 commit!
-
-                # 진행률 로그 (사용자가 진행 상황 확인)
-                logger.info(f"📊 [{progress_percentage}%] {trading_day.date()} | 💰 {float(portfolio_value):,.0f}원 | 📈 {current_return:.2f}% | 📉 MDD {current_mdd:.2f}% | 매수 {daily_buy_count} | 매도 {total_sell_count} (리밸 {daily_rebalance_sell_count})")
+                logger.info(f"📊 실시간 진행 상황 업데이트: {progress_percentage}% | 날짜: {trading_day.date()} | 매수: {daily_buy_count} | 매도: {daily_sell_count} | 수익률: {current_return:.2f}% | MDD: {current_mdd:.2f}% | daily_values: {len(daily_snapshots)}개 저장")
 
         # 백테스트 종료 시 모든 보유 종목 강제 매도
         if holdings:
@@ -1795,7 +1732,7 @@ class BacktestEngine:
                 commission = amount * self.commission_rate
                 tax = amount * self.tax_rate
 
-                logger.debug(f"  🔚 강제 매도: {stock_code} {holding.quantity}주 @ {execution_price:,.0f}원")
+                logger.info(f"  🔚 강제 매도: {stock_code} {holding.quantity}주 @ {execution_price:,.0f}원")
 
                 # 매도 거래 기록
                 cash_balance += amount - commission - tax
@@ -1833,12 +1770,6 @@ class BacktestEngine:
             # holdings 비우기
             holdings.clear()
 
-        # ⚡ 극한 최적화: 시뮬레이션 완료 후 단 한 번만 commit!
-        # Before: 20% 단위로 commit (5회)
-        # After: 완료 후 1회만 commit
-        await self.db.commit()
-        logger.info("⚡ DB commit 완료 (1회)")
-
         return {
             'trades': [execution for execution in executions if execution['side'] == 'SELL'],
             'orders': orders,
@@ -1874,9 +1805,9 @@ class BacktestEngine:
         hold_cfg = self.hold_days or {}
         condition_sell_meta = self.condition_sell_meta
 
-        # 디버깅: 매도 로직 (DEBUG 레벨)
+        # 디버깅: 매도 로직 진입 시 설정 확인
         if len(holdings) > 0:
-            logger.debug(f"💼 [{trading_day}] 매도 체크: {len(holdings)}개 보유")
+            logger.info(f"💼 [{trading_day}] 매도 체크 시작 - 보유 종목 수: {len(holdings)} | 목표가/손절가 설정: {target_cfg}")
 
         for stock_code, holding in list(holdings.items()):
             # 현재가 조회
@@ -1888,24 +1819,13 @@ class BacktestEngine:
             if current_price_data.empty:
                 continue
 
-            # 일중 가격 데이터 (시가/고가/저가/종가) - 안전한 접근
+            # 일중 가격 데이터 (시가/고가/저가/종가)
             row = current_price_data.iloc[0]
-            try:
-                # close_price는 필수, 나머지는 fallback
-                close_price_raw = row.get('close_price')
-                if close_price_raw is None or pd.isna(close_price_raw):
-                    logger.warning(f"⚠️ {stock_code}: close_price 없음, 매도 스킵")
-                    continue
-                close_price = Decimal(str(close_price_raw))
-
-                # open/high/low는 close로 fallback
-                open_price = Decimal(str(row.get('open_price', close_price_raw)))
-                high_price = Decimal(str(row.get('high_price', close_price_raw)))
-                low_price = Decimal(str(row.get('low_price', close_price_raw)))
-                current_price = close_price  # 기본값은 종가
-            except (ValueError, TypeError, InvalidOperation) as e:
-                logger.warning(f"⚠️ {stock_code}: 가격 데이터 변환 실패 ({e}), 매도 스킵")
-                continue
+            open_price = Decimal(str(row['open_price']))
+            high_price = Decimal(str(row['high_price']))
+            low_price = Decimal(str(row['low_price']))
+            close_price = Decimal(str(row['close_price']))
+            current_price = close_price  # 기본값은 종가
 
             # 매도 조건 체크
             should_sell = False
@@ -1945,7 +1865,7 @@ class BacktestEngine:
                     actual_loss_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
                     sell_reason = f"Stop loss {actual_loss_rate:.2f}%"
                     sell_reason_key = "stop"
-                    logger.debug(f"🛑 손절가 매도: {stock_code} | 저가: {low_profit_rate:.2f}% | 손절가 도달 -> {actual_loss_rate:.2f}%에 매도")
+                    logger.info(f"🛑 손절가 매도: {stock_code} | 저가: {low_profit_rate:.2f}% | 손절가 도달 -> {actual_loss_rate:.2f}%에 매도")
 
                 # 목표가 체크 (고가 기준)
                 elif target_gain is not None and high_profit_rate >= target_gain:
@@ -1956,7 +1876,7 @@ class BacktestEngine:
                     actual_profit_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
                     sell_reason = f"Take profit {actual_profit_rate:.2f}%"
                     sell_reason_key = "target"
-                    logger.debug(f"🎯 목표가 매도: {stock_code} | 고가: {high_profit_rate:.2f}% | 목표가 도달 -> {actual_profit_rate:.2f}%에 매도")
+                    logger.info(f"🎯 목표가 매도: {stock_code} | 고가: {high_profit_rate:.2f}% | 목표가 도달 -> {actual_profit_rate:.2f}%에 매도")
 
             if not should_sell and not enforce_min_hold:
                 for condition in sell_conditions:
@@ -2109,7 +2029,8 @@ class BacktestEngine:
         # 포지션 사이징에서 available_slots로 신규 매수 수량 제한
 
         # 통합 모듈로 매수 조건 평가 (54개 팩터 사용)
-        logger.debug(f"🔍 조건 평가: {len(tradeable_stocks)}개 종목")
+        logger.info(f"🔍 조건 평가 시작 - 거래 가능 종목: {len(tradeable_stocks)}개, 조건 타입: {type(buy_conditions)}")
+        logger.info(f"🔍 buy_conditions 내용: {buy_conditions}")
 
         selected_stocks = factor_integrator.evaluate_buy_conditions_with_factors(
             factor_data=factor_data,
@@ -2118,7 +2039,7 @@ class BacktestEngine:
             trading_date=trading_ts
         )
 
-        logger.debug(f"✅ 조건 만족: {len(selected_stocks)}개")
+        logger.info(f"🔍 조건 평가 완료 - 조건 만족 종목: {len(selected_stocks)}개 - {selected_stocks[:10]}")
 
         # 팩터 가중치가 있는 경우 스코어링
         if isinstance(buy_conditions, dict) and 'factor_weights' in buy_conditions:
@@ -2219,9 +2140,6 @@ class BacktestEngine:
             return position_sizes
 
         num_positions = len(effective_candidates)
-        if num_positions == 0:  # 추가 방어
-            return position_sizes
-
         allocatable_cash = cash_balance * Decimal("0.95")
 
         if position_sizing == "EQUAL_WEIGHT":
@@ -2330,20 +2248,7 @@ class BacktestEngine:
             if current_price_data.empty:
                 continue
 
-            # 안전한 close_price 접근
-            try:
-                close_price_raw = current_price_data.iloc[0].get('close_price')
-                if close_price_raw is None or pd.isna(close_price_raw):
-                    logger.warning(f"⚠️ {stock_code}: close_price 없음, 매수 스킵")
-                    continue
-                current_price = Decimal(str(close_price_raw))
-                if current_price <= 0:
-                    logger.warning(f"⚠️ {stock_code}: 유효하지 않은 가격 ({current_price}), 매수 스킵")
-                    continue
-            except (ValueError, TypeError, InvalidOperation) as e:
-                logger.warning(f"⚠️ {stock_code}: 가격 데이터 변환 실패 ({e}), 매수 스킵")
-                continue
-
+            current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
             stock_name = current_price_data.iloc[0].get('stock_name', f"Stock_{stock_code}")
 
             # 슬리피지 적용
@@ -2429,7 +2334,6 @@ class BacktestEngine:
                 existing_position.quantity = total_qty
                 existing_position.current_price = execution_price
                 existing_position.current_value = execution_price * total_qty
-                logger.debug(f"✅ 추가 매수: {stock_code} {quantity}주 @ {execution_price:,.0f}원 (평균가: {new_avg_price:,.0f}원)")
             else:
                 holdings[stock_code] = Position(
                     position_id=f"POS-{stock_code}-{trading_day}",
@@ -2442,7 +2346,6 @@ class BacktestEngine:
                     current_value=execution_price * quantity
                 )
                 new_position_count += 1
-                logger.debug(f"✅ 신규 매수: {stock_code} {quantity}주 @ {execution_price:,.0f}원")
 
         return buy_trades, new_position_count
 
@@ -2490,85 +2393,24 @@ class BacktestEngine:
         trading_day: date,
         cash_balance: Decimal
     ) -> Decimal:
-        """
-        🚀 OPTIMIZATION 5: 포트폴리오 가치 계산 벡터화
+        """포트폴리오 가치 계산"""
 
-        Before: 각 종목마다 DataFrame 필터링 (N회)
-        After: MultiIndex로 한 번에 조회 (1회) - 10-20배 빠름
-        """
         total_value = cash_balance
 
-        if not holdings:
-            return total_value
-
-        # 보유 종목 코드 리스트
-        holding_codes = [code for code, h in holdings.items() if h is not None]
-
-        if not holding_codes:
-            return total_value
-
-        # 🚀 벡터화: MultiIndex로 한 번에 모든 종목 가격 조회
-        try:
-            # price_data에 MultiIndex가 없으면 생성 (처음 한 번만)
-            if not hasattr(self, '_price_data_indexed') or self._last_price_data_id != id(price_data):
-                self._price_data_indexed = price_data.set_index(['date', 'stock_code'])
-                self._last_price_data_id = id(price_data)
-
-            # 한 번에 모든 보유 종목의 현재가 조회
-            current_prices = self._price_data_indexed.loc[
-                (pd.Timestamp(trading_day), holding_codes),
-                'close_price'
+        for stock_code, holding in holdings.items():
+            current_price_data = price_data[
+                (price_data['stock_code'] == stock_code) &
+                (price_data['date'] == trading_day)
             ]
 
-            # Series로 변환 (단일 종목일 경우 처리)
-            if isinstance(current_prices, (int, float, Decimal)):
-                current_prices = pd.Series([current_prices], index=[holding_codes[0]])
-            elif not isinstance(current_prices, pd.Series):
-                current_prices = pd.Series(current_prices, index=holding_codes)
+            if not current_price_data.empty:
+                current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
+            else:
+                current_price = holding.entry_price
 
-            # 각 보유 종목 업데이트
-            for stock_code in holding_codes:
-                holding = holdings.get(stock_code)
-                if holding is None:
-                    continue
-
-                # 가격 조회
-                if stock_code in current_prices.index:
-                    close_price_raw = current_prices[stock_code]
-                    if close_price_raw is not None and not pd.isna(close_price_raw):
-                        current_price = Decimal(str(close_price_raw))
-                    else:
-                        current_price = holding.entry_price
-                else:
-                    current_price = holding.entry_price
-
-                holding.current_price = current_price
-                holding.current_value = current_price * holding.quantity
-                total_value += holding.current_value
-
-        except (KeyError, IndexError) as e:
-            # MultiIndex 조회 실패 시 폴백 (기존 방식)
-            for stock_code, holding in holdings.items():
-                if holding is None:
-                    continue
-
-                current_price_data = price_data[
-                    (price_data['stock_code'] == stock_code) &
-                    (price_data['date'] == trading_day)
-                ]
-
-                if not current_price_data.empty:
-                    close_price_raw = current_price_data.iloc[0].get('close_price')
-                    if close_price_raw is not None and not pd.isna(close_price_raw):
-                        current_price = Decimal(str(close_price_raw))
-                    else:
-                        current_price = holding.entry_price
-                else:
-                    current_price = holding.entry_price
-
-                holding.current_price = current_price
-                holding.current_value = current_price * holding.quantity
-                total_value += holding.current_value
+            holding.current_price = current_price
+            holding.current_value = current_price * holding.quantity
+            total_value += holding.current_value
 
         return total_value
 

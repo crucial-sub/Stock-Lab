@@ -97,12 +97,13 @@ def set_postgresql_pragma(dbapi_conn, connection_record):
     cursor.close()
 
 
+# 🚀 최적화: SQL 쿼리 로그 비활성화 (성능 향상)
 # 쿼리 성능 모니터링 (개발 환경)
-@event.listens_for(engine.sync_engine, "before_cursor_execute")
-def receive_before_cursor_execute(conn, cursor, statement, params, context, executemany):
-    """쿼리 실행 전 로깅"""
-    if settings.DEBUG:
-        logger.debug(f"SQL Query: {statement}")
+# @event.listens_for(engine.sync_engine, "before_cursor_execute")
+# def receive_before_cursor_execute(conn, cursor, statement, params, context, executemany):
+#     """쿼리 실행 전 로깅"""
+#     if settings.DEBUG:
+#         logger.debug(f"SQL Query: {statement}")
 
 
 # 대용량 데이터 배치 처리 헬퍼

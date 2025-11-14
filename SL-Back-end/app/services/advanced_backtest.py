@@ -161,8 +161,16 @@ async def _run_backtest_async(
             await db.execute(stmt)
             await db.commit()
 
-            # BacktestEngine 생성
+            # BacktestEngine 생성 (최적화 적용)
             engine = BacktestEngine(db)
+
+            # 🚀 최적화 모듈 통합
+            try:
+                from app.services.backtest_integration import integrate_optimizations
+                integrate_optimizations(engine)
+                logger.info("✅ 백테스트 최적화 모듈 적용 완료!")
+            except Exception as e:
+                logger.warning(f"⚠️ 최적화 모듈 적용 실패 (기본 모드로 실행): {e}")
 
             import re
 

@@ -1,8 +1,8 @@
 /**
  * Result 페이지 탭 네비게이션
- * - 거래내역, 수익률, 매매결과, 설정 조건 탭
+ * - 매매종목 정보, 수익률, 매매결과, 거래 내역, 설정 조건 탭
  */
-type TabType = "history" | "returns" | "statistics" | "settings";
+type TabType = "stockInfo" | "returns" | "statistics" | "history" | "settings";
 
 interface TabNavigationProps {
   activeTab: TabType;
@@ -11,9 +11,10 @@ interface TabNavigationProps {
 
 export function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
   const tabs: Array<{ id: TabType; label: string }> = [
-    { id: "history", label: "거래내역" },
+    { id: "stockInfo", label: "매매종목 정보" },
     { id: "returns", label: "수익률" },
     { id: "statistics", label: "매매결과" },
+    { id: "history", label: "거래 내역" },
     { id: "settings", label: "설정 조건" },
   ];
 

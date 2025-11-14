@@ -190,6 +190,16 @@ class RedisCache:
 cache = RedisCache()
 
 
+def get_redis() -> Optional[redis.Redis]:
+    """
+    Redis 클라이언트 인스턴스 반환
+    백테스트 진행률 등 실시간 데이터 저장용
+    """
+    if cache._client:
+        return cache._client
+    return None
+
+
 # 캐시 데코레이터
 def cached(
     prefix: str,

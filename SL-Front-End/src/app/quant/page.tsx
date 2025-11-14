@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Title } from "@/components/common/Title";
 import { SearchBar } from "@/components/quant/list/SearchBar";
 import { StrategyActions } from "@/components/quant/list/StrategyActions";
@@ -45,70 +46,72 @@ export default function QuantPage() {
   } = useStrategyList(initialStrategies);
 
   return (
-    <div className="min-h-screen bg-background pb-[3.25rem]">
-      <Title className="mb-5">내가 만든 전략 목록</Title>
-      <div className="bg-bg-surface rounded-md p-5">
-        {/* 액션 버튼 (새 전략 만들기, 선택 전략 삭제) */}
-        <div className="flex mb-6 justify-between">
-          <StrategyActions
-            selectedCount={selectedIds.length}
-            onDelete={deleteSelectedStrategies}
-          />
-          <SearchBar
-            value={searchKeyword}
-            onChange={updateSearchKeyword}
-            onSearch={executeSearch}
-          />
-        </div>
+    <ProtectedRoute>
+      <div className="min-h-screen bg-background pb-[3.25rem]">
+        <Title className="mb-5">내가 만든 전략 목록</Title>
+        <div className="bg-bg-surface rounded-md p-5">
+          {/* 액션 버튼 (새 전략 만들기, 선택 전략 삭제) */}
+          <div className="flex mb-6 justify-between">
+            <StrategyActions
+              selectedCount={selectedIds.length}
+              onDelete={deleteSelectedStrategies}
+            />
+            <SearchBar
+              value={searchKeyword}
+              onChange={updateSearchKeyword}
+              onSearch={executeSearch}
+            />
+          </div>
 
-        {/* 전략 테이블 */}
-        <StrategyList
-          strategies={strategies}
-          selectedIds={selectedIds}
-          onToggleAll={toggleAllStrategies}
-          onToggleItem={toggleStrategy}
-        />
+          {/* 전략 테이블 */}
+          <StrategyList
+            strategies={strategies}
+            selectedIds={selectedIds}
+            onToggleAll={toggleAllStrategies}
+            onToggleItem={toggleStrategy}
+          />
 
-        {/* 페이지네이션 */}
-        <div className="h-8 py-1 flex justify-center items-center gap-[22px]">
-          <button className="hover:bg-bg-surface-hover rounded transition-colors">
-            <Image src="/icons/arrow_left.svg" alt="이전" width={24} height={24} />
-          </button>
-          <div>
-            <button className="font-normal">
-              1
+          {/* 페이지네이션 */}
+          <div className="h-8 py-1 flex justify-center items-center gap-[22px]">
+            <button className="hover:bg-bg-surface-hover rounded transition-colors">
+              <Image src="/icons/arrow_left.svg" alt="이전" width={24} height={24} />
+            </button>
+            <div>
+              <button className="font-normal">
+                1
+              </button>
+            </div>
+            <button className="hover:bg-bg-surface-hover rounded transition-colors">
+              <Image
+                src="/icons/arrow_right.svg"
+                alt="다음"
+                width={24}
+                height={24}
+              />
             </button>
           </div>
-          <button className="hover:bg-bg-surface-hover rounded transition-colors">
-            <Image
-              src="/icons/arrow_right.svg"
-              alt="다음"
-              width={24}
-              height={24}
-            />
-          </button>
+        </div>
+
+        {/* 하단 가이드 카드 */}
+        <div className="mt-5 grid grid-cols-3 gap-6">
+          <GuideCard
+            icon="📈"
+            title="퀀트 투자에 대해 알아보기 #1"
+            descriptions={["퀀트 투자가 처음이라면, 왜? 가이드를 읽어보세요!", "개발자가 퀀트 투자에 대해 자세히 설명해드립니다 😊"]}
+          />
+          <GuideCard
+            icon="📊"
+            title="퀀트 투자에 대해 알아보기 #2"
+            descriptions={["퀀트 투자에 어느 정도 익숙하신가요?", "그렇다면 본격적으로 전략을 짜면 피봇하세요! 😊"]}
+          />
+          <GuideCard
+            icon="🤔"
+            title="퀀트 투자에서 수익을 내려면?"
+            descriptions={["퀀트 투자에서도 많았던 수익을 내기가 너무 어렵다구요?", "왜? 가이드를 통해 같이 수익을 내어보아요! 😎"]}
+          />
         </div>
       </div>
-
-      {/* 하단 가이드 카드 */}
-      <div className="mt-5 grid grid-cols-3 gap-6">
-        <GuideCard
-          icon="📈"
-          title="퀀트 투자에 대해 알아보기 #1"
-          descriptions={["퀀트 투자가 처음이라면, 왜? 가이드를 읽어보세요!", "개발자가 퀀트 투자에 대해 자세히 설명해드립니다 😊"]}
-        />
-        <GuideCard
-          icon="📊"
-          title="퀀트 투자에 대해 알아보기 #2"
-          descriptions={["퀀트 투자에 어느 정도 익숙하신가요?", "그렇다면 본격적으로 전략을 짜면 피봇하세요! 😊"]}
-        />
-        <GuideCard
-          icon="🤔"
-          title="퀀트 투자에서 수익을 내려면?"
-          descriptions={["퀀트 투자에서도 많았던 수익을 내기가 너무 어렵다구요?", "왜? 가이드를 통해 같이 수익을 내어보아요! 😎"]}
-        />
-      </div>
-    </div>
+    </ProtectedRoute>
   );
 }
 

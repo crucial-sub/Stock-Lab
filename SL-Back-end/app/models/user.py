@@ -20,6 +20,13 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
+
+    # 키움증권 API 연동 정보
+    kiwoom_app_key = Column(String(255), nullable=True)
+    kiwoom_app_secret = Column(String(255), nullable=True)
+    kiwoom_access_token = Column(String(512), nullable=True)
+    kiwoom_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

@@ -36,6 +36,7 @@ bcrypt==4.0.1
 passlib[bcrypt]==1.7.4  # 비밀번호 해싱
 python-dotenv==1.0.0  # 환경변수 관리
 aiohttp==3.9.4  # 비동기 HTTP 클라이언트 사용 (news crawler/tools)
+requests==2.32.5  # HTTP 클라이언트 (kiwoom service)
 
 # Web Scraping
 beautifulsoup4==4.12.2  # HTML 파싱 (news crawler)

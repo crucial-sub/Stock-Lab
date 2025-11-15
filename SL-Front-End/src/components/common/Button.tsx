@@ -4,7 +4,7 @@ import { twMerge } from "tailwind-merge";
 interface ButtonProps {
   children: ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "secondary" | "tertiary" | "ghost";
+  variant?: "primary" | "secondary" | "tertiary" | "ghost" | "success";
   size?: "sm" | "md" | "lg";
   className?: string;
   disabled?: boolean;
@@ -15,6 +15,7 @@ const VARIANT_STYLES: Record<NonNullable<ButtonProps["variant"]>, string> = {
   secondary: "bg-zinc-100 text-black text-xl",
   tertiary: "bg-bg-positive text-brand-primary text-xl",
   ghost: "bg-transparent text-black",
+  success: "bg-green-500 text-white text-xl hover:bg-green-600",
 };
 
 const SIZE_STYLES: Record<NonNullable<ButtonProps["size"]>, string> = {

@@ -12,8 +12,8 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # 설정
-SSH_KEY="/Users/parkjungsub/Desktop/krafton_jungle/StockLab/secret/Stock-Lab-Dev.pem"
-BASTION_HOST="13.209.198.242"
+SSH_KEY="/Users/a2/Desktop/Keys/Stock-Lab-Dev.pem"
+BASTION_HOST="54.180.34.167"
 BASTION_USER="ubuntu"
 RDS_ENDPOINT="sl-postgres-db.cl0gcamkufcq.ap-northeast-2.rds.amazonaws.com"
 RDS_PORT="5432"

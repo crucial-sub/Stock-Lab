@@ -22,6 +22,7 @@ import {
   PageHeader,
   StatisticsSection,
   TabNavigation,
+  AutoTradingSection,
 } from "@/components/quant/result/sections";
 import { useBacktestResultQuery, useBacktestSettingsQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
 import { mockBacktestResult } from "@/mocks/backtestResult";
@@ -225,6 +226,12 @@ export function QuantResultPageClient({
           statistics={finalResult.statistics}
           initialCapital={initialCapital}
           periodReturns={periodReturns}
+        />
+
+        {/* 자동매매 섹션 */}
+        <AutoTradingSection
+          sessionId={backtestId}
+          sessionStatus={statusData?.status || "completed"}
         />
 
         {/* 탭 네비게이션 */}

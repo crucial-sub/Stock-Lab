@@ -1,17 +1,15 @@
 "use client";
 
+// 1. External imports (라이브러리)
 import Image from "next/image";
-import Link from "next/link";
-import { useState, useEffect } from "react";
 
-import { getBacktestList } from "@/lib/api";
+// 2. Internal imports (프로젝트 내부)
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Title } from "@/components/common/Title";
 import { SearchBar } from "@/components/quant/list/SearchBar";
 import { StrategyActions } from "@/components/quant/list/StrategyActions";
 import { StrategyList } from "@/components/quant/list/StrategyList";
 import { useStrategyList } from "@/hooks/useStrategyList";
-import type { Strategy } from "@/types/strategy";
 
 /**
  * 퀀트 전략 목록 페이지 (메인)
@@ -24,28 +22,50 @@ import type { Strategy } from "@/types/strategy";
  * - GuideCard: 하단 가이드 카드 섹션
  */
 export default function QuantPage() {
-  // 더미 데이터 (향후 서버 API로 교체)
-  const initialStrategies: Strategy[] = Array.from({ length: 10 }, (_, i) => ({
-    id: i + 1,
-    name: "전략 이름은 이렇게 표시",
-    dailyAverageReturn: i % 3 === 0 ? 99.9 : -99.9,
-    cumulativeReturn: i % 3 === 0 ? 99.9 : -99.9,
-    maxDrawdown: i % 3 === 0 ? 99.99 : -99.99,
-    createdAt: "2025.12.31",
-  }));
-
-  // 전략 목록 관리 훅
+  // 전략 목록 관리 훅 (서버 fetch, 선택, 검색, 삭제 모두 포함)
   const {
     strategies,
     selectedIds,
     searchKeyword,
     isLoading,
+    error,
     toggleStrategy,
     toggleAllStrategies,
     updateSearchKeyword,
-    executeSearch,
     deleteSelectedStrategies,
-  } = useStrategyList(initialStrategies);
+  } = useStrategyList();
+
+  // 로딩 상태
+  if (isLoading) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-background pb-[3.25rem]">
+          <Title className="mb-5">내가 만든 전략 목록</Title>
+          <div className="bg-bg-surface rounded-md p-5">
+            <div className="flex items-center justify-center h-64">
+              <p className="text-text-muted">백테스트 목록을 불러오는 중...</p>
+            </div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  // 에러 상태
+  if (error) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-background pb-[3.25rem]">
+          <Title className="mb-5">내가 만든 전략 목록</Title>
+          <div className="bg-bg-surface rounded-md p-5">
+            <div className="flex items-center justify-center h-64">
+              <p className="text-error">백테스트 목록을 불러오는데 실패했습니다.</p>
+            </div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
@@ -61,7 +81,6 @@ export default function QuantPage() {
             <SearchBar
               value={searchKeyword}
               onChange={updateSearchKeyword}
-              onSearch={executeSearch}
             />
           </div>
 

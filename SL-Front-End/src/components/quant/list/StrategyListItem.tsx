@@ -14,7 +14,7 @@ interface StrategyListItemProps {
   /** 선택 여부 */
   isSelected: boolean;
   /** 선택 상태 변경 핸들러 */
-  onToggle: (id: number) => void;
+  onToggle: (id: string) => void;
 }
 
 export function StrategyListItem({
@@ -40,7 +40,7 @@ export function StrategyListItem({
       {/* 전략 이름 */}
       <td className="p-[10px] ">
         <Link
-          href={`/quant/result`}
+          href={`/quant/result/${strategy.id}`}
           className={`text-[18px] text-left font-semibold ${isSelected ? "text-accent-primary" : ""}`}
         >
           {strategy.name}

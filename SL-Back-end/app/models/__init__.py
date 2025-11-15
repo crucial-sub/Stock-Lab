@@ -36,6 +36,13 @@ from app.models.backtest import (
     BacktestHolding,
 )
 
+# 커뮤니티 모델
+from app.models.community import (
+    CommunityPost,
+    CommunityComment,
+    CommunityLike,
+)
+
 __all__ = [
     # 기본 데이터 모델
     "Company",
@@ -48,6 +55,8 @@ __all__ = [
     # 뉴스 모델
     "NewsArticle",
     "ThemeSentiment",
+    # 사용자 모델
+    "User",
     # 시뮬레이션 모델
     "FactorCategory",
     "Factor",
@@ -59,4 +68,15 @@ __all__ = [
     "SimulationDailyValue",
     "SimulationTrade",
     "SimulationPosition",
+    # 백테스트 모델
+    "BacktestSession",
+    "BacktestCondition",
+    "BacktestStatistics",
+    "BacktestDailySnapshot",
+    "BacktestTrade",
+    "BacktestHolding",
+    # 커뮤니티 모델
+    "CommunityPost",
+    "CommunityComment",
+    "CommunityLike",
 ]

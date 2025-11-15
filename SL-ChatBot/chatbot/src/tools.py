@@ -27,28 +27,52 @@ def get_tools(news_retriever=None, factor_sync=None) -> List:
     # --- Tool Implementations ---
     @tool
     async def search_stock_news(keyword: str, max_results: int = 5) -> Dict:
-        """지정한 키워드(종목/테마)로 최신 뉴스를 검색합니다. 감성 요약에 적합한 요약문을 함께 제공합니다."""
+        """지정한 키워드(종목/테마)로 최신 뉴스를 검색합니다. DB에 저장된 실제 뉴스만 반환합니다."""
         if not news_retriever:
-            return {"error": "News retriever not available", "success": False}
-
-        news_list = await news_retriever.search_news_by_keyword(
-            keyword=keyword,
-            max_results=max_results
-        )
-
-        if news_list:
-            formatted_news = news_retriever.format_news_for_context(news_list, top_k=max_results)
-            return {
-                "success": True,
-                "news_count": len(news_list),
-                "news_summary": formatted_news,
-                "keyword": keyword
-            }
-        else:
             return {
                 "success": False,
-                "message": f"'{keyword}'에 대한 뉴스를 찾을 수 없습니다.",
+                "error": "뉴스 검색 서비스 이용 불가",
                 "keyword": keyword
+            }
+
+        try:
+            news_list = await news_retriever.search_news_by_keyword(
+                keyword=keyword,
+                max_results=max_results
+            )
+
+            if news_list and len(news_list) > 0:
+                # 뉴스 데이터를 구조화된 형식으로 반환
+                formatted_news = [
+                    {
+                        "title": news.get("title", ""),
+                        "summary": news.get("summary", "")[:200],  # 첫 200자
+                        "sentiment": news.get("sentiment", "neutral"),
+                        "publishedAt": news.get("publishedAt", ""),
+                        "source": news.get("source", "")
+                    }
+                    for news in news_list[:max_results]
+                ]
+                return {
+                    "success": True,
+                    "news_count": len(news_list),
+                    "news_data": formatted_news,
+                    "keyword": keyword,
+                    "message": f"'{keyword}'에 대한 뉴스 {len(news_list)}건 조회됨"
+                }
+            else:
+                return {
+                    "success": False,
+                    "news_count": 0,
+                    "keyword": keyword,
+                    "message": f"'{keyword}'에 대한 최신 뉴스 데이터가 없습니다."
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "keyword": keyword,
+                "message": "뉴스 검색 중 오류 발생"
             }
 
     @tool

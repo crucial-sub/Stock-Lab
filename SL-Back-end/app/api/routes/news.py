@@ -156,17 +156,17 @@ async def get_theme_sentiment_summary(
     """
     try:
         # 긍정 테마 조회
-        positive_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.sentiment_score.desc()).limit(limit)
+        positive_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.avg_sentiment_score.desc()).limit(limit)
         positive_result = await db.execute(positive_themes_query)
         positive_themes = positive_result.scalars().all()
 
         # 부정 테마 조회
-        negative_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.sentiment_score.asc()).limit(limit)
+        negative_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.avg_sentiment_score.asc()).limit(limit)
         negative_result = await db.execute(negative_themes_query)
         negative_themes = negative_result.scalars().all()
 
         # 가장 최근 업데이트된 시간 조회
-        latest_update_query = select(func.max(ThemeSentiment.updated_at))
+        latest_update_query = select(func.max(ThemeSentiment.calculated_at))
         latest_update_result = await db.execute(latest_update_query)
         latest_update_at = latest_update_result.scalar_one_or_none()
 
@@ -183,7 +183,7 @@ async def get_theme_sentiment_summary(
                 "positive_count": ts.positive_count,
                 "negative_count": ts.negative_count,
                 "neutral_count": ts.neutral_count,
-                "updated_at": (ts.calculated_at.isoformat() if ts.calculated_at else None),
+                "calculated_at": (ts.calculated_at.isoformat() if ts.calculated_at else None),
             }
 
         return {

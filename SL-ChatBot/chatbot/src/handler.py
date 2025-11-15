@@ -1,16 +1,13 @@
 """챗 핸들러 - RAG와 LLM을 오케스트레이션합니다."""
 import os
+import re
+import asyncio
 from typing import Optional
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock").lower()
 
-try:
-    import boto3
-    from botocore.config import Config
-except ImportError:
-    print("Warning: boto3 not installed. Run: pip install boto3")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock").lower()
 try:
     from langchain_aws import ChatBedrock
     # Claude 도구 호출 에이전트
@@ -218,12 +215,6 @@ class ChatHandler:
         # 1. Classify intent
         intent = await self._classify_intent(message)
 
-        # For 'theme_search', guide the LLM to perform a market analysis
-        if intent == 'theme_search':
-            # Prepend a clear instruction to the user message
-            message = f"'get_theme_sentiment_summary' 도구를 사용하여 현재 시장의 주요 테마 동향을 '유형 4' 형식으로 분석하고 관련주를 제안해줘. 사용자의 원래 질문: '{message}'"
-            print(f"Guiding LLM for theme_search. New message: {message}")
-
         # 2. Retrieve relevant knowledge (RAG)
         context = await self._retrieve_context(message, intent)
 
@@ -235,17 +226,9 @@ class ChatHandler:
         return response
 
     async def _classify_intent(self, message: str) -> str:
-        """Classify user intent.
-
-        Returns:
-            Intent type: 'explain', 'recommend', 'build', 'general'
-        """
+        """사용자 의도 분류. 테마 분석, 전략 설명 등을 감지합니다."""
         message_lower = message.strip().lower()
 
-        # "종목 추천"과 같은 일반적인 추천 요청을 'theme_search'로 분류
-        if "종목 추천" in message_lower or message_lower == "종목추천":
-            return 'theme_search'
-        
         if any(word in message_lower for word in ['전략 추천', 'recommend', '전략']):
             return 'recommend'
         elif any(word in message_lower for word in ['설명', 'explain', '뭐', '무엇']):
@@ -365,6 +348,9 @@ class ChatHandler:
 
             answer = response.get("output", "No response generated.")
 
+            
+            answer = self._clean_tool_calls_from_response(answer)
+
             # Manually save conversation history to the session's memory
             memory.save_context({"input": message}, {"output": answer})
 
@@ -380,13 +366,28 @@ class ChatHandler:
                 "intent": intent
             }
 
-    async def recommend(self, user_profile: dict) -> dict:
-        """Recommend strategy based on user profile."""
-        # TODO: Implement strategy recommendation
-        return {
-            "strategy": "value",
-            "conditions": []
-        }
+    def _clean_tool_calls_from_response(self, response: str) -> str:
+        """LangChain의 내부 도구 호출 형식(<function_calls>, <invoke> 등)을 제거합니다."""
+        # <function_calls> 블록 제거
+        response = re.sub(
+            r'<function_calls>.*?</function_calls>',
+            '',
+            response,
+            flags=re.DOTALL
+        )
+
+        # <invoke> 블록 제거
+        response = re.sub(
+            r'<invoke>.*?</invoke>',
+            '',
+            response,
+            flags=re.DOTALL
+        )
+
+        # 연속된 빈 줄 제거
+        response = re.sub(r'\n\n+', '\n\n', response)
+
+        return response.strip()
 
     def _check_investment_advisory_policy(self, message: str) -> Optional[str]:
         """투자 조언 정책 위반 확인.

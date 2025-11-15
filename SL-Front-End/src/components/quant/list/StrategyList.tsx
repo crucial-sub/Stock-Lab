@@ -11,11 +11,11 @@ interface StrategyListProps {
   /** 전략 목록 */
   strategies: Strategy[];
   /** 선택된 전략 ID 배열 */
-  selectedIds: number[];
+  selectedIds: string[];
   /** 전체 선택/해제 핸들러 */
   onToggleAll: () => void;
   /** 개별 선택/해제 핸들러 */
-  onToggleItem: (id: number) => void;
+  onToggleItem: (id: string) => void;
 }
 
 const STRATEGY_TH = [

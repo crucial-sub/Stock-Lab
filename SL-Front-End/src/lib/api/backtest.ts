@@ -92,7 +92,7 @@ export async function getBacktestList(
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
   const response = await axios.get<PaginatedResponse<BacktestResult>>(
-    "/backtest",
+    "/backtest/list",
     { params },
   );
   return response.data;

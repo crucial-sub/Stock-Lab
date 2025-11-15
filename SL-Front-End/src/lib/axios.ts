@@ -58,7 +58,17 @@ axiosInstance.interceptors.response.use(
     // 에러 응답 처리
     if (error.response) {
       // 서버가 응답을 반환한 경우
-      const { status, data } = error.response;
+      const { status, data, config } = error.response;
+      const requestUrl = config?.url || '';
+
+      // /auth/me 요청의 401/403 에러는 로그 출력 안 함 (정상적인 비로그인 상태)
+      const isAuthMeRequest = requestUrl.includes('/auth/me');
+      const isAuthError = status === 401 || status === 403;
+
+      if (isAuthMeRequest && isAuthError) {
+        // 로그인하지 않은 상태에서의 정상적인 에러이므로 무시
+        return Promise.reject(error);
+      }
 
       // 401 에러: 인증 실패
       if (status === 401) {

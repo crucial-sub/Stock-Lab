@@ -1,14 +1,15 @@
 "use client";
 
+// 1. External imports (라이브러리)
 import Image from "next/image";
 
+// 2. Internal imports (프로젝트 내부)
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Title } from "@/components/common/Title";
 import { SearchBar } from "@/components/quant/list/SearchBar";
 import { StrategyActions } from "@/components/quant/list/StrategyActions";
 import { StrategyList } from "@/components/quant/list/StrategyList";
 import { useStrategyList } from "@/hooks/useStrategyList";
-import type { Strategy } from "@/types/strategy";
 
 /**
  * 퀀트 전략 목록 페이지 (메인)
@@ -21,29 +22,50 @@ import type { Strategy } from "@/types/strategy";
  * - GuideCard: 하단 가이드 카드 섹션
  */
 export default function QuantPage() {
-  // 더미 데이터 (향후 서버 API로 교체)
-  // React Compiler가 자동으로 메모이제이션 처리
-  const initialStrategies: Strategy[] = Array.from({ length: 10 }, (_, i) => ({
-    id: i + 1,
-    name: "전략 이름은 이렇게 표시",
-    dailyAverageReturn: i % 3 === 0 ? 99.9 : -99.9,
-    cumulativeReturn: i % 3 === 0 ? 99.9 : -99.9,
-    maxDrawdown: i % 3 === 0 ? 99.99 : -99.99,
-    createdAt: "2025.12.31",
-  }));
-
-  // 전략 목록 관리 훅
+  // 전략 목록 관리 훅 (서버 fetch, 선택, 검색, 삭제 모두 포함)
   const {
     strategies,
     selectedIds,
     searchKeyword,
     isLoading,
+    error,
     toggleStrategy,
     toggleAllStrategies,
     updateSearchKeyword,
-    executeSearch,
     deleteSelectedStrategies,
-  } = useStrategyList(initialStrategies);
+  } = useStrategyList();
+
+  // 로딩 상태
+  if (isLoading) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-background pb-[3.25rem]">
+          <Title className="mb-5">내가 만든 전략 목록</Title>
+          <div className="bg-bg-surface rounded-md p-5">
+            <div className="flex items-center justify-center h-64">
+              <p className="text-text-muted">백테스트 목록을 불러오는 중...</p>
+            </div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  // 에러 상태
+  if (error) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-background pb-[3.25rem]">
+          <Title className="mb-5">내가 만든 전략 목록</Title>
+          <div className="bg-bg-surface rounded-md p-5">
+            <div className="flex items-center justify-center h-64">
+              <p className="text-error">백테스트 목록을 불러오는데 실패했습니다.</p>
+            </div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
@@ -59,7 +81,6 @@ export default function QuantPage() {
             <SearchBar
               value={searchKeyword}
               onChange={updateSearchKeyword}
-              onSearch={executeSearch}
             />
           </div>
 
@@ -77,9 +98,7 @@ export default function QuantPage() {
               <Image src="/icons/arrow_left.svg" alt="이전" width={24} height={24} />
             </button>
             <div>
-              <button className="font-normal">
-                1
-              </button>
+              <button className="font-normal">1</button>
             </div>
             <button className="hover:bg-bg-surface-hover rounded transition-colors">
               <Image
@@ -97,17 +116,26 @@ export default function QuantPage() {
           <GuideCard
             icon="📈"
             title="퀀트 투자에 대해 알아보기 #1"
-            descriptions={["퀀트 투자가 처음이라면, 왜? 가이드를 읽어보세요!", "개발자가 퀀트 투자에 대해 자세히 설명해드립니다 😊"]}
+            descriptions={[
+              "퀀트 투자가 처음이라면, 왜? 가이드를 읽어보세요!",
+              "개발자가 퀀트 투자에 대해 자세히 설명해드립니다 😊",
+            ]}
           />
           <GuideCard
             icon="📊"
             title="퀀트 투자에 대해 알아보기 #2"
-            descriptions={["퀀트 투자에 어느 정도 익숙하신가요?", "그렇다면 본격적으로 전략을 짜면 피봇하세요! 😊"]}
+            descriptions={[
+              "퀀트 투자에 어느 정도 익숙하신가요?",
+              "그렇다면 본격적으로 전략을 짜면 피봇하세요! 😊",
+            ]}
           />
           <GuideCard
             icon="🤔"
             title="퀀트 투자에서 수익을 내려면?"
-            descriptions={["퀀트 투자에서도 많았던 수익을 내기가 너무 어렵다구요?", "왜? 가이드를 통해 같이 수익을 내어보아요! 😎"]}
+            descriptions={[
+              "퀀트 투자에서도 많았던 수익을 내기가 너무 어렵다구요?",
+              "왜? 가이드를 통해 같이 수익을 내어보아요! 😎",
+            ]}
           />
         </div>
       </div>
@@ -127,10 +155,14 @@ interface GuideCardProps {
 function GuideCard({ icon, title, descriptions }: GuideCardProps) {
   return (
     <div className="flex flex-col gap-3 bg-bg-surface rounded-md p-6 shadow-card">
-      <h3 className="flex text-[1.5rem] font-semibold">{icon} {title}</h3>
+      <h3 className="flex text-[1.5rem] font-semibold">
+        {icon} {title}
+      </h3>
       <div className="flex flex-col gap-[18px]">
         {descriptions.map((desc, index) => (
-          <div key={`${desc}-${index}`} className="text-[18px] font-normal">{desc}</div>
+          <div key={`${desc}-${index}`} className="text-[18px] font-normal">
+            {desc}
+          </div>
         ))}
       </div>
     </div>

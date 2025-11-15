@@ -21,6 +21,7 @@ from app.models.simulation import (
 )
 from app.models.user import User
 from app.schemas.strategy import (
+    StrategyListItem,
     StrategyDetailItem,
     StrategyRankingItem,
     MyStrategiesResponse,
@@ -69,36 +70,14 @@ async def get_my_strategies(
         # 2. 백테스트 결과 리스트 생성
         my_strategies = []
         for session, strategy, stats in rows:
-            # 통계 요약 생성 (완료된 경우에만)
-            statistics_summary = None
-            if session.status == "COMPLETED" and stats:
-                statistics_summary = StrategyStatisticsSummary(
-                    total_return=float(stats.total_return) if stats.total_return else None,
-                    annualized_return=float(stats.annualized_return) if stats.annualized_return else None,
-                    max_drawdown=float(stats.max_drawdown) if stats.max_drawdown else None,
-                    sharpe_ratio=float(stats.sharpe_ratio) if stats.sharpe_ratio else None,
-                    win_rate=float(stats.win_rate) if stats.win_rate else None
-                )
-
-            # 백테스트 결과 아이템 생성
-            strategy_item = StrategyDetailItem(
+            # 간소화된 목록 아이템 생성
+            strategy_item = StrategyListItem(
                 session_id=session.session_id,
                 strategy_id=strategy.strategy_id,
                 strategy_name=strategy.strategy_name,
-                strategy_type=strategy.strategy_type,
-                description=strategy.description,
-                is_public=strategy.is_public,
-                is_anonymous=strategy.is_anonymous,
-                hide_strategy_details=strategy.hide_strategy_details,
                 is_active=session.is_active if hasattr(session, 'is_active') else True,
-                initial_capital=float(session.initial_capital) if session.initial_capital else None,
-                backtest_start_date=session.start_date,
-                backtest_end_date=session.end_date,
                 status=session.status,
-                progress=session.progress,
-                error_message=session.error_message,
                 total_return=float(stats.total_return) if stats and stats.total_return else None,
-                statistics=statistics_summary,
                 created_at=session.created_at,
                 updated_at=session.updated_at
             )

@@ -22,6 +22,20 @@ class StrategySharingUpdate(BaseModel):
     hide_strategy_details: Optional[bool] = None
 
 
+class StrategyListItem(BaseModel):
+    """백테스트 목록 아이템 (quant/main 페이지용 - 간소화)"""
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
+    session_id: str = Field(..., serialization_alias="sessionId")
+    strategy_id: str = Field(..., serialization_alias="strategyId")
+    strategy_name: str = Field(..., serialization_alias="strategyName")
+    is_active: bool = Field(default=True, serialization_alias="isActive")
+    status: str = Field(..., description="상태 (PENDING/RUNNING/COMPLETED/FAILED)")
+    total_return: Optional[float] = Field(None, serialization_alias="totalReturn", description="누적 수익률 (%)")
+    created_at: datetime = Field(..., serialization_alias="createdAt")
+    updated_at: datetime = Field(..., serialization_alias="updatedAt")
+
+
 class StrategyStatisticsSummary(BaseModel):
     """투자전략 통계 요약 (목록용)"""
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
@@ -107,7 +121,7 @@ class StrategyRankingItem(BaseModel):
 
 class MyStrategiesResponse(BaseModel):
     """내 투자전략 목록 응답"""
-    strategies: List[StrategyDetailItem]
+    strategies: List[StrategyListItem]
     total: int
 
 

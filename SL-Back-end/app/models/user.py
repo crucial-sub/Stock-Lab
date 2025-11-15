@@ -25,6 +25,9 @@ class User(Base):
 
     # Relationships
     simulation_sessions = relationship("SimulationSession", back_populates="user", lazy="selectin")
+    community_posts = relationship("CommunityPost", back_populates="user")
+    community_comments = relationship("CommunityComment", back_populates="user")
+    community_likes = relationship("CommunityLike", back_populates="user")
 
     def __repr__(self):
         return f"<User(user_id={self.user_id}, name={self.name}, email={self.email}, phone={self.phone_number})>"

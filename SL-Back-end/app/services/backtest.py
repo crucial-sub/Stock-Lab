@@ -3056,21 +3056,26 @@ class BacktestEngine:
         logger.info(f"💸 거래 비용 분석: 총 거래={total_trades}회 | 수수료={total_commission:,.0f}원 | 거래세={total_tax:,.0f}원 | 총 비용={total_costs:,.0f}원 ({total_costs/float(initial_capital)*100:.2f}%)")
 
         # 변동성
-        volatility = df['daily_return'].std() * np.sqrt(252) * 100 if not df['daily_return'].empty else 0
+        volatility_val = df['daily_return'].std() * np.sqrt(252) * 100 if not df['daily_return'].empty else 0
+        volatility = 0 if np.isnan(volatility_val) or np.isinf(volatility_val) else volatility_val
 
         # 하방 변동성
         negative_returns = df['daily_return'][df['daily_return'] < 0]
-        downside_volatility = negative_returns.std() * np.sqrt(252) * 100 if not negative_returns.empty else 0
+        downside_vol_val = negative_returns.std() * np.sqrt(252) * 100 if not negative_returns.empty else 0
+        downside_volatility = 0 if np.isnan(downside_vol_val) or np.isinf(downside_vol_val) else downside_vol_val
 
         # 샤프 비율
         risk_free_rate = 0.02  # 2% 무위험 수익률
-        sharpe_ratio = (annualized_return - risk_free_rate) / volatility if volatility > 0 else 0
+        sharpe_val = (annualized_return - risk_free_rate) / volatility if volatility > 0 else 0
+        sharpe_ratio = 0 if np.isnan(sharpe_val) or np.isinf(sharpe_val) else sharpe_val
 
         # 소르티노 비율
-        sortino_ratio = (annualized_return - risk_free_rate) / downside_volatility if downside_volatility > 0 else 0
+        sortino_val = (annualized_return - risk_free_rate) / downside_volatility if downside_volatility > 0 else 0
+        sortino_ratio = 0 if np.isnan(sortino_val) or np.isinf(sortino_val) else sortino_val
 
         # 칼마 비율
-        calmar_ratio = annualized_return / max_drawdown if max_drawdown > 0 else 0
+        calmar_val = annualized_return / max_drawdown if max_drawdown > 0 else 0
+        calmar_ratio = 0 if np.isnan(calmar_val) or np.isinf(calmar_val) else calmar_val
 
         # 거래 통계
         winning_trades = [t for t in sell_executions if t.get('realized_pnl', 0) > 0]

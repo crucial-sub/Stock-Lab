@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/AppShell";
+import { SideNav } from "@/components/SideNav";
 import "@/styles/globals.css";
 import type { Metadata } from "next";
 import { Providers } from "./providers";
@@ -15,9 +15,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className="relative antialiased">
+      <body className="flex h-screen overflow-hidden antialiased">
         <Providers>
-          <AppShell>{children}</AppShell>
+          <SideNav />
+          <main className="flex-1 h-full overflow-auto bg-background">
+            {children}
+          </main>
         </Providers>
       </body>
     </html>

@@ -1,146 +1,25 @@
-"use client";
+import { HomePageClient } from "./HomePageClient";
 
-import type { NextPage } from "next";
-import { useEffect, useState } from "react";
+/**
+ * 홈 페이지 (서버 컴포넌트)
+ *
+ * @description 메인 홈 화면의 진입점입니다.
+ * 서버에서 인증 상태를 확인하고, 적절한 화면을 렌더링합니다.
+ *
+ * @future
+ * - 로그인 여부 확인: const session = await getServerSession();
+ * - 로그인 안 되어 있으면: return <LoginPrompt />;
+ * - 로그인 되어 있으면: return <HomePageClient userName={session.user.name} />;
+ */
 
-import { FeaturedStrategiesSection } from "@/components/home/FeaturedStrategiesSection";
-import type { MarketTickerCardProps } from "@/components/home/MarketTickerCard";
-import type { NewsItem } from "@/components/home/NewsCard";
-import type { StrategyCardProps } from "@/components/home/StrategyCard";
-import { TodayMarketSection } from "@/components/home/TodayMarketSection";
-import { TodayNewsSection } from "@/components/home/TodayNewsSection";
-import { StockDetailModal } from "@/components/modal/StockDetailModal";
-import { marketQuoteApi } from "@/lib/api/market-quote";
+export default async function HomePage() {
+  // TODO: 인증 구현 후 활성화
+  // const session = await getServerSession();
+  //
+  // if (!session) {
+  //   return <LoginPrompt />;
+  // }
 
-const featuredStrategies: StrategyCardProps[] = [
-    {
-        title: "전략 이름",
-        author: "nickname",
-        tags: ["태그1", "태그2"],
-        description:
-            "전략을 소개하는 설명이 들어갑니다. Simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the...",
-        metrics: [
-            { label: "수익률", value: "99.99%", tone: "positive" },
-            { label: "MDD", value: "40%", tone: "muted" },
-            { label: "일 평균 수익률", value: "99.99%", tone: "positive" },
-        ],
-        ctaLabel: "전략 확인하기",
-    },
-    {
-        title: "전략 이름",
-        author: "nickname",
-        tags: ["태그1", "태그2"],
-        description:
-            "전략을 소개하는 설명이 들어갑니다. Simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the...",
-        metrics: [
-            { label: "수익률", value: "99.99%", tone: "positive" },
-            { label: "MDD", value: "40%", tone: "muted" },
-            { label: "일 평균 수익률", value: "99.99%", tone: "positive" },
-        ],
-        ctaLabel: "전략 확인하기",
-    },
-    {
-        title: "전략 이름",
-        author: "nickname",
-        tags: ["태그1", "태그2"],
-        description:
-            "전략을 소개하는 설명이 들어갑니다. Simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the...",
-        metrics: [
-            { label: "수익률", value: "99.99%", tone: "positive" },
-            { label: "MDD", value: "40%", tone: "muted" },
-            { label: "일 평균 수익률", value: "99.99%", tone: "positive" },
-        ],
-        ctaLabel: "전략 확인하기",
-    },
-];
-
-
-const newsItems: NewsItem[] = [
-    {
-        id: "news-1",
-        title: "제목의 위치는 여기입니다.",
-        nameTag: "종목 이름",
-        SentimentTag: "긍정",
-        publishedAt: "30분 전",
-        source: "www.naver.com/example/link",
-        summary:
-            "여기에 간단한 내용이 들어갑니다. Simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the...",
-    },
-    {
-        id: "news-2",
-        title: "제목의 위치는 여기입니다.",
-        nameTag: "종목 이름",
-        SentimentTag: "긍정",
-        publishedAt: "30분 전",
-        source: "www.naver.com/example/link",
-        summary:
-            "여기에 간단한 내용이 들어갑니다. Simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the...",
-    },
-    {
-        id: "news-3",
-        title: "제목의 위치는 여기입니다.",
-        nameTag: "종목 이름",
-        SentimentTag: "긍정",
-        publishedAt: "30분 전",
-        source: "www.naver.com/example/link",
-        summary:
-            "여기에 간단한 내용이 들어갑니다. Simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the...",
-    },
-];
-
-const HomePage: NextPage = () => {
-    const [marketTickers, setMarketTickers] = useState<MarketTickerCardProps[]>([]);
-    const [selectedStock, setSelectedStock] = useState<{ name: string; code: string } | null>(null);
-
-    useEffect(() => {
-        const fetchMarketData = async () => {
-            try {
-                const response = await marketQuoteApi.getMarketQuotes({
-                    sortBy: "change_rate",
-                    sortOrder: "desc",
-                    page: 1,
-                    pageSize: 20,
-                });
-
-                const formattedTickers: MarketTickerCardProps[] = response.items.map((item) => ({
-                    id: item.code,
-                    name: item.name,
-                    code: item.code,
-                    price: `${item.price.toLocaleString()}원`,
-                    change: `${item.changeRate > 0 ? "+" : ""}${item.changeRate.toFixed(2)}%`,
-                    trend: item.trend === "up" ? "up" : "down",
-                    logoSrc: "/icons/krafton-logo.svg", // 기본 로고 (추후 개선 가능)
-                    graph: item.trend === "up" ? "/icons/up-graph.svg" : "/icons/down-graph.svg",
-                    onDetailClick: () => setSelectedStock({ name: item.name, code: item.code }),
-                }));
-
-                setMarketTickers(formattedTickers);
-            } catch (error) {
-                console.error("시장 데이터 조회 실패:", error);
-            }
-        };
-
-        fetchMarketData();
-    }, []);
-
-    return (
-        <>
-            <div className="">
-                <div className="flex w-full flex-col gap-10 md:px-10 lg:px-0" >
-                    <FeaturedStrategiesSection strategies={featuredStrategies} />
-                    <TodayMarketSection items={marketTickers} />
-                    <TodayNewsSection items={newsItems} />
-                </div >
-            </div >
-
-            <StockDetailModal
-                isOpen={!!selectedStock}
-                onClose={() => setSelectedStock(null)}
-                stockName={selectedStock?.name || ""}
-                stockCode={selectedStock?.code || ""}
-            />
-        </>
-    );
-};
-
-export default HomePage;
+  // 임시로 하드코딩된 사용자 이름 (나중에 session.user.name으로 교체)
+  return <HomePageClient userName="은따거" />;
+}

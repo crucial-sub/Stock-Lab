@@ -47,6 +47,7 @@ class StrategyDetailItem(BaseModel):
     is_public: bool = Field(..., serialization_alias="isPublic")
     is_anonymous: bool = Field(..., serialization_alias="isAnonymous")
     hide_strategy_details: bool = Field(..., serialization_alias="hideStrategyDetails")
+    is_active: bool = Field(default=True, serialization_alias="isActive")
 
     # 백테스트 정보
     initial_capital: Optional[float] = Field(None, serialization_alias="initialCapital")
@@ -58,7 +59,10 @@ class StrategyDetailItem(BaseModel):
     progress: int = Field(default=0, description="진행률 (%)")
     error_message: Optional[str] = Field(None, serialization_alias="errorMessage")
 
-    # 통계 (완료된 경우에만)
+    # 주요 통계 (빠른 접근용)
+    total_return: Optional[float] = Field(None, serialization_alias="totalReturn", description="누적 수익률 (%)")
+
+    # 통계 상세 (완료된 경우에만)
     statistics: Optional[StrategyStatisticsSummary] = None
 
     # 메타데이터

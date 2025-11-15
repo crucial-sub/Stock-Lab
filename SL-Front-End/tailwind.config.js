@@ -1,13 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    "./src/**/*.{ts,tsx}",
+    "./src/**/*.{js,ts,jsx,tsx}",
     "./src/app/**/*.{ts,tsx}",
     "./src/components/**/*.{ts,tsx}",
     "./src/hooks/**/*.{ts,tsx}",
     "./src/lib/**/*.{ts,tsx}",
   ],
-  darkMode: "class",
   theme: {
     container: {
       center: true,
@@ -18,56 +17,130 @@ module.exports = {
       },
     },
     extend: {
+      /* 폰트 패밀리 */
       fontFamily: {
-        sans: ["Pretendard Variable", "sans-serif"],
+        sans: ["Pretendard Variable", "system-ui", "sans-serif"],
+        pretendard: ["Pretendard Variable", "sans-serif"],
         circular: ["Circular Std", "sans-serif"],
       },
+
+      /* 1) 팔레트 레이어: 필요하면 직접 text-navy-900 이런 걸로도 쓸 수 있음 */
       colors: {
-        bg: {
-          app: "var(--color-bg-app) /* #f4f9ff */", /* 전체 페이지 공통 배경 */
-          surface: "var(--color-surface) /* #ffffff */", /* 카드/패널 기본 표면 */
-          muted: "var(--color-surface-muted) /* #eff6ff */", /* 옅은 구분 섹션 */
-          positive: "var(--color-surface-positive) /* #fff6f6 */", /* 상승/알림 영역 */
-        },
-        text: {
-          strong: "var(--color-text-strong) /* #000000 */", /* 제목/헤더 텍스트 */
-          body: "var(--color-text-body) /* #505050 */", /* 일반 본문 텍스트 */
-          muted: "var(--color-text-muted) /* #a0a0a0 */", /* 부가 설명/타임스탬프 */
-        },
-        brand: {
-          primary: "var(--color-brand-primary) /* #ff6464 */", /* 주 브랜드/CTA */
-        },
-        accent: {
-          primary: "var(--color-accent-primary) /* #007dfc */", /* 링크/포커스 */
-          secondary: "var(--color-accent-secondary) /* #4c7cff */", /* 보조 블루 하이라이트 */
-          success: "var(--color-success) /* #00cd00 */", /* 긍정 지표/태그 텍스트 */
-        },
-        tag: {
-          neutral: "var(--color-tag-neutral) /* #c8c8c8 */", /* 중립 pill 테두리/텍스트 */
-        },
-        newsTag: {
-          positive: "var(--color-news-positive-bg) /* #ddffe5 */", /* 뉴스 긍정 태그 배경 */
-          positiveText: "var(--color-news-positive-text) /* #00cd00 */", /* 뉴스 긍정 태그 텍스트 */
-          neutral: "var(--color-news-neutral-bg) /* #fff1d6 */", /* 뉴스 중립 태그 배경 */
-          neutralText: "var(--color-news-neutral-text) /* #ffaa00 */", /* 뉴스 중립 태그 텍스트 */
-          negative: "var(--color-news-negative-bg) /* #ffe5e5 */", /* 뉴스 부정 태그 배경 */
-          negativeText: "var(--color-news-negative-text) /* #ff6464 */", /* 뉴스 부정 태그 텍스트 */
-          theme: "var(--color-news-theme-bg) /* #f4e2ff */", /* 뉴스 테마 태그 배경 */
-          themeText: "var(--color-news-theme-text) /* #a000fc */", /* 뉴스 테마 태그 텍스트 */
-          press: "var(--color-news-press-bg) /* #eaf5ff */", /* 뉴스 언론사 태그 배경 */
-          pressText: "var(--color-news-press-text) /* #007dfc */", /* 뉴스 언론사 태그 텍스트 */
-        },
-        border: {
-          DEFAULT: "var(--color-border-default) /* #c8c8c8 */", /* 컴포넌트 외곽선 */
-          subtle: "var(--color-border-subtle) /* #e1e1e1 */", /* 카드 내부 구분선 */
-        },
+        // Base
+        "base-0": "rgb(var(--color-base-0) / <alpha-value>) /* #FFFFFF */",
+        "base-soft-blue":
+          "rgb(var(--color-base-soft-blue) / <alpha-value>) /* #EFF4FF */",
+
+        // Nav / Gray
+        "navy-900": "rgb(var(--color-navy-900) / <alpha-value>) /* #182234 */",
+        "gray-400": "rgb(var(--color-gray-400) / <alpha-value>) /* #C8C8C8 */",
+        "gray-600": "rgb(var(--color-gray-600) / <alpha-value>) /* #646464 */",
+        "gray-700": "rgb(var(--color-gray-700) / <alpha-value>) /* #505050 */",
+
+        // Brand / State
+        "brand-purple":
+          "rgb(var(--color-brand-purple) / <alpha-value>) /* #AC64FF */",
+        "red-500": "rgb(var(--color-red-500) / <alpha-value>) /* #FF6464 */",
+        "blue-500": "rgb(var(--color-blue-500) / <alpha-value>) /* #007DFC */",
+        "orange-400":
+          "rgb(var(--color-orange-400) / <alpha-value>) /* #FFAC64 */",
+        "green-600":
+          "rgb(var(--color-green-600) / <alpha-value>) /* #1A8F00 */",
+        black: "rgb(var(--color-black) / <alpha-value>) /* #000000 */",
+
+        // 그라데이션 stop용 (semantic → from/via/to에 사용)
+        "app-main-from":
+          "rgb(var(--bg-app-main-from) / <alpha-value>) /* #FFFFFF */",
+        "app-main-via":
+          "rgb(var(--bg-app-main-via) / <alpha-value>) /* #EFF4FF */",
+        "app-main-to":
+          "rgb(var(--bg-app-main-to) / <alpha-value>) /* #EFF4FF */",
       },
+
+      /* 2) 역할 기반 Background 색 */
+      backgroundColor: (theme) => ({
+        ...theme("colors"),
+
+        // 레이아웃
+        sidebar: "rgb(var(--bg-sidebar) / <alpha-value>) /* #182234 */",
+
+        "sidebar-item-active": "var(--bg-sidebar-item-active) /* #FFFFFF33 */",
+        "sidebar-item-sub-active":
+          "var(--bg-sidebar-item-sub-active) /* #FFFFFF0D */",
+
+        surface: "var(--bg-surface) /* navy-900 5% → #1822340D 근사값 */",
+        "button-primary-soft": "var(--bg-button-primary-soft) /* #AC64FF80 */",
+
+        "brand-soft": "var(--bg-brand-soft) /* #AC64FF0D */",
+        "price-up": "var(--bg-price-up) /* #FF646433 */",
+        "price-down": "var(--bg-price-down) /* #007DFC33 */",
+
+        "tag-portfolio-active": "var(--bg-tag-portfolio-active) /* #FFAC64 */",
+
+        overlay: "var(--bg-overlay) /* #00000033 */", // 모달 뒷배경
+      }),
+
+      /* 3) 역할 기반 Text 색 */
+      textColor: (theme) => ({
+        ...theme("colors"),
+
+        body: "rgb(var(--text-body) / <alpha-value>) /* #000000 */",
+
+        "sidebar-item":
+          "rgb(var(--text-sidebar-item) / <alpha-value>) /* #C8C8C8 */",
+        "sidebar-item-active":
+          "rgb(var(--text-sidebar-item-active) / <alpha-value>) /* #FFFFFF */",
+
+        muted: "rgb(var(--text-muted) / <alpha-value>) /* #646464 */",
+
+        brand: "rgb(var(--text-brand) / <alpha-value>) /* #AC64FF */",
+
+        "price-up": "rgb(var(--text-price-up) / <alpha-value>) /* #FF6464 */",
+        "price-down":
+          "rgb(var(--text-price-down) / <alpha-value>) /* #007DFC */",
+
+        "tag-portfolio-active":
+          "rgb(var(--text-tag-portfolio-active) / <alpha-value>) /* #FFFFFF */",
+
+        positive: "rgb(var(--text-positive) / <alpha-value>) /* #1A8F00 */",
+      }),
+
+      /* 4) 역할 기반 Border 색 */
+      borderColor: (theme) => ({
+        ...theme("colors"),
+
+        sidebar: "rgb(var(--border-sidebar) / <alpha-value>) /* #505050 */",
+        "sidebar-item-active":
+          "rgb(var(--border-sidebar-item-active) / <alpha-value>) /* #FFFFFF */",
+
+        surface: "var(--border-surface) /* #18223433 */",
+        "brand-soft": "var(--border-brand-soft) /* #AC64FF33 */",
+      }),
+
+      /* 5) 역할 기반 Box Shadow */
       boxShadow: {
-        header: "var(--shadow-header) /* 0px 4px 16px rgba(150,150,150,0.10) */",
-        card: "var(--shadow-card-soft) /* 0px 0px 8px rgba(0,0,0,0.10) */",
-        "card-muted":
-          "var(--shadow-card-muted) /* 0px 0px 8px rgba(0,0,0,0.08) */",
+        // shadow-elev-sm
+        "elev-sm":
+          "var(--shadow-elev-sm) /* 0px 0px 8px 0px rgba(0, 0, 0, 0.05) */",
+
+        // 브랜드 포커스/호버용
+        "elev-brand":
+          "var(--shadow-elev-brand) /* 0px 0px 8px 0px rgba(172, 100, 255, 0.2) */",
+
+        // 메인 카드/패널
+        "elev-card":
+          "var(--shadow-elev-card) /* 0px 0px 8px 4px rgba(0, 0, 0, 0.1) */",
+
+        // 서브 카드/인풋
+        "elev-card-soft":
+          "var(--shadow-elev-card-soft) /* 0px 0px 8px 0px rgba(0, 0, 0, 0.1) */",
+
+        // 강한 강조(모달 등)
+        "elev-strong":
+          "var(--shadow-elev-strong) /* 0px 0px 8px 0px rgba(0, 0, 0, 0.2) */",
       },
+
+      /* 6) 역할 기반 Border Radius */
       borderRadius: {
         xs: "var(--radius-xs) /* 2px */",
         sm: "var(--radius-sm) /* 4px */",

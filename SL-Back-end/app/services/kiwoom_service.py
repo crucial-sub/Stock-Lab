@@ -3,6 +3,7 @@
 """
 import requests
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
@@ -378,15 +379,19 @@ class KiwoomService:
         try:
             # 1. 예수금 조회
             deposit = KiwoomService.get_deposit_info(access_token)
+            time.sleep(0.3)  # Rate Limit 방지
 
             # 2. 계좌 평가/잔고 조회
             evaluation = KiwoomService.get_account_evaluation(access_token)
+            time.sleep(0.3)  # Rate Limit 방지
 
             # 3. 수익률 조회
             profit = KiwoomService.get_account_balance(access_token)
+            time.sleep(0.3)  # Rate Limit 방지
 
             # 4. 미체결 조회
             unexecuted = KiwoomService.get_unexecuted_orders(access_token)
+            time.sleep(0.3)  # Rate Limit 방지
 
             # 5. 체결 조회
             executed = KiwoomService.get_executed_orders(access_token)

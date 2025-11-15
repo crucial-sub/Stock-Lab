@@ -48,9 +48,7 @@ export function useStrategyList() {
     return strategyData.strategies.map((item: StrategyDetailItem) => ({
       id: item.sessionId,
       name: item.strategyName,
-      dailyAverageReturn: item.statistics?.annualizedReturn
-        ? item.statistics.annualizedReturn / 365
-        : 0,
+      dailyAverageReturn: item.statistics?.annualizedReturn ?? 0,
       cumulativeReturn: item.statistics?.totalReturn ?? 0,
       maxDrawdown: item.statistics?.maxDrawdown ?? 0,
       createdAt: new Date(item.createdAt).toLocaleDateString("ko-KR", {

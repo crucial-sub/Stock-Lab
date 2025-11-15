@@ -20,9 +20,9 @@ interface StrategyListProps {
 
 const STRATEGY_TH = [
   "전략 이름",
-  "일평균 수익률",
+  "연환산 수익률",
   "누적 수익률",
-  "투자 수익률",
+  "MDD",
   "생성일",
 ];
 

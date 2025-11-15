@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
 
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading
 from app.api.v1 import industries
 
 settings = get_settings()
@@ -193,6 +193,12 @@ app.include_router(
     kiwoom.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Kiwoom"]
+)
+
+app.include_router(
+    auto_trading.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Auto Trading"]
 )
 
 # Root 엔드포인트

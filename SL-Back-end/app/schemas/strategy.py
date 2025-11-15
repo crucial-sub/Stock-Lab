@@ -34,9 +34,10 @@ class StrategyStatisticsSummary(BaseModel):
 
 
 class StrategyDetailItem(BaseModel):
-    """투자전략 상세 정보 (내 투자전략 목록용)"""
+    """백테스트 결과 상세 정보 (내 백테스트 목록용)"""
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
+    session_id: str = Field(..., serialization_alias="sessionId")
     strategy_id: str = Field(..., serialization_alias="strategyId")
     strategy_name: str = Field(..., serialization_alias="strategyName")
     strategy_type: Optional[str] = Field(None, serialization_alias="strategyType")
@@ -52,7 +53,12 @@ class StrategyDetailItem(BaseModel):
     backtest_start_date: Optional[date] = Field(None, serialization_alias="backtestStartDate")
     backtest_end_date: Optional[date] = Field(None, serialization_alias="backtestEndDate")
 
-    # 통계 (최신 시뮬레이션 기준)
+    # 실행 상태
+    status: str = Field(..., description="상태 (PENDING/RUNNING/COMPLETED/FAILED)")
+    progress: int = Field(default=0, description="진행률 (%)")
+    error_message: Optional[str] = Field(None, serialization_alias="errorMessage")
+
+    # 통계 (완료된 경우에만)
     statistics: Optional[StrategyStatisticsSummary] = None
 
     # 메타데이터
@@ -108,3 +114,8 @@ class StrategyRankingResponse(BaseModel):
     page: int
     limit: int
     sort_by: str = Field(..., serialization_alias="sortBy")  # "total_return" or "annualized_return"
+
+
+class BacktestDeleteRequest(BaseModel):
+    """백테스트 삭제 요청"""
+    session_ids: List[str] = Field(..., description="삭제할 백테스트 세션 ID 목록")

@@ -157,7 +157,7 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         >
           {changeStats[0].value.match(/[-+]?[0-9,.]+%/gu)?.[0] ?? "-"}
         </span>{" "}
-        감소했어요 🥲
+        {changeStats[0].value.includes("+") ? "증가했어요 🚀" : "감소했어요 🥲"}
       </p>
       <div className="grid md:grid-cols-3 pt-[0.5rem]">
         {changeStats.map((stat, index) => {

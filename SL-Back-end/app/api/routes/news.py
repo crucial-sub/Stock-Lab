@@ -12,7 +12,7 @@ from app.core.dependencies import get_current_user
 from app.services.shared_data import AVAILABLE_THEMES
 from app.core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.repositories.news_repository import NewsRepository
+from app.repositories.news_repository import NewsRepository, THEME_MAPPING
 from app.models.news import ThemeSentiment
 from loguru import logger
 
@@ -29,7 +29,8 @@ class NewsArticleSchema(BaseModel):
     content: str
     tickerLabel: str  # 종목명
     stockCode: Optional[str] = None  # 종목코드
-    themeName: Optional[str] = None  # 테마명
+    themeName: Optional[str] = None  # 테마명 (한글)
+    themeNameKor: Optional[str] = None  # 테마명 (한글) - 프론트 요청
     sentiment: str  # positive, neutral, negative
     publishedAt: str  # 발행일 (YYYY.MM.DD 형식)
     source: str  # 출처
@@ -89,11 +90,11 @@ async def search_news(
     summary="DB에서 테마별 뉴스 조회"
 )
 async def search_news_by_theme(
-    theme: str = Query(..., description="Theme name"),
+    theme: str = Query(..., description="Theme name (한글 또는 영어)"),
     max_results: int = Query(1000, ge=1, le=10000, description="Max results"),
     db: AsyncSession = Depends(get_db),
 ):
-    """DB 저장본에서 테마별 뉴스 조회."""
+    """DB 저장본에서 테마별 뉴스 조회. 한글 또는 영어 테마명 모두 지원."""
     try:
         items = await NewsRepository.search_news_by_theme(db, theme, max_results)
         return NewsListResponse(total=len(items), news=items)
@@ -112,9 +113,11 @@ async def get_available_themes(
     """DB에 실제로 존재하는 테마 목록을 반환합니다 (뉴스가 있는 테마만)."""
     try:
         themes = await NewsRepository.get_available_themes(db)
+        # 영어 테마명을 한글로 변환
+        korean_themes = [THEME_MAPPING.get(theme.lower(), theme) for theme in themes]
         return {
-            "themes": themes,
-            "count": len(themes),
+            "themes": korean_themes,
+            "count": len(korean_themes),
             "retrieved_at": datetime.now().isoformat()
         }
     except Exception as e:
@@ -153,29 +156,34 @@ async def get_theme_sentiment_summary(
     """
     try:
         # 긍정 테마 조회
-        positive_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.sentiment_score.desc()).limit(limit)
+        positive_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.avg_sentiment_score.desc()).limit(limit)
         positive_result = await db.execute(positive_themes_query)
         positive_themes = positive_result.scalars().all()
 
         # 부정 테마 조회
-        negative_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.sentiment_score.asc()).limit(limit)
+        negative_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.avg_sentiment_score.asc()).limit(limit)
         negative_result = await db.execute(negative_themes_query)
         negative_themes = negative_result.scalars().all()
 
         # 가장 최근 업데이트된 시간 조회
-        latest_update_query = select(func.max(ThemeSentiment.updated_at))
+        latest_update_query = select(func.max(ThemeSentiment.calculated_at))
         latest_update_result = await db.execute(latest_update_query)
         latest_update_at = latest_update_result.scalar_one_or_none()
 
         # Serialize ORM rows to JSON-safe dicts
         def _serialize(ts: ThemeSentiment) -> dict:
+            # 한글 테마명 매핑
+            theme_name_kor = THEME_MAPPING.get(ts.theme.lower(), ts.theme) if ts.theme else None
             return {
-                "theme_name": ts.theme_name,
-                "sentiment_score": ts.sentiment_score,
-                "summary": ts.summary,
-                "positive_news_count": ts.positive_news_count,
-                "negative_news_count": ts.negative_news_count,
-                "updated_at": (ts.updated_at.isoformat() if ts.updated_at else None),
+                "theme_name": ts.theme,
+                "theme_name_kor": theme_name_kor,
+                "sentiment_score": ts.avg_sentiment_score,
+                "sentiment_label": ts.sentiment_label,
+                "total_count": ts.total_count,
+                "positive_count": ts.positive_count,
+                "negative_count": ts.negative_count,
+                "neutral_count": ts.neutral_count,
+                "calculated_at": (ts.calculated_at.isoformat() if ts.calculated_at else None),
             }
 
         return {

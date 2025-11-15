@@ -26,7 +26,8 @@ from app.schemas.strategy import (
     MyStrategiesResponse,
     StrategyRankingResponse,
     StrategySharingUpdate,
-    StrategyStatisticsSummary
+    StrategyStatisticsSummary,
+    BacktestDeleteRequest
 )
 
 logger = logging.getLogger(__name__)
@@ -40,60 +41,48 @@ async def get_my_strategies(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    내 투자전략 목록 조회
-    - 로그인한 사용자의 모든 투자전략 반환
-    - 각 전략의 최신 백테스트 결과 통계 포함
+    내 백테스트 결과 목록 조회
+    - 로그인한 사용자의 모든 백테스트 결과 반환 (진행중/완료/실패 모두 포함)
+    - 최신 순으로 정렬
     """
     try:
         user_id = current_user.user_id
 
-        # 1. 사용자의 모든 전략 조회
-        strategies_query = (
-            select(PortfolioStrategy)
-            .where(PortfolioStrategy.user_id == user_id)
-            .order_by(PortfolioStrategy.created_at.desc())
-        )
-        strategies_result = await db.execute(strategies_query)
-        strategies = strategies_result.scalars().all()
-
-        # 2. 각 전략의 최신 시뮬레이션 통계 조회
-        my_strategies = []
-        for strategy in strategies:
-            # 최신 완료된 시뮬레이션 찾기
-            latest_session_query = (
-                select(SimulationSession)
-                .where(
-                    and_(
-                        SimulationSession.strategy_id == strategy.strategy_id,
-                        SimulationSession.status == "COMPLETED"
-                    )
-                )
-                .order_by(SimulationSession.completed_at.desc())
-                .limit(1)
+        # 1. 사용자의 모든 시뮬레이션 세션 조회 (전략 정보 포함)
+        sessions_query = (
+            select(SimulationSession, PortfolioStrategy, SimulationStatistics)
+            .join(
+                PortfolioStrategy,
+                PortfolioStrategy.strategy_id == SimulationSession.strategy_id
             )
-            session_result = await db.execute(latest_session_query)
-            latest_session = session_result.scalar_one_or_none()
+            .outerjoin(
+                SimulationStatistics,
+                SimulationStatistics.session_id == SimulationSession.session_id
+            )
+            .where(SimulationSession.user_id == user_id)
+            .order_by(SimulationSession.created_at.desc())
+        )
 
-            # 통계 조회
+        result = await db.execute(sessions_query)
+        rows = result.all()
+
+        # 2. 백테스트 결과 리스트 생성
+        my_strategies = []
+        for session, strategy, stats in rows:
+            # 통계 요약 생성 (완료된 경우에만)
             statistics_summary = None
-            if latest_session:
-                stats_query = select(SimulationStatistics).where(
-                    SimulationStatistics.session_id == latest_session.session_id
+            if session.status == "COMPLETED" and stats:
+                statistics_summary = StrategyStatisticsSummary(
+                    total_return=float(stats.total_return) if stats.total_return else None,
+                    annualized_return=float(stats.annualized_return) if stats.annualized_return else None,
+                    max_drawdown=float(stats.max_drawdown) if stats.max_drawdown else None,
+                    sharpe_ratio=float(stats.sharpe_ratio) if stats.sharpe_ratio else None,
+                    win_rate=float(stats.win_rate) if stats.win_rate else None
                 )
-                stats_result = await db.execute(stats_query)
-                stats = stats_result.scalar_one_or_none()
 
-                if stats:
-                    statistics_summary = StrategyStatisticsSummary(
-                        total_return=float(stats.total_return) if stats.total_return else None,
-                        annualized_return=float(stats.annualized_return) if stats.annualized_return else None,
-                        max_drawdown=float(stats.max_drawdown) if stats.max_drawdown else None,
-                        sharpe_ratio=float(stats.sharpe_ratio) if stats.sharpe_ratio else None,
-                        win_rate=float(stats.win_rate) if stats.win_rate else None
-                    )
-
-            # strategyDetailItem 생성
+            # 백테스트 결과 아이템 생성
             strategy_item = StrategyDetailItem(
+                session_id=session.session_id,
                 strategy_id=strategy.strategy_id,
                 strategy_name=strategy.strategy_name,
                 strategy_type=strategy.strategy_type,
@@ -101,12 +90,15 @@ async def get_my_strategies(
                 is_public=strategy.is_public,
                 is_anonymous=strategy.is_anonymous,
                 hide_strategy_details=strategy.hide_strategy_details,
-                initial_capital=float(strategy.initial_capital) if strategy.initial_capital else None,
-                backtest_start_date=strategy.backtest_start_date,
-                backtest_end_date=strategy.backtest_end_date,
+                initial_capital=float(session.initial_capital) if session.initial_capital else None,
+                backtest_start_date=session.start_date,
+                backtest_end_date=session.end_date,
+                status=session.status,
+                progress=session.progress,
+                error_message=session.error_message,
                 statistics=statistics_summary,
-                created_at=strategy.created_at,
-                updated_at=strategy.updated_at
+                created_at=session.created_at,
+                updated_at=session.updated_at
             )
             my_strategies.append(strategy_item)
 
@@ -116,7 +108,7 @@ async def get_my_strategies(
         )
 
     except Exception as e:
-        logger.error(f"내 투자전략 목록 조회 실패: {e}", exc_info=True)
+        logger.error(f"내 백테스트 결과 목록 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -310,5 +302,67 @@ async def update_strategy_sharing_settings(
         raise
     except Exception as e:
         logger.error(f"투자전략 공개 설정 변경 실패: {e}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/strategies/sessions")
+async def delete_backtest_sessions(
+    delete_request: BacktestDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    백테스트 세션 삭제
+    - 본인이 소유한 백테스트 세션만 삭제 가능
+    - 여러 세션을 한 번에 삭제 가능
+    """
+    try:
+        user_id = current_user.user_id
+        session_ids = delete_request.session_ids
+
+        if not session_ids:
+            raise HTTPException(status_code=400, detail="삭제할 세션 ID가 없습니다")
+
+        # 1. 세션 조회 및 권한 확인
+        sessions_query = select(SimulationSession).where(
+            SimulationSession.session_id.in_(session_ids)
+        )
+        sessions_result = await db.execute(sessions_query)
+        sessions = sessions_result.scalars().all()
+
+        if not sessions:
+            raise HTTPException(status_code=404, detail="백테스트 세션을 찾을 수 없습니다")
+
+        # 2. 권한 확인 - 모든 세션이 현재 사용자 소유인지 확인
+        unauthorized_sessions = [
+            session.session_id for session in sessions
+            if session.user_id != user_id
+        ]
+
+        if unauthorized_sessions:
+            raise HTTPException(
+                status_code=403,
+                detail=f"삭제 권한이 없는 세션이 포함되어 있습니다: {unauthorized_sessions}"
+            )
+
+        # 3. 세션 삭제
+        deleted_count = 0
+        for session in sessions:
+            await db.delete(session)
+            deleted_count += 1
+
+        await db.commit()
+
+        return {
+            "message": f"{deleted_count}개의 백테스트가 삭제되었습니다",
+            "deleted_session_ids": session_ids,
+            "deleted_count": deleted_count
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"백테스트 세션 삭제 실패: {e}", exc_info=True)
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

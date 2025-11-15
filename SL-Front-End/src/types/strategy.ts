@@ -6,8 +6,8 @@
  * 전략 데이터 구조
  */
 export interface Strategy {
-  /** 전략 고유 ID */
-  id: number;
+  /** 전략 고유 ID (session_id) */
+  id: string;
   /** 전략 이름 */
   name: string;
   /** 일평균 수익률 (%) */
@@ -18,6 +18,10 @@ export interface Strategy {
   maxDrawdown: number;
   /** 생성일 */
   createdAt: string;
+  /** 백테스트 실행 상태 (PENDING/RUNNING/COMPLETED/FAILED) */
+  status?: string;
+  /** 백테스트 진행률 (0-100) */
+  progress?: number;
 }
 
 /**

@@ -15,11 +15,13 @@ pandas==2.2.3  # 데이터 분석 및 조작 (Python 3.13 호환)
 numpy==2.0.2  # 수치 계산 (Python 3.13 호환)
 polars==1.15.0  # Pandas보다 10-100배 빠른 DataFrame 라이브러리 (Rust 기반)
 pyarrow==18.1.0  # Apache Arrow - 컬럼형 데이터 처리 (메모리 효율적)
+numba==0.60.0  # JIT 컴파일러 (2-5배 성능 향상)
 # dask[complete]==2024.1.0  # 대용량 데이터 병렬 처리 (10GB+ 데이터용) - Python 3.13 호환성 문제로 임시 제거
 
 # Caching (성능 최적화)
 redis==5.0.1  # 캐싱 및 세션 관리
 aiocache==0.12.2  # 비동기 캐싱
+lz4==4.3.3  # 빠른 압축/해제 (캐시 최적화용)
 
 # Database Connection Pooling
 psycopg[binary]==3.1.18  # PostgreSQL 어댑터 (Python 3.13 호환)

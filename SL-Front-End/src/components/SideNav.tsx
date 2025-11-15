@@ -133,9 +133,9 @@ export function SideNav() {
                 <Link
                   href={item.path}
                   className={[
-                    "flex items-center gap-3 px-4 py-3 rounded-lg",
-                    "transition-all duration-200",
-                    isOpen ? "w-[204px] h-14" : "w-[52px] h-14 justify-center",
+                    "flex items-center rounded-lg overflow-hidden",
+                    "transition-all duration-300 ease-in-out",
+                    isOpen ? "gap-3 px-4 py-3 w-[204px] h-14" : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
                     active
                       ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
                       : "text-sidebar-item hover:bg-sidebar-item-sub-active",
@@ -153,11 +153,17 @@ export function SideNav() {
                       aria-hidden="true"
                     />
                   </div>
-                  {isOpen && (
-                    <span className="text-xl font-semibold whitespace-nowrap">
-                      {item.label}
-                    </span>
-                  )}
+                  <span
+                    className={[
+                      "text-xl font-semibold whitespace-nowrap",
+                      "transition-all duration-300 ease-in-out",
+                      isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {item.label}
+                  </span>
                 </Link>
               </li>
             );
@@ -197,9 +203,9 @@ export function SideNav() {
                 <Link
                   href={item.path}
                   className={[
-                    "flex items-center gap-3 px-4 py-3 rounded-lg",
-                    "transition-all duration-200",
-                    isOpen ? "w-[204px] h-14" : "w-[52px] h-14 justify-center",
+                    "flex items-center rounded-lg overflow-hidden",
+                    "transition-all duration-300 ease-in-out",
+                    isOpen ? "gap-3 px-4 py-3 w-[204px] h-14" : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
                     active
                       ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
                       : "text-sidebar-item hover:bg-sidebar-item-sub-active",
@@ -217,11 +223,17 @@ export function SideNav() {
                       aria-hidden="true"
                     />
                   </div>
-                  {isOpen && (
-                    <span className="text-xl font-semibold whitespace-nowrap">
-                      {item.label}
-                    </span>
-                  )}
+                  <span
+                    className={[
+                      "text-xl font-semibold whitespace-nowrap",
+                      "transition-all duration-300 ease-in-out",
+                      isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {item.label}
+                  </span>
                 </Link>
               </li>
             );

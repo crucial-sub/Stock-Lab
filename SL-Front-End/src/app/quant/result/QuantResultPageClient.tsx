@@ -12,32 +12,32 @@
  * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
-import { useState, useEffect, useRef } from "react";
-import { useBacktestResultQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
-import { useQueryClient } from "@tanstack/react-query";
-import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
+import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
-import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
 import { SettingsTab } from "@/components/quant/result/SettingsTab";
+import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
+import { StockInfoTab } from "@/components/quant/result/StockInfoTab";
+import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import {
   PageHeader,
-  TabNavigation,
   StatisticsSection,
+  TabNavigation,
 } from "@/components/quant/result/sections";
-import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
-import type { BacktestRunRequest } from "@/types/api";
+import { useBacktestResultQuery, useBacktestSettingsQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
 import { mockBacktestResult } from "@/mocks/backtestResult";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 
 interface QuantResultPageClientProps {
   backtestId: string;
 }
 
-type TabType = "history" | "returns" | "statistics" | "settings";
+type TabType = "stockInfo" | "returns" | "statistics" | "history" | "settings";
 
 export function QuantResultPageClient({
   backtestId,
 }: QuantResultPageClientProps) {
-  const [activeTab, setActiveTab] = useState<TabType>("history");
+  const [activeTab, setActiveTab] = useState<TabType>("stockInfo");
   const queryClient = useQueryClient();
   const previousStatusRef = useRef<string | undefined>();
 
@@ -53,6 +53,12 @@ export function QuantResultPageClient({
 
   // React Query로 백테스트 결과 조회 (completed 상태일 때만)
   const { data: result, isLoading, error } = useBacktestResultQuery(
+    backtestId,
+    !isMockMode && statusData?.status === "completed"
+  );
+
+  // 백테스트 설정 조회
+  const { data: settings, isLoading: isLoadingSettings } = useBacktestSettingsQuery(
     backtestId,
     !isMockMode && statusData?.status === "completed"
   );
@@ -173,12 +179,14 @@ export function QuantResultPageClient({
 
     const latestPoint = sortedPoints[sortedPoints.length - 1];
     const latestReturn = latestPoint?.cumulativeReturn || 0;
+    const latestDate = new Date(latestPoint.date);
 
-    // 기간별 수익률 계산 함수
+    // 기간별 수익률 계산 함수 (백테스트 마지막 날짜 기준)
     const getReturnAtDate = (daysAgo: number) => {
-      const targetDate = new Date();
+      const targetDate = new Date(latestDate); // ✅ 백테스트 마지막 날짜 기준
       targetDate.setDate(targetDate.getDate() - daysAgo);
 
+      // 목표 날짜 이전의 가장 가까운 거래일 찾기
       const closestPoint = sortedPoints
         .filter((p) => new Date(p.date) <= targetDate)
         .pop();
@@ -188,7 +196,7 @@ export function QuantResultPageClient({
 
     return [
       { label: "최근 거래일", value: latestReturn },
-      { label: "최근 월주일", value: latestReturn - getReturnAtDate(7) },
+      { label: "최근 일주일", value: latestReturn - getReturnAtDate(7) },
       { label: "최근 1개월", value: latestReturn - getReturnAtDate(30) },
       { label: "최근 3개월", value: latestReturn - getReturnAtDate(90) },
       { label: "최근 6개월", value: latestReturn - getReturnAtDate(180) },
@@ -217,68 +225,34 @@ export function QuantResultPageClient({
           statistics={finalResult.statistics}
           initialCapital={initialCapital}
           periodReturns={periodReturns}
-          yieldPoints={finalResult.yieldPoints}
-          startDate={startDate}
-          endDate={endDate}
         />
 
         {/* 탭 네비게이션 */}
         <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* 탭 컨텐츠 */}
-        {activeTab === "history" && (
-          <TradingHistoryTab trades={finalResult.trades} />
+        {activeTab === "stockInfo" && (
+          <StockInfoTab
+            trades={finalResult.trades}
+            universeStocks={finalResult.universeStocks}
+          />
         )}
         {activeTab === "returns" && (
-          <ReturnsTab yieldPoints={finalResult.yieldPoints} />
+          <ReturnsTab yieldPoints={finalResult.yieldPoints} trades={finalResult.trades} />
         )}
         {activeTab === "statistics" && (
           <StatisticsTabWrapper statistics={finalResult.statistics} />
         )}
+        {activeTab === "history" && (
+          <TradingHistoryTab
+            trades={finalResult.trades}
+            yieldPoints={finalResult.yieldPoints}
+          />
+        )}
         {activeTab === "settings" && (
           <SettingsTab
-            settings={
-              {
-                // 임시 설정 데이터
-                user_id: "temp_user",
-                strategy_name: "테스트 전략",
-                is_day_or_month: "일봉",
-                start_date: "20240101",
-                end_date: "20241231",
-                initial_investment: 5000,
-                commission_rate: 0.015,
-                slippage: 0.01,
-                buy_conditions: [
-                  {
-                    name: "A",
-                    exp_left_side: "{PER}",
-                    inequality: "<",
-                    exp_right_side: 15,
-                  },
-                ],
-                buy_logic: "A",
-                priority_factor: "{PBR}",
-                priority_order: "asc",
-                per_stock_ratio: 10,
-                max_holdings: 10,
-                max_buy_value: null,
-                max_daily_stock: null,
-                buy_price_basis: "전일 종가",
-                buy_price_offset: 0,
-                target_and_loss: {
-                  target_gain: 20,
-                  stop_loss: 10,
-                },
-                hold_days: null,
-                condition_sell: null,
-                trade_targets: {
-                  use_all_stocks: false,
-                  selected_universes: ["KOSPI_LARGE"],
-                  selected_themes: [],
-                  selected_stocks: [],
-                },
-              } as BacktestRunRequest
-            }
+            settings={settings || null}
+            isLoading={isLoadingSettings}
           />
         )}
       </div>

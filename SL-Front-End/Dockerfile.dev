@@ -20,5 +20,5 @@ EXPOSE 3000
 ENV NODE_ENV=development \
     PORT=3000
 
-# Start development server with hot-reload
-CMD ["pnpm", "dev"]
+# Start Next.js development server
+CMD ["pnpm", "exec", "next", "dev"]

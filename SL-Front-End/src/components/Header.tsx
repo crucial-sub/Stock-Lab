@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
+import { authApi } from "@/lib/api/auth";
 import { Button } from "./common";
 
 interface HeaderProps {
@@ -10,9 +12,38 @@ interface HeaderProps {
 }
 
 export function Header({
-  userName = "은따거",
+  userName,
 }: HeaderProps) {
   const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchCurrentUser = async () => {
+      try {
+        const user = await authApi.getCurrentUser();
+        if (!mounted) {
+          return;
+        }
+        setIsLoggedIn(true);
+        setCurrentUserName(user.name);
+      } catch {
+        if (!mounted) {
+          return;
+        }
+        setIsLoggedIn(false);
+        setCurrentUserName(null);
+      }
+    };
+
+    fetchCurrentUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleCreateStrategy = () => {
     router.push("/quant/new");
@@ -21,6 +52,15 @@ export function Header({
   const handleLogin = () => {
     router.push("/login");
   };
+
+  const handleLogout = async () => {
+    await authApi.logout();
+    setIsLoggedIn(false);
+    setCurrentUserName(null);
+    router.push("/");
+  };
+
+  const displayName = currentUserName ?? userName ?? "사용자";
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-24 w-full bg-white shadow-header">
@@ -39,18 +79,26 @@ export function Header({
           {/* Welcome message */}
           <div>
             <p className="font-sans text-xl font-normal text-black">
-              {userName}님, 환영합니다!
+              {displayName}님, 환영합니다!
             </p>
           </div>
 
           {/* Action buttons */}
           <div className="flex gap-[21px]">
-            <Button variant="primary" size="md" onClick={handleCreateStrategy}>
-              새 전략 만들기
-            </Button>
-            <Button variant="secondary" size="md" onClick={handleLogin}>
-              로그인
-            </Button>
+            {isLoggedIn && (
+              <Button variant="primary" size="md" onClick={handleCreateStrategy}>
+                새 전략 만들기
+              </Button>
+            )}
+            {isLoggedIn ? (
+              <Button variant="secondary" size="md" onClick={handleLogout}>
+                로그아웃
+              </Button>
+            ) : (
+              <Button variant="secondary" size="md" onClick={handleLogin}>
+                로그인
+              </Button>
+            )}
           </div>
         </div>
       </div>

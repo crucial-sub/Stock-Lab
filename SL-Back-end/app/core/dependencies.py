@@ -115,3 +115,39 @@ async def get_current_superuser(
             detail="권한이 없습니다"
         )
     return current_user
+
+async def get_current_user_optional(
+    db: AsyncSession = Depends(get_db)
+) -> User:
+    """
+    개발용: 인증 없이 admin 유저 반환
+
+    TODO: 프로덕션 배포 전에 제거하고 get_current_user 사용할 것
+
+    Args:
+        db: 데이터베이스 세션
+
+    Returns:
+        User: admin 유저 객체
+    """
+    # admin 유저 (UUID: 00000000-0000-0000-0000-000000000001) 조회
+    admin_user_id = UUID('00000000-0000-0000-0000-000000000001')
+
+    result = await db.execute(select(User).where(User.user_id == admin_user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # admin 유저가 없으면 생성
+        user = User(
+            user_id=admin_user_id,
+            email="admin@stocklab.com",
+            hashed_password="dummy",  # 실제로 로그인 안 함
+            username="admin",
+            is_active=True,
+            is_superuser=True
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    return user

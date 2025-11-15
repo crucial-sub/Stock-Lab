@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { Title } from "@/components/common/Title";
 import { MarketTickerCard, type MarketTickerCardProps } from "./MarketTickerCard";
 
 interface TodayMarketSectionProps {
@@ -18,10 +19,8 @@ export function TodayMarketSection({
   const pausedRef = useRef(false);
   const [isPaused, setIsPaused] = useState(false);
 
-  const duplicatedItems = useMemo(
-    () => (items.length ? [...items, ...items] : []),
-    [items],
-  );
+  // React Compiler가 자동으로 메모이제이션 처리
+  const duplicatedItems = items.length ? [...items, ...items] : [];
 
   useEffect(() => {
     pausedRef.current = isPaused;
@@ -60,7 +59,7 @@ export function TodayMarketSection({
     <section className={`flex flex-col gap-5 ${className}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-4">
-          <h2 className="text-3xl font-semibold">오늘의 주식 시장</h2>
+          <Title>오늘의 주식 시장</Title>
           <span className="text-base font-normal text-text-muted">등락률 상위20 종목</span>
         </div>
         <Link href={'/market-price'} className="text-xl font-light transition">

@@ -30,7 +30,7 @@ export function SideNav({ }: SideNavProps) {
                         <Link
                             key={item.href}
                             href={item.href}
-                            className={`relative flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${rootSegment == item.href ? "bg-bg-muted" : "hover:bg-slate-50"
+                            className={`relative flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${rootSegment === item.href ? "bg-bg-muted" : "hover:bg-slate-50"
                                 }`}
                         >
                             <Icon
@@ -43,9 +43,9 @@ export function SideNav({ }: SideNavProps) {
                                 size={20}
                             />
                             <span
-                                className={`text-xl font-sans ${rootSegment == item.href
+                                className={`text-xl font-sans ${rootSegment === item.href
                                     ? "font-semibold text-accent-primary"
-                                    : "font-light text-tag-neutral"
+                                    : "font-normal text-tag-neutral"
                                     }`}
                             >
                                 {item.label}

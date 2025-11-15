@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Input } from "@/components/common/Input";
+import { authApi } from "@/lib/api/auth";
 
 const socialLogins = [
   {
@@ -44,7 +45,7 @@ export default function LoginPage() {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextErrors: typeof errors = {};
 
@@ -60,11 +61,16 @@ export default function LoginPage() {
 
     if (Object.keys(nextErrors).length === 0) {
       setIsSubmitting(true);
-      // TODO: 실제 로그인 API 연동
-      setTimeout(() => {
-        setIsSubmitting(false);
+      try {
+        await authApi.login({ email, password });
         router.push("/");
-      }, 800);
+      } catch (error) {
+        setErrors({
+          email: "이메일 또는 비밀번호가 올바르지 않습니다."
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 

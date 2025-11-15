@@ -9,8 +9,10 @@ import type { NewsItem } from "@/components/home/NewsCard";
 import type { StrategyCardProps } from "@/components/home/StrategyCard";
 import { TodayMarketSection } from "@/components/home/TodayMarketSection";
 import { TodayNewsSection } from "@/components/home/TodayNewsSection";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
+import { KiwoomConnectModal } from "@/components/modal/KiwoomConnectModal";
 import { marketQuoteApi } from "@/lib/api/market-quote";
-import { StockInfoCard } from "@/components/market-price/StockInfoCard";
+import { kiwoomApi } from "@/lib/api/kiwoom";
 
 const featuredStrategies: StrategyCardProps[] = [
     {
@@ -91,6 +93,8 @@ const newsItems: NewsItem[] = [
 const HomePage: NextPage = () => {
     const [marketTickers, setMarketTickers] = useState<MarketTickerCardProps[]>([]);
     const [selectedStock, setSelectedStock] = useState<{ name: string; code: string } | null>(null);
+    const [isKiwoomModalOpen, setIsKiwoomModalOpen] = useState(false);
+    const [isKiwoomConnected, setIsKiwoomConnected] = useState(false);
 
     useEffect(() => {
         const fetchMarketData = async () => {
@@ -120,43 +124,60 @@ const HomePage: NextPage = () => {
             }
         };
 
+        const checkKiwoomStatus = async () => {
+            try {
+                const status = await kiwoomApi.getStatus();
+                setIsKiwoomConnected(status.is_connected);
+            } catch (error) {
+                // 인증되지 않은 경우 무시
+                console.log("키움증권 연동 상태 확인 실패 (로그인 필요)");
+            }
+        };
+
         fetchMarketData();
+        checkKiwoomStatus();
     }, []);
+
+    const handleKiwoomSuccess = () => {
+        setIsKiwoomConnected(true);
+    };
 
     return (
         <>
             <div className="">
                 <div className="flex w-full flex-col gap-10 md:px-10 lg:px-0" >
+                    {/* 키움증권 연동 버튼 */}
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() => setIsKiwoomModalOpen(true)}
+                            className={`px-6 py-2 rounded-md font-medium transition-colors ${
+                                isKiwoomConnected
+                                    ? "bg-green-500 text-white hover:bg-green-600"
+                                    : "bg-primary-main text-white hover:bg-primary-dark"
+                            }`}
+                        >
+                            {isKiwoomConnected ? "✓ 증권사 연동됨" : "증권사 연동하기"}
+                        </button>
+                    </div>
+
                     <FeaturedStrategiesSection strategies={featuredStrategies} />
                     <TodayMarketSection items={marketTickers} />
                     <TodayNewsSection items={newsItems} />
                 </div >
             </div >
 
-            {selectedStock && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-                    onClick={() => setSelectedStock(null)}
-                >
-                    <div
-                        className="relative rounded-[8px] max-h-[70vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="relative flex items-center shadow-header bg-white px-[0.5rem] py-[0.8rem]">
-                            <h2 className="absolute left-1/2 -translate-x-1/2 text-[0.9rem] font-normal text-text-strong">
-                                {selectedStock.name} 종목 정보
-                            </h2>
-                            <button
-                                type="button"
-                                className="mr-[0.25rem] ml-auto flex h-3 w-3 rounded-full bg-[#FF6464]"
-                                aria-label="닫기"
-                                onClick={() => setSelectedStock(null)}
-                            />
-                        </div>
-                        <StockInfoCard name={selectedStock.name} code={selectedStock.code} />
-                    </div>
-                </div>
-            )}
+            <StockDetailModal
+                isOpen={!!selectedStock}
+                onClose={() => setSelectedStock(null)}
+                stockName={selectedStock?.name || ""}
+                stockCode={selectedStock?.code || ""}
+            />
+
+            <KiwoomConnectModal
+                isOpen={isKiwoomModalOpen}
+                onClose={() => setIsKiwoomModalOpen(false)}
+                onSuccess={handleKiwoomSuccess}
+            />
         </>
     );
 };

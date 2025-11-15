@@ -6,6 +6,7 @@
  */
 
 import axios from "axios";
+import { getAuthTokenFromCookie } from "./auth/token";
 
 /**
  * Axios 기본 인스턴스
@@ -30,10 +31,11 @@ export const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     // 요청 전 처리 (예: 토큰 추가)
-    // const token = getAuthToken();
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const token = getAuthTokenFromCookie();
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
 
     return config;
   },

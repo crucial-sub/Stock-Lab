@@ -4,7 +4,7 @@ import { twMerge } from "tailwind-merge";
 interface ButtonProps {
   children: ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "secondary" | "tertiary" | "ghost";
+  variant?: "primary" | "secondary" | "tertiary" | "ghost" | "success";
   size?: "sm" | "md" | "lg";
   className?: string;
   disabled?: boolean;
@@ -15,11 +15,12 @@ const VARIANT_STYLES: Record<NonNullable<ButtonProps["variant"]>, string> = {
   secondary: "bg-zinc-100 text-black text-xl",
   tertiary: "bg-bg-positive text-brand-primary text-xl",
   ghost: "bg-transparent text-black",
+  success: "bg-green-500 text-white text-xl hover:bg-green-600",
 };
 
 const SIZE_STYLES: Record<NonNullable<ButtonProps["size"]>, string> = {
   sm: "py-[5px] text-[16px]",
-  md: "py-2 text-xl",
+  md: "py-2 text-base",
   lg: "py-3 text-[16px]",
 };
 
@@ -37,7 +38,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       className={twMerge(
-        "flex items-center justify-center gap-1 overflow-hidden rounded-sm px-6 font-sans font-semibold",
+        "flex items-center justify-center gap-1 overflow-hidden rounded-md px-6 font-sans font-semibold",
         VARIANT_STYLES[variant],
         SIZE_STYLES[size],
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",

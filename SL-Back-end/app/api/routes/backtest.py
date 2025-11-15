@@ -225,8 +225,15 @@ class BacktestYieldPoint(BaseModel):
     daily_return: float = Field(..., serialization_alias="dailyReturn")  # 일간 수익률
     cumulative_return: float = Field(..., serialization_alias="cumulativeReturn")  # 누적 수익률
     value: float  # 차트용 (cumulative_return과 동일, 하위 호환성)
+    daily_drawdown: float = Field(default=0, serialization_alias="dailyDrawdown")  # 일일 낙폭 (%)
     buy_count: int = Field(default=0, serialization_alias="buyCount")  # 당일 매수 횟수
     sell_count: int = Field(default=0, serialization_alias="sellCount")  # 당일 매도 횟수
+
+
+class UniverseStock(BaseModel):
+    """유니버스 종목 정보"""
+    stock_code: str = Field(..., serialization_alias="stockCode")
+    stock_name: str = Field(..., serialization_alias="stockName")
 
 
 class BacktestResultResponse(BaseModel):
@@ -236,8 +243,54 @@ class BacktestResultResponse(BaseModel):
     statistics: BacktestResultStatistics
     trades: List[BacktestTrade]
     yield_points: List[BacktestYieldPoint] = Field(..., serialization_alias="yieldPoints")
+    universe_stocks: List[UniverseStock] = Field(default_factory=list, serialization_alias="universeStocks")
     created_at: datetime = Field(..., serialization_alias="createdAt")
     completed_at: Optional[datetime] = Field(None, serialization_alias="completedAt")
+
+
+class StrategyFactorSettings(BaseModel):
+    """전략 팩터 설정"""
+    factor_id: str = Field(..., serialization_alias="factorId")
+    factor_name: str = Field(..., serialization_alias="factorName")
+    usage_type: str = Field(..., serialization_alias="usageType")
+    operator: Optional[str] = None
+    threshold_value: Optional[float] = Field(None, serialization_alias="thresholdValue")
+    weight: Optional[float] = None
+    direction: Optional[str] = None
+
+
+class TradingRuleSettings(BaseModel):
+    """매매 규칙 설정"""
+    rule_type: str = Field(..., serialization_alias="ruleType")
+    rebalance_frequency: Optional[str] = Field(None, serialization_alias="rebalanceFrequency")
+    rebalance_day: Optional[int] = Field(None, serialization_alias="rebalanceDay")
+    position_sizing: Optional[str] = Field(None, serialization_alias="positionSizing")
+    max_positions: Optional[int] = Field(None, serialization_alias="maxPositions")
+    min_position_weight: Optional[float] = Field(None, serialization_alias="minPositionWeight")
+    max_position_weight: Optional[float] = Field(None, serialization_alias="maxPositionWeight")
+    stop_loss_pct: Optional[float] = Field(None, serialization_alias="stopLossPct")
+    take_profit_pct: Optional[float] = Field(None, serialization_alias="takeProfitPct")
+    commission_rate: Optional[float] = Field(None, serialization_alias="commissionRate")
+    tax_rate: Optional[float] = Field(None, serialization_alias="taxRate")
+    buy_condition: Optional[Dict[str, Any]] = Field(None, serialization_alias="buyCondition")
+    sell_condition: Optional[Dict[str, Any]] = Field(None, serialization_alias="sellCondition")
+
+
+class BacktestSettingsResponse(BaseModel):
+    """백테스트 설정 응답"""
+    session_name: Optional[str] = Field(None, serialization_alias="sessionName")
+    start_date: str = Field(..., serialization_alias="startDate")
+    end_date: str = Field(..., serialization_alias="endDate")
+    initial_capital: float = Field(..., serialization_alias="initialCapital")
+    benchmark: Optional[str] = None
+    strategy_name: str = Field(..., serialization_alias="strategyName")
+    strategy_type: Optional[str] = Field(None, serialization_alias="strategyType")
+    strategy_description: Optional[str] = Field(None, serialization_alias="strategyDescription")
+    universe_type: Optional[str] = Field(None, serialization_alias="universeType")
+    market_cap_filter: Optional[str] = Field(None, serialization_alias="marketCapFilter")
+    sector_filter: Optional[List[str]] = Field(None, serialization_alias="sectorFilter")
+    factors: List[StrategyFactorSettings] = []
+    trading_rules: List[TradingRuleSettings] = Field([], serialization_alias="tradingRules")
 
 
 @router.post("/backtest/run", response_model=BacktestResponse)
@@ -250,8 +303,33 @@ async def run_backtest(
     백테스트 실행
     - 비동기로 백그라운드 실행
     - 세션 ID 즉시 반환
+    - 🚀 PRODUCTION: 사용자당 동시 1개 백테스트 제한
     """
     try:
+        # 🚀 PRODUCTION OPTIMIZATION: Rate Limiting (사용자당 동시 1개 백테스트)
+        try:
+            from app.core.cache import get_redis
+            redis_client = get_redis()
+            if redis_client:
+                rate_limit_key = f"backtest:running:{current_user.user_id}"
+                running_count = await redis_client.get(rate_limit_key)
+
+                if running_count and int(running_count) > 0:
+                    raise HTTPException(
+                        status_code=429,
+                        detail="이미 실행 중인 백테스트가 있습니다. 완료 후 다시 시도해주세요."
+                    )
+
+                # 실행 중인 백테스트 카운터 증가 (TTL: 1시간)
+                await redis_client.setex(rate_limit_key, 3600, 1)
+                logger.info(f"🚦 Rate Limit 체크 통과: user_id={current_user.user_id}")
+        except HTTPException:
+            # 429 에러는 그대로 전달
+            raise
+        except Exception as e:
+            # Redis 에러는 무시하고 계속 진행 (Rate Limiting 없이)
+            logger.warning(f"Rate Limiting 스킵 (Redis 에러): {e}")
+
         # 1. 세션 ID 생성
         session_id = str(uuid.uuid4())
 
@@ -305,7 +383,8 @@ async def run_backtest(
                 "max_buy_value": request.max_buy_value,
                 "max_daily_stock": request.max_daily_stock,
                 "buy_price_basis": request.buy_price_basis,
-                "buy_price_offset": request.buy_price_offset
+                "buy_price_offset": request.buy_price_offset,
+                "trade_targets": request.trade_targets.model_dump()  # 매매 대상 저장
             },
             sell_condition={
                 "target_and_loss": request.target_and_loss.model_dump() if request.target_and_loss else None,
@@ -465,7 +544,8 @@ async def run_backtest(
                 request.hold_days.model_dump() if request.hold_days else None,
                 request.condition_sell.model_dump() if request.condition_sell else None,
                 request.max_buy_value,
-                request.max_daily_stock
+                request.max_daily_stock,
+                str(current_user.user_id)  # 🚀 PRODUCTION: Rate Limiting용 user_id
             )
         )
 
@@ -476,6 +556,9 @@ async def run_backtest(
             created_at=datetime.now()
         )
 
+    except HTTPException:
+        # HTTPException은 그대로 전달 (429, 404 등)
+        raise
     except Exception as e:
         logger.error(f"백테스트 실행 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -559,6 +642,9 @@ async def get_backtest_status(
     if not session:
         raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
 
+    # ⚡ Redis 제거: DB에서 직접 진행률 조회 (asyncio 충돌 방지)
+    # 백테스트가 매 거래일마다 DB에 commit하므로 실시간 조회 가능
+
     # 실행 중인 백테스트의 실시간 yield_points 조회
     yield_points_data = []
     if session.status in ["RUNNING", "COMPLETED"]:
@@ -605,19 +691,28 @@ async def get_backtest_status(
                 "sellCount": daily_trade_counts[date_str]["sell"],
             })
 
+    # ⚡ DB에서 직접 실시간 진행률 조회 (매 거래일마다 commit됨)
+    progress = session.progress or 0
+    current_date_str = session.current_date.isoformat() if session.current_date else None
+    buy_count = session.buy_count or 0
+    sell_count = session.sell_count or 0
+    current_return = float(session.current_return) if session.current_return else None
+    current_capital = float(session.current_capital) if session.current_capital else None
+    current_mdd = float(session.current_mdd) if session.current_mdd else None
+
     return BacktestStatusResponse(
         backtest_id=session.session_id,
         status=session.status.lower() if session.status else "pending",
-        progress=session.progress or 0,
-        message=f"진행률: {session.progress}%",
+        progress=progress,
+        message=f"진행률: {progress}%",
         started_at=session.started_at,
         completed_at=session.completed_at,
         error_message=session.error_message,
         start_date=session.start_date.strftime("%Y-%m-%d") if session.start_date else None,
         end_date=session.end_date.strftime("%Y-%m-%d") if session.end_date else None,
-        current_date=session.current_date.isoformat() if session.current_date else None,
-        buy_count=session.buy_count or 0,
-        sell_count=session.sell_count or 0,
+        current_date=current_date_str,
+        buy_count=buy_count,
+        sell_count=sell_count,
         current_return=float(session.current_return) if session.current_return else None,
         current_capital=float(session.current_capital) if session.current_capital else None,
         current_mdd=float(session.current_mdd) if session.current_mdd else None,
@@ -708,6 +803,59 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
         for snap in snapshots
     ]
 
+    # 유니버스 종목 조회 (BacktestSession에는 strategy_id가 없으므로 거래 종목에서 추론)
+    universe_stocks_list = []
+    try:
+        from app.models.company import Company
+
+        universe_stock_codes = set()
+
+        # 거래된 종목들의 industry를 조회해서 해당 industry의 모든 종목을 유니버스로 사용
+        if trade_list:
+            print(f"📊 [BacktestSession] 거래 종목에서 산업 추론 중...")
+            traded_stock_codes = list(set([t.stock_code for t in trade_list]))
+            print(f"📊 [BacktestSession] 거래된 종목: {traded_stock_codes}")
+
+            # 거래된 종목들의 industry 조회
+            traded_industries_query = select(Company.industry).where(
+                Company.stock_code.in_(traded_stock_codes)
+            ).distinct()
+            traded_industries_result = await db.execute(traded_industries_query)
+            traded_industries = [row.industry for row in traded_industries_result.all() if row.industry]
+
+            if traded_industries:
+                print(f"📊 [BacktestSession] 추론된 산업: {traded_industries}")
+                # 해당 산업의 모든 종목 조회
+                industry_companies_query = select(Company.stock_code).where(
+                    Company.industry.in_(traded_industries)
+                )
+                industry_companies_result = await db.execute(industry_companies_query)
+                industry_stock_codes = [row.stock_code for row in industry_companies_result.all()]
+                print(f"✅ [BacktestSession] 산업별 종목 {len(industry_stock_codes)}개 발견")
+                universe_stock_codes.update(industry_stock_codes)
+
+        if universe_stock_codes:
+            universe_companies_query = select(Company.stock_code, Company.company_name).where(
+                Company.stock_code.in_(list(universe_stock_codes))
+            )
+            universe_companies_result = await db.execute(universe_companies_query)
+            universe_companies_rows = universe_companies_result.all()
+
+            universe_stocks_list = [
+                UniverseStock(
+                    stock_code=row.stock_code,
+                    stock_name=row.company_name
+                )
+                for row in universe_companies_rows
+            ]
+            print(f"✅ [BacktestSession] 유니버스 종목 {len(universe_stocks_list)}개 로드됨")
+        else:
+            print(f"⚠️  [BacktestSession] 유니버스 종목을 찾을 수 없습니다")
+    except Exception as e:
+        print(f"⚠️  [BacktestSession] Failed to load universe stocks: {e}")
+        import traceback
+        traceback.print_exc()
+
     return BacktestResultResponse(
         id=str(session.backtest_id),
         status="completed",
@@ -727,6 +875,7 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
         ),
         trades=trade_list,
         yield_points=yield_points,
+        universe_stocks=universe_stocks_list,
         created_at=session.created_at,
         completed_at=session.completed_at  # completed_at 사용 (updated_at 없음)
     )
@@ -860,10 +1009,102 @@ async def get_backtest_result(
             position_value=int(dv.position_value) if dv.position_value else 0,
             daily_return=float(dv.daily_return) if dv.daily_return else 0,
             cumulative_return=float(dv.cumulative_return) if dv.cumulative_return else 0,
-            value=float(dv.cumulative_return) if dv.cumulative_return else 0  # 차트용 (하위 호환성)
+            value=float(dv.cumulative_return) if dv.cumulative_return else 0,  # 차트용 (하위 호환성)
+            daily_drawdown=float(dv.daily_drawdown) if dv.daily_drawdown else 0  # 일일 낙폭
         )
         for dv in daily_values
     ]
+
+    # 7. 유니버스 종목 조회 (TradingRule의 trade_targets 기반)
+    universe_stocks_list = []
+    try:
+        # TradingRule에서 trade_targets 조회
+        from app.models.simulation import TradingRule
+        trading_rule_query = select(TradingRule).where(TradingRule.strategy_id == session.strategy_id)
+        trading_rule_result = await db.execute(trading_rule_query)
+        trading_rule = trading_rule_result.scalar_one_or_none()
+
+        universe_stock_codes = set()  # 중복 제거를 위해 set 사용
+
+        if trading_rule and trading_rule.buy_condition:
+            trade_targets = trading_rule.buy_condition.get("trade_targets", {})
+
+            # 개별 종목 코드 추출
+            selected_stocks = trade_targets.get("selected_stocks", [])
+
+            # 선택된 테마에서 종목 조회
+            selected_themes = trade_targets.get("selected_themes", [])
+
+            universe_stock_codes.update(selected_stocks)
+
+            # 테마가 선택되었으면 해당 테마의 모든 종목 조회
+            if selected_themes:
+                print(f"📊 선택된 테마: {selected_themes}")
+                # Company 테이블에서 industry가 선택된 테마에 포함된 종목 조회
+                theme_companies_query = select(Company.stock_code).where(
+                    Company.industry.in_(selected_themes)
+                )
+                theme_companies_result = await db.execute(theme_companies_query)
+                theme_stock_codes = [row.stock_code for row in theme_companies_result.all()]
+                print(f"✅ 테마 종목 {len(theme_stock_codes)}개 발견")
+                universe_stock_codes.update(theme_stock_codes)
+
+            # 전체 종목 사용 여부 확인
+            use_all_stocks = trade_targets.get("use_all_stocks", False)
+            if use_all_stocks:
+                print(f"📊 전체 종목 사용 모드")
+                all_companies_query = select(Company.stock_code)
+                all_companies_result = await db.execute(all_companies_query)
+                all_stock_codes = [row.stock_code for row in all_companies_result.all()]
+                universe_stock_codes.update(all_stock_codes)
+
+        # Fallback: trade_targets가 없거나 비어있는 경우 (기존 백테스트)
+        # 거래된 종목들의 industry를 조회해서 해당 industry의 모든 종목을 유니버스로 사용
+        if not universe_stock_codes and trade_list:
+            print(f"⚠️  trade_targets 없음 - 거래 종목에서 산업 추론 중...")
+            traded_stock_codes = list(set([trade["stock_code"] for trade in trade_list]))
+
+            # 거래된 종목들의 industry 조회
+            traded_industries_query = select(Company.industry).where(
+                Company.stock_code.in_(traded_stock_codes)
+            ).distinct()
+            traded_industries_result = await db.execute(traded_industries_query)
+            traded_industries = [row.industry for row in traded_industries_result.all() if row.industry]
+
+            if traded_industries:
+                print(f"📊 추론된 산업: {traded_industries}")
+                # 해당 산업의 모든 종목 조회
+                industry_companies_query = select(Company.stock_code).where(
+                    Company.industry.in_(traded_industries)
+                )
+                industry_companies_result = await db.execute(industry_companies_query)
+                industry_stock_codes = [row.stock_code for row in industry_companies_result.all()]
+                print(f"✅ 산업별 종목 {len(industry_stock_codes)}개 발견")
+                universe_stock_codes.update(industry_stock_codes)
+
+        # 종목 코드 리스트가 있으면 Company 테이블에서 종목명 조회
+        if universe_stock_codes:
+            universe_companies_query = select(Company.stock_code, Company.company_name).where(
+                Company.stock_code.in_(list(universe_stock_codes))
+            )
+            universe_companies_result = await db.execute(universe_companies_query)
+            universe_companies_rows = universe_companies_result.all()
+
+            universe_stocks_list = [
+                UniverseStock(
+                    stock_code=row.stock_code,
+                    stock_name=row.company_name
+                )
+                for row in universe_companies_rows
+            ]
+            print(f"✅ 유니버스 종목 {len(universe_stocks_list)}개 로드됨")
+        else:
+            print(f"⚠️  유니버스 종목을 찾을 수 없습니다")
+    except Exception as e:
+        # 유니버스 조회 실패 시 빈 리스트 반환 (백테스트 결과는 정상 반환)
+        print(f"Warning: Failed to load universe stocks: {e}")
+        import traceback
+        traceback.print_exc()
 
     return BacktestResultResponse(
         id=backtest_id,
@@ -884,6 +1125,7 @@ async def get_backtest_result(
         ),
         trades=trade_list,
         yield_points=yield_points,
+        universe_stocks=universe_stocks_list,
         created_at=session.created_at,
         completed_at=session.completed_at
     )
@@ -971,6 +1213,107 @@ async def get_backtest_trades(
             "total_pages": (total_count + limit - 1) // limit
         }
     }
+
+
+@router.get("/backtest/{backtest_id}/settings", response_model=BacktestSettingsResponse)
+async def get_backtest_settings(
+    backtest_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """백테스트 설정 조회"""
+    # 1. 세션 조회
+    session_query = (
+        select(SimulationSession)
+        .where(SimulationSession.session_id == backtest_id)
+    )
+    session_result = await db.execute(session_query)
+    session = session_result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
+
+    # 2. 전략 조회
+    strategy_query = select(PortfolioStrategy).where(PortfolioStrategy.strategy_id == session.strategy_id)
+    strategy_result = await db.execute(strategy_query)
+    strategy = strategy_result.scalar_one_or_none()
+
+    if not strategy:
+        raise HTTPException(status_code=404, detail="전략을 찾을 수 없습니다")
+
+    # 3. 팩터 설정 조회 (Factor 테이블 JOIN 제거)
+    factors_query = (
+        select(StrategyFactor)
+        .where(StrategyFactor.strategy_id == session.strategy_id)
+        .order_by(StrategyFactor.id)
+    )
+    factors_result = await db.execute(factors_query)
+    factors_rows = factors_result.scalars().all()
+
+    factors_list = [
+        StrategyFactorSettings(
+            factor_id=sf.factor_id,
+            factor_name=sf.factor_id,  # factor_id를 factor_name으로 사용
+            usage_type=sf.usage_type,
+            operator=sf.operator,
+            threshold_value=float(sf.threshold_value) if sf.threshold_value else None,
+            weight=float(sf.weight) if sf.weight else None,
+            direction=sf.direction
+        )
+        for sf in factors_rows
+    ]
+
+    # 4. 매매 규칙 조회
+    rules_query = (
+        select(TradingRule)
+        .where(TradingRule.strategy_id == session.strategy_id)
+        .order_by(TradingRule.rule_id)
+    )
+    rules_result = await db.execute(rules_query)
+    rules = rules_result.scalars().all()
+
+    trading_rules_list = [
+        TradingRuleSettings(
+            rule_type=rule.rule_type,
+            rebalance_frequency=rule.rebalance_frequency,
+            rebalance_day=rule.rebalance_day,
+            position_sizing=rule.position_sizing,
+            max_positions=rule.max_positions,
+            min_position_weight=float(rule.min_position_weight) if rule.min_position_weight else None,
+            max_position_weight=float(rule.max_position_weight) if rule.max_position_weight else None,
+            stop_loss_pct=float(rule.stop_loss_pct) if rule.stop_loss_pct else None,
+            take_profit_pct=float(rule.take_profit_pct) if rule.take_profit_pct else None,
+            commission_rate=float(rule.commission_rate) if rule.commission_rate else None,
+            tax_rate=float(rule.tax_rate) if rule.tax_rate else None,
+            buy_condition=rule.buy_condition,
+            sell_condition=rule.sell_condition
+        )
+        for rule in rules
+    ]
+
+    # 5. sector_filter 파싱 (JSON -> List[str])
+    sector_filter = None
+    if strategy.sector_filter:
+        if isinstance(strategy.sector_filter, list):
+            sector_filter = strategy.sector_filter
+        elif isinstance(strategy.sector_filter, dict):
+            sector_filter = list(strategy.sector_filter.keys())
+
+    # 6. 응답 생성
+    return BacktestSettingsResponse(
+        session_name=session.session_name,
+        start_date=session.start_date.isoformat(),
+        end_date=session.end_date.isoformat(),
+        initial_capital=float(session.initial_capital),
+        benchmark=session.benchmark,
+        strategy_name=strategy.strategy_name,
+        strategy_type=strategy.strategy_type,
+        strategy_description=strategy.description,
+        universe_type=strategy.universe_type,
+        market_cap_filter=strategy.market_cap_filter,
+        sector_filter=sector_filter,
+        factors=factors_list,
+        trading_rules=trading_rules_list
+    )
 
 
 @router.get("/backtest/list")
@@ -1131,7 +1474,8 @@ async def execute_backtest_wrapper(
     hold_days: dict = None,
     condition_sell: dict = None,
     max_buy_value: Optional[float] = None,
-    max_daily_stock: Optional[int] = None
+    max_daily_stock: Optional[int] = None,
+    user_id: str = None  # 🚀 PRODUCTION: Rate Limiting용
 ):
     """백테스트 비동기 실행 래퍼 (고도화된 백테스트 용)"""
     try:
@@ -1175,6 +1519,19 @@ async def execute_backtest_wrapper(
 
     except Exception as e:
         logger.error(f"백테스트 래퍼 오류: {e}", exc_info=True)
+    finally:
+        # 🚀 PRODUCTION OPTIMIZATION: Rate Limit 해제 (완료 또는 실패 시)
+        if user_id:
+            try:
+                from app.core.cache import get_redis
+                redis_client = get_redis()
+                if redis_client:
+                    rate_limit_key = f"backtest:running:{user_id}"
+                    await redis_client.delete(rate_limit_key)
+                    logger.info(f"🚦 Rate Limit 해제: user_id={user_id}")
+            except Exception as e:
+                # Redis 에러는 무시 (이미 백테스트는 완료됨)
+                logger.warning(f"Rate Limit 해제 실패 (무시): {e}")
 
 
 async def update_session_status_internal(

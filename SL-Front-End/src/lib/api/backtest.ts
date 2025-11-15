@@ -8,6 +8,7 @@ import type {
   BacktestRunRequest,
   BacktestRunResponse,
   BacktestResult,
+  BacktestSettings,
   PaginatedResponse,
   PaginationParams,
   Factor,
@@ -55,9 +56,30 @@ export async function getBacktestResult(
 }
 
 /**
- * 백테스트(전략) 목록 조회
- * - GET /backtest/list
- * - 로그인된 사용자의 portfolio_strategies 목록을 조회합니다
+ * 백테스트 설정 조회
+ * - GET /backtest/{backtestId}/settings
+ * - 백테스트에 사용된 설정 정보를 조회합니다
+ *
+ * @param backtestId - 백테스트 ID
+ * @param isServer - 서버 사이드 요청 여부 (SSR용)
+ * @returns 백테스트 설정 정보
+ */
+export async function getBacktestSettings(
+  backtestId: string,
+  isServer = false,
+): Promise<BacktestSettings> {
+  const axios = isServer ? axiosServerInstance : axiosInstance;
+
+  const response = await axios.get<BacktestSettings>(
+    `/backtest/${backtestId}/settings`,
+  );
+  return response.data;
+}
+
+/**
+ * 백테스트 목록 조회
+ * - GET /backtest
+ * - 사용자의 백테스트 목록을 조회합니다
  *
  * @param params - 페이지네이션 파라미터
  * @param isServer - 서버 사이드 요청 여부

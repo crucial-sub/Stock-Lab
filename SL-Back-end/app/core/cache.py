@@ -17,11 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 class RedisCache:
-    """Redis 캐시 관리자"""
+    """Redis 캐시 관리자 (Multi Event Loop 지원)"""
 
     def __init__(self):
         self._pool: Optional[ConnectionPool] = None
         self._client: Optional[redis.Redis] = None
+        self._loop_clients: Dict[int, redis.Redis] = {}  # Event loop별 클라이언트 저장
 
     async def initialize(self):
         """Redis 연결 초기화"""
@@ -31,8 +32,14 @@ class RedisCache:
                 port=settings.REDIS_PORT,
                 db=settings.REDIS_DB,
                 password=settings.REDIS_PASSWORD if hasattr(settings, 'REDIS_PASSWORD') else None,
-                max_connections=20,
-                decode_responses=False  # Binary 데이터 처리용
+                # 🚀 PRODUCTION OPTIMIZATION: Connection Pool 확장 (동시 사용자 지원)
+                max_connections=100,    # 20 → 100으로 확장 (동시 100명 백테스트 지원)
+                socket_keepalive=True,  # TCP keepalive 활성화
+                # socket_keepalive_options 제거 (Docker 환경 호환성)
+                health_check_interval=30,  # 30초마다 연결 상태 확인
+                decode_responses=False,  # Binary 데이터 처리용
+                socket_connect_timeout=5,  # 연결 타임아웃 5초
+                retry_on_timeout=True  # 타임아웃 시 재시도
             )
             self._client = redis.Redis(connection_pool=self._pool)
 
@@ -50,6 +57,54 @@ class RedisCache:
             await self._client.close()
         if self._pool:
             await self._pool.disconnect()
+        # Loop-local 클라이언트도 모두 종료
+        for client in self._loop_clients.values():
+            await client.close()
+        self._loop_clients.clear()
+
+    def _get_loop_client(self) -> Optional[redis.Redis]:
+        """현재 event loop에 맞는 Redis 클라이언트 반환"""
+        try:
+            import asyncio
+
+            # 현재 event loop 가져오기
+            try:
+                current_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                # 실행 중인 루프가 없으면 기본 클라이언트 사용
+                return self._client
+
+            loop_id = id(current_loop)
+
+            # 메인 클라이언트의 루프와 같으면 메인 클라이언트 사용
+            if self._client:
+                try:
+                    # 메인 클라이언트가 현재 루프에서 사용 가능한지 확인
+                    return self._client
+                except Exception:
+                    pass
+
+            # 현재 루프용 클라이언트가 이미 있으면 반환
+            if loop_id in self._loop_clients:
+                return self._loop_clients[loop_id]
+
+            # 새 루프용 클라이언트 생성
+            logger.info(f"Creating new Redis client for event loop {loop_id}")
+            new_client = redis.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                db=settings.REDIS_DB,
+                password=settings.REDIS_PASSWORD if hasattr(settings, 'REDIS_PASSWORD') else None,
+                decode_responses=False,
+                socket_connect_timeout=5,
+                retry_on_timeout=True
+            )
+            self._loop_clients[loop_id] = new_client
+            return new_client
+
+        except Exception as e:
+            logger.warning(f"Failed to get loop-specific Redis client: {e}")
+            return self._client
 
     def _generate_key(self, prefix: str, params: Dict[str, Any]) -> str:
         """캐시 키 생성"""
@@ -64,7 +119,11 @@ class RedisCache:
             if not settings.ENABLE_CACHE:
                 return None
 
-            value = await self._client.get(key)
+            client = self._get_loop_client()
+            if not client:
+                return None
+
+            value = await client.get(key)
             if value:
                 return pickle.loads(value)
             return None
@@ -83,10 +142,14 @@ class RedisCache:
             if not settings.ENABLE_CACHE:
                 return False
 
+            client = self._get_loop_client()
+            if not client:
+                return False
+
             serialized = pickle.dumps(value)
             ttl = ttl or settings.CACHE_TTL_SECONDS
 
-            await self._client.setex(
+            await client.setex(
                 key,
                 timedelta(seconds=ttl),
                 serialized
@@ -102,13 +165,17 @@ class RedisCache:
             if not settings.ENABLE_CACHE:
                 return 0
 
+            client = self._get_loop_client()
+            if not client:
+                return 0
+
             # 패턴과 일치하는 모든 키 찾기
             keys = []
-            async for key in self._client.scan_iter(match=pattern):
+            async for key in client.scan_iter(match=pattern):
                 keys.append(key)
 
             if keys:
-                return await self._client.delete(*keys)
+                return await client.delete(*keys)
             return 0
         except Exception as e:
             logger.warning(f"Cache delete error for pattern {pattern}: {e}")
@@ -119,7 +186,12 @@ class RedisCache:
         try:
             if not settings.ENABLE_CACHE:
                 return False
-            return await self._client.exists(key) > 0
+
+            client = self._get_loop_client()
+            if not client:
+                return False
+
+            return await client.exists(key) > 0
         except Exception as e:
             logger.warning(f"Cache exists error for key {key}: {e}")
             return False
@@ -163,8 +235,12 @@ class RedisCache:
     async def get_cache_stats(self) -> Dict[str, Any]:
         """캐시 통계 정보"""
         try:
-            info = await self._client.info("stats")
-            memory = await self._client.info("memory")
+            client = self._get_loop_client()
+            if not client:
+                return {"connected": False, "error": "No Redis client available"}
+
+            info = await client.info("stats")
+            memory = await client.info("memory")
 
             return {
                 "connected": True,
@@ -188,6 +264,14 @@ class RedisCache:
 
 # 싱글톤 인스턴스
 cache = RedisCache()
+
+
+def get_redis() -> Optional[redis.Redis]:
+    """
+    Redis 클라이언트 인스턴스 반환 (Event Loop 안전)
+    백테스트 진행률 등 실시간 데이터 저장용
+    """
+    return cache._get_loop_client()
 
 
 # 캐시 데코레이터

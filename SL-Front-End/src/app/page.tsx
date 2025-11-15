@@ -10,7 +10,9 @@ import type { StrategyCardProps } from "@/components/home/StrategyCard";
 import { TodayMarketSection } from "@/components/home/TodayMarketSection";
 import { TodayNewsSection } from "@/components/home/TodayNewsSection";
 import { StockDetailModal } from "@/components/modal/StockDetailModal";
+import { KiwoomConnectModal } from "@/components/modal/KiwoomConnectModal";
 import { marketQuoteApi } from "@/lib/api/market-quote";
+import { kiwoomApi } from "@/lib/api/kiwoom";
 
 const featuredStrategies: StrategyCardProps[] = [
     {
@@ -91,6 +93,8 @@ const newsItems: NewsItem[] = [
 const HomePage: NextPage = () => {
     const [marketTickers, setMarketTickers] = useState<MarketTickerCardProps[]>([]);
     const [selectedStock, setSelectedStock] = useState<{ name: string; code: string } | null>(null);
+    const [isKiwoomModalOpen, setIsKiwoomModalOpen] = useState(false);
+    const [isKiwoomConnected, setIsKiwoomConnected] = useState(false);
 
     useEffect(() => {
         const fetchMarketData = async () => {
@@ -120,13 +124,42 @@ const HomePage: NextPage = () => {
             }
         };
 
+        const checkKiwoomStatus = async () => {
+            try {
+                const status = await kiwoomApi.getStatus();
+                setIsKiwoomConnected(status.is_connected);
+            } catch (error) {
+                // 인증되지 않은 경우 무시
+                console.log("키움증권 연동 상태 확인 실패 (로그인 필요)");
+            }
+        };
+
         fetchMarketData();
+        checkKiwoomStatus();
     }, []);
+
+    const handleKiwoomSuccess = () => {
+        setIsKiwoomConnected(true);
+    };
 
     return (
         <>
             <div className="">
                 <div className="flex w-full flex-col gap-10 md:px-10 lg:px-0" >
+                    {/* 키움증권 연동 버튼 */}
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() => setIsKiwoomModalOpen(true)}
+                            className={`px-6 py-2 rounded-md font-medium transition-colors ${
+                                isKiwoomConnected
+                                    ? "bg-green-500 text-white hover:bg-green-600"
+                                    : "bg-primary-main text-white hover:bg-primary-dark"
+                            }`}
+                        >
+                            {isKiwoomConnected ? "✓ 증권사 연동됨" : "증권사 연동하기"}
+                        </button>
+                    </div>
+
                     <FeaturedStrategiesSection strategies={featuredStrategies} />
                     <TodayMarketSection items={marketTickers} />
                     <TodayNewsSection items={newsItems} />
@@ -138,6 +171,12 @@ const HomePage: NextPage = () => {
                 onClose={() => setSelectedStock(null)}
                 stockName={selectedStock?.name || ""}
                 stockCode={selectedStock?.code || ""}
+            />
+
+            <KiwoomConnectModal
+                isOpen={isKiwoomModalOpen}
+                onClose={() => setIsKiwoomModalOpen(false)}
+                onSuccess={handleKiwoomSuccess}
             />
         </>
     );

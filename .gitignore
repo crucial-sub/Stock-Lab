@@ -57,6 +57,7 @@ __pycache__/
 .DS_Store
 SL-Back-end/logs/quant_api.log
 .venv/
+/scripts/check-ssh-tunnel.sh
 
 # Docker
 *.log

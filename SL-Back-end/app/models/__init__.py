@@ -37,11 +37,12 @@ from app.models.backtest import (
 )
 
 # 커뮤니티 모델
-from app.models.community import (
-    CommunityPost,
-    CommunityComment,
-    CommunityLike,
-)
+# TODO: 커뮤니티 모델 추가 시 활성화
+# from app.models.community import (
+#     CommunityPost,
+#     CommunityComment,
+#     CommunityLike,
+# )
 
 __all__ = [
     # 기본 데이터 모델
@@ -75,8 +76,8 @@ __all__ = [
     "BacktestDailySnapshot",
     "BacktestTrade",
     "BacktestHolding",
-    # 커뮤니티 모델
-    "CommunityPost",
-    "CommunityComment",
-    "CommunityLike",
+    # 커뮤니티 모델 (TODO: 추가 시 활성화)
+    # "CommunityPost",
+    # "CommunityComment",
+    # "CommunityLike",
 ]

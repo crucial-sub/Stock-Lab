@@ -46,7 +46,7 @@ class UserStockService:
         # 2. 이미 존재하는지 확인 (중복 방지)
         existing = await self._check_favorite_exists(user_id, company.company_id)
         if existing:
-            return {"message": "이미 관심종목에 등록되어 있습니다", "exists": True}
+            raise ValueError("이미 관심종목에 등록되어 있습니다")
 
         # 3. 관심종목 추가
         favorite = UserFavoriteStock(
@@ -62,14 +62,7 @@ class UserStockService:
             await self.db.refresh(favorite)
         except IntegrityError:
             await self.db.rollback()
-            return {"message": "이미 관심종목에 등록되어 있습니다", "exists": True}
-
-        return {
-            "message": "관심종목이 추가되었습니다",
-            "stock_code": stock_code,
-            "stock_name": company.stock_name,
-            "exists": False
-        }
+            raise ValueError("이미 관심종목에 등록되어 있습니다")
 
     async def remove_favorite(self, user_id: UUID, stock_code: str) -> Dict[str, str]:
         """
@@ -137,7 +130,7 @@ class UserStockService:
             UserFavoriteStock.stock_name,
             UserFavoriteStock.created_at,
             *price_columns
-        ).where(UserFavoriteStock.user_id == user_id).order_by(desc(UserFavoriteStock.created_at))
+        ).where(UserFavoriteStock.user_id == user_id).order_by(desc(UserFavoriteStock.favorite_id))
 
         if join_condition is not None:
             query = query.outerjoin(StockPrice, join_condition)
@@ -223,6 +216,9 @@ class UserStockService:
 
         try:
             await self.db.commit()
+
+            # 10개 초과 시 가장 오래된 항목 삭제
+            await self._enforce_recent_view_limit(user_id, limit=10)
         except IntegrityError:
             await self.db.rollback()
             logger.warning(f"최근 본 주식 기록 실패: {stock_code}")
@@ -295,6 +291,32 @@ class UserStockService:
 
         return {"items": items, "total": len(items)}
 
+    async def remove_recent_view(self, user_id: UUID, stock_code: str) -> None:
+        """
+        최근 본 주식 수동 삭제
+
+        Args:
+            user_id: 사용자 ID
+            stock_code: 종목 코드
+        """
+        # 회사 정보 조회
+        company = await self._get_company_by_code(stock_code)
+        if not company:
+            raise ValueError(f"종목 코드 {stock_code}를 찾을 수 없습니다")
+
+        # 삭제
+        stmt = delete(UserRecentStock).where(
+            and_(
+                UserRecentStock.user_id == user_id,
+                UserRecentStock.company_id == company.company_id
+            )
+        )
+        result = await self.db.execute(stmt)
+        await self.db.commit()
+
+        if result.rowcount == 0:
+            raise ValueError("최근 본 종목에 없습니다")
+
     # ==================== Private Methods ====================
 
     async def _get_company_by_code(self, stock_code: str) -> Optional[Company]:
@@ -323,6 +345,39 @@ class UserStockService:
         )
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
+
+    async def _enforce_recent_view_limit(self, user_id: UUID, limit: int = 10) -> None:
+        """
+        최근 본 주식 개수 제한 (10개 초과 시 가장 오래된 항목 삭제)
+
+        Args:
+            user_id: 사용자 ID
+            limit: 최대 개수 (기본 10개)
+        """
+        # 현재 개수 확인
+        count_query = select(UserRecentStock).where(UserRecentStock.user_id == user_id)
+        count_result = await self.db.execute(count_query)
+        count = len(count_result.all())
+
+        if count > limit:
+            # 가장 오래된 항목들 조회 (개수 초과분만큼)
+            delete_count = count - limit
+            old_items_query = (
+                select(UserRecentStock.recent_id)
+                .where(UserRecentStock.user_id == user_id)
+                .order_by(UserRecentStock.viewed_at)  # 오래된 순
+                .limit(delete_count)
+            )
+            old_items_result = await self.db.execute(old_items_query)
+            old_item_ids = [row.recent_id for row in old_items_result.all()]
+
+            # 오래된 항목 삭제
+            if old_item_ids:
+                delete_stmt = delete(UserRecentStock).where(
+                    UserRecentStock.recent_id.in_(old_item_ids)
+                )
+                await self.db.execute(delete_stmt)
+                await self.db.commit()
 
     @staticmethod
     def _calculate_previous_close_value(

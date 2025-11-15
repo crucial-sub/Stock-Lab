@@ -13,11 +13,15 @@ import { Title } from "@/components/common";
 import {
   StockCount,
   TradeTargetHeader,
-  UniverseThemeSelection
+  UniverseThemeSelection,
 } from "@/components/quant/sections";
 import { useTradeTargetSelection } from "@/hooks/quant";
 import { runBacktest } from "@/lib/api/backtest";
-import { getIndustries, searchStocks, type StockInfo } from "@/lib/api/industries";
+import {
+  getIndustries,
+  searchStocks,
+  type StockInfo,
+} from "@/lib/api/industries";
 import { useBacktestConfigStore } from "@/stores";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -29,7 +33,9 @@ export default function TargetSelectionTab() {
 
   // 산업 데이터 상태 (DB에서 가져옴)
   const [industries, setIndustries] = useState<string[]>([]);
-  const [industryStockCounts, setIndustryStockCounts] = useState<Map<string, number>>(new Map());
+  const [industryStockCounts, setIndustryStockCounts] = useState<
+    Map<string, number>
+  >(new Map());
   const [isLoadingIndustries, setIsLoadingIndustries] = useState(true);
   const [totalStockCount, setTotalStockCount] = useState(0);
 
@@ -81,7 +87,8 @@ export default function TargetSelectionTab() {
   }, []);
 
   // 선택된 산업의 종목 수 계산
-  const [selectedIndustryStockCount, setSelectedIndustryStockCount] = useState(0);
+  const [selectedIndustryStockCount, setSelectedIndustryStockCount] =
+    useState(0);
 
   // 커스텀 훅으로 매매 대상 선택 로직 관리
   const {
@@ -153,7 +160,7 @@ export default function TargetSelectionTab() {
       선택된_산업_수: selectedIndustries.size,
       산업별_종목_합계: total,
       개별_선택_종목: selectedStocks.size,
-      최종_합계: total + selectedStocks.size
+      최종_합계: total + selectedStocks.size,
     });
   }, [selectedIndustries, industryStockCounts, selectedStocks.size]);
 
@@ -258,16 +265,29 @@ export default function TargetSelectionTab() {
             <table className="w-full">
               <thead className="bg-bg-tertiary">
                 <tr>
-                  <th className="px-4 py-2 text-left text-sm font-semibold">선택</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold">종목코드</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold">종목명</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold">산업</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold">시장</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">
+                    선택
+                  </th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">
+                    종목코드
+                  </th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">
+                    종목명
+                  </th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">
+                    산업
+                  </th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold">
+                    시장
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {searchResults.map((stock) => (
-                  <tr key={stock.stock_code} className="border-b border-border-primary hover:bg-bg-secondary">
+                  <tr
+                    key={stock.stock_code}
+                    className="border-b border-border-primary hover:bg-bg-secondary"
+                  >
                     <td className="px-4 py-2">
                       <input
                         type="checkbox"
@@ -277,9 +297,13 @@ export default function TargetSelectionTab() {
                       />
                     </td>
                     <td className="px-4 py-2 text-sm">{stock.stock_code}</td>
-                    <td className="px-4 py-2 text-sm font-medium">{stock.stock_name}</td>
+                    <td className="px-4 py-2 text-sm font-medium">
+                      {stock.stock_name}
+                    </td>
                     <td className="px-4 py-2 text-sm">{stock.industry}</td>
-                    <td className="px-4 py-2 text-sm">{stock.market_type || "-"}</td>
+                    <td className="px-4 py-2 text-sm">
+                      {stock.market_type || "-"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -295,7 +319,9 @@ export default function TargetSelectionTab() {
             </h4>
             <div className="flex flex-wrap gap-2">
               {Array.from(selectedStocks).map((stockCode) => {
-                const stock = searchResults.find((s) => s.stock_code === stockCode);
+                const stock = searchResults.find(
+                  (s) => s.stock_code === stockCode
+                );
                 return (
                   <span
                     key={stockCode}
@@ -329,8 +355,8 @@ export default function TargetSelectionTab() {
           onClick={handleStartBacktest}
           disabled={isRunning}
           className={`px-12 py-4 rounded-lg text-lg font-bold transition-opacity ${isRunning
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-accent-primary text-white hover:opacity-90"
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-brand-purple text-white hover:opacity-90"
             }`}
         >
           {isRunning ? "백테스트 실행 중..." : "백테스트 시작하기"}

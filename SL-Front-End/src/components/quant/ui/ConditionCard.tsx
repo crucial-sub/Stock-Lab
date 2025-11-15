@@ -37,7 +37,7 @@ export function ConditionCard({
   conditionType,
 }: ConditionCardProps) {
   // 조건 타입에 따른 배경색 결정
-  const bgColor = conditionType === "buy" ? "bg-brand-primary" : "bg-accent-primary";
+  const bgColor = conditionType === "buy" ? "bg-price-up" : "bg-price-down";
 
   return (
     <div className="flex items-center gap-3">

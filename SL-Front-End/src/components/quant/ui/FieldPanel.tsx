@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
 import ColorBorderLeft from "@/components/quant/common/ColorBorderLeft";
+import { ReactNode } from "react";
 
 /**
  * FieldPanel - 퀀트 투자 생성 페이지 필드 공통 패널 컴포넌트
@@ -20,7 +20,7 @@ export function FieldPanel({
 }: FieldPanelProps) {
   return (
     <div
-      className={`bg-bg-surface rounded-md shadow-card p-8 relative ${className}`}
+      className={`bg-[#FFFFFF66] rounded-md shadow-card p-8 relative ${className}`}
     >
       <ColorBorderLeft conditionType={conditionType} />
       {children}

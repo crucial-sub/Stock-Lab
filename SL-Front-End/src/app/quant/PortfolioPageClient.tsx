@@ -1,9 +1,9 @@
 "use client";
 
+import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
+import { PortfolioCard } from "@/components/quant/PortfolioCard";
+import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
 import { useState } from "react";
-import { PortfolioDashboard } from "@/components/portfolio/PortfolioDashboard";
-import { PortfolioCard } from "@/components/portfolio/PortfolioCard";
-import { CreatePortfolioCard } from "@/components/portfolio/CreatePortfolioCard";
 
 /**
  * 포트폴리오 페이지 클라이언트 컴포넌트

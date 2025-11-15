@@ -26,6 +26,7 @@
   /* Brand / States */
   --color-brand-purple: 172 100 255; /* #AC64FF */
   --color-red-500: 255 100 100; /* #FF6464 */
+  --color-pink: 255 246 246; /* #FFF6F6 */
   --color-blue-500: 0 125 252; /* #007DFC */
   --color-orange-400: 255 172 100; /* #FFAC64 */
   --color-green-600: 26 143 0; /* #1A8F00 */
@@ -95,17 +96,19 @@
 
   /* 주식 상승/하락 */
   --text-price-up: var(--color-red-500); /* #FF6464 */
-  --bg-price-up: rgb(var(--color-red-500) / 0.2); /* #FF646433 */
+  --bg-price-up: rgb(var(--color-red-500)); /* #FF6464 */
+  --bg-price-up-soft: rgb(var(--color-red-500) / 0.1); /* 연한 빨강 10% */
 
   --text-price-down: var(--color-blue-500); /* #007DFC */
-  --bg-price-down: rgb(var(--color-blue-500) / 0.2); /* #007DFC33 */
+  --bg-price-down: rgb(var(--color-blue-500)); /* #007DFC */
+  --bg-price-down-soft: rgb(var(--color-blue-500) / 0.1); /* 연한 파랑 10% */
 
   /* 활성 포트폴리오 태그 */
-  --bg-tag-portfolio-active: var(--color-orange-400); /* #FFAC64 */
-  --text-tag-portfolio-active: var(--color-base-0); /* #FFFFFF */
+  --bg-tag-portfolio-active: rgb(var(--color-orange-400)); /* #FFAC64 */
+  --text-tag-portfolio-active: rgb(var(--color-base-0)); /* #FFFFFF */
 
   /* 초록색: 수익률 등 positive 텍스트 */
-  --text-positive: var(--color-green-600); /* #1A8F00 */
+  --text-positive: rgb(var(--color-green-600)); /* #1A8F00 */
 }
 
 /* --- 모달 오버레이 --- */

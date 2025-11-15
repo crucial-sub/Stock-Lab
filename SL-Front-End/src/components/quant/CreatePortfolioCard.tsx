@@ -13,7 +13,7 @@ import Link from "next/link";
 export function CreatePortfolioCard() {
   return (
     <Link
-      href="#" // TODO: 전략 생성 페이지 경로로 변경
+      href="/quant/new" // TODO: 전략 생성 페이지 경로로 변경
       className="bg-surface border border-surface rounded-lg p-5 h-[170px] flex flex-col items-center justify-center gap-4 transition-all duration-200 hover:border-brand-soft hover:shadow-elev-card"
     >
       {/* 플러스 아이콘 */}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
+import { useState } from "react";
 import { NavItem } from "../ui";
 
 /**
@@ -41,7 +41,7 @@ const MAIN_NAV_ITEMS = [
   {
     icon: "/icons/portfolio.svg",
     label: "전략 포트폴리오",
-    path: "/portfolio",
+    path: "/quant",
   },
   {
     icon: "/icons/finance.svg",

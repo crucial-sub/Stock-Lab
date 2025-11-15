@@ -2,17 +2,20 @@
 
 /**
  * Quant 새 전략 페이지 - 클라이언트 컴포넌트
- * - 서버에서 prefetch된 팩터와 함수 데이터를 사용합니다
- * - Figma 디자인에 따른 3-탭 레이아웃 (매수 조건, 매도 조건, 매매 대상)
- * - 성능 최적화: 각 탭을 lazy loading으로 코드 스플리팅 (초기 번들 크기 95% 감소)
- * - Zustand로 탭 상태 전역 관리
+ *
+ * @description
+ * - 리액트 쿼리를 통해 클라이언트에서 팩터, 서브팩터, 테마 데이터를 fetch
+ * - 중앙 탭 컨텐츠 + 오른쪽 요약 패널
+ * - 성능 최적화: lazy loading으로 탭 컴포넌트 코드 스플리팅 (초기 번들 95% 감소)
+ * - Zustand를 통한 전역 상태 관리 (탭 상태, 전략 설정값)
  */
 
+import QuantStrategySummaryPanel from "@/components/quant/layout/QuantStrategySummaryPanel";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useQuantTabStore } from "@/stores";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 
 /**
  * 탭 컴포넌트들을 동적으로 로드 (코드 스플리팅)
@@ -20,25 +23,31 @@ import { lazy, Suspense } from "react";
  * - lazy loading으로 필요할 때만 로드하여 초기 로딩 속도 대폭 개선
  */
 const BuyConditionTab = lazy(
-  () => import("@/components/quant/tabs/BuyConditionTab"),
+  () => import("@/components/quant/tabs/BuyConditionTab")
 );
 const SellConditionTab = lazy(
-  () => import("@/components/quant/tabs/SellConditionTab"),
+  () => import("@/components/quant/tabs/SellConditionTab")
 );
 const TargetSelectionTab = lazy(
-  () => import("@/components/quant/tabs/TargetSelectionTab"),
+  () => import("@/components/quant/tabs/TargetSelectionTab")
 );
 
 /**
  * Quant 새 전략 페이지 클라이언트 컴포넌트
- * - SSR로 prefetch된 데이터를 React Query를 통해 자동으로 사용합니다
- * - Zustand store에서 activeTab 상태를 가져와서 탭 전환을 처리합니다
+ *
+ * @description
+ * - React Query로 클라이언트에서 데이터 fetch (빌드 시 백엔드 독립성)
+ * - Zustand store에서 activeTab 상태를 가져와서 탭 전환 처리
+ * - 요약 패널의 열림/닫힘 상태를 로컬 state로 관리
  */
 export function QuantNewPageClient() {
   // Zustand store에서 탭 상태 가져오기
   const { activeTab } = useQuantTabStore();
 
-  // 서버에서 prefetch된 데이터를 자동으로 사용 (추가 요청 없음)
+  // 요약 패널 열림/닫힘 상태
+  const [isSummaryPanelOpen, setIsSummaryPanelOpen] = useState(true);
+
+  // React Query로 데이터 fetch (클라이언트 사이드)
   const { data: factors, isLoading: isLoadingFactors } = useFactorsQuery();
   const { data: subFactors, isLoading: isLoadingSubFactors } =
     useSubFactorsQuery();
@@ -47,28 +56,39 @@ export function QuantNewPageClient() {
   // 로딩 상태 표시
   if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg-app relative">
+      <div className="flex items-center justify-center h-full">
         <div className="text-text-body">데이터를 불러오는 중...</div>
       </div>
     );
   }
 
   return (
-    <div className="h-full p-[3.75rem]">
-      {/* Tab Content - Suspense로 감싸서 lazy loading 처리 */}
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center py-12">
-            <div className="text-text-body">탭을 불러오는 중...</div>
-          </div>
-        }
+    <div className="flex h-full overflow-hidden">
+      {/* 중앙 컨텐츠 영역 */}
+      <main
+        id="quant-main-content"
+        className="flex-1 overflow-y-auto px-10 py-12"
       >
-        <div className="pb-12">
+        {/* Tab Content - Suspense로 감싸서 lazy loading 처리 */}
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-12">
+              <div className="text-text-body">탭을 불러오는 중...</div>
+            </div>
+          }
+        >
           {activeTab === "buy" && <BuyConditionTab />}
           {activeTab === "sell" && <SellConditionTab />}
           {activeTab === "target" && <TargetSelectionTab />}
-        </div>
-      </Suspense>
+        </Suspense>
+      </main>
+
+      {/* 요약 패널 (오른쪽) */}
+      <QuantStrategySummaryPanel
+        activeTab={activeTab}
+        isOpen={isSummaryPanelOpen}
+        setIsOpen={setIsSummaryPanelOpen}
+      />
     </div>
   );
 }

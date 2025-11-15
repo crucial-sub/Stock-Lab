@@ -63,17 +63,17 @@ module.exports = {
 
         // 레이아웃
         sidebar: "rgb(var(--bg-sidebar) / <alpha-value>) /* #182234 */",
-
         "sidebar-item-active": "var(--bg-sidebar-item-active) /* #FFFFFF33 */",
         "sidebar-item-sub-active":
           "var(--bg-sidebar-item-sub-active) /* #FFFFFF0D */",
 
         surface: "var(--bg-surface) /* navy-900 5% → #1822340D 근사값 */",
         "button-primary-soft": "var(--bg-button-primary-soft) /* #AC64FF80 */",
-
         "brand-soft": "var(--bg-brand-soft) /* #AC64FF0D */",
-        "price-up": "var(--bg-price-up) /* #FF646433 */",
-        "price-down": "var(--bg-price-down) /* #007DFC33 */",
+        "price-up": "var(--bg-price-up) /* #FF6464 */",
+        "price-up-soft": "var(--bg-price-up-soft) /* #FFF6F6 */",
+        "price-down": "var(--bg-price-down) /* #007DFC */",
+        "price-down-soft": "var(--bg-price-down-soft) /* #007DFC33 */",
 
         "tag-portfolio-active": "var(--bg-tag-portfolio-active) /* #FFAC64 */",
 

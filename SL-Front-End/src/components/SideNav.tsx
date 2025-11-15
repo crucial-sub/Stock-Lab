@@ -33,7 +33,7 @@ const MAIN_NAV_ITEMS = [
   {
     icon: "/icons/portfolio.svg",
     label: "전략 포트폴리오",
-    path: "/portfolio",
+    path: "/quant",
   },
   {
     icon: "/icons/finance.svg",
@@ -135,7 +135,9 @@ export function SideNav() {
                   className={[
                     "flex items-center rounded-lg overflow-hidden",
                     "transition-all duration-300 ease-in-out",
-                    isOpen ? "gap-3 px-4 py-3 w-[204px] h-14" : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
+                    isOpen
+                      ? "gap-3 px-4 py-3 w-[204px] h-14"
+                      : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
                     active
                       ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
                       : "text-sidebar-item hover:bg-sidebar-item-sub-active",
@@ -157,7 +159,9 @@ export function SideNav() {
                     className={[
                       "text-xl font-semibold whitespace-nowrap",
                       "transition-all duration-300 ease-in-out",
-                      isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden",
+                      isOpen
+                        ? "opacity-100 w-auto"
+                        : "opacity-0 w-0 overflow-hidden",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -205,7 +209,9 @@ export function SideNav() {
                   className={[
                     "flex items-center rounded-lg overflow-hidden",
                     "transition-all duration-300 ease-in-out",
-                    isOpen ? "gap-3 px-4 py-3 w-[204px] h-14" : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
+                    isOpen
+                      ? "gap-3 px-4 py-3 w-[204px] h-14"
+                      : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
                     active
                       ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
                       : "text-sidebar-item hover:bg-sidebar-item-sub-active",
@@ -227,7 +233,9 @@ export function SideNav() {
                     className={[
                       "text-xl font-semibold whitespace-nowrap",
                       "transition-all duration-300 ease-in-out",
-                      isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden",
+                      isOpen
+                        ? "opacity-100 w-auto"
+                        : "opacity-0 w-0 overflow-hidden",
                     ]
                       .filter(Boolean)
                       .join(" ")}

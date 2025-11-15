@@ -1,7 +1,7 @@
 import { Dropdown, Title, UnderlineInput } from "@/components/common";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { FieldPanel, SectionHeader } from "@/components/quant/ui";
 
 /**
  * 매수 방법 선택 섹션
@@ -9,8 +9,12 @@ import { FieldPanel, SectionHeader } from "@/components/quant/ui";
  * - 가격 조정 (%)
  */
 export function BuyMethodSection() {
-  const { buy_price_basis, buy_price_offset, setBuyPriceBasis, setBuyPriceOffset } =
-    useBacktestConfigStore();
+  const {
+    buy_price_basis,
+    buy_price_offset,
+    setBuyPriceBasis,
+    setBuyPriceOffset,
+  } = useBacktestConfigStore();
 
   const [buyCostBasisSelect, setBuyCostBasisSelect] = useState<string>(
     buy_price_basis || "전일 종가"
@@ -23,11 +27,17 @@ export function BuyMethodSection() {
   useEffect(() => {
     setBuyPriceBasis(buyCostBasisSelect);
     setBuyPriceOffset(buyCostBasisValue);
-  }, [buyCostBasisSelect, buyCostBasisValue, setBuyPriceBasis, setBuyPriceOffset]);
+  }, [
+    buyCostBasisSelect,
+    buyCostBasisValue,
+    setBuyPriceBasis,
+    setBuyPriceOffset,
+  ]);
 
   return (
     <div id="section-buy-method" className="space-y-3">
-      <SectionHeader title="매수 방법 선택"
+      <SectionHeader
+        title="매수 방법 선택"
         description="매수 조건에 부합한 종목들을 매수할 때, 매수 방법을 선택합니다."
       />
 
@@ -51,9 +61,7 @@ export function BuyMethodSection() {
               onChange={(e) => setBuyCostBasisValue(Number(e.target.value))}
               className="w-32"
             />
-            <span className="absolute right-0 bottom-[0.625rem]">
-              %
-            </span>
+            <span className="absolute right-0 bottom-[0.625rem]">%</span>
           </div>
         </div>
       </FieldPanel>

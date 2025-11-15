@@ -28,15 +28,30 @@ export function GeneralSettingsSection() {
     <div id="section-general-settings" className="space-y-3">
       <SectionHeader title="일반 조건 설정" />
       <FieldPanel conditionType="buy">
-
         {/* 백테스트 데이터 기준 */}
         <div className="mb-8">
           <Title variant="subtitle" className="mb-3">
             백테스트 데이터 기준
           </Title>
           <div className="flex items-center gap-3">
-            <button className={`font-normal ${is_day_or_month === "daily" ? "bg-bg-positive border-brand-primary border font-semibold text-brand-primary" : "bg-[#f5f5f5]"} rounded-md px-6 py-2`} onClick={() => setIsDayOrMonth("daily")}>일봉</button>
-            <button className={`font-normal ${is_day_or_month === "monthly" ? "bg-bg-positive border-brand-primary border font-semibold text-brand-primary" : "bg-[#f5f5f5]"} rounded-md px-6 py-2`} onClick={() => setIsDayOrMonth("monthly")}>월봉</button>
+            <button
+              className={`font-normal ${is_day_or_month === "daily"
+                ? "bg-price-up-soft border border-red-500 font-semibold text-price-up"
+                : "bg-surface"
+                } rounded-md px-6 py-2`}
+              onClick={() => setIsDayOrMonth("daily")}
+            >
+              일봉
+            </button>
+            <button
+              className={`font-normal ${is_day_or_month === "monthly"
+                ? "bg-price-up-soft border border-brand border-red-500 font-semibold text-price-up"
+                : "bg-surface"
+                } rounded-md px-6 py-2`}
+              onClick={() => setIsDayOrMonth("monthly")}
+            >
+              월봉
+            </button>
           </div>
         </div>
 
@@ -58,7 +73,10 @@ export function GeneralSettingsSection() {
               type="date"
               value={
                 start_date
-                  ? `${start_date.slice(0, 4)}-${start_date.slice(4, 6)}-${start_date.slice(6, 8)}`
+                  ? `${start_date.slice(0, 4)}-${start_date.slice(
+                    4,
+                    6
+                  )}-${start_date.slice(6, 8)}`
                   : ""
               }
               onChange={(e) => {
@@ -76,7 +94,10 @@ export function GeneralSettingsSection() {
               type="date"
               value={
                 end_date
-                  ? `${end_date.slice(0, 4)}-${end_date.slice(4, 6)}-${end_date.slice(6, 8)}`
+                  ? `${end_date.slice(0, 4)}-${end_date.slice(
+                    4,
+                    6
+                  )}-${end_date.slice(6, 8)}`
                   : ""
               }
               onChange={(e) => {

@@ -1,9 +1,13 @@
-import { Dropdown, Title } from "@/components/common";
+import {
+  Dropdown,
+  Title,
+  ToggleSwitch,
+  UnderlineInput,
+} from "@/components/common";
+import { FieldPanel, SectionHeader } from "@/components/quant/ui";
+import ActivateConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
-import { FieldPanel, SectionHeader } from "@/components/quant/ui";
-import { ToggleSwitch, UnderlineInput } from "@/components/common";
-import ActivateConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 
 /**
  * 보유 기간 섹션
@@ -70,9 +74,7 @@ export function HoldPeriodSection() {
                   onChange={(e) => setMinHoldDays(Number(e.target.value))}
                   className="!h-full"
                 />
-                <span className="absolute right-0 top-[5px]">
-                  일
-                </span>
+                <span className="absolute right-0 top-[5px]">일</span>
               </div>
             </div>
 
@@ -87,9 +89,7 @@ export function HoldPeriodSection() {
                   onChange={(e) => setMaxHoldDays(Number(e.target.value))}
                   className="!h-full"
                 />
-                <span className="absolute right-0 top-[5px]">
-                  일
-                </span>
+                <span className="absolute right-0 top-[5px]">일</span>
               </div>
             </div>
 
@@ -113,9 +113,7 @@ export function HoldPeriodSection() {
                     onChange={(e) => setSellPriceOffset(Number(e.target.value))}
                     className=" !h-full"
                   />
-                  <span className="absolute right-0 top-[5px]">
-                    %
-                  </span>
+                  <span className="absolute right-0 top-[5px]">%</span>
                 </div>
               </div>
             </div>

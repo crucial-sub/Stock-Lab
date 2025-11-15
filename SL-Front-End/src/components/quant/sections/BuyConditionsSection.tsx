@@ -1,7 +1,10 @@
-import { Title } from "@/components/common";
-import { ConditionCard, FieldPanel, SectionHeader } from "@/components/quant/ui";
-import { UnderlineInput } from "@/components/common";
+import { Title, UnderlineInput } from "@/components/common";
 import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
+import {
+  ConditionCard,
+  FieldPanel,
+  SectionHeader,
+} from "@/components/quant/ui";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
@@ -17,44 +20,53 @@ import { useShallow } from "zustand/react/shallow";
  */
 export function BuyConditionsSection() {
   // ✅ useShallow hook 사용 (데이터와 함수 분리)
-  const {
-    buyConditionsUI,
-    buy_logic,
-    priority_factor,
-    priority_order,
-  } = useBacktestConfigStore(
-    useShallow((state) => ({
-      buyConditionsUI: state.buyConditionsUI,
-      buy_logic: state.buy_logic,
-      priority_factor: state.priority_factor,
-      priority_order: state.priority_order,
-    }))
-  );
+  const { buyConditionsUI, buy_logic, priority_factor, priority_order } =
+    useBacktestConfigStore(
+      useShallow((state) => ({
+        buyConditionsUI: state.buyConditionsUI,
+        buy_logic: state.buy_logic,
+        priority_factor: state.priority_factor,
+        priority_order: state.priority_order,
+      }))
+    );
 
   // 함수들은 별도로 선택 (안정적인 참조)
-  const addBuyConditionUI = useBacktestConfigStore(state => state.addBuyConditionUI);
-  const updateBuyConditionUI = useBacktestConfigStore(state => state.updateBuyConditionUI);
-  const removeBuyConditionUI = useBacktestConfigStore(state => state.removeBuyConditionUI);
-  const setBuyLogic = useBacktestConfigStore(state => state.setBuyLogic);
-  const setPriorityFactor = useBacktestConfigStore(state => state.setPriorityFactor);
-  const setPriorityOrder = useBacktestConfigStore(state => state.setPriorityOrder);
+  const addBuyConditionUI = useBacktestConfigStore(
+    (state) => state.addBuyConditionUI
+  );
+  const updateBuyConditionUI = useBacktestConfigStore(
+    (state) => state.updateBuyConditionUI
+  );
+  const removeBuyConditionUI = useBacktestConfigStore(
+    (state) => state.removeBuyConditionUI
+  );
+  const setBuyLogic = useBacktestConfigStore((state) => state.setBuyLogic);
+  const setPriorityFactor = useBacktestConfigStore(
+    (state) => state.setPriorityFactor
+  );
+  const setPriorityOrder = useBacktestConfigStore(
+    (state) => state.setPriorityOrder
+  );
 
   const { data: subFactors = [] } = useSubFactorsQuery();
   const { data: factors = [] } = useFactorsQuery();
 
   // 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentConditionId, setCurrentConditionId] = useState<string | null>(null);
+  const [currentConditionId, setCurrentConditionId] = useState<string | null>(
+    null
+  );
 
   // 우선순위 팩터 선택 모달 상태
   const [isPriorityModalOpen, setIsPriorityModalOpen] = useState(false);
-  const [priorityFactorDisplay, setPriorityFactorDisplay] = useState<string>("");
+  const [priorityFactorDisplay, setPriorityFactorDisplay] =
+    useState<string>("");
 
   // 우선순위 팩터 기본값 설정 (최초 1회만)
   useEffect(() => {
     if (!priority_factor && factors.length > 0) {
       // PER 팩터를 기본값으로 설정
-      const defaultFactor = factors.find(f => f.name === 'per') || factors[0];
+      const defaultFactor = factors.find((f) => f.name === "per") || factors[0];
       if (defaultFactor) {
         setPriorityFactor(`{${defaultFactor.display_name}}`);
         setPriorityFactorDisplay(defaultFactor.display_name);
@@ -107,9 +119,9 @@ export function BuyConditionsSection() {
 
   // 조건식 텍스트 생성
   const getConditionExpression = (condition: any) => {
-    if (!condition.factorName) return '팩터를 선택하세요';
+    if (!condition.factorName) return "팩터를 선택하세요";
 
-    let text = '';
+    let text = "";
     if (condition.subFactorName) {
       text = condition.argument
         ? `${condition.subFactorName}({${condition.factorName}},{${condition.argument}})`
@@ -118,13 +130,13 @@ export function BuyConditionsSection() {
       text = condition.factorName;
     }
 
-    return `${text} ${condition.operator} ${condition.value || '___'}`;
+    return `${text} ${condition.operator} ${condition.value || "___"}`;
   };
 
   // 현재 조건 가져오기
   const getCurrentCondition = () => {
     if (!currentConditionId) return undefined;
-    const condition = buyConditionsUI.find(c => c.id === currentConditionId);
+    const condition = buyConditionsUI.find((c) => c.id === currentConditionId);
     if (!condition) return undefined;
 
     return {
@@ -186,7 +198,9 @@ export function BuyConditionsSection() {
                   condition={condition}
                   expressionText={getConditionExpression(condition)}
                   onFactorSelect={() => openModal(condition.id)}
-                  onOperatorChange={(op) => handleOperatorChange(condition.id, op)}
+                  onOperatorChange={(op) =>
+                    handleOperatorChange(condition.id, op)
+                  }
                   onValueChange={(val) => handleValueChange(condition.id, val)}
                   onRemove={() => removeBuyConditionUI(condition.id)}
                   conditionType="buy"
@@ -243,9 +257,7 @@ export function BuyConditionsSection() {
           {/* 매수 종목 선택 우선순위 */}
           <div>
             <div className="flex justify-between w-[31.25rem] mb-3">
-              <Title variant="subtitle">
-                매수 종목 선택 우선순위
-              </Title>
+              <Title variant="subtitle">매수 종목 선택 우선순위</Title>
               <div className="flex gap-4 justify-center items-center">
                 <div className="flex justify-center items-center">
                   <button
@@ -263,9 +275,7 @@ export function BuyConditionsSection() {
                     alt=""
                     width={16}
                     height={16}
-                    className={`${priority_order === "desc"
-                      ? "opacity-100"
-                      : "opacity-30"
+                    className={`${priority_order === "desc" ? "opacity-100" : "opacity-30"
                       }`}
                   />
                 </div>
@@ -285,9 +295,7 @@ export function BuyConditionsSection() {
                     alt=""
                     width={16}
                     height={16}
-                    className={`${priority_order === "asc"
-                      ? "opacity-100"
-                      : "opacity-30"
+                    className={`${priority_order === "asc" ? "opacity-100" : "opacity-30"
                       }`}
                   />
                 </div>
@@ -297,7 +305,9 @@ export function BuyConditionsSection() {
               onClick={() => setIsPriorityModalOpen(true)}
               className="w-[31.25rem] p-[14px] border-[0.5px] border-tag-neutral rounded-md cursor-pointer hover:border-accent-primary"
             >
-              {priorityFactorDisplay || priority_factor || "팩터를 선택해주세요"}
+              {priorityFactorDisplay ||
+                priority_factor ||
+                "팩터를 선택해주세요"}
             </div>
           </div>
         </div>

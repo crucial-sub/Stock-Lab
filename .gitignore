@@ -59,6 +59,7 @@ SL-Back-end/logs/quant_api.log
 .venv/
 /docs
 /.cursor
+/scripts
 
 # Docker
 *.log

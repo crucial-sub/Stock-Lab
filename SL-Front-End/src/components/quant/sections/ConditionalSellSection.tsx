@@ -1,7 +1,16 @@
-import { Dropdown, Title, ToggleSwitch, UnderlineInput } from "@/components/common";
-import { ConditionCard, FieldPanel, SectionHeader } from "@/components/quant/ui";
-import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
+import {
+  Dropdown,
+  Title,
+  ToggleSwitch,
+  UnderlineInput,
+} from "@/components/common";
 import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
+import {
+  ConditionCard,
+  FieldPanel,
+  SectionHeader,
+} from "@/components/quant/ui";
+import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
@@ -17,10 +26,7 @@ import { useShallow } from "zustand/react/shallow";
  */
 export function ConditionalSellSection() {
   // ✅ useShallow hook 사용 (데이터와 함수 분리)
-  const {
-    sellConditionsUI,
-    condition_sell,
-  } = useBacktestConfigStore(
+  const { sellConditionsUI, condition_sell } = useBacktestConfigStore(
     useShallow((state) => ({
       sellConditionsUI: state.sellConditionsUI,
       condition_sell: state.condition_sell,
@@ -28,17 +34,27 @@ export function ConditionalSellSection() {
   );
 
   // 함수들은 별도로 선택 (안정적인 참조)
-  const addSellConditionUI = useBacktestConfigStore(state => state.addSellConditionUI);
-  const updateSellConditionUI = useBacktestConfigStore(state => state.updateSellConditionUI);
-  const removeSellConditionUI = useBacktestConfigStore(state => state.removeSellConditionUI);
-  const setConditionSell = useBacktestConfigStore(state => state.setConditionSell);
+  const addSellConditionUI = useBacktestConfigStore(
+    (state) => state.addSellConditionUI
+  );
+  const updateSellConditionUI = useBacktestConfigStore(
+    (state) => state.updateSellConditionUI
+  );
+  const removeSellConditionUI = useBacktestConfigStore(
+    (state) => state.removeSellConditionUI
+  );
+  const setConditionSell = useBacktestConfigStore(
+    (state) => state.setConditionSell
+  );
 
   const { data: subFactors = [] } = useSubFactorsQuery();
   const { data: factors = [] } = useFactorsQuery();
 
   // 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentConditionId, setCurrentConditionId] = useState<string | null>(null);
+  const [currentConditionId, setCurrentConditionId] = useState<string | null>(
+    null
+  );
 
   // 토글 및 설정 상태
   const [isOpen, setIsOpen] = useState(condition_sell !== null);
@@ -147,9 +163,9 @@ export function ConditionalSellSection() {
 
   // 조건식 텍스트 생성
   const getConditionExpression = (condition: any) => {
-    if (!condition.factorName) return '팩터를 선택하세요';
+    if (!condition.factorName) return "팩터를 선택하세요";
 
-    let text = '';
+    let text = "";
     if (condition.subFactorName) {
       text = condition.argument
         ? `${condition.subFactorName}({${condition.factorName}},{${condition.argument}})`
@@ -158,13 +174,13 @@ export function ConditionalSellSection() {
       text = condition.factorName;
     }
 
-    return `${text} ${condition.operator} ${condition.value || '___'}`;
+    return `${text} ${condition.operator} ${condition.value || "___"}`;
   };
 
   // 현재 조건 가져오기
   const getCurrentCondition = () => {
     if (!currentConditionId) return undefined;
-    const condition = sellConditionsUI.find(c => c.id === currentConditionId);
+    const condition = sellConditionsUI.find((c) => c.id === currentConditionId);
     if (!condition) return undefined;
 
     return {
@@ -199,8 +215,12 @@ export function ConditionalSellSection() {
                     condition={condition}
                     expressionText={getConditionExpression(condition)}
                     onFactorSelect={() => openModal(condition.id)}
-                    onOperatorChange={(op) => handleOperatorChange(condition.id, op)}
-                    onValueChange={(val) => handleValueChange(condition.id, val)}
+                    onOperatorChange={(op) =>
+                      handleOperatorChange(condition.id, op)
+                    }
+                    onValueChange={(val) =>
+                      handleValueChange(condition.id, val)
+                    }
                     onRemove={() => removeSellConditionUI(condition.id)}
                     conditionType="sell"
                   />
@@ -274,9 +294,7 @@ export function ConditionalSellSection() {
                     onChange={(e) => setSellPriceOffset(Number(e.target.value))}
                     className="w-32"
                   />
-                  <span className="absolute right-0 bottom-[0.625rem]">
-                    %
-                  </span>
+                  <span className="absolute right-0 bottom-[0.625rem]">%</span>
                 </div>
               </div>
             </div>

@@ -146,7 +146,7 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
   // Buy 조건 관리 함수
   // ========================================
   addBuyConditionUI: () => set((state) => {
-    const newId = `A${state.buyConditionsUI.length}`;
+    const newId = String.fromCharCode(65 + state.buyConditionsUI.length); // 65 = 'A'
     return {
       buyConditionsUI: [
         ...state.buyConditionsUI,
@@ -175,7 +175,7 @@ export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => 
   // Sell 조건 관리 함수
   // ========================================
   addSellConditionUI: () => set((state) => {
-    const newId = `A${state.sellConditionsUI.length}`;
+    const newId = String.fromCharCode(65 + state.sellConditionsUI.length); // 65 = 'A'
     return {
       sellConditionsUI: [
         ...state.sellConditionsUI,

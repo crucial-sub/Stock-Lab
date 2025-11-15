@@ -4,30 +4,30 @@
  */
 
 import {
-  useQuery,
-  useMutation,
-  useInfiniteQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import {
-  runBacktest,
+  deleteBacktest,
+  getBacktestList,
   getBacktestResult,
   getBacktestSettings,
-  getBacktestList,
+  getBacktestStatus,
   getBacktestTrades,
   getBacktestYieldPoints,
-  getBacktestStatus,
-  deleteBacktest,
+  runBacktest,
 } from "@/lib/api";
+import type { BacktestStatus } from "@/lib/api/backtest";
 import type {
+  BacktestResult,
   BacktestRunRequest,
   BacktestRunResponse,
-  BacktestResult,
   BacktestSettings,
-  BacktestStatus,
   PaginatedResponse,
   PaginationParams,
 } from "@/types/api";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 /**
  * 백테스트 쿼리 키

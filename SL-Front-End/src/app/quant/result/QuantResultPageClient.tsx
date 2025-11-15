@@ -43,7 +43,7 @@ export function QuantResultPageClient({
 }: QuantResultPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("stockInfo");
   const queryClient = useQueryClient();
-  const previousStatusRef = useRef<string | undefined>();
+  const previousStatusRef = useRef<string | undefined>(undefined);
 
   // Mock 모드 체크
   const isMockMode = backtestId.startsWith("mock");

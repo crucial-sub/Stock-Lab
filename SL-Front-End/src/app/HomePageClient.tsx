@@ -15,9 +15,11 @@ import {
 interface HomePageClientProps {
   /** 사용자 이름 (서버에서 전달) */
   userName: string;
+  /** 로그인 여부 (서버에서 전달) */
+  isLoggedIn: boolean;
 }
 
-export function HomePageClient({ userName }: HomePageClientProps) {
+export function HomePageClient({ userName, isLoggedIn }: HomePageClientProps) {
   const handleAISubmit = (value: string) => {
     // TODO: AI 전략 요청 처리 로직 구현
     console.log("AI request:", value);

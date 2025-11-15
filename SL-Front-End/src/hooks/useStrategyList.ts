@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { axiosInstance } from "@/lib/axios";
 import type { Strategy } from "@/types/strategy";
-import type { MyStrategiesResponse } from "@/lib/api/strategy";
+import type { MyStrategiesResponse, StrategyDetailItem } from "@/lib/api/strategy";
 
 /**
  * 전략 쿼리 키
@@ -45,7 +45,7 @@ export function useStrategyList() {
   const allStrategies = useMemo<Strategy[]>(() => {
     if (!strategyData?.strategies) return [];
 
-    return strategyData.strategies.map((item) => ({
+    return strategyData.strategies.map((item: StrategyDetailItem) => ({
       id: item.sessionId,
       name: item.strategyName,
       dailyAverageReturn: item.statistics?.annualizedReturn
@@ -59,7 +59,7 @@ export function useStrategyList() {
         day: "2-digit",
       }).replace(/\. /g, ".").replace(/\.$/, ""),
       status: item.status,
-      progress: item.progress,
+      progress: item.progress ?? 0,
     }));
   }, [strategyData]);
 

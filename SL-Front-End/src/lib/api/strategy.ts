@@ -1,4 +1,4 @@
-import { axiosInstance } from "../axios";
+import { axiosInstance, axiosServerInstance } from "../axios";
 
 export interface StrategyStatisticsSummary {
   totalReturn?: number | null;
@@ -8,24 +8,21 @@ export interface StrategyStatisticsSummary {
   winRate?: number | null;
 }
 
-export interface StrategyDetailItem {
+export interface StrategyListItem {
   sessionId: string;
   strategyId: string;
   strategyName: string;
-  strategyType?: string | null;
-  description?: string | null;
-  isPublic: boolean;
-  isAnonymous: boolean;
-  hideStrategyDetails: boolean;
-  initialCapital?: number | null;
-  backtestStartDate?: string | null;
-  backtestEndDate?: string | null;
+  isActive: boolean;
   status: string; // PENDING/RUNNING/COMPLETED/FAILED
-  progress: number;
-  errorMessage?: string | null;
-  statistics?: StrategyStatisticsSummary | null;
+  totalReturn?: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// 기존 호환성 유지를 위한 타입 (useStrategyList에서 사용)
+export interface StrategyDetailItem extends StrategyListItem {
+  progress?: number;
+  statistics?: StrategyStatisticsSummary | null;
 }
 
 export interface MyStrategiesResponse {
@@ -35,10 +32,23 @@ export interface MyStrategiesResponse {
 
 export const strategyApi = {
   /**
-   * 내 백테스트 결과 목록 조회
+   * 내 백테스트 결과 목록 조회 (클라이언트 사이드)
    */
   getMyStrategies: async (): Promise<MyStrategiesResponse> => {
     const response = await axiosInstance.get<MyStrategiesResponse>("/strategies/my");
+    return response.data;
+  },
+
+  /**
+   * 내 백테스트 결과 목록 조회 (서버 사이드)
+   * @param token - 인증 토큰
+   */
+  getMyStrategiesServer: async (token: string): Promise<MyStrategiesResponse> => {
+    const response = await axiosServerInstance.get<MyStrategiesResponse>("/strategies/my", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     return response.data;
   },
 

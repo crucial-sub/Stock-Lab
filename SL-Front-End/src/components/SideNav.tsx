@@ -52,13 +52,17 @@ const MAIN_NAV_ITEMS = [
   },
 ];
 
-// 하단 유틸리티 아이템
-const UTILITY_NAV_ITEMS = [
+// 하단 유틸리티 아이템 (로그인 상태에 관계없이 공통)
+const COMMON_UTILITY_NAV_ITEMS = [
   {
     icon: "/icons/help.svg",
     label: "이용 가이드",
     path: "/guide",
   },
+];
+
+// 로그인된 사용자용 아이템
+const LOGGED_IN_UTILITY_NAV_ITEMS = [
   {
     icon: "/icons/account-circle.svg",
     label: "프로필 보기",
@@ -66,9 +70,29 @@ const UTILITY_NAV_ITEMS = [
   },
 ];
 
-export function SideNav() {
+// 로그인 안 된 사용자용 아이템
+const LOGGED_OUT_UTILITY_NAV_ITEMS = [
+  {
+    icon: "/icons/account-circle.svg",
+    label: "로그인 하기",
+    path: "/login",
+  },
+];
+
+interface SideNavProps {
+  /** 로그인 여부 (서버에서 전달) */
+  isLoggedIn: boolean;
+}
+
+export function SideNav({ isLoggedIn }: SideNavProps) {
   const [isOpen, setIsOpen] = useState(true);
   const pathname = usePathname();
+
+  // 로그인 상태에 따라 유틸리티 아이템 결정
+  const utilityNavItems = [
+    ...COMMON_UTILITY_NAV_ITEMS,
+    ...(isLoggedIn ? LOGGED_IN_UTILITY_NAV_ITEMS : LOGGED_OUT_UTILITY_NAV_ITEMS),
+  ];
 
   // 현재 경로가 활성 경로인지 확인
   const isActive = (itemPath: string) => {
@@ -200,7 +224,7 @@ export function SideNav() {
             />
           </li>
 
-          {UTILITY_NAV_ITEMS.map((item) => {
+          {utilityNavItems.map((item) => {
             const active = isActive(item.path);
             return (
               <li key={item.path}>

@@ -4012,7 +4012,7 @@ class BacktestEngine:
                 )
                 self.db.add(condition)
 
-            # 3. 통계 저장
+            # 3. 통계 저장 - BacktestStatistics (기존)
             stats = result.statistics
             statistics = BacktestStatisticsModel(
                 backtest_id=backtest_id,
@@ -4041,6 +4041,41 @@ class BacktestEngine:
                 trading_days=stats.trading_days
             )
             self.db.add(statistics)
+
+            # 3.5. 통계 저장 - SimulationStatistics (전략 목록 API용)
+            from app.models.simulation import SimulationStatistics
+
+            # 기존 SimulationStatistics 삭제 (재실행 시 중복 방지)
+            from sqlalchemy import delete
+            await self.db.execute(delete(SimulationStatistics).where(
+                SimulationStatistics.session_id == str(backtest_id)
+            ))
+
+            # 새로운 SimulationStatistics 생성
+            simulation_stats = SimulationStatistics(
+                session_id=str(backtest_id),
+                total_return=stats.total_return,
+                annualized_return=stats.annualized_return,
+                benchmark_return=stats.benchmark_return if hasattr(stats, 'benchmark_return') else None,
+                excess_return=stats.excess_return if hasattr(stats, 'excess_return') else None,
+                volatility=stats.volatility,
+                max_drawdown=stats.max_drawdown,
+                sharpe_ratio=stats.sharpe_ratio,
+                sortino_ratio=stats.sortino_ratio,
+                total_trades=stats.total_trades,
+                winning_trades=stats.winning_trades,
+                losing_trades=stats.losing_trades,
+                win_rate=stats.win_rate,
+                avg_profit=stats.avg_win if hasattr(stats, 'avg_win') else None,
+                avg_loss=stats.avg_loss if hasattr(stats, 'avg_loss') else None,
+                profit_factor=stats.profit_loss_ratio if hasattr(stats, 'profit_loss_ratio') else None,
+                avg_holding_period=None,  # 계산되지 않은 경우 None
+                final_capital=stats.final_capital,
+                total_commission=None,  # 별도 계산 필요 시 추가
+                total_tax=None  # 별도 계산 필요 시 추가
+            )
+            self.db.add(simulation_stats)
+            logger.info(f"✅ SimulationStatistics 저장 완료 - session_id: {backtest_id}")
 
             # 4. 일별 스냅샷 저장
             for daily in result.daily_performance:

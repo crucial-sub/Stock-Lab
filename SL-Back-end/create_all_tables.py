@@ -37,6 +37,19 @@ try:
 except Exception as e:
     print(f"WARNING - Simulation models import failed: {e}")
 
+# Auto-trading 모델들
+try:
+    from app.models.auto_trading import (
+        AutoTradingStrategy,
+        LivePosition,
+        LiveTrade,
+        LiveDailyPerformance,
+        AutoTradingLog
+    )
+    print("OK - Auto-trading models imported")
+except Exception as e:
+    print(f"WARNING - Auto-trading models import failed: {e}")
+
 print("OK - All models imported")
 
 

@@ -10,11 +10,11 @@ export interface Strategy {
   id: string;
   /** 전략 이름 */
   name: string;
-  /** 일평균 수익률 (%) */
+  /** 연환산 수익률 (%) - Annualized Return */
   dailyAverageReturn: number;
-  /** 누적 수익률 (%) */
+  /** 누적 수익률 (%) - Total Return */
   cumulativeReturn: number;
-  /** 투자 수익률 (MDD - Max Drawdown) (%) */
+  /** 최대 낙폭 (%) - Max Drawdown (MDD) */
   maxDrawdown: number;
   /** 생성일 */
   createdAt: string;

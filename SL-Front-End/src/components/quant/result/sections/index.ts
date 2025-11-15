@@ -4,3 +4,4 @@
 export { PageHeader } from "./PageHeader";
 export { TabNavigation } from "./TabNavigation";
 export { StatisticsSection } from "./StatisticsSection";
+export { AutoTradingSection } from "./AutoTradingSection";

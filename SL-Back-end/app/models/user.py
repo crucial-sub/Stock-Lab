@@ -32,6 +32,7 @@ class User(Base):
 
     # Relationships
     simulation_sessions = relationship("SimulationSession", back_populates="user", lazy="selectin")
+    auto_trading_strategies = relationship("AutoTradingStrategy", back_populates="user", lazy="selectin")
 
     def __repr__(self):
         return f"<User(user_id={self.user_id}, name={self.name}, email={self.email}, phone={self.phone_number})>"

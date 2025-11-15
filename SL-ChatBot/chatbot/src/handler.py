@@ -1,4 +1,4 @@
-"""Chat Handler - Orchestrates RAG and LLM."""
+"""챗 핸들러 - RAG와 LLM을 오케스트레이션합니다."""
 import os
 from typing import Optional
 from pathlib import Path
@@ -13,18 +13,13 @@ except ImportError:
     print("Warning: boto3 not installed. Run: pip install boto3")
 try:
     from langchain_aws import ChatBedrock
-    # LangChain 0.2.x import paths
+    # Claude 도구 호출 에이전트
     from langchain.agents import create_tool_calling_agent, AgentExecutor
-    # create_react_agent may not exist in some 0.2.x builds; import defensively
-    try:
-        from langchain.agents import create_react_agent  # type: ignore
-    except Exception:
-        create_react_agent = None  # type: ignore
     from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
     from langchain_core.messages import BaseMessage
     from langchain.memory import ConversationBufferWindowMemory
 except ImportError as e:
-    print(f"Warning: LangChain components not installed. Run: pip install langchain langchain-aws. Error: {e}")
+    print(f"경고: LangChain 컴포넌트가 설치되지 않았습니다. 실행: pip install langchain langchain-aws. 오류: {e}")
     ChatBedrock = None
     create_tool_calling_agent = None
     AgentExecutor = None
@@ -122,21 +117,22 @@ class ChatHandler:
             self.news_retriever = NewsRetriever(backend_url)
             print(f"News Retriever initialized - Backend URL: {backend_url}")
 
-        # Initialize LangChain Agent if provider is bedrock
+        # Bedrock 제공자용 LangChain 에이전트 초기화
         if self.provider == "bedrock":
             if not get_tools:
-                print("Warning: get_tools not available. Agent will not be initialized.")
+                print("경고: get_tools를 사용할 수 없습니다. 에이전트가 초기화되지 않습니다.")
                 return
 
             try:
-                # 1. Initialize LLM with AWS credentials
-                print("Step 1: Initializing LLM client...")
+                # 1. LLM 클라이언트 초기화
+                print("Step 1: LLM 클라이언트 초기화 중...")
                 aws_region = os.getenv("AWS_REGION", self.config["llm"].get("region", "us-east-1"))
-                # Use default AWS credential chain (env, profile, ECS/EKS, instance role)
+
                 if not ChatBedrock:
-                    print("Warning: ChatBedrock not available. Install langchain-aws.")
+                    print("경고: ChatBedrock을 사용할 수 없습니다. langchain-aws를 설치하세요.")
                     return
 
+                # AWS Bedrock으로 Claude LLM 초기화
                 self.llm_client = ChatBedrock(
                     region_name=aws_region,
                     model_id=os.getenv("BEDROCK_MODEL_ID", self.config["llm"]["model"]),
@@ -146,103 +142,43 @@ class ChatHandler:
                     },
                     streaming=False,
                 )
-                print(f"Step 1 OK: Using AWS Bedrock - Region: {aws_region}, Model: {self.llm_client.model_id}")
+                print(f"Step 1 OK: AWS Bedrock 사용 - 리전: {aws_region}, 모델: {self.llm_client.model_id}")
 
-                # 2. Initialize Tools
-                print("Step 2: Initializing tools...")
+                # 2. 도구 초기화
+                print("Step 2: 도구 초기화 중...")
                 tools = get_tools(
                     news_retriever=self.news_retriever,
                     factor_sync=self.factor_sync
                 )
-                print(f"Step 2 OK: Tools initialized: {[tool.name for tool in tools]}")
+                print(f"Step 2 OK: 도구 초기화 완료: {[tool.name for tool in tools]}")
 
-                # 3. Create Agent with system prompt
-                print("Step 3: Loading system prompt...")
-                # Ensure prompt_path is correct relative to the project root or current file
-                # Assuming system.txt is in SL-ChatBot/chatbot/prompts
+                # 3. 시스템 프롬프트 로드
+                print("Step 3: 시스템 프롬프트 로드 중...")
                 prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "system.txt"
-                system_prompt = prompt_path.read_text(encoding='utf-8') if prompt_path.exists() else "You are a quant investment advisor."
-                print(f"Step 3 OK: System prompt loaded ({len(system_prompt)} chars)")
+                system_prompt = prompt_path.read_text(encoding='utf-8') if prompt_path.exists() else "당신은 정량 투자 자문가입니다."
+                print(f"Step 3 OK: 시스템 프롬프트 로드 완료 ({len(system_prompt)} 자)")
 
-                # 4. Create Agent Prompt Template(s)
-                print("Step 4: Creating prompt templates...")
-                # Tool-calling models (e.g., Anthropic Claude 3) can use the tool-calling agent.
-                # For models without native tool-calling (e.g., Meta Llama, Mistral), use ReAct agent.
+                # 4. Claude 도구 호출 프롬프트 생성
+                print("Step 4: Claude 프롬프트 템플릿 생성 중...")
+                # Claude는 도구 호출을 기본 지원
                 tool_calling_prompt = ChatPromptTemplate.from_messages([
                     (
                         "system",
                         system_prompt
-                        + "\n\nYou have access to the following tools and must call them when needed."
+                        + "\n\n필요할 때 다음 도구를 사용할 수 있습니다."
                         + "\n\n{agent_scratchpad}"
                     ),
                     MessagesPlaceholder("chat_history"),
-                    ("user", "Context:\n{context}\n\nQuestion: {input}"),
+                    ("user", "참고자료:\n{context}\n\n질문: {input}"),
                 ])
+                print("Step 4 OK: Claude 프롬프트 템플릿 생성 완료")
 
-                # Format tool list for ReAct prompt
-                tool_strings = "\n".join([f"{tool.name}: {tool.description}" for tool in tools])
-
-                react_prompt = ChatPromptTemplate.from_messages([
-                    (
-                        "system",
-                        system_prompt
-                        + "\n\nYou can use the following tools:\n" + tool_strings
-                        + "\n\nWhen needed, follow this ReAct format strictly:\n"
-                          "Question: {input}\n"
-                          "Thought: You should think about what to do next\n"
-                          "Action: <tool name>\n"
-                          "Action Input: <JSON input>\n"
-                          "Observation: <tool result>\n"
-                          "... (repeat Thought/Action/Action Input/Observation as needed)\n"
-                          "Final Answer: <concise answer using observations>\n"
-                        + "\n\n{agent_scratchpad}"
-                    ),
-                    MessagesPlaceholder("chat_history"),
-                    ("user", "Context:\n{context}\n\nQuestion: {input}"),
-                ])
-                print("Step 4 OK: Prompts created")
-
-                # 5. Create Agent and AgentExecutor
-                print("Step 5: Creating agent and executor...")
-                model_id = getattr(self.llm_client, "model_id", "").lower()
-                # Tool-calling models: Claude, Llama 3.1+, etc.
-                supports_tool_calling = (
-                    ("anthropic" in model_id) or
-                    ("claude" in model_id) or
-                    ("llama3-1" in model_id) or  # Llama 3.1 supports tool-calling
-                    ("llama-3.1" in model_id)
-                )
-                # Nova and Mistral models use ReAct instead of tool-calling
-                is_nova = "nova" in model_id
-                is_mistral = "mistral" in model_id
-                print(f"  Model: {model_id}, Supports tool calling: {supports_tool_calling}, Is Nova: {is_nova}, Is Mistral: {is_mistral}")
-                # If ReAct agent factory is unavailable, fall back to tool-calling agent
-                # Nova and Mistral models use ReAct format instead of tool-calling
-                if (is_nova or is_mistral) and create_react_agent is not None:
-                    print("  Using ReAct agent (Nova model)...")
-                    try:
-                        agent = create_react_agent(self.llm_client, tools, react_prompt)  # type: ignore
-                        self.agent_type = "react"
-                    except ValueError as ve:
-                        print(f"  ReAct agent creation failed: {ve}")
-                        print("  Falling back to tool-calling agent...")
-                        agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
-                        self.agent_type = "tool_calling"
-                elif supports_tool_calling or (create_react_agent is None):
-                    print("  Using tool-calling agent...")
-                    agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
-                    self.agent_type = "tool_calling"
-                else:
-                    print("  Using ReAct agent...")
-                    try:
-                        agent = create_react_agent(self.llm_client, tools, react_prompt)  # type: ignore
-                        self.agent_type = "react"
-                    except ValueError as ve:
-                        print(f"  ReAct agent creation failed: {ve}")
-                        print("  Falling back to tool-calling agent...")
-                        agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
-                        self.agent_type = "tool_calling"
-                print(f"  Agent created ({self.agent_type}), creating AgentExecutor...")
+                # 5. Claude 에이전트 생성
+                print("Step 5: Claude 에이전트와 Executor 생성 중...")
+                # Claude는 도구 호출(Tool Calling)을 기본 지원
+                agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
+                self.agent_type = "tool_calling"
+                print(f"  Claude 에이전트 생성 완료, AgentExecutor 생성 중...")
                 self.agent_executor = AgentExecutor(
                     agent=agent,
                     tools=tools,
@@ -250,26 +186,35 @@ class ChatHandler:
                     return_intermediate_steps=True,
                     handle_parsing_errors=True
                 )
-                print("Step 5 OK: AgentExecutor created")
+                print("Step 5 OK: AgentExecutor 생성 완료")
 
-                print("LangChain AgentExecutor created successfully.")
+                print("✅ LangChain AgentExecutor 생성 성공")
             except Exception as e:
-                print(f"Error initializing LangChain agent: {e}")
+                print(f"❌ LangChain 에이전트 초기화 오류: {e}")
                 import traceback
                 traceback.print_exc()
         else:
-            print(f"Warning: Agent initialization skipped. Provider={self.provider}, get_tools={get_tools is not None}")
+            print(f"경고: 에이전트 초기화 건너뜀. 제공자={self.provider}, get_tools={get_tools is not None}")
 
     async def handle(self, message: str, session_id: Optional[str] = None) -> dict:
-        """Handle user message.
+        """사용자 메시지를 처리합니다.
 
         Args:
-            message: User input
-            session_id: Optional session ID
+            message: 사용자 입력
+            session_id: 선택사항 세션 ID
 
         Returns:
-            Response dictionary
+            응답 딕셔너리
         """
+        # 0. 정책 검사 (투자 조언 금지 정책)
+        policy_violation = self._check_investment_advisory_policy(message)
+        if policy_violation:
+            return {
+                "response": policy_violation,
+                "intent": "policy_violation",
+                "sources": []
+            }
+
         # 1. Classify intent
         intent = await self._classify_intent(message)
 
@@ -442,3 +387,107 @@ class ChatHandler:
             "strategy": "value",
             "conditions": []
         }
+
+    def _check_investment_advisory_policy(self, message: str) -> Optional[str]:
+        """투자 조언 정책 위반 확인.
+
+        Returns:
+            정책 위반 메시지 (위반 시), None (정책 준수 시)
+        """
+        # 한글은 대소문자가 없으므로 그대로 사용
+        message_check = message.strip()
+
+        # 금지된 패턴들 (투자 조언 금지 정책에서 정의)
+        forbidden_patterns = {
+            # 1. 종목 추천 패턴
+            "종목_추천": [
+                r"(.*?)(삼성|SK|현대|LG|카카오|네이버|넥슨|엔씨소프트|셀트리온|"
+                r"NVIDIA|애플|테슬라|마이크로소프트|구글|알파벳)\s*(추천|사세요|매수|매도|사달라|팔아야)",
+                r"(이 종목|이 주식).*?(상승|하락|사세요|팔아야|매수)",
+                r"(꼭|반드시|꼭꼭|적극)\s*(추천|추천함|포함)",
+            ],
+            # 2. 매매 시점 조언 패턴
+            "매매_시점": [
+                r"(지금|현재|요즘|해야|해야 할)\s*(매수|매도|사세요|팔아야|타이밍|사나|파나)",
+                r"(매수|매도|사야|파야)\s*(하나|할까|할지|해야|합니다)",
+                r"(매수가|적정가|목표가|손절|익절)\s*(설정|하세요|해야)",
+                r"(\d+원).*?(적정|맞는|타이밍)",
+                r"(언제|어디서|어떻게)\s+(매수|매도|사야|파야)",
+            ],
+            # 3. 수익률 보장 패턴
+            "수익률_보장": [
+                r"(보장|확실|확정|100%|무조건)\s*(수익|이익|수익률)",
+                r"(수익|이익).*?(손실|위험).*?(없|없음)",
+                r"(항상|반드시)\s*(수익)",
+            ],
+            # 4. 개인화 조언 패턴
+            "개인화_조언": [
+                r"(당신|너|니|저는|우리는|우리)\s*(경우|상황|환경).*?(전략|투자|추천|사는|사세요)",
+                r"(월|분기|년)\s*(\d+)\s*(만원|천원|원).*?(투자|사세요|해야)",
+                r"(특별히|맞춤|특화|개인|따라).*?(투자|전략|추천)",
+            ],
+        }
+
+        # 패턴 매칭
+        violations_found = []
+        for violation_type, patterns in forbidden_patterns.items():
+            for pattern in patterns:
+                if __import__('re').search(pattern, message_check):
+                    violations_found.append(violation_type)
+                    break
+
+        if violations_found:
+            return self._get_policy_violation_response(violations_found[0])
+
+        return None
+
+    def _get_policy_violation_response(self, violation_type: str) -> str:
+        """정책 위반에 따른 응답 메시지 반환."""
+        base_response = (
+            "죄송합니다. 저는 특정 종목에 대한 투자 조언을 제공할 수 없습니다.\n\n"
+            "대신 도움드릴 수 있는 것:\n"
+            "- 종목 분석 방법 설명\n"
+            "- 재무제표 읽는 법\n"
+            "- 투자 지표 계산 방법\n"
+            "-  리스크 관리 원칙\n\n"
+            "투자 결정은 반드시 본인의 판단으로 하시기 바랍니다."
+        )
+
+        if violation_type == "종목_추천":
+            return (
+                "죄송합니다. 저는 특정 종목을 추천해드릴 수 없습니다.\n\n"
+                "대신 다음을 도움드릴 수 있습니다:\n"
+                "- 팩터 분석 방법\n"
+                "- 종목 평가 방법\n"
+                "- 투자 전략 설명\n\n"
+                "투자 결정은 충분한 리서치 후 본인의 판단으로 하시기 바랍니다."
+            )
+        elif violation_type == "매매_시점":
+            return (
+                "죄송합니다. 매매 타이밍에 대한 조언은 드릴 수 없습니다.\n\n"
+                "대신 다음을 도움드릴 수 있습니다:\n"
+                "- 기술적 분석 방법\n"
+                "- 차트 읽는 법\n"
+                "- 리스크 관리 전략\n\n"
+                "매매 타이밍은 본인의 투자 계획과 판단으로 결정하시기 바랍니다."
+            )
+        elif violation_type == "수익률_보장":
+            return (
+                "죄송합니다. 수익을 보장해드릴 수는 없습니다.\n\n"
+                "투자에는 항상 손실의 위험이 존재합니다. 대신 다음을 도움드릴 수 있습니다:\n"
+                "- 리스크 관리 방법\n"
+                "- 포트폴리오 분산 전략\n"
+                "- 역사적 수익률 데이터 분석\n\n"
+                "안정적인 장기 투자 계획을 세우시기 바랍니다."
+            )
+        elif violation_type == "개인화_조언":
+            return (
+                "죄송합니다. 개인의 상황에 맞춘 투자 조언은 드릴 수 없습니다.\n\n"
+                "대신 다음을 도움드릴 수 있습니다:\n"
+                "- 일반적인 투자 전략 설명\n"
+                "- 자산배분 원칙\n"
+                "- 투자 목표 설정 방법\n\n"
+                "본인의 상황과 목표에 맞는 투자 계획을 세우시기 바랍니다."
+            )
+
+        return base_response

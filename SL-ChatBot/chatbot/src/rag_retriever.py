@@ -96,107 +96,108 @@ class RAGRetriever:
             embedding_function=self.embedding_function
         )
 
-        # Index documents if the collection is empty
+        # 컬렉션이 비어있으면 문서 인덱싱
         if self.collection.count() == 0:
-            print("ChromaDB collection is empty. Indexing documents...")
+            print("ChromaDB 컬렉션이 비어있습니다. 문서 인덱싱 중...")
             self._index_documents()
 
-    def _load_factors_from_files(self) -> List[Dict]:
-        """factors 폴더에서 마크다운 파일들을 자동으로 로드"""
-        documents = []
-        factors_dir = Path("rag/documents/factors")
+    def _load_all_documents(self) -> List[Dict]:
+        """모든 문서 폴더에서 자동 로드: factors, strategies, policies, beginner_guide, indicators"""
+        all_documents = []
+        base_path = Path(__file__).parent.parent.parent / "rag" / "documents"
 
-        # 상대 경로가 작동하지 않으면 절대 경로 시도
-        if not factors_dir.exists():
-            # 현재 파일 기준으로 경로 계산
-            current_dir = Path(__file__).parent.parent.parent
-            factors_dir = current_dir / "rag" / "documents" / "factors"
+        # 로드할 폴더들
+        folders = ["factors", "strategies", "policies", "beginner_guide", "indicators"]
 
-        if not factors_dir.exists():
-            print(f"❌ factors 폴더를 찾을 수 없습니다: {factors_dir}")
-            return []
+        for folder in folders:
+            folder_path = base_path / folder
 
-        # metadata.json에서 문서 정보 읽기
-        metadata_file = factors_dir / "metadata.json"
-        metadata = {}
-        if metadata_file.exists():
-            try:
-                with open(metadata_file, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
-            except Exception as e:
-                print(f"❌ metadata.json 로드 실패: {e}")
-
-        # .md 파일들 로드
-        for md_file in sorted(factors_dir.glob("*.md")):
-            if md_file.name == "metadata.json":
+            if not folder_path.exists():
+                print(f"⚠️  폴더 없음: {folder_path}")
                 continue
 
-            try:
-                with open(md_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
+            # metadata.json 로드
+            metadata_file = folder_path / "metadata.json"
+            metadata = {}
+            if metadata_file.exists():
+                try:
+                    with open(metadata_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                except Exception as e:
+                    print(f"❌ metadata.json 로드 실패 ({folder}): {e}")
 
-                # 파일명에서 ID 생성 (예: value.md -> factor_value)
-                file_id = md_file.stem
-                doc_id = f"factor_{file_id}"
+            # .md 파일들 로드
+            for md_file in sorted(folder_path.glob("*.md")):
+                if md_file.name == "metadata.json":
+                    continue
 
-                # metadata에서 제목과 요약 가져오기
-                title = f"팩터: {file_id.upper()}"
-                summary = ""
+                try:
+                    with open(md_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
 
-                if metadata.get("documents"):
-                    for doc_meta in metadata["documents"]:
-                        if doc_meta.get("file") == md_file.name:
-                            title = doc_meta.get("name", title)
-                            summary = doc_meta.get("summary", "")
-                            break
+                    # 파일명에서 ID 생성
+                    file_id = md_file.stem
+                    doc_id = f"{folder}_{file_id}"
 
-                documents.append({
-                    "id": doc_id,
-                    "title": title,
-                    "content": content,
-                    "summary": summary,
-                    "file": md_file.name
-                })
+                    # metadata에서 제목과 요약 가져오기
+                    title = f"{folder.upper()}: {file_id.replace('_', ' ').title()}"
+                    summary = ""
 
-                print(f"✅ 로드됨: {md_file.name} -> {title}")
+                    if metadata.get("documents"):
+                        for doc_meta in metadata["documents"]:
+                            if doc_meta.get("file") == md_file.name:
+                                title = doc_meta.get("name", title)
+                                summary = doc_meta.get("summary", "")
+                                break
 
-            except Exception as e:
-                print(f"❌ 파일 로드 실패 ({md_file.name}): {e}")
+                    all_documents.append({
+                        "id": doc_id,
+                        "title": title,
+                        "content": content,
+                        "summary": summary,
+                        "file": md_file.name,
+                        "folder": folder
+                    })
 
-        if documents:
-            print(f"\n📚 총 {len(documents)}개 팩터 문서 로드 완료\n")
-            return documents
+                    print(f"✅ 로드됨: {folder}/{md_file.name} -> {title}")
+
+                except Exception as e:
+                    print(f"❌ 파일 로드 실패 ({folder}/{md_file.name}): {e}")
+
+        if all_documents:
+            print(f"\n📚 총 {len(all_documents)}개 문서 로드 완료\n")
+            return all_documents
         else:
-            print(f"❌ factors 문서 로드 실패")
+            print(f"❌ 문서 로드 실패")
             return []
 
     def _build_knowledge_base(self) -> List[Dict]:
-        """팩터 설명 - 파일에서 자동 로드"""
-        documents = self._load_factors_from_files()
+        """모든 문서를 로드 (factors, strategies, policies, beginner_guide, indicators)"""
+        documents = self._load_all_documents()
         if not documents:
-            print("❌ factors 문서를 로드할 수 없습니다.")
+            print("❌ 문서를 로드할 수 없습니다.")
             return []
         return documents
 
     def _index_documents(self):
-        """Embed and store documents in ChromaDB."""
+        """문서를 ChromaDB에 임베딩하여 저장."""
         documents = self._build_knowledge_base()
         self.collection.add(
             ids=[doc["id"] for doc in documents],
             documents=[doc["content"] for doc in documents],
             metadatas=[{"title": doc["title"]} for doc in documents]
         )
-        print(f"Indexed {len(documents)} documents into ChromaDB.")
+        print(f"✅ {len(documents)}개 문서가 ChromaDB에 인덱싱되었습니다.")
 
     def retrieve(self, query: str, top_k: int = 3) -> List[Dict]:
-        """Retrieve relevant documents based on query.
+        """쿼리를 기반으로 관련 문서를 검색.
 
         Args:
-            query: User query.
-            top_k: Number of documents to return.
+            query: 사용자 쿼리.
+            top_k: 반환할 문서 수.
 
         Returns:
-            List of relevant documents with scores.
+            점수가 포함된 관련 문서 리스트.
         """
         results = self.collection.query(
             query_texts=[query],
@@ -217,14 +218,14 @@ class RAGRetriever:
         return retrieved_docs
 
     def get_context(self, query: str, top_k: int = 3) -> str:
-        """Get formatted context string for LLM.
+        """LLM을 위한 포맷된 컨텍스트 문자열을 생성.
 
         Args:
-            query: User query
-            top_k: Number of documents to retrieve
+            query: 사용자 쿼리
+            top_k: 검색할 문서 수
 
         Returns:
-            Formatted context string
+            포맷된 컨텍스트 문자열
         """
         results = self.retrieve(query, top_k)
 

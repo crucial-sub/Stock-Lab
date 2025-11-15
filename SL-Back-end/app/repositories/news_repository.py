@@ -3,7 +3,7 @@
 
 """
 from typing import List, Dict, Optional, Tuple
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.news import NewsArticle, ThemeSentiment
 from loguru import logger
@@ -11,7 +11,7 @@ import html
 from datetime import datetime
 from pytz import UTC, timezone
 
-# Theme mapping: English (DB) -> Korean (Frontend)
+# Theme mapping: English (DB) <-> Korean (Frontend)
 THEME_MAPPING = {
     "other": "기타",
     "chemical": "화학",
@@ -43,6 +43,9 @@ THEME_MAPPING = {
     "finance": "금융",
     "publishing": "출판·매체복제",
 }
+
+# Reverse mapping: Korean -> English (프론트에서 받은 한글 테마명을 영어로 변환)
+THEME_MAPPING_REVERSE = {v: k for k, v in THEME_MAPPING.items()}
 
 # Stock code to company name mapping
 STOCK_CODE_MAPPING = {
@@ -157,15 +160,19 @@ class NewsRepository:
 
         Args:
             db: 데이터베이스 세션
-            theme: 테마명
+            theme: 테마명 (한글 또는 영어)
             limit: 조회 제한 수
 
         Returns:
             뉴스 리스트
         """
         try:
+            # 프론트에서 받은 한글 테마명을 영어로 변환
+            # 예: "전기·전자" -> "electronics"
+            search_theme = THEME_MAPPING_REVERSE.get(theme, theme)
+
             query = select(NewsArticle).where(
-                NewsArticle.theme == theme
+                NewsArticle.theme == search_theme
             ).order_by(
                 NewsArticle.news_date.desc()
             ).limit(limit)
@@ -261,7 +268,8 @@ def _serialize_news(article: NewsArticle) -> Dict:
         "content": html.unescape(article.content) if article.content else "",
         "tickerLabel": ticker_label,  # 종목명
         "stockCode": article.stock_code or None,  # 종목코드
-        "themeName": theme_name,  # 테마명
+        "themeName": theme_name,  # 테마명 (한글)
+        "themeNameKor": theme_name,  # 테마명 (한글) - 프론트 요청
         "sentiment": sentiment,
         "publishedAt": published_at,  # analyzed_at(UTC) -> KST로 변환된 날짜
         "source": article.source or "",

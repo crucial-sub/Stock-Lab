@@ -12,6 +12,7 @@ import {
 import {
   runBacktest,
   getBacktestResult,
+  getBacktestSettings,
   getBacktestList,
   getBacktestTrades,
   getBacktestYieldPoints,
@@ -22,6 +23,7 @@ import type {
   BacktestRunRequest,
   BacktestRunResponse,
   BacktestResult,
+  BacktestSettings,
   BacktestStatus,
   PaginatedResponse,
   PaginationParams,
@@ -41,6 +43,7 @@ export const backtestQueryKey = {
   yieldPoints: (id: string) =>
     [...backtestQueryKey.detail(id), "yield-points"] as const,
   status: (id: string) => [...backtestQueryKey.detail(id), "status"] as const,
+  settings: (id: string) => [...backtestQueryKey.detail(id), "settings"] as const,
 };
 
 /**
@@ -77,6 +80,25 @@ export function useBacktestResultQuery(
   return useQuery<BacktestResult, Error>({
     queryKey: backtestQueryKey.detail(backtestId),
     queryFn: () => getBacktestResult(backtestId, false),
+    enabled: enabled && !!backtestId,
+  });
+}
+
+/**
+ * 백테스트 설정 조회 훅
+ * - 백테스트에 사용된 설정 정보를 조회합니다
+ *
+ * @param backtestId - 백테스트 ID
+ * @param enabled - 쿼리 활성화 여부
+ * @returns 백테스트 설정 쿼리
+ */
+export function useBacktestSettingsQuery(
+  backtestId: string,
+  enabled = true,
+) {
+  return useQuery<BacktestSettings, Error>({
+    queryKey: backtestQueryKey.settings(backtestId),
+    queryFn: () => getBacktestSettings(backtestId, false),
     enabled: enabled && !!backtestId,
   });
 }

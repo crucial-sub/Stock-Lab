@@ -27,11 +27,7 @@ export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
               <div className="w-full h-24 flex items-end justify-center">
                 <div
                   className={`w-full rounded-t transition-all ${
-                    isPositive
-                      ? "bg-accent-primary"
-                      : i < 3
-                        ? "bg-blue-500"
-                        : "bg-red-500"
+                    isPositive ? "bg-red-500" : "bg-blue-500"
                   }`}
                   style={{
                     height: `${barHeight}px`,
@@ -39,7 +35,11 @@ export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
                   }}
                 />
               </div>
-              <div className="text-[10px] text-text-body mt-2 text-center leading-tight">
+              <div
+                className={`text-[10px] mt-2 text-center leading-tight font-medium ${
+                  isPositive ? "text-red-500" : "text-blue-500"
+                }`}
+              >
                 {item.value > 0 ? "+" : ""}
                 {item.value.toFixed(2)}%
               </div>

@@ -161,8 +161,16 @@ async def _run_backtest_async(
             await db.execute(stmt)
             await db.commit()
 
-            # BacktestEngine 생성
+            # BacktestEngine 생성 (최적화 적용)
             engine = BacktestEngine(db)
+
+            # 🚀 최적화 모듈 통합
+            try:
+                from app.services.backtest_integration import integrate_optimizations
+                integrate_optimizations(engine)
+                logger.info("✅ 백테스트 최적화 모듈 적용 완료!")
+            except Exception as e:
+                logger.warning(f"⚠️ 최적화 모듈 적용 실패 (기본 모드로 실행): {e}")
 
             import re
 
@@ -271,6 +279,26 @@ async def _run_backtest_async(
             await db.execute(stmt)
             await db.commit()
 
+            # 🚀 Rate Limit 해제 (백테스트 완료 직후, Redis 연결이 살아있을 때)
+            try:
+                # user_id 조회
+                from sqlalchemy import select
+                session_query = select(SimulationSession.user_id).where(
+                    SimulationSession.session_id == session_id
+                )
+                session_result = await db.execute(session_query)
+                user_id = session_result.scalar_one_or_none()
+
+                if user_id:
+                    from app.core.cache import get_redis
+                    redis_client = get_redis()
+                    if redis_client:
+                        rate_limit_key = f"backtest:running:{user_id}"
+                        await redis_client.delete(rate_limit_key)
+                        logger.info(f"🚦 Rate Limit 해제 성공: user_id={user_id}")
+            except Exception as e:
+                logger.warning(f"Rate Limit 해제 실패 (무시): {e}")
+
             return result
 
         except Exception as e:
@@ -291,5 +319,24 @@ async def _run_backtest_async(
             )
             await db.execute(stmt)
             await db.commit()
+
+            # 🚀 Rate Limit 해제 (백테스트 실패 시에도)
+            try:
+                from sqlalchemy import select
+                session_query = select(SimulationSession.user_id).where(
+                    SimulationSession.session_id == session_id
+                )
+                session_result = await db.execute(session_query)
+                user_id = session_result.scalar_one_or_none()
+
+                if user_id:
+                    from app.core.cache import get_redis
+                    redis_client = get_redis()
+                    if redis_client:
+                        rate_limit_key = f"backtest:running:{user_id}"
+                        await redis_client.delete(rate_limit_key)
+                        logger.info(f"🚦 Rate Limit 해제 성공 (실패 케이스): user_id={user_id}")
+            except Exception as release_error:
+                logger.warning(f"Rate Limit 해제 실패 (무시): {release_error}")
 
             raise

@@ -101,6 +101,12 @@ export interface BacktestRunResponse {
   createdAt: string;
 }
 
+/** 유니버스 종목 정보 */
+export interface UniverseStock {
+  stockCode: string;
+  stockName: string;
+}
+
 /** 백테스트 결과 상세 타입 */
 export interface BacktestResult {
   /** 백테스트 ID */
@@ -116,6 +122,11 @@ export interface BacktestResult {
     winRate: number;
     profitFactor: number;
     volatility: number;
+    totalTrades: number;
+    winningTrades: number;
+    losingTrades: number;
+    initialCapital: number;
+    finalCapital: number;
   };
   /** 매매 결과 */
   trades: {
@@ -151,13 +162,61 @@ export interface BacktestResult {
     positionValue?: number;
     dailyReturn?: number;
     cumulativeReturn?: number;
+    dailyDrawdown?: number;
     buyCount?: number;
     sellCount?: number;
   }[];
+  /** 유니버스 종목 목록 */
+  universeStocks?: UniverseStock[];
   /** 생성 시간 */
   createdAt: string;
   /** 완료 시간 */
   completedAt?: string;
+}
+
+/** 전략 팩터 설정 */
+export interface StrategyFactorSettings {
+  factorId: string;
+  factorName: string;
+  usageType: string;
+  operator?: string;
+  thresholdValue?: number;
+  weight?: number;
+  direction?: string;
+}
+
+/** 매매 규칙 설정 */
+export interface TradingRuleSettings {
+  ruleType: string;
+  rebalanceFrequency?: string;
+  rebalanceDay?: number;
+  positionSizing?: string;
+  maxPositions?: number;
+  minPositionWeight?: number;
+  maxPositionWeight?: number;
+  stopLossPct?: number;
+  takeProfitPct?: number;
+  commissionRate?: number;
+  taxRate?: number;
+  buyCondition?: Record<string, any>;
+  sellCondition?: Record<string, any>;
+}
+
+/** 백테스트 설정 정보 */
+export interface BacktestSettings {
+  sessionName?: string;
+  startDate: string;
+  endDate: string;
+  initialCapital: number;
+  benchmark?: string;
+  strategyName: string;
+  strategyType?: string;
+  strategyDescription?: string;
+  universeType?: string;
+  marketCapFilter?: string;
+  sectorFilter?: string[];
+  factors: StrategyFactorSettings[];
+  tradingRules: TradingRuleSettings[];
 }
 
 /** 페이지네이션 요청 파라미터 */

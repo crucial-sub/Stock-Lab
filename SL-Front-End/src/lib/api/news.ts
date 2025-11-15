@@ -13,7 +13,7 @@ interface NewsListResponse {
  */
 export async function fetchNewsList(params?: NewsListParams): Promise<NewsItem[]> {
   try {
-    // 테마 필터만 있는 경우 (우선순위 1)
+    // 테마 필터만 있는 경우 
     if (params?.themes && params.themes.length && !params.themes.includes("전체")) {
       // 모든 테마에 대해 데이터 수집
       const allNews: NewsItem[] = [];
@@ -29,7 +29,7 @@ export async function fetchNewsList(params?: NewsListParams): Promise<NewsItem[]
       return allNews;
     }
 
-    // 키워드가 있으면 검색 API 사용 (우선순위 2)
+    // 키워드가 있으면 검색 API 사용 
     if (params?.keyword && params.keyword.trim()) {
       const response = await axiosInstance.get<NewsListResponse>("/news/db/search", {
         params: {
@@ -40,7 +40,7 @@ export async function fetchNewsList(params?: NewsListParams): Promise<NewsItem[]
 
       let filtered = response.data.news ?? [];
 
-      // 테마로 추가 필터링 (키워드 + 테마)
+      //  키워드 + 테마 필터링
       if (params.themes && params.themes.length && !params.themes.includes("전체")) {
         filtered = filtered.filter((item: NewsItem) =>
           params.themes?.some((theme) => item.themeName?.includes(theme) ?? false)

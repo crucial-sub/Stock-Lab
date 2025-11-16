@@ -67,7 +67,7 @@ const LOGGED_IN_UTILITY_NAV_ITEMS = [
   {
     icon: "/icons/account-circle.svg",
     label: "프로필 보기",
-    path: "/profile",
+    path: "/mypage",
   },
 ];
 

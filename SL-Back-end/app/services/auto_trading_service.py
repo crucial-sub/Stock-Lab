@@ -155,6 +155,16 @@ class AutoTradingService:
             strategy.is_active = False
             strategy.deactivated_at = datetime.now()
 
+            # 3-1. 연결된 SimulationSession도 비활성화
+            if strategy.simulation_session_id:
+                session_query = select(SimulationSession).where(
+                    SimulationSession.session_id == strategy.simulation_session_id
+                )
+                session_result = await db.execute(session_query)
+                session = session_result.scalar_one_or_none()
+                if session:
+                    session.is_active = False
+
             await db.commit()
             await db.refresh(strategy)
 

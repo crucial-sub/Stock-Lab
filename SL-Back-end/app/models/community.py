@@ -56,6 +56,7 @@ class CommunityPost(Base):
     # 게시글 기본 정보
     title = Column(String(200), nullable=False, comment="제목")
     content = Column(Text, nullable=False, comment="내용")
+    tags = Column(JSON, nullable=True, comment="태그 목록 (예: ['질문', '초보'])")
     post_type = Column(
         String(50),
         nullable=False,
@@ -144,6 +145,9 @@ class CommunityComment(Base):
     # 댓글 내용
     content = Column(Text, nullable=False, comment="댓글 내용")
 
+    # 통계
+    like_count = Column(Integer, default=0, nullable=False, comment="좋아요 수")
+
     # 대댓글 기능
     parent_comment_id = Column(
         String(36),
@@ -205,4 +209,39 @@ class CommunityLike(Base):
         Index('idx_community_likes_post', 'post_id'),
         Index('idx_community_likes_user', 'user_id', 'created_at'),
         {"comment": "커뮤니티 좋아요 테이블"}
+    )
+
+
+class CommunityCommentLike(Base):
+    """커뮤니티 댓글 좋아요 테이블"""
+    __tablename__ = "community_comment_likes"
+
+    like_id = Column(Integer, primary_key=True, autoincrement=True, comment="좋아요 ID")
+    comment_id = Column(
+        String(36),
+        ForeignKey("community_comments.comment_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="댓글 ID"
+    )
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.user_id"),
+        nullable=False,
+        index=True,
+        comment="사용자 ID"
+    )
+
+    # 메타데이터
+    created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False, comment="좋아요 누른 시간")
+
+    # Relationships
+    comment = relationship("CommunityComment", backref="likes")
+    user = relationship("User", backref="comment_likes")
+
+    __table_args__ = (
+        UniqueConstraint('comment_id', 'user_id', name='uq_comment_user_like'),
+        Index('idx_community_comment_likes_comment', 'comment_id'),
+        Index('idx_community_comment_likes_user', 'user_id', 'created_at'),
+        {"comment": "커뮤니티 댓글 좋아요 테이블"}
     )

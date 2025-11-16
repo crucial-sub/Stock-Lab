@@ -1,10 +1,11 @@
 "use client";
 
-import type { BacktestResult } from "@/types/api";
-import { useEffect, useRef, useState } from "react";
 import * as am5 from "@amcharts/amcharts5";
-import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
+import * as am5xy from "@amcharts/amcharts5/xy";
+import { useEffect, useRef, useState } from "react";
+import type { BacktestResult } from "@/types/api";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
 
 /**
  * 매매 내역 탭 컴포넌트
@@ -18,22 +19,30 @@ interface TradingHistoryTabProps {
   yieldPoints?: BacktestResult["yieldPoints"];
 }
 
-export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTabProps) {
+export function TradingHistoryTab({
+  trades,
+  yieldPoints = [],
+}: TradingHistoryTabProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<"all" | "byDate">("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [selectedStock, setSelectedStock] = useState<{
+    name: string;
+    code: string;
+  } | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const itemsPerPage = 10;
 
   // 월별로 거래 필터링
-  const filteredTrades = viewMode === "all"
-    ? trades
-    : trades.filter(trade => {
-        if (!selectedMonth) return true;
-        // 매수일의 연-월이 선택된 월과 같은 거래만 표시
-        const tradeMonth = trade.buyDate.substring(0, 7); // "2024-01-15" -> "2024-01"
-        return tradeMonth === selectedMonth;
-      });
+  const filteredTrades =
+    viewMode === "all"
+      ? trades
+      : trades.filter((trade) => {
+          if (!selectedMonth) return true;
+          // 매수일의 연-월이 선택된 월과 같은 거래만 표시
+          const tradeMonth = trade.buyDate.substring(0, 7); // "2024-01-15" -> "2024-01"
+          return tradeMonth === selectedMonth;
+        });
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(filteredTrades.length / itemsPerPage);
@@ -50,13 +59,15 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
 
   // 거래가 발생한 월 목록 추출 (YYYY-MM 형식)
   const tradeMonths = Array.from(
-    new Set(trades.map(t => t.buyDate.substring(0, 7)))
-  ).sort().reverse(); // 최신 월이 먼저 오도록 역순 정렬
+    new Set(trades.map((t) => t.buyDate.substring(0, 7))),
+  )
+    .sort()
+    .reverse(); // 최신 월이 먼저 오도록 역순 정렬
 
   // viewMode 변경 시 페이지 초기화
   useEffect(() => {
     setCurrentPage(1);
-  }, [viewMode, selectedMonth]);
+  }, []);
 
   // 누적 수익률 차트 렌더링
   useEffect(() => {
@@ -72,11 +83,11 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
         wheelX: "panX",
         wheelY: "zoomX",
         pinchZoomX: true,
-      })
+      }),
     );
 
     // 데이터 준비
-    const chartData = yieldPoints.map(point => ({
+    const chartData = yieldPoints.map((point) => ({
       date: new Date(point.date).getTime(),
       value: point.cumulativeReturn || 0,
     }));
@@ -89,7 +100,7 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
           minGridDistance: 50,
         }),
         tooltip: am5.Tooltip.new(root, {}),
-      })
+      }),
     );
 
     xAxis.get("renderer").labels.template.setAll({
@@ -101,7 +112,7 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
     const yAxis = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {}),
-      })
+      }),
     );
 
     yAxis.get("renderer").labels.template.setAll({
@@ -122,7 +133,7 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
 
     series.strokes.template.setAll({
@@ -137,10 +148,13 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
     series.data.setAll(chartData);
 
     // 커서 추가
-    chart.set("cursor", am5xy.XYCursor.new(root, {
-      behavior: "zoomX",
-      xAxis: xAxis,
-    }));
+    chart.set(
+      "cursor",
+      am5xy.XYCursor.new(root, {
+        behavior: "zoomX",
+        xAxis: xAxis,
+      }),
+    );
 
     // 애니메이션
     series.appear(1000);
@@ -156,7 +170,9 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
       {/* 누적 수익률 차트 */}
       {yieldPoints.length > 0 && (
         <div className="bg-bg-surface rounded-lg shadow-card p-6">
-          <h3 className="text-lg font-bold text-text-strong mb-4">누적 수익률</h3>
+          <h3 className="text-lg font-bold text-text-strong mb-4">
+            누적 수익률
+          </h3>
           <div ref={chartRef} style={{ width: "100%", height: "300px" }} />
         </div>
       )}
@@ -201,7 +217,7 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
                 className="px-4 py-2 text-sm bg-bg-muted border border-border-subtle rounded-lg text-text-body focus:outline-none focus:ring-2 focus:ring-accent-primary"
               >
                 <option value="">전체 월</option>
-                {tradeMonths.map(month => (
+                {tradeMonths.map((month) => (
                   <option key={month} value={month}>
                     {month}
                   </option>
@@ -215,18 +231,20 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-bg-muted rounded-lg p-4">
             <div className="text-sm text-text-muted mb-1">총 거래 횟수</div>
-            <div className="text-2xl font-bold text-text-strong">{filteredTrades.length}</div>
+            <div className="text-2xl font-bold text-text-strong">
+              {filteredTrades.length}
+            </div>
           </div>
           <div className="bg-bg-muted rounded-lg p-4">
             <div className="text-sm text-text-muted mb-1">수익 거래</div>
             <div className="text-2xl font-bold text-red-500">
-              {filteredTrades.filter(t => t.profitRate >= 0).length}
+              {filteredTrades.filter((t) => t.profitRate >= 0).length}
             </div>
           </div>
           <div className="bg-bg-muted rounded-lg p-4">
             <div className="text-sm text-text-muted mb-1">손실 거래</div>
             <div className="text-2xl font-bold text-blue-500">
-              {filteredTrades.filter(t => t.profitRate < 0).length}
+              {filteredTrades.filter((t) => t.profitRate < 0).length}
             </div>
           </div>
         </div>
@@ -234,10 +252,18 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
         {/* 테이블 헤더 */}
         <div className="grid grid-cols-[1fr_150px_150px_120px_120px] gap-4 px-6 py-4 bg-bg-muted border-b border-border-subtle">
           <div className="text-sm font-medium text-text-muted">종목명</div>
-          <div className="text-sm font-medium text-text-muted text-right">진입</div>
-          <div className="text-sm font-medium text-text-muted text-right">청산</div>
-          <div className="text-sm font-medium text-text-muted text-right">보유일수</div>
-          <div className="text-sm font-medium text-text-muted text-right">수익률 (%)</div>
+          <div className="text-sm font-medium text-text-muted text-right">
+            진입
+          </div>
+          <div className="text-sm font-medium text-text-muted text-right">
+            청산
+          </div>
+          <div className="text-sm font-medium text-text-muted text-right">
+            보유일수
+          </div>
+          <div className="text-sm font-medium text-text-muted text-right">
+            수익률 (%)
+          </div>
         </div>
 
         {/* 테이블 바디 */}
@@ -254,9 +280,22 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
                 key={`${trade.stockCode}-${idx}`}
                 className="grid grid-cols-[1fr_150px_150px_120px_120px] gap-4 px-6 py-4 border-b border-border-subtle hover:bg-bg-muted transition-colors"
               >
-                <div className="text-text-body font-medium">{trade.stockName}</div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedStock({
+                      name: trade.stockName,
+                      code: trade.stockCode,
+                    })
+                  }
+                  className="text-text-body font-medium text-left hover:text-accent-primary hover:underline transition-colors"
+                >
+                  {trade.stockName}
+                </button>
                 <div className="text-text-body text-right">{trade.buyDate}</div>
-                <div className="text-text-body text-right">{trade.sellDate}</div>
+                <div className="text-text-body text-right">
+                  {trade.sellDate}
+                </div>
                 <div className="text-text-body text-right">
                   {calculateHoldingDays(trade.buyDate, trade.sellDate)}일
                 </div>
@@ -327,6 +366,14 @@ export function TradingHistoryTab({ trades, yieldPoints = [] }: TradingHistoryTa
           </div>
         )}
       </div>
+
+      {/* 종목 상세 모달 */}
+      <StockDetailModal
+        isOpen={!!selectedStock}
+        onClose={() => setSelectedStock(null)}
+        stockName={selectedStock?.name || ""}
+        stockCode={selectedStock?.code || ""}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import ColorBorderLeft from "@/components/quant/common/ColorBorderLeft";
 
 /**
@@ -20,7 +20,7 @@ export function FieldPanel({
 }: FieldPanelProps) {
   return (
     <div
-      className={`bg-bg-surface rounded-md shadow-card p-8 relative ${className}`}
+      className={`bg-[#FFFFFF66] rounded-md shadow-card p-8 relative ${className}`}
     >
       <ColorBorderLeft conditionType={conditionType} />
       {children}

@@ -12,21 +12,26 @@
  * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
 import { SettingsTab } from "@/components/quant/result/SettingsTab";
 import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
 import { StockInfoTab } from "@/components/quant/result/StockInfoTab";
-import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import {
+  AutoTradingSection,
   PageHeader,
   StatisticsSection,
   TabNavigation,
 } from "@/components/quant/result/sections";
-import { useBacktestResultQuery, useBacktestSettingsQuery, useBacktestStatusQuery } from "@/hooks/useBacktestQuery";
+import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
+import {
+  useBacktestResultQuery,
+  useBacktestSettingsQuery,
+  useBacktestStatusQuery,
+} from "@/hooks/useBacktestQuery";
 import { mockBacktestResult } from "@/mocks/backtestResult";
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
 
 interface QuantResultPageClientProps {
   backtestId: string;
@@ -39,7 +44,7 @@ export function QuantResultPageClient({
 }: QuantResultPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("stockInfo");
   const queryClient = useQueryClient();
-  const previousStatusRef = useRef<string | undefined>();
+  const previousStatusRef = useRef<string | undefined>(undefined);
 
   // Mock 모드 체크
   const isMockMode = backtestId.startsWith("mock");
@@ -48,20 +53,25 @@ export function QuantResultPageClient({
   const { data: statusData } = useBacktestStatusQuery(
     backtestId,
     !isMockMode, // mock 모드가 아닐 때만 활성화
-    2000 // 2초마다 폴링
+    2000, // 2초마다 폴링
   );
 
   // React Query로 백테스트 결과 조회 (completed 상태일 때만)
-  const { data: result, isLoading, error } = useBacktestResultQuery(
+  const {
+    data: result,
+    isLoading,
+    error,
+  } = useBacktestResultQuery(
     backtestId,
-    !isMockMode && statusData?.status === "completed"
+    !isMockMode && statusData?.status === "completed",
   );
 
   // 백테스트 설정 조회
-  const { data: settings, isLoading: isLoadingSettings } = useBacktestSettingsQuery(
-    backtestId,
-    !isMockMode && statusData?.status === "completed"
-  );
+  const { data: settings, isLoading: isLoadingSettings } =
+    useBacktestSettingsQuery(
+      backtestId,
+      !isMockMode && statusData?.status === "completed",
+    );
 
   // 백테스트 완료 시 결과 데이터 자동 갱신
   useEffect(() => {
@@ -95,8 +105,15 @@ export function QuantResultPageClient({
   }
 
   // 백테스트가 아직 실행 중인 경우
-  if (!isMockMode && statusData && (statusData.status === "pending" || statusData.status === "running")) {
-    console.log("📊 백테스트 진행 중 - yieldPoints:", statusData.yieldPoints ? statusData.yieldPoints.length : 0);
+  if (
+    !isMockMode &&
+    statusData &&
+    (statusData.status === "pending" || statusData.status === "running")
+  ) {
+    console.log(
+      "📊 백테스트 진행 중 - yieldPoints:",
+      statusData.yieldPoints ? statusData.yieldPoints.length : 0,
+    );
     return (
       <BacktestLoadingState
         backtestId={backtestId}
@@ -174,7 +191,7 @@ export function QuantResultPageClient({
     }
 
     const sortedPoints = [...finalResult.yieldPoints].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
     );
 
     const latestPoint = sortedPoints[sortedPoints.length - 1];
@@ -207,12 +224,14 @@ export function QuantResultPageClient({
   const periodReturns = calculatePeriodReturns();
 
   // 백테스트 시작/종료 날짜 추출 (yieldPoints의 첫 번째와 마지막 날짜)
-  const startDate = finalResult.yieldPoints && finalResult.yieldPoints.length > 0
-    ? finalResult.yieldPoints[0].date
-    : undefined;
-  const endDate = finalResult.yieldPoints && finalResult.yieldPoints.length > 0
-    ? finalResult.yieldPoints[finalResult.yieldPoints.length - 1].date
-    : undefined;
+  const _startDate =
+    finalResult.yieldPoints && finalResult.yieldPoints.length > 0
+      ? finalResult.yieldPoints[0].date
+      : undefined;
+  const _endDate =
+    finalResult.yieldPoints && finalResult.yieldPoints.length > 0
+      ? finalResult.yieldPoints[finalResult.yieldPoints.length - 1].date
+      : undefined;
 
   return (
     <div className="min-h-screen bg-bg-app py-6 px-6">
@@ -227,6 +246,12 @@ export function QuantResultPageClient({
           periodReturns={periodReturns}
         />
 
+        {/* 자동매매 섹션 */}
+        <AutoTradingSection
+          sessionId={backtestId}
+          sessionStatus={statusData?.status || "completed"}
+        />
+
         {/* 탭 네비게이션 */}
         <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -238,7 +263,10 @@ export function QuantResultPageClient({
           />
         )}
         {activeTab === "returns" && (
-          <ReturnsTab yieldPoints={finalResult.yieldPoints} trades={finalResult.trades} />
+          <ReturnsTab
+            yieldPoints={finalResult.yieldPoints}
+            trades={finalResult.trades}
+          />
         )}
         {activeTab === "statistics" && (
           <StatisticsTabWrapper statistics={finalResult.statistics} />

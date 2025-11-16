@@ -1,6 +1,6 @@
-import type { Strategy } from "@/types/strategy";
 import Image from "next/image";
 import Link from "next/link";
+import type { Strategy } from "@/types/strategy";
 
 /**
  * 전략 목록 아이템 컴포넌트
@@ -23,9 +23,7 @@ export function StrategyListItem({
   onToggle,
 }: StrategyListItemProps) {
   return (
-    <tr
-      className={`${isSelected ? "rounded-md shadow-card" : ""}`}
-    >
+    <tr className={`${isSelected ? "rounded-md shadow-card" : ""}`}>
       {/* 체크박스 */}
       <td className="p-[10px] text-left">
         <Image
@@ -48,34 +46,36 @@ export function StrategyListItem({
       </td>
 
       {/* 일평균 수익률 */}
-      <td className={`p-[10px] text-[18px] text-left font-semibold ${strategy.maxDrawdown > 0
-        ? "text-brand-primary"
-        : "text-accent-primary"
-        }`}>
+      <td
+        className={`p-[10px] text-[18px] text-left font-semibold ${
+          strategy.dailyAverageReturn > 0
+            ? "text-brand-primary"
+            : "text-accent-primary"
+        }`}
+      >
         {strategy.dailyAverageReturn > 0 ? "+" : ""}
-        {strategy.dailyAverageReturn}%
+        {strategy.dailyAverageReturn.toFixed(2)}%
       </td>
 
       {/* 누적 수익률 */}
       <td
-        className={`p-[10px] text-[18px] text-left font-semibold ${strategy.cumulativeReturn > 0
-          ? "text-brand-primary"
-          : "text-accent-primary"
-          }`}
+        className={`p-[10px] text-[18px] text-left font-semibold ${
+          strategy.cumulativeReturn > 0
+            ? "text-brand-primary"
+            : "text-accent-primary"
+        }`}
       >
         {strategy.cumulativeReturn > 0 ? "+" : ""}
-        {strategy.cumulativeReturn}%
+        {strategy.cumulativeReturn.toFixed(2)}%
       </td>
 
-      {/* 투자 수익률 (MDD) */}
+      {/* MDD (Max Drawdown) */}
       <td
-        className={`p-[10px] text-[18px] text-left font-semibold ${strategy.maxDrawdown > 0
-          ? "text-brand-primary"
-          : "text-accent-primary"
-          }`}
+        className={`p-[10px] text-[18px] text-left font-semibold ${
+          strategy.maxDrawdown < 0 ? "text-accent-primary" : "text-gray-500"
+        }`}
       >
-        {strategy.maxDrawdown > 0 ? "+" : ""}
-        {strategy.maxDrawdown}%
+        {strategy.maxDrawdown.toFixed(2)}%
       </td>
 
       {/* 생성일 */}

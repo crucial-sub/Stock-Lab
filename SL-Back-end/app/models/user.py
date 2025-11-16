@@ -35,6 +35,7 @@ class User(Base):
     community_posts = relationship("CommunityPost", back_populates="user")
     community_comments = relationship("CommunityComment", back_populates="user")
     community_likes = relationship("CommunityLike", back_populates="user")
+    auto_trading_strategies = relationship("AutoTradingStrategy", back_populates="user", lazy="selectin")
 
     def __repr__(self):
         return f"<User(user_id={self.user_id}, name={self.name}, email={self.email}, phone={self.phone_number})>"

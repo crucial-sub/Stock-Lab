@@ -1,12 +1,13 @@
+import type { InputHTMLAttributes } from "react";
 import { Title, UnderlineInput } from "@/components/common";
-import { InputHTMLAttributes } from "react";
 
 /**
  * 입력 필드 공통 컴포넌트
  * - 라벨, 입력 필드, 후위 텍스트를 포함하는 wrapper
  * - UnderlineInput 사용 (하단 테두리만 있는 디자인)
  */
-interface FormFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
+interface FormFieldProps
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> {
   label: string;
   suffix?: string;
   error?: string;
@@ -38,9 +39,7 @@ export function FormField({
           className={className}
         />
         {suffix && (
-          <span className="absolute right-0 bottom-[0.625rem]">
-            {suffix}
-          </span>
+          <span className="absolute right-0 bottom-[0.625rem]">{suffix}</span>
         )}
       </div>
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}

@@ -99,7 +99,7 @@ export const companyApi = {
    */
   getCompanyInfo: async (
     stockCode: string,
-    userId?: string
+    userId?: string,
   ): Promise<CompanyInfoResponse> => {
     const { data } = await axiosInstance.get<CompanyInfoResponse>(
       `/company/${stockCode}/info`,
@@ -107,7 +107,7 @@ export const companyApi = {
         params: {
           user_id: userId,
         },
-      }
+      },
     );
     return data;
   },
@@ -117,7 +117,7 @@ export const companyApi = {
    */
   searchCompanies: async (
     query: string,
-    limit: number = 10
+    limit: number = 10,
   ): Promise<any[]> => {
     const { data } = await axiosInstance.get("/company/search", {
       params: {

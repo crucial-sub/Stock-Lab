@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Dropdown 컴포넌트 Props 타입
@@ -65,21 +65,26 @@ export function Dropdown({
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     }
 
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
 
   // Variant별 스타일 설정
   const variantStyles = {
     large: {
-      button: "w-[88px] h-12 border-[0.5px] border-tag-neutral rounded-md p-[10px]",
+      button:
+        "w-[88px] h-12 border-[0.5px] border-tag-neutral rounded-md p-[10px]",
       text: "text-[20px] font-semibold",
       icon: { width: 28, height: 28 },
       menu: "w-[88px] mt-1",
@@ -93,7 +98,8 @@ export function Dropdown({
       option: "px-1 py-2 font-normal",
     },
     small: {
-      button: "w-[104px] h-[22px] border-[0.5px] border-tag-neutral rounded-md p-1",
+      button:
+        "w-[104px] h-[22px] border-[0.5px] border-tag-neutral rounded-md p-1",
       text: "font-normal text-[12px]",
       icon: { width: 14, height: 14 },
       menu: "w-[104px] mt-1",
@@ -113,7 +119,9 @@ export function Dropdown({
         className={`flex items-center justify-between ${currentVariant.button} hover:border-accent-primary transition-colors`}
       >
         {/* 왼쪽 텍스트 영역 */}
-        <span className={`flex-1 text-left text-text-strong ${currentVariant.text}`}>
+        <span
+          className={`flex-1 text-left text-text-strong ${currentVariant.text}`}
+        >
           {selectedOption?.label || "선택"}
         </span>
 
@@ -141,7 +149,9 @@ export function Dropdown({
                 setIsOpen(false);
               }}
               className={`w-full text-left ${currentVariant.option} hover:bg-bg-muted transition-colors ${
-                option.value === value ? "bg-bg-muted text-accent-primary" : "text-text-body"
+                option.value === value
+                  ? "bg-bg-muted text-accent-primary"
+                  : "text-text-body"
               }`}
             >
               {option.label}

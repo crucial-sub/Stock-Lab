@@ -1,7 +1,8 @@
 "use client";
 
-import type { BacktestResult, UniverseStock } from "@/types/api";
 import { useMemo, useState } from "react";
+import type { BacktestResult, UniverseStock } from "@/types/api";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
 
 /**
  * 매매종목 정보 탭 컴포넌트
@@ -21,8 +22,15 @@ interface StockInfo {
   hasSell: boolean;
 }
 
-export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps) {
+export function StockInfoTab({
+  trades,
+  universeStocks = [],
+}: StockInfoTabProps) {
   const [showAll, setShowAll] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<{
+    name: string;
+    code: string;
+  } | null>(null);
   const INITIAL_DISPLAY_COUNT = 30;
 
   // 종목별 매수/매도 여부 계산
@@ -57,15 +65,19 @@ export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps)
     });
 
     return Array.from(stockMap.values()).sort((a, b) =>
-      a.stockName.localeCompare(b.stockName, "ko")
+      a.stockName.localeCompare(b.stockName, "ko"),
     );
   }, [trades, universeStocks]);
 
   // 거래한 종목과 거래하지 않은 종목 구분
-  const tradedStocksCount = stockList.filter((s) => s.hasBuy || s.hasSell).length;
+  const tradedStocksCount = stockList.filter(
+    (s) => s.hasBuy || s.hasSell,
+  ).length;
 
   // 표시할 종목 리스트
-  const displayedStocks = showAll ? stockList : stockList.slice(0, INITIAL_DISPLAY_COUNT);
+  const displayedStocks = showAll
+    ? stockList
+    : stockList.slice(0, INITIAL_DISPLAY_COUNT);
   const hasMore = stockList.length > INITIAL_DISPLAY_COUNT;
 
   return (
@@ -75,7 +87,8 @@ export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps)
           유니버스 종목 목록 ({stockList.length}개)
         </h3>
         <p className="text-sm text-text-muted mt-1">
-          선택한 테마/유니버스의 전체 종목입니다. 실제 거래한 종목은 {tradedStocksCount}개입니다.
+          선택한 테마/유니버스의 전체 종목입니다. 실제 거래한 종목은{" "}
+          {tradedStocksCount}개입니다.
         </p>
       </div>
 
@@ -105,9 +118,16 @@ export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps)
           displayedStocks.map((stock, index) => {
             const hasTraded = stock.hasBuy || stock.hasSell;
             return (
-              <div
+              <button
+                type="button"
                 key={stock.stockCode}
-                className={`relative p-4 rounded border transition-all ${
+                onClick={() =>
+                  setSelectedStock({
+                    name: stock.stockName,
+                    code: stock.stockCode,
+                  })
+                }
+                className={`relative p-4 rounded border transition-all cursor-pointer text-left ${
                   hasTraded
                     ? "bg-bg-muted border-border-subtle hover:border-accent-primary hover:bg-bg-surface"
                     : "bg-bg-surface border-border-subtle opacity-50 hover:opacity-75"
@@ -138,14 +158,14 @@ export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps)
 
                 {/* 종목 정보 */}
                 <div className="mt-6 space-y-1">
-                  <div className="text-sm font-semibold text-text-strong truncate">
+                  <div className="text-sm font-semibold text-text-strong truncate hover:text-accent-primary transition-colors">
                     {stock.stockName}
                   </div>
                   <div className="text-xs text-text-muted">
                     {stock.stockCode}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })
         )}
@@ -159,12 +179,18 @@ export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps)
             onClick={() => setShowAll(!showAll)}
             className="px-6 py-2 text-sm font-medium text-accent-primary border border-accent-primary rounded-lg hover:bg-accent-primary hover:text-white transition-colors"
           >
-            {showAll
-              ? "접기"
-              : "더보기"}
+            {showAll ? "접기" : "더보기"}
           </button>
         </div>
       )}
+
+      {/* 종목 상세 모달 */}
+      <StockDetailModal
+        isOpen={!!selectedStock}
+        onClose={() => setSelectedStock(null)}
+        stockName={selectedStock?.name || ""}
+        stockCode={selectedStock?.code || ""}
+      />
     </div>
   );
 }

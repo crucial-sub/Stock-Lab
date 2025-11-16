@@ -1,65 +1,303 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { authApi } from "@/lib/api/auth";
 
-import { Button } from "./common";
-import { Icon } from "./common/Icon";
+/**
+ * 전역 사이드바 네비게이션
+ *
+ * @description 모든 페이지에서 표시되는 사이드바입니다.
+ * 햄버거 메뉴를 클릭하여 접기/펼치기가 가능합니다.
+ *
+ * @features
+ * - 펼쳤을 때: 260px (아이콘 + 텍스트)
+ * - 접혔을 때: 108px (아이콘만)
+ * - 부드러운 transition 애니메이션
+ * - 현재 경로에 따른 활성 상태 표시
+ */
+
+// 메인 네비게이션 아이템
+const MAIN_NAV_ITEMS = [
+  {
+    icon: "/icons/home.svg",
+    label: "홈",
+    path: "/",
+  },
+  {
+    icon: "/icons/neurology.svg",
+    label: "AI 어시스턴트",
+    path: "/ai-assistant",
+  },
+  {
+    icon: "/icons/portfolio.svg",
+    label: "전략 포트폴리오",
+    path: "/quant",
+  },
+  {
+    icon: "/icons/finance.svg",
+    label: "시세",
+    path: "/market-price",
+  },
+  {
+    icon: "/icons/news.svg",
+    label: "뉴스",
+    path: "/news",
+  },
+  {
+    icon: "/icons/community.svg",
+    label: "커뮤니티",
+    path: "/community",
+  },
+];
+
+// 하단 유틸리티 아이템 (로그인 상태에 관계없이 공통)
+const COMMON_UTILITY_NAV_ITEMS = [
+  {
+    icon: "/icons/help.svg",
+    label: "이용 가이드",
+    path: "/guide",
+  },
+];
+
+// 로그인된 사용자용 아이템
+const LOGGED_IN_UTILITY_NAV_ITEMS = [
+  {
+    icon: "/icons/account-circle.svg",
+    label: "프로필 보기",
+    path: "/mypage",
+  },
+];
+
+// 로그인 안 된 사용자용 아이템
+const LOGGED_OUT_UTILITY_NAV_ITEMS = [
+  {
+    icon: "/icons/account-circle.svg",
+    label: "로그인 하기",
+    path: "/login",
+  },
+];
 
 interface SideNavProps {
+  serverHasToken: boolean;
 }
 
-export function SideNav({ }: SideNavProps) {
-    const pathname = usePathname();
-    const segments = pathname.split("/").filter(Boolean);
-    const rootSegment = "/" + (segments[0] ?? "");
+export function SideNav({ serverHasToken }: SideNavProps) {
+  const [isOpen, setIsOpen] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(serverHasToken);
+  const pathname = usePathname();
 
-    const navItems = [
-        { href: "/", label: "홈", icon: "/icons/home.svg" },
-        { href: "/quant", label: "퀀트 투자", icon: "/icons/function.svg" },
-        { href: "/market-price", label: "시세", icon: "/icons/bar-chart.svg" },
-        { href: "/news", label: "뉴스", icon: "/icons/news.svg" },
-        { href: "/mypage", label: "마이페이지", icon: "/icons/account-circle.svg" },
-    ];
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      try {
+        await authApi.getCurrentUser();
+        setIsLoggedIn(true);
+      } catch (_error) {
+        setIsLoggedIn(false);
+      }
+    };
 
-    return (
-        <aside className="fixed left-0 top-0 z-40 flex h-full w-64 flex-col overflow-hidden border-r border-border-default bg-white">
-            <div className="flex flex-col pt-40 pb-8 h-full justify-between">
-                <nav className="flex flex-1 flex-col gap-3 px-6">
-                    {navItems.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={`relative flex h-12 items-center gap-3 rounded-lg px-4 transition-colors ${rootSegment === item.href ? "bg-bg-muted" : "hover:bg-slate-50"
-                                }`}
-                        >
-                            <Icon
-                                src={item.icon}
-                                color={
-                                    rootSegment == item.href
-                                        ? "var(--color-accent-primary)"
-                                        : "var(--color-border-default)"
-                                }
-                                size={20}
-                            />
-                            <span
-                                className={`text-xl font-sans ${rootSegment === item.href
-                                    ? "font-semibold text-accent-primary"
-                                    : "font-normal text-tag-neutral"
-                                    }`}
-                            >
-                                {item.label}
-                            </span>
-                        </Link>
-                    ))}
-                </nav>
-                <Button variant="tertiary" className="flex w-56 h-12 self-center gap-3 pr-[38px] justify-start">
-                    <Icon
-                        src={'icons/help.svg'}
+    checkLoginStatus();
+
+    const handleFocus = () => {
+      checkLoginStatus();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+
+  // 로그인 상태에 따라 유틸리티 아이템 결정
+  const utilityNavItems = [
+    ...COMMON_UTILITY_NAV_ITEMS,
+    ...(isLoggedIn
+      ? LOGGED_IN_UTILITY_NAV_ITEMS
+      : LOGGED_OUT_UTILITY_NAV_ITEMS),
+  ];
+
+  // 현재 경로가 활성 경로인지 확인
+  const isActive = (itemPath: string) => {
+    if (itemPath === "/") {
+      return pathname === "/";
+    }
+    return pathname.startsWith(itemPath);
+  };
+
+  return (
+    <aside
+      className={[
+        "relative h-full bg-sidebar shrink-0 overflow-hidden",
+        "transition-all duration-300 ease-in-out",
+        isOpen ? "w-[260px]" : "w-[108px]",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      aria-label="메인 네비게이션"
+    >
+      {/* 햄버거 메뉴 버튼 */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={[
+          "absolute w-6 h-6 top-[42px]",
+          "transition-all duration-300",
+          isOpen ? "right-[28px]" : "left-[42px]",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        aria-label={isOpen ? "메뉴 닫기" : "메뉴 열기"}
+        aria-expanded={isOpen}
+      >
+        <div className="relative w-full h-full">
+          <Image
+            src="/icons/hamburger.svg"
+            alt=""
+            fill
+            className="object-contain"
+            aria-hidden="true"
+          />
+        </div>
+      </button>
+
+      {/* 메인 네비게이션 */}
+      <nav
+        className={[
+          "absolute top-[200px]",
+          "transition-all duration-300",
+          isOpen ? "left-[28px]" : "left-[28px]",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        aria-label="메인 메뉴"
+      >
+        <ul className="flex flex-col gap-[20px]">
+          {MAIN_NAV_ITEMS.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <li key={item.path}>
+                <Link
+                  href={item.path}
+                  className={[
+                    "flex items-center rounded-lg overflow-hidden",
+                    "transition-all duration-300 ease-in-out",
+                    isOpen
+                      ? "gap-3 px-4 py-3 w-[204px] h-14"
+                      : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
+                    active
+                      ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
+                      : "text-sidebar-item hover:bg-sidebar-item-sub-active",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <div className="relative w-5 h-5 shrink-0">
+                    <Image
+                      src={item.icon}
+                      alt=""
+                      fill
+                      className="object-contain"
+                      aria-hidden="true"
                     />
-                    <span>가이드 시작하기</span>
-                </Button>
-            </div>
-        </aside>
-    );
+                  </div>
+                  <span
+                    className={[
+                      "text-xl font-semibold whitespace-nowrap",
+                      "transition-all duration-300 ease-in-out",
+                      isOpen
+                        ? "opacity-100 w-auto"
+                        : "opacity-0 w-0 overflow-hidden",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* 하단 유틸리티 네비게이션 */}
+      <nav
+        className={[
+          "absolute bottom-[96px]",
+          "transition-all duration-300",
+          isOpen ? "left-[28px]" : "left-[28px]",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        aria-label="유틸리티 메뉴"
+      >
+        <ul className="flex flex-col gap-[20px]">
+          {/* 구분선 */}
+          <li>
+            <hr
+              className={[
+                "border-t border-sidebar mb-[20px]",
+                "transition-all duration-300",
+                isOpen ? "w-[204px]" : "w-[52px]",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            />
+          </li>
+
+          {utilityNavItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <li key={item.path}>
+                <Link
+                  href={item.path}
+                  className={[
+                    "flex items-center rounded-lg overflow-hidden",
+                    "transition-all duration-300 ease-in-out",
+                    isOpen
+                      ? "gap-3 px-4 py-3 w-[204px] h-14"
+                      : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
+                    active
+                      ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
+                      : "text-sidebar-item hover:bg-sidebar-item-sub-active",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <div className="relative w-5 h-5 shrink-0">
+                    <Image
+                      src={item.icon}
+                      alt=""
+                      fill
+                      className="object-contain"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <span
+                    className={[
+                      "text-xl font-semibold whitespace-nowrap",
+                      "transition-all duration-300 ease-in-out",
+                      isOpen
+                        ? "opacity-100 w-auto"
+                        : "opacity-0 w-0 overflow-hidden",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </aside>
+  );
 }

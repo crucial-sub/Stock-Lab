@@ -1,5 +1,5 @@
+import type { ReactNode } from "react";
 import { Title } from "@/components/common/Title";
-import { ReactNode } from "react";
 
 /**
  * 섹션 헤더 공통 컴포넌트

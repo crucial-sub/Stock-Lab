@@ -215,7 +215,12 @@ export const MOCK_BACKTEST_METRICS: BacktestMetric[] = [
     value: "50,000,000 원",
   },
   { group: "통계", label: "총 손익", value: "34,740,557 원", tone: "positive" },
-  { group: "통계", label: "현재 총 자산", value: "84,740,557 원", tone: "positive" },
+  {
+    group: "통계",
+    label: "현재 총 자산",
+    value: "84,740,557 원",
+    tone: "positive",
+  },
   { group: "매매 결과", label: "총 거래일", value: "242일" },
   { group: "매매 결과", label: "평균 보유일", value: "3.69일" },
   { group: "매매 결과", label: "총 매매 횟수", value: "495회" },

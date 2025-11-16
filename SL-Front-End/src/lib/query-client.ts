@@ -4,7 +4,10 @@
  * - SSR을 위한 설정을 포함합니다
  */
 
-import { QueryClient, defaultShouldDehydrateQuery } from "@tanstack/react-query";
+import {
+  defaultShouldDehydrateQuery,
+  QueryClient,
+} from "@tanstack/react-query";
 
 /**
  * QueryClient 기본 옵션을 생성하는 함수
@@ -41,7 +44,7 @@ export function makeQueryClient() {
  * 서버 사이드 전용 QueryClient
  * - 각 요청마다 새로운 인스턴스를 생성합니다
  */
-let browserQueryClient: QueryClient | undefined = undefined;
+let browserQueryClient: QueryClient | undefined;
 
 /**
  * 브라우저 환경에서 사용할 QueryClient를 반환합니다

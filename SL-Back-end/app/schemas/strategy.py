@@ -22,6 +22,20 @@ class StrategySharingUpdate(BaseModel):
     hide_strategy_details: Optional[bool] = None
 
 
+class StrategyListItem(BaseModel):
+    """백테스트 목록 아이템 (quant/main 페이지용 - 간소화)"""
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
+    session_id: str = Field(..., serialization_alias="sessionId")
+    strategy_id: str = Field(..., serialization_alias="strategyId")
+    strategy_name: str = Field(..., serialization_alias="strategyName")
+    is_active: bool = Field(default=True, serialization_alias="isActive")
+    status: str = Field(..., description="상태 (PENDING/RUNNING/COMPLETED/FAILED)")
+    total_return: Optional[float] = Field(None, serialization_alias="totalReturn", description="누적 수익률 (%)")
+    created_at: datetime = Field(..., serialization_alias="createdAt")
+    updated_at: datetime = Field(..., serialization_alias="updatedAt")
+
+
 class StrategyStatisticsSummary(BaseModel):
     """투자전략 통계 요약 (목록용)"""
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
@@ -47,6 +61,7 @@ class StrategyDetailItem(BaseModel):
     is_public: bool = Field(..., serialization_alias="isPublic")
     is_anonymous: bool = Field(..., serialization_alias="isAnonymous")
     hide_strategy_details: bool = Field(..., serialization_alias="hideStrategyDetails")
+    is_active: bool = Field(default=True, serialization_alias="isActive")
 
     # 백테스트 정보
     initial_capital: Optional[float] = Field(None, serialization_alias="initialCapital")
@@ -58,7 +73,10 @@ class StrategyDetailItem(BaseModel):
     progress: int = Field(default=0, description="진행률 (%)")
     error_message: Optional[str] = Field(None, serialization_alias="errorMessage")
 
-    # 통계 (완료된 경우에만)
+    # 주요 통계 (빠른 접근용)
+    total_return: Optional[float] = Field(None, serialization_alias="totalReturn", description="누적 수익률 (%)")
+
+    # 통계 상세 (완료된 경우에만)
     statistics: Optional[StrategyStatisticsSummary] = None
 
     # 메타데이터
@@ -103,7 +121,7 @@ class StrategyRankingItem(BaseModel):
 
 class MyStrategiesResponse(BaseModel):
     """내 투자전략 목록 응답"""
-    strategies: List[StrategyDetailItem]
+    strategies: List[StrategyListItem]
     total: int
 
 

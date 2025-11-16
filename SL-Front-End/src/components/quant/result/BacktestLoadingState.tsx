@@ -19,8 +19,8 @@ interface BacktestLoadingStateProps {
   currentCapital?: number;
   currentDate?: string;
   currentMdd?: number;
-  startDate?: string;  // YYYY-MM-DD
-  endDate?: string;    // YYYY-MM-DD
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD
   yieldPoints?: Array<{
     date: string;
     buyCount?: number;
@@ -91,8 +91,9 @@ export function BacktestLoadingState({
               <div className="text-sm text-text-body mb-1">누적 수익률</div>
               {currentReturn !== undefined && currentReturn !== null ? (
                 <div
-                  className={`text-2xl font-bold ${currentReturn >= 0 ? "text-red-500" : "text-blue-500"
-                    }`}
+                  className={`text-2xl font-bold ${
+                    currentReturn >= 0 ? "text-red-500" : "text-blue-500"
+                  }`}
                 >
                   {currentReturn > 0 ? "+" : ""}
                   {currentReturn.toFixed(2)}%
@@ -108,8 +109,11 @@ export function BacktestLoadingState({
             <div className="text-center">
               <div className="text-sm text-text-body mb-1">MDD</div>
               {currentMdd !== undefined && currentMdd !== null ? (
-                <div className={`text-2xl font-bold ${currentMdd >= 0 ? "text-accent-error" : "text-blue-500"
-                  }`}>
+                <div
+                  className={`text-2xl font-bold ${
+                    currentMdd >= 0 ? "text-accent-error" : "text-blue-500"
+                  }`}
+                >
                   {currentMdd.toFixed(2)}%
                 </div>
               ) : (
@@ -160,7 +164,9 @@ export function BacktestLoadingState({
         {/* 차트 영역 */}
         {yieldPoints && yieldPoints.length > 0 && (
           <div className="bg-bg-surface rounded-lg shadow-card p-6">
-            <h2 className="text-lg font-bold text-text-strong mb-4">매수/매도 활동</h2>
+            <h2 className="text-lg font-bold text-text-strong mb-4">
+              매수/매도 활동
+            </h2>
             <TradingActivityChart
               yieldPoints={yieldPoints}
               startDate={startDate}

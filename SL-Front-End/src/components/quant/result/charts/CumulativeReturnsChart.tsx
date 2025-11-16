@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import * as am5 from "@amcharts/amcharts5";
-import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
+import * as am5xy from "@amcharts/amcharts5/xy";
+import { useEffect, useRef } from "react";
 import type { BacktestResult } from "@/types/api";
 
 interface CumulativeReturnsChartProps {
   yieldPoints: BacktestResult["yieldPoints"];
 }
 
-export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartProps) {
+export function CumulativeReturnsChart({
+  yieldPoints,
+}: CumulativeReturnsChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
         wheelY: "zoomX",
         pinchZoomX: true,
         layout: root.verticalLayout,
-      })
+      }),
     );
 
     // 데이터 변환
@@ -47,7 +49,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
           minGridDistance: 50,
         }),
         tooltip: am5.Tooltip.new(root, {}),
-      })
+      }),
     );
 
     // Y축 1 (수익률)
@@ -55,7 +57,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {}),
         tooltip: am5.Tooltip.new(root, {}),
-      })
+      }),
     );
 
     // Y축 2 (낙폭)
@@ -67,7 +69,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
         min: 0,
         max: 100,
         strictMinMax: true,
-      })
+      }),
     );
 
     // 수익률 라인 시리즈
@@ -82,7 +84,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
     series.strokes.template.setAll({ strokeWidth: 2 });
     series.data.setAll(chartData);
@@ -101,7 +103,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
     drawdownSeries.fills.template.setAll({ visible: true, fillOpacity: 0.3 });
     drawdownSeries.data.setAll(chartData);
@@ -111,7 +113,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
       "cursor",
       am5xy.XYCursor.new(root, {
         behavior: "zoomX",
-      })
+      }),
     );
 
     // 스크롤바
@@ -119,7 +121,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
       "scrollbarX",
       am5.Scrollbar.new(root, {
         orientation: "horizontal",
-      })
+      }),
     );
 
     // 범례
@@ -127,7 +129,7 @@ export function CumulativeReturnsChart({ yieldPoints }: CumulativeReturnsChartPr
       am5.Legend.new(root, {
         centerX: am5.p50,
         x: am5.p50,
-      })
+      }),
     );
     legend.data.setAll(chart.series.values);
 

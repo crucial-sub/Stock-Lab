@@ -18,11 +18,16 @@ interface TradingActivityChartProps {
     cumulativeReturn?: number;
   }>;
   startDate?: string; // YYYY-MM-DD 형식
-  endDate?: string;   // YYYY-MM-DD 형식
+  endDate?: string; // YYYY-MM-DD 형식
   className?: string;
 }
 
-export function TradingActivityChart({ yieldPoints, startDate, endDate, className = "" }: TradingActivityChartProps) {
+export function TradingActivityChart({
+  yieldPoints,
+  startDate,
+  endDate,
+  className = "",
+}: TradingActivityChartProps) {
   const chartDivRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<am5.Root | null>(null);
 
@@ -44,7 +49,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
         layout: root.verticalLayout,
         paddingLeft: 0,
         paddingRight: 0,
-      })
+      }),
     );
 
     // X축 범위 계산
@@ -67,8 +72,8 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
         // X축 범위 고정
         min: minDate,
         max: maxDate,
-        strictMinMax: startDate && endDate ? true : false,
-      })
+        strictMinMax: !!(startDate && endDate),
+      }),
     );
 
     // Y축 (수익률) - 왼쪽
@@ -79,7 +84,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
         }),
         numberFormat: "#'%'",
         strictMinMax: false,
-      })
+      }),
     );
 
     // Y축 (거래 횟수) - 오른쪽
@@ -91,7 +96,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
         min: -10,
         max: 10,
         strictMinMax: true,
-      })
+      }),
     );
 
     // 매수 시리즈 (빨간색 바, 위로)
@@ -108,7 +113,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
         tooltip: am5.Tooltip.new(root, {
           labelText: "매수: {valueY}회",
         }),
-      })
+      }),
     );
 
     buySeries.columns.template.setAll({
@@ -131,7 +136,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
         tooltip: am5.Tooltip.new(root, {
           labelText: "매도: {valueY}회",
         }),
-      })
+      }),
     );
 
     sellSeries.columns.template.setAll({
@@ -153,7 +158,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
         tooltip: am5.Tooltip.new(root, {
           labelText: "수익률: {valueY}%",
         }),
-      })
+      }),
     );
 
     returnSeries.strokes.template.setAll({
@@ -166,7 +171,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
     });
 
     // 차트 데이터 생성
-    const chartData = yieldPoints.map(point => ({
+    const chartData = yieldPoints.map((point) => ({
       date: new Date(point.date).getTime(),
       buy: point.buyCount || 0,
       sell: -(point.sellCount || 0), // 매도는 음수 (아래로 표시)
@@ -182,7 +187,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
       am5.Legend.new(root, {
         centerX: am5.percent(50),
         x: am5.percent(50),
-      })
+      }),
     );
 
     legend.data.setAll(chart.series.values);
@@ -192,7 +197,7 @@ export function TradingActivityChart({ yieldPoints, startDate, endDate, classNam
       "cursor",
       am5xy.XYCursor.new(root, {
         behavior: "zoomX",
-      })
+      }),
     );
 
     // 클린업

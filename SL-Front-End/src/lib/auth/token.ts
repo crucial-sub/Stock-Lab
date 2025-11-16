@@ -2,17 +2,21 @@ const hasDocument = typeof document !== "undefined";
 const hasWindow = typeof window !== "undefined";
 
 export const AUTH_TOKEN_COOKIE_KEY = "access_token";
-const DEFAULT_MAX_AGE_SECONDS = 60 * 60; // 1 day
+const DEFAULT_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7일
 
 /**
  * access token을 쿠키에 저장합니다.
  */
-export function setAuthTokenCookie(token: string, maxAge = DEFAULT_MAX_AGE_SECONDS): void {
+export function setAuthTokenCookie(
+  token: string,
+  maxAge = DEFAULT_MAX_AGE_SECONDS,
+): void {
   if (!hasDocument) {
     return;
   }
 
-  const secureFlag = hasWindow && window.location.protocol === "https:" ? "; Secure" : "";
+  const secureFlag =
+    hasWindow && window.location.protocol === "https:" ? "; Secure" : "";
   const serialized = `${AUTH_TOKEN_COOKIE_KEY}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secureFlag}`;
 
   document.cookie = serialized;

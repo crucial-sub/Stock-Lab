@@ -22,7 +22,12 @@ export interface MarketQuoteListResponse {
   hasNext: boolean;
 }
 
-export type SortBy = "volume" | "change_rate" | "trading_value" | "market_cap" | "name";
+export type SortBy =
+  | "volume"
+  | "change_rate"
+  | "trading_value"
+  | "market_cap"
+  | "name";
 export type SortOrder = "asc" | "desc";
 
 // 관심 종목 관련 타입
@@ -72,15 +77,18 @@ export const marketQuoteApi = {
     pageSize?: number;
     userId?: string;
   }): Promise<MarketQuoteListResponse> => {
-    const { data } = await axiosInstance.get<MarketQuoteListResponse>("/market/quotes", {
-      params: {
-        sort_by: params.sortBy || "market_cap",
-        sort_order: params.sortOrder || "desc",
-        page: params.page || 1,
-        page_size: params.pageSize || 50,
-        user_id: params.userId,
+    const { data } = await axiosInstance.get<MarketQuoteListResponse>(
+      "/market/quotes",
+      {
+        params: {
+          sort_by: params.sortBy || "market_cap",
+          sort_order: params.sortOrder || "desc",
+          page: params.page || 1,
+          page_size: params.pageSize || 50,
+          user_id: params.userId,
+        },
       },
-    });
+    );
     return data;
   },
 
@@ -88,7 +96,8 @@ export const marketQuoteApi = {
    * 관심 종목 목록 조회
    */
   getFavorites: async (): Promise<FavoriteStockListResponse> => {
-    const { data } = await axiosInstance.get<FavoriteStockListResponse>("/market/favorites");
+    const { data } =
+      await axiosInstance.get<FavoriteStockListResponse>("/market/favorites");
     return data;
   },
 
@@ -110,7 +119,9 @@ export const marketQuoteApi = {
    * 최근 본 종목 목록 조회
    */
   getRecentViewed: async (): Promise<RecentStockListResponse> => {
-    const { data } = await axiosInstance.get<RecentStockListResponse>("/market/recent-viewed");
+    const { data } = await axiosInstance.get<RecentStockListResponse>(
+      "/market/recent-viewed",
+    );
     return data;
   },
 

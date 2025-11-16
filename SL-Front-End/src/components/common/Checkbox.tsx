@@ -64,8 +64,9 @@ export function Checkbox({
       type="button"
       onClick={handleClick}
       disabled={disabled}
-      className={`flex items-center gap-[8px] ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer group"
-        } ${className}`}
+      className={`flex items-center gap-[8px] ${
+        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer group"
+      } ${className}`}
     >
       {/* 체크박스 아이콘 */}
       <Image
@@ -77,13 +78,7 @@ export function Checkbox({
       />
 
       {/* 라벨 텍스트 */}
-      {label && (
-        <span
-          className={`whitespace-nowrap`}
-        >
-          {label}
-        </span>
-      )}
+      {label && <span className={`whitespace-nowrap`}>{label}</span>}
     </button>
   );
 }

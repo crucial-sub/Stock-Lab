@@ -6,8 +6,12 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
 import { NewsDetailModal } from "@/components/news/NewsDetailModal";
-import { useAvailableThemesQuery, useDebounce, useNewsListQuery } from "@/hooks";
-import type { NewsListParams, NewsItem } from "@/types/news";
+import {
+  useAvailableThemesQuery,
+  useDebounce,
+  useNewsListQuery,
+} from "@/hooks";
+import type { NewsItem, NewsListParams } from "@/types/news";
 
 const NewsPage: NextPage = () => {
   const [selectedThemes, setSelectedThemes] = useState<string[]>(["전체"]);
@@ -63,63 +67,86 @@ const NewsPage: NextPage = () => {
   };
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-[1.8rem] font-semibold text-text-strong">테마별 뉴스 요약</h1>
-      <div className="flex flex-col gap-4 md:grid md:grid-cols-[2fr_auto_auto]">
-        <input
-          type="search"
-          placeholder="뉴스 검색"
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          className="w-full rounded-[8px] px-[1rem] py-[0.75rem] text-text-body font-semibold placeholder:text-tag-neutral shadow-card-muted focus:border focus:border-brand-primary"
-        />
-        <button
-          type="button"
-          className="flex items-center justify-center rounded-[8px] bg-brand-primary px-[0.75rem] py-[0.75rem] text-white shadow-card-muted"
-          aria-label="뉴스 검색"
-        >
-          <Icon src="/icons/search.svg" alt="검색" size={28} color="#FFFFFF" />
-          검색
-        </button>
-        <select
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          className="rounded-[8px] shadow-card-muted bg-white px-[1rem] pr-[2.5rem] py-[0.5rem] text-text-body focus:border-brand-primary focus:outline-none"
-        >
-          <option value="all">전체</option>
-          <option value="latest">최신순</option>
-          <option value="popular">인기순</option>
-        </select>
-      </div>
+    <section className="flex flex-col gap-[1.875rem] px-[18.75rem] py-[3.75rem]">
+      <h1 className="text-[1.75rem] font-semibold text-black ml-[1.875rem]">
+        테마별 요약 뉴스
+      </h1>
 
-      <div className="flex flex-wrap gap-3">
-        {displayThemes.map((theme: string) => {
-          const isActive = selectedThemes.includes(theme);
-          return (
+      <div className="flex flex-col gap-4">
+        {/* 검색 및 정렬 영역 */}
+        <div className="flex items-center gap-3 justify-between">
+          {/* 검색 입력과 버튼 */}
+          <div className="flex items-center gap-3 flex-1">
+            <div className="relative flex-1 max-w-[500px]">
+              <input
+                type="search"
+                placeholder="뉴스 검색"
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                className="w-full h-9 rounded-lg bg-surface border-[0.5px] border-surface py-[0.5rem] px-[0.813rem] text-[0.75rem] text-gray-600 placeholder:text-gray-600 focus:border-brand-purple focus:outline-none"
+              />
+            </div>
             <button
-              key={theme}
               type="button"
-              onClick={() => handleToggleTheme(theme)}
-              className={`rounded-[4px] border px-[1.25rem] py-[0.5rem] text-[0.9rem] font-normal transition ${isActive
-                ? "border-brand-primary bg-[#FFF6F6] text-brand-primary font-semibold"
-                : "border-border-default bg-white text-text-body"
-                }`}
+              className="flex size-9 items-center justify-center rounded-lg bg-brand-purple hover:bg-brand-purple/90 transition"
+              aria-label="검색"
             >
-              {theme}
+              <Icon
+                src="/icons/search.svg"
+                alt="검색"
+                size={20}
+                color="white"
+              />
             </button>
-          );
-        })}
+          </div>
+
+          {/* 정렬 드롭다운 */}
+          <select
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            className="h-9 rounded-lg bg-white border-[0.5px] border-surface px-3 text-[0.75rem] text-gray-600 focus:border-brand-purple focus:outline-none"
+          >
+            <option value="all">날짜 순 정렬</option>
+            <option value="latest">최신순</option>
+            <option value="popular">인기순</option>
+          </select>
+        </div>
+
+        {/* 필터 버튼 영역 */}
+        <div className="flex flex-wrap gap-1">
+          {displayThemes.map((theme: string) => {
+            const isActive = selectedThemes.includes(theme);
+            return (
+              <button
+                key={theme}
+                type="button"
+                onClick={() => handleToggleTheme(theme)}
+                className={`rounded-full px-3 py-2 text-[1rem] tracking-[-0.02em] transition ${
+                  isActive
+                    ? "bg-brand-purple text-white font-semibold"
+                    : "text-black font-normal"
+                }`}
+              >
+                {theme}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {isLoading && (
-        <p className="text-center text-text-muted">뉴스를 불러오는 중입니다...</p>
+        <p className="text-center text-text-body">
+          뉴스를 불러오는 중입니다...
+        </p>
       )}
       {isError && (
-        <p className="text-center text-accent-primary">뉴스 데이터를 불러오지 못했습니다.</p>
+        <p className="text-center text-accent-primary">
+          뉴스 데이터를 불러오지 못했습니다.
+        </p>
       )}
 
       {!isLoading && !isError && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {newsList.map((item, index: number) => (
             <NewsCard
               key={`${item.id}-${index}`}
@@ -129,7 +156,10 @@ const NewsPage: NextPage = () => {
               tickerLabel={item.tickerLabel || item.stockCode || "종목"}
               themeName={item.themeName}
               pressName={item.pressName}
-              sentiment={(item.sentiment as "positive" | "negative" | "neutral") || "neutral"}
+              sentiment={
+                (item.sentiment as "positive" | "negative" | "neutral") ||
+                "neutral"
+              }
               publishedAt={item.publishedAt || ""}
               source={item.source || ""}
               link={item.link || ""}
@@ -137,7 +167,7 @@ const NewsPage: NextPage = () => {
             />
           ))}
           {!newsList.length && (
-            <p className="col-span-full text-center text-text-muted">
+            <p className="col-span-full text-center text-text-body">
               조건에 해당하는 뉴스가 없습니다.
             </p>
           )}
@@ -145,7 +175,10 @@ const NewsPage: NextPage = () => {
       )}
 
       {selectedNewsId && selectedNews && (
-        <NewsDetailModal news={selectedNews} onClose={() => setSelectedNewsId(null)} />
+        <NewsDetailModal
+          news={selectedNews}
+          onClose={() => setSelectedNewsId(null)}
+        />
       )}
     </section>
   );

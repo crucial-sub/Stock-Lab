@@ -19,8 +19,10 @@ help:
 	@echo "Service Management:"
 	@echo "  make restart-backend   - Restart backend service"
 	@echo "  make restart-frontend  - Restart frontend service"
+	@echo "  make restart-chatbot   - Restart chatbot service"
 	@echo "  make logs-backend      - Show backend logs"
 	@echo "  make logs-frontend     - Show frontend logs"
+	@echo "  make logs-chatbot      - Show chatbot logs"
 	@echo ""
 	@echo "Database Commands:"
 	@echo "  make db-shell     - Access PostgreSQL shell"
@@ -32,6 +34,7 @@ help:
 	@echo "  make ps           - Show running containers"
 	@echo "  make shell-backend   - Access backend container shell"
 	@echo "  make shell-frontend  - Access frontend container shell"
+	@echo "  make shell-chatbot   - Access chatbot container shell"
 
 # Development environment
 dev:
@@ -66,11 +69,17 @@ restart-backend:
 restart-frontend:
 	docker-compose -f docker-compose.dev.yml restart frontend
 
+restart-chatbot:
+	docker-compose -f docker-compose.dev.yml restart chatbot
+
 logs-backend:
 	docker-compose -f docker-compose.dev.yml logs -f backend
 
 logs-frontend:
 	docker-compose -f docker-compose.dev.yml logs -f frontend
+
+logs-chatbot:
+	docker-compose -f docker-compose.dev.yml logs -f chatbot
 
 # Database commands
 db-shell:
@@ -94,6 +103,9 @@ shell-backend:
 shell-frontend:
 	docker-compose -f docker-compose.dev.yml exec frontend sh
 
+shell-chatbot:
+	docker-compose -f docker-compose.dev.yml exec chatbot bash
+
 # Utility commands
 ps:
 	docker-compose -f docker-compose.dev.yml ps
@@ -113,3 +125,7 @@ rebuild-backend:
 rebuild-frontend:
 	docker-compose -f docker-compose.dev.yml build --no-cache frontend
 	docker-compose -f docker-compose.dev.yml up -d frontend
+
+rebuild-chatbot:
+	docker-compose -f docker-compose.dev.yml build --no-cache chatbot
+	docker-compose -f docker-compose.dev.yml up -d chatbot

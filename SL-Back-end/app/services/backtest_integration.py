@@ -399,12 +399,12 @@ def integrate_optimizations(backtest_engine):
         # 벡터화 버전으로 교체
         backtest_engine.condition_evaluator.evaluate_buy_conditions = _evaluate_buy_conditions_vectorized
 
-    # 함수 교체
-    backtest_engine._load_price_data = _load_price_data_optimized
-    backtest_engine._load_financial_data = _load_financial_data_optimized
+    # 함수 교체 (데이터 로드는 원본 사용 - SQLAlchemy 동시성 에러 방지)
+    # backtest_engine._load_price_data = _load_price_data_optimized
+    # backtest_engine._load_financial_data = _load_financial_data_optimized
     backtest_engine._calculate_all_factors_optimized = _calculate_all_factors_super_optimized
 
-    logger.info("✅ 백테스트 엔진 최적화 통합 완료! (조건 평가 벡터화 포함)")
+    logger.info("✅ 백테스트 엔진 최적화 통합 완료! (네이티브 데이터 로드 + 조건 평가 벡터화)")
 
 
 def restore_original_functions(backtest_engine):

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   RankingCard,
   PortfolioShareCard,
@@ -13,6 +14,8 @@ import {
  * - 자유게시판
  */
 export default function CommunityPageClient() {
+  const router = useRouter();
+
   // TODO: API 연동으로 실제 데이터 가져오기
   const rankingData = [
     {
@@ -61,6 +64,7 @@ export default function CommunityPageClient() {
 
   const postsData = [
     {
+      id: 1,
       tag: "태그",
       title: "게시물 이름은 이렇게 들어갑니다.",
       author: "FMJS",
@@ -72,6 +76,7 @@ export default function CommunityPageClient() {
       comments: 999,
     },
     {
+      id: 2,
       tag: "태그",
       title: "게시물 이름은 이렇게 들어갑니다.",
       author: "FMJS",
@@ -83,6 +88,7 @@ export default function CommunityPageClient() {
       comments: 999,
     },
     {
+      id: 3,
       tag: "태그",
       title: "게시물 이름은 이렇게 들어갑니다.",
       author: "FMJS",
@@ -163,9 +169,9 @@ export default function CommunityPageClient() {
         </div>
 
         <div className="flex flex-col gap-5">
-          {postsData.map((item, index) => (
+          {postsData.map((item) => (
             <CommunityPostCard
-              key={index}
+              key={item.id}
               tag={item.tag}
               title={item.title}
               author={item.author}
@@ -174,7 +180,7 @@ export default function CommunityPageClient() {
               views={item.views}
               likes={item.likes}
               comments={item.comments}
-              onClick={() => console.log(`게시물 클릭: ${item.title}`)}
+              onClick={() => router.push(`/community/${item.id}`)}
             />
           ))}
         </div>

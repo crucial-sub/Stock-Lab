@@ -126,7 +126,17 @@ axiosServerInstance.interceptors.response.use(
   },
   (error) => {
     if (error.response) {
-      const { status, data } = error.response;
+      const { status, data, config } = error.response;
+      const requestUrl = config?.url || '';
+
+      // /strategies/my 요청의 401 에러는 로그 출력 안 함 (페이지 레벨에서 리다이렉트 처리)
+      const isStrategiesRequest = requestUrl.includes('/strategies/my');
+      const isAuthError = status === 401;
+
+      if (isStrategiesRequest && isAuthError) {
+        // 로그인 리다이렉트로 처리되므로 무시
+        return Promise.reject(error);
+      }
 
       if (status === 401) {
         console.error("인증 실패:", data);

@@ -18,14 +18,14 @@ import { useAddRecentViewedMutation } from "@/hooks/useRecentViewedMutation";
 
 type TabType = "sort" | "favorite" | "recent";
 
+// Figma 디자인 순서대로 탭 정렬: 최근 본 주식 → 정렬 옵션들 → 즐겨찾기한 종목
 const marketTabs: { label: string; sortBy?: SortBy; type: TabType }[] = [
-  { label: "관심 종목", type: "favorite" },
-  { label: "최근 본 종목", type: "recent" },
-  { label: "시가총액 순", sortBy: "market_cap", type: "sort" },
+  { label: "최근 본 주식", type: "recent" },
   { label: "체결량 순", sortBy: "volume", type: "sort" },
   { label: "등락률 순", sortBy: "change_rate", type: "sort" },
   { label: "거래 대금 순", sortBy: "trading_value", type: "sort" },
-
+  { label: "시가총액 순", sortBy: "market_cap", type: "sort" },
+  { label: "즐겨찾기한 종목", type: "favorite" },
 ];
 
 const columnTemplate = "grid grid-cols-[2.6fr,1fr,1fr,1fr,1fr,1fr] gap-4";
@@ -44,8 +44,12 @@ type MarketRow = {
 };
 
 export function MarketPriceContent() {
-  const [selectedTab, setSelectedTab] = useState(marketTabs[0]);
+  // 기본 탭을 시가총액 순으로 설정 (로그인 불필요)
+  const [selectedTab, setSelectedTab] = useState(
+    marketTabs.find((tab) => tab.sortBy === "market_cap") || marketTabs[0]
+  );
   const [selectedRow, setSelectedRow] = useState<MarketRow | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const todayLabel = new Date().toLocaleDateString("ko-KR", {
     year: "numeric",
@@ -75,31 +79,47 @@ export function MarketPriceContent() {
         ? recentViewedQuery
         : marketQuotesQuery;
 
-  // 데이터 포맷팅
+  // 데이터 포맷팅 - 중복 제거 및 최적화
   const rows = useMemo<MarketRow[]>(() => {
     if (!currentQuery.data) return [];
 
-    if (selectedTab.type === "favorite") {
-      const data = favoritesQuery.data;
-      if (!data) return [];
-
-      return data.items.map((item, index) => ({
-        rank: index + 1,
-        name: item.stockName,
-        code: item.stockCode,
-        price: item.currentPrice
-          ? `${item.currentPrice.toLocaleString()}원`
+    // 공통 포맷팅 함수
+    const formatStockItem = (
+      item: {
+        stockName?: string;
+        name?: string;
+        stockCode?: string;
+        code?: string;
+        currentPrice?: number | null;
+        price?: number;
+        changeRate?: number | null;
+        volume?: number | null;
+        tradingValue?: number | null;
+        marketCap?: number | null;
+        rank?: number;
+        trend?: string;
+        isFavorite?: boolean;
+      },
+      index: number,
+      isFav: boolean = false
+    ): MarketRow => {
+      const changeRateValue = item.changeRate ?? 0;
+      return {
+        rank: item.rank ?? index + 1,
+        name: item.stockName ?? item.name ?? "",
+        code: item.stockCode ?? item.code ?? "",
+        price: (item.currentPrice ?? item.price)
+          ? `${(item.currentPrice ?? item.price)!.toLocaleString()}원`
           : "-",
-        change: item.changeRate
-          ? `${item.changeRate > 0 ? "+" : ""}${item.changeRate.toFixed(2)}%`
+        change: changeRateValue !== 0
+          ? `${changeRateValue > 0 ? "+" : ""}${changeRateValue.toFixed(2)}%`
           : "-",
-        trend: item.changeRate
-          ? item.changeRate > 0
+        trend: (item.trend ??
+          (changeRateValue > 0
             ? "up"
-            : item.changeRate < 0
+            : changeRateValue < 0
               ? "down"
-              : "flat"
-          : "flat",
+              : "flat")) as "up" | "down" | "flat",
         volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
         tradingValue: item.tradingValue
           ? `${Math.floor(item.tradingValue / 100000000)}억원`
@@ -107,60 +127,31 @@ export function MarketPriceContent() {
         marketCap: item.marketCap
           ? `${Math.floor(item.marketCap / 100000000)}억원`
           : "-",
-        isFavorite: true,
-      }));
+        isFavorite: item.isFavorite ?? isFav,
+      };
+    };
+
+    // 탭 타입별 데이터 처리
+    if (selectedTab.type === "favorite" && favoritesQuery.data) {
+      return favoritesQuery.data.items.map((item, index) =>
+        formatStockItem(item, index, true)
+      );
     }
 
-    if (selectedTab.type === "recent") {
-      const data = recentViewedQuery.data;
-      if (!data) return [];
-
-      return data.items.map((item, index) => ({
-        rank: index + 1,
-        name: item.stockName,
-        code: item.stockCode,
-        price: item.currentPrice
-          ? `${item.currentPrice.toLocaleString()}원`
-          : "-",
-        change: item.changeRate
-          ? `${item.changeRate > 0 ? "+" : ""}${item.changeRate.toFixed(2)}%`
-          : "-",
-        trend: item.changeRate
-          ? item.changeRate > 0
-            ? "up"
-            : item.changeRate < 0
-              ? "down"
-              : "flat"
-          : "flat",
-        volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
-        tradingValue: item.tradingValue
-          ? `${Math.floor(item.tradingValue / 100000000)}억원`
-          : "-",
-        marketCap: item.marketCap
-          ? `${Math.floor(item.marketCap / 100000000)}억원`
-          : "-",
-        isFavorite: false,
-      }));
+    if (selectedTab.type === "recent" && recentViewedQuery.data) {
+      return recentViewedQuery.data.items.map((item, index) =>
+        formatStockItem(item, index, false)
+      );
     }
 
     // 일반 시세 조회
-    const data = marketQuotesQuery.data;
-    if (!data) return [];
+    if (marketQuotesQuery.data) {
+      return marketQuotesQuery.data.items.map((item, index) =>
+        formatStockItem(item, index)
+      );
+    }
 
-    return data.items.map((item) => ({
-      rank: item.rank,
-      name: item.name,
-      code: item.code,
-      price: `${item.price.toLocaleString()}원`,
-      change: `${item.changeRate > 0 ? "+" : ""}${item.changeRate.toFixed(2)}%`,
-      trend: item.trend as "up" | "down" | "flat",
-      volume: `${item.volume.toLocaleString()}주`,
-      tradingValue: `${Math.floor(item.tradingValue / 100000000)}억원`,
-      marketCap: item.marketCap
-        ? `${Math.floor(item.marketCap / 100000000)}억원`
-        : "-",
-      isFavorite: item.isFavorite,
-    }));
+    return [];
   }, [
     currentQuery.data,
     selectedTab.type,
@@ -168,6 +159,17 @@ export function MarketPriceContent() {
     recentViewedQuery.data,
     marketQuotesQuery.data,
   ]);
+
+  // 검색 필터링 적용
+  const filteredRows = useMemo(() => {
+    if (!searchQuery.trim()) return rows;
+
+    const query = searchQuery.toLowerCase().trim();
+    return rows.filter((row) =>
+      row.name.toLowerCase().includes(query) ||
+      row.code.toLowerCase().includes(query)
+    );
+  }, [rows, searchQuery]);
 
   const handleToggleFavorite = (code: string, isFavorite: boolean) => {
     if (isFavorite) {
@@ -230,17 +232,23 @@ export function MarketPriceContent() {
                 <input
                   type="search"
                   placeholder="종목 이름으로 검색하기"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-[8px] border border-border-default py-[0.7rem] px-[1rem] text-[0.75rem] text-text-body placeholder:text-tag-neutral focus:border-brand-primary focus:outline-none"
                 />
               </div>
-              <div className="flex p-[0.7rem] items-center justify-center rounded-[8px] bg-[#F0F0F0]">
+              <button
+                type="button"
+                className="flex p-[0.7rem] items-center justify-center rounded-[8px] bg-brand-primary hover:bg-brand-primary/90 transition"
+                aria-label="검색"
+              >
                 <Icon
                   src="/icons/search.svg"
                   alt="검색"
                   size={20}
-                  color="var(--color-text-strong)"
+                  color="white"
                 />
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -277,12 +285,16 @@ export function MarketPriceContent() {
                   데이터를 불러오는데 실패했습니다.
                 </p>
               </div>
-            ) : rows.length === 0 ? (
+            ) : filteredRows.length === 0 ? (
               <div className="flex items-center justify-center py-20">
-                <p className="text-text-body">데이터가 없습니다</p>
+                <p className="text-text-body">
+                  {searchQuery.trim()
+                    ? "검색 결과가 없습니다"
+                    : "데이터가 없습니다"}
+                </p>
               </div>
             ) : (
-              rows.map((row) => (
+              filteredRows.map((row) => (
                 <div
                   key={row.rank}
                   className={`${columnTemplate} py-[1rem] items-center rounded-[8px] text-text-body transition hover:bg-white hover:shadow-card cursor-pointer`}

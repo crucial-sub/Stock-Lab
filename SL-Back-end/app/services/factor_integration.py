@@ -116,6 +116,14 @@ class FactorIntegration:
         if isinstance(buy_conditions, dict) and 'expression' in buy_conditions:
             # 🚀 벡터화 조건 평가기 사용 (500-1000배 빠름!)
             if self.use_vectorized:
+                # 🔍 디버그: 샘플 데이터 확인
+                if stock_codes and not factor_data.empty:
+                    date_mask = (pd.to_datetime(factor_data['date']) == trading_date)
+                    sample_data = factor_data[date_mask].head(3)
+                    if not sample_data.empty:
+                        for idx, row in sample_data.iterrows():
+                            logger.info(f"📊 샘플 종목 {row.get('stock_code')}: ROE={row.get('ROE', 'N/A')}, PBR={row.get('PBR', 'N/A')}")
+
                 selected_stocks = self.condition_evaluator.evaluate_buy_conditions_vectorized(
                     factor_data=factor_data,
                     stock_codes=stock_codes,

@@ -36,43 +36,34 @@ export function NewsCard({
 
   return (
     <article
-      className={`rounded-[8px] border border-border-subtle bg-white p-[1.25rem] shadow-card transition ${
-        onClick ? "cursor-pointer hover:shadow-card-muted" : ""
+      className={`rounded-lg border-[0.5px] border-[rgba(24,34,52,0.2)] bg-[rgba(24,34,52,0.05)] p-5 transition ${
+        onClick ? "cursor-pointer hover:shadow-[0px_0px_9px_0px_rgba(0,0,0,0.1)]" : ""
       }`}
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      <h2 className="text-[1.5rem] font-semibold text-text-strong">{title}</h2>
-      <div className="mt-[0.5rem] flex flex-wrap items-center gap-2 text-[0.8rem]">
-        <span className="rounded-[4px] bg-[#E1E1E1] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal text-text-strong">{tickerLabel}</span>
-        <span className={`rounded-[4px] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal ${tone.bg} ${tone.text}`}>
+      <h2 className="text-[1.5rem] font-semibold text-black">{title}</h2>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="rounded-[4px] bg-[#E1E1E1] px-2 py-1 text-[0.8rem] font-normal text-black">{tickerLabel}</span>
+        <span className={`rounded-[4px] px-2 py-1 text-[0.8rem] font-normal ${tone.bg} ${tone.text}`}>
           {sentiment === "positive" ? "긍정" : sentiment === "neutral" ? "중립" : "부정"}
         </span>
-        {/* {themeName && (
-          <span className="rounded-[4px] bg-[#F3D8FF] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal text-[#8A3FFC]">
-            {themeName}
-          </span>
-        )}
-        {pressName && (
-          <span className="rounded-[4px] bg-[#D7E9FF] px-[0.5rem] py-[0.25rem] text-[0.8rem] font-normal text-[#007DFC]">
-            {pressName}
-          </span>
-        )} */}
-        <span className="text-[0.8rem] font-normal text-text-muted">{publishedAt}</span>
+        <span className="text-[0.8rem] font-normal text-gray-600">{publishedAt}</span>
         {link && (
           <a
-            className="flex max-w-[200px] items-center gap-1 text-[0.8rem] font-normal text-text-muted underline-offset-4 hover:text-text-body"
+            className="flex max-w-[200px] items-center gap-1 text-[0.8rem] font-normal text-gray-600 hover:text-black"
             href={link}
             target="_blank"
             rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
           >
             <span className="truncate">{link}</span>
           </a>
         )}
       </div>
       <p
-        className="mt-[0.5rem] text-[1rem] text-text-body"
+        className="mt-2 text-[1.125rem] font-light text-black leading-relaxed"
         style={{
           display: "-webkit-box",
           WebkitLineClamp: 3,

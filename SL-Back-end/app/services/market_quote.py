@@ -59,26 +59,48 @@ class MarketQuoteService:
                 "has_next": False
             }
 
+        # 1-1. 전일 거래일 찾기
+        prev_trade_date_query = (
+            select(StockPrice.trade_date)
+            .where(StockPrice.trade_date < latest_trade_date)
+            .order_by(desc(StockPrice.trade_date))
+            .limit(1)
+        )
+        prev_date_result = await self.db.execute(prev_trade_date_query)
+        prev_trade_date = prev_date_result.scalar_one_or_none()
+
         # 2. 정렬 컬럼 매핑
         sort_column = self._get_sort_column(sort_by)
         order_func = desc if sort_order == SortOrder.DESC else asc
 
-        # 3. 시세 데이터 조회 (JOIN으로 한번에 가져오기)
+        # 3. 시세 데이터 조회 (전일 데이터와 JOIN하여 등락률 계산)
         offset = (page - 1) * page_size
+
+        # 전일 주가 서브쿼리 (별칭: prev)
+        PrevStockPrice = StockPrice.__table__.alias("prev_stock_price")
 
         query = (
             select(
                 Company.stock_code,
                 Company.stock_name,
+                Company.company_id,
                 StockPrice.close_price,
                 StockPrice.change_vs_1d,
                 StockPrice.fluctuation_rate,
                 StockPrice.volume,
                 StockPrice.trading_value,
                 StockPrice.market_cap,
-                StockPrice.trade_date
+                StockPrice.trade_date,
+                PrevStockPrice.c.close_price.label("prev_close_price")
             )
             .join(StockPrice, Company.company_id == StockPrice.company_id)
+            .outerjoin(
+                PrevStockPrice,
+                and_(
+                    PrevStockPrice.c.company_id == Company.company_id,
+                    PrevStockPrice.c.trade_date == prev_trade_date
+                )
+            )
             .where(StockPrice.trade_date == latest_trade_date)
             .order_by(order_func(sort_column))
             .offset(offset)
@@ -114,22 +136,34 @@ class MarketQuoteService:
 
         # 7. 응답 데이터 생성 (rank 추가)
         offset = (page - 1) * page_size
-        items = [
-            {
+        items = []
+        for idx, row in enumerate(rows):
+            # fluctuation_rate 계산: DB값 우선, 없으면 전일 종가로 계산
+            fluctuation_rate = row.fluctuation_rate
+            change_amount = row.change_vs_1d
+
+            if fluctuation_rate is None and row.prev_close_price and row.prev_close_price != 0:
+                # 등락률 = ((현재가 - 전일종가) / 전일종가) * 100
+                fluctuation_rate = ((row.close_price - row.prev_close_price) / row.prev_close_price) * 100
+                # 등락 금액도 계산
+                if change_amount is None:
+                    change_amount = row.close_price - row.prev_close_price
+            elif fluctuation_rate is None:
+                fluctuation_rate = 0.0
+
+            items.append({
                 "rank": offset + idx + 1,  # 페이지 기준 순위 계산
                 "name": row.stock_name,
                 "code": row.stock_code,
                 "price": row.close_price or 0,
-                "change_amount": row.change_vs_1d or 0,
-                "change_rate": row.fluctuation_rate or 0.0,
-                "trend": self._get_trend(row.fluctuation_rate),
+                "change_amount": change_amount or 0,
+                "change_rate": fluctuation_rate,
+                "trend": self._get_trend(fluctuation_rate),
                 "volume": row.volume or 0,
                 "trading_value": row.trading_value or 0,
                 "market_cap": row.market_cap,
                 "is_favorite": row.stock_code in favorite_stock_codes
-            }
-            for idx, row in enumerate(rows)
-        ]
+            })
 
         return {
             "items": items,

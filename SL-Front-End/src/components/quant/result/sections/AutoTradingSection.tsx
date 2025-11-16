@@ -135,10 +135,10 @@ export function AutoTradingSection({
 
           {/* 활성화된 전략 정보 */}
           {activeStrategy && (
-            <div className="grid grid-cols-3 gap-6 bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-4">
+            <div className="grid grid-cols-3 gap-6 bg-blue-50 dark:bg-blue-950/50 p-4 rounded-lg mb-4 border border-blue-200 dark:border-blue-700">
               <div>
-                <p className="text-xs text-text-muted mb-1">초기 자본금</p>
-                <p className="text-base font-semibold text-text-strong">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">초기 자본금</p>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">
                   {Math.round(activeStrategy.initial_capital).toLocaleString(
                     "ko-KR",
                   )}
@@ -146,8 +146,8 @@ export function AutoTradingSection({
                 </p>
               </div>
               <div>
-                <p className="text-xs text-text-muted mb-1">현재 자본금</p>
-                <p className="text-base font-semibold text-text-strong">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">현재 자본금</p>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">
                   {Math.round(activeStrategy.current_capital).toLocaleString(
                     "ko-KR",
                   )}
@@ -155,8 +155,8 @@ export function AutoTradingSection({
                 </p>
               </div>
               <div>
-                <p className="text-xs text-text-muted mb-1">현금 잔고</p>
-                <p className="text-base font-semibold text-text-strong">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">현금 잔고</p>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">
                   {Math.round(activeStrategy.cash_balance).toLocaleString(
                     "ko-KR",
                   )}
@@ -164,20 +164,20 @@ export function AutoTradingSection({
                 </p>
               </div>
               <div>
-                <p className="text-xs text-text-muted mb-1">종목당 투자 비율</p>
-                <p className="text-base font-semibold text-text-strong">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">종목당 투자 비율</p>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">
                   {activeStrategy.per_stock_ratio}%
                 </p>
               </div>
               <div>
-                <p className="text-xs text-text-muted mb-1">최대 보유 종목</p>
-                <p className="text-base font-semibold text-text-strong">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">최대 보유 종목</p>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">
                   {activeStrategy.max_positions}개
                 </p>
               </div>
               <div>
-                <p className="text-xs text-text-muted mb-1">리밸런싱 주기</p>
-                <p className="text-base font-semibold text-text-strong">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">리밸런싱 주기</p>
+                <p className="text-base font-semibold text-gray-900 dark:text-white">
                   {activeStrategy.rebalance_frequency === "DAILY"
                     ? "매일"
                     : activeStrategy.rebalance_frequency}

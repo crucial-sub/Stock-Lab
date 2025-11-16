@@ -1,15 +1,20 @@
 "use client";
 
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import type { Factor, SubFactor } from "@/types/api";
-import { useState } from "react";
-import { createPortal } from "react-dom";
 
 interface FactorSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (factorId: string, factorName: string, subFactorId: string, argument?: string) => void;
+  onSelect: (
+    factorId: string,
+    factorName: string,
+    subFactorId: string,
+    argument?: string,
+  ) => void;
   initialValues?: {
     factorId: string;
     subFactorId: string;
@@ -31,26 +36,34 @@ export function FactorSelectionModal({
 }: FactorSelectionModalProps) {
   // 서버 데이터 가져오기
   const { data: factors = [], isLoading: isLoadingFactors } = useFactorsQuery();
-  const { data: subFactors = [], isLoading: isLoadingSubFactors } = useSubFactorsQuery();
+  const { data: subFactors = [], isLoading: isLoadingSubFactors } =
+    useSubFactorsQuery();
 
-  const [currentTab, setCurrentTab] = useState<"factor" | "subfactor">("factor");
+  const [currentTab, setCurrentTab] = useState<"factor" | "subfactor">(
+    "factor",
+  );
   const [selectedFactor, setSelectedFactor] = useState<Factor | null>(null);
-  const [selectedSubFactor, setSelectedSubFactor] = useState<SubFactor | null>(null);
+  const [selectedSubFactor, setSelectedSubFactor] = useState<SubFactor | null>(
+    null,
+  );
   const [selectedArgument, setSelectedArgument] = useState<string>("");
 
   if (!isOpen) return null;
 
   // SSR 환경에서 document가 없을 수 있음
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
 
   // 카테고리별로 팩터 그룹화
-  const groupedFactors = factors.reduce((acc, factor) => {
-    if (!acc[factor.category]) {
-      acc[factor.category] = [];
-    }
-    acc[factor.category].push(factor);
-    return acc;
-  }, {} as Record<string, Factor[]>);
+  const groupedFactors = factors.reduce(
+    (acc, factor) => {
+      if (!acc[factor.category]) {
+        acc[factor.category] = [];
+      }
+      acc[factor.category].push(factor);
+      return acc;
+    },
+    {} as Record<string, Factor[]>,
+  );
 
   const handleFactorSelect = (factor: Factor) => {
     setSelectedFactor(factor);
@@ -76,13 +89,14 @@ export function FactorSelectionModal({
     if (!selectedFactor || !selectedSubFactor) return;
 
     // 서브팩터가 arguments를 가지고 있으면 argument도 함께 전달
-    const hasArguments = selectedSubFactor.arguments && selectedSubFactor.arguments.length > 0;
+    const hasArguments =
+      selectedSubFactor.arguments && selectedSubFactor.arguments.length > 0;
 
     onSelect(
       String(selectedFactor.id),
       selectedFactor.name,
       String(selectedSubFactor.id),
-      hasArguments ? selectedArgument : undefined
+      hasArguments ? selectedArgument : undefined,
     );
 
     handleClose();
@@ -139,20 +153,20 @@ export function FactorSelectionModal({
           <div className="flex gap-8">
             <button
               onClick={() => setCurrentTab("factor")}
-              className={`text-base font-semibold pb-1 transition-colors ${currentTab === "factor"
-                ? "text-brand-primary"
-                : "text-gray-400"
-                }`}
+              className={`text-base font-semibold pb-1 transition-colors ${
+                currentTab === "factor" ? "text-brand-primary" : "text-gray-400"
+              }`}
             >
               팩터 선택하기
             </button>
             <button
               onClick={() => setCurrentTab("subfactor")}
               disabled={!selectedFactor}
-              className={`text-base font-semibold pb-1 transition-colors ${currentTab === "subfactor" && selectedFactor
-                ? "text-brand-primary"
-                : "text-gray-400 disabled:cursor-not-allowed"
-                }`}
+              className={`text-base font-semibold pb-1 transition-colors ${
+                currentTab === "subfactor" && selectedFactor
+                  ? "text-brand-primary"
+                  : "text-gray-400 disabled:cursor-not-allowed"
+              }`}
             >
               함수 선택하기
             </button>
@@ -170,44 +184,54 @@ export function FactorSelectionModal({
             <div className="grid grid-cols-2 gap-6">
               {/* 좌측: 팩터 목록 (카테고리별 그룹화) */}
               <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                {Object.entries(groupedFactors).map(([category, categoryFactors]) => (
-                  <div key={category}>
-                    <h3 className="text-sm font-bold text-gray-900 mb-2 sticky top-0 bg-white py-1">
-                      {category}
-                    </h3>
-                    <ul className="space-y-1">
-                      {categoryFactors.map((factor) => (
-                        <li key={factor.id}>
-                          <button
-                            onClick={() => handleFactorSelect(factor)}
-                            className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${selectedFactor?.id === factor.id
-                              ? "bg-brand-primary text-white font-medium"
-                              : "text-gray-700 hover:bg-gray-50"
+                {Object.entries(groupedFactors).map(
+                  ([category, categoryFactors]) => (
+                    <div key={category}>
+                      <h3 className="text-sm font-bold text-gray-900 mb-2 sticky top-0 bg-white py-1">
+                        {category}
+                      </h3>
+                      <ul className="space-y-1">
+                        {categoryFactors.map((factor) => (
+                          <li key={factor.id}>
+                            <button
+                              onClick={() => handleFactorSelect(factor)}
+                              className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                                selectedFactor?.id === factor.id
+                                  ? "bg-brand-primary text-white font-medium"
+                                  : "text-gray-700 hover:bg-gray-50"
                               }`}
-                          >
-                            • {factor.display_name}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+                            >
+                              • {factor.display_name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ),
+                )}
               </div>
 
               {/* 우측: 선택된 팩터 정보 */}
               <div className="pl-6 border-l border-gray-200">
                 <h3 className="text-sm font-bold text-gray-900 mb-4">
-                  선택된 팩터: <span className="text-brand-primary">{selectedFactor ? selectedFactor.display_name : "-"}</span>
+                  선택된 팩터:{" "}
+                  <span className="text-brand-primary">
+                    {selectedFactor ? selectedFactor.display_name : "-"}
+                  </span>
                 </h3>
                 {selectedFactor ? (
                   <div className="space-y-3">
                     {selectedFactor.description && (
                       <div className="text-sm text-gray-700">
-                        <p className="whitespace-pre-line">{selectedFactor.description}</p>
+                        <p className="whitespace-pre-line">
+                          {selectedFactor.description}
+                        </p>
                       </div>
                     )}
                     <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                      <p className="font-medium text-gray-800 mb-1">일반 범위:</p>
+                      <p className="font-medium text-gray-800 mb-1">
+                        일반 범위:
+                      </p>
                       <p>0 ~ 100점 (높을수록 좋음)</p>
                     </div>
                   </div>
@@ -235,10 +259,13 @@ export function FactorSelectionModal({
                           onChange={() => handleSubFactorSelect(subFactor)}
                           className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
                         />
-                        <span className={`text-sm ${selectedSubFactor?.id === subFactor.id
-                          ? "text-brand-primary font-medium"
-                          : "text-gray-700 group-hover:text-gray-900"
-                          }`}>
+                        <span
+                          className={`text-sm ${
+                            selectedSubFactor?.id === subFactor.id
+                              ? "text-brand-primary font-medium"
+                              : "text-gray-700 group-hover:text-gray-900"
+                          }`}
+                        >
                           {subFactor.display_name}
                         </span>
                       </label>
@@ -254,7 +281,10 @@ export function FactorSelectionModal({
                     {/* 함수 설명 */}
                     <div>
                       <h3 className="text-sm font-bold text-gray-900 mb-2">
-                        선택된 함수: <span className="text-brand-primary">{selectedSubFactor.display_name}</span>
+                        선택된 함수:{" "}
+                        <span className="text-brand-primary">
+                          {selectedSubFactor.display_name}
+                        </span>
                       </h3>
                       <p className="text-sm text-gray-700 mb-3">
                         {selectedSubFactor.description}
@@ -262,32 +292,40 @@ export function FactorSelectionModal({
                     </div>
 
                     {/* 인자 선택 (arguments가 있는 경우) - 라디오 버튼 스타일 */}
-                    {selectedSubFactor.arguments && selectedSubFactor.arguments.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-gray-800">
-                          인자 선택 <span className="text-brand-primary">*</span>
-                        </p>
+                    {selectedSubFactor.arguments &&
+                      selectedSubFactor.arguments.length > 0 && (
                         <div className="space-y-2">
-                          {selectedSubFactor.arguments.map((arg) => (
-                            <label key={arg} className="flex items-center gap-2 cursor-pointer group">
-                              <input
-                                type="radio"
-                                name="argument"
-                                checked={selectedArgument === arg}
-                                onChange={() => setSelectedArgument(arg)}
-                                className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
-                              />
-                              <span className={`text-sm ${selectedArgument === arg
-                                ? "text-brand-primary font-medium"
-                                : "text-gray-700 group-hover:text-gray-900"
-                                }`}>
-                                {arg}
-                              </span>
-                            </label>
-                          ))}
+                          <p className="text-sm font-semibold text-gray-800">
+                            인자 선택{" "}
+                            <span className="text-brand-primary">*</span>
+                          </p>
+                          <div className="space-y-2">
+                            {selectedSubFactor.arguments.map((arg) => (
+                              <label
+                                key={arg}
+                                className="flex items-center gap-2 cursor-pointer group"
+                              >
+                                <input
+                                  type="radio"
+                                  name="argument"
+                                  checked={selectedArgument === arg}
+                                  onChange={() => setSelectedArgument(arg)}
+                                  className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
+                                />
+                                <span
+                                  className={`text-sm ${
+                                    selectedArgument === arg
+                                      ? "text-brand-primary font-medium"
+                                      : "text-gray-700 group-hover:text-gray-900"
+                                  }`}
+                                >
+                                  {arg}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {/* 조건식 미리보기 */}
                     {selectedFactor && selectedSubFactor && (
@@ -317,21 +355,29 @@ export function FactorSelectionModal({
         {/* 모달 푸터 */}
         <div className="border-t border-gray-200 px-6 py-4 flex justify-center gap-3">
           <button
-            onClick={currentTab === "factor" ? handleClose : () => setCurrentTab("factor")}
+            onClick={
+              currentTab === "factor"
+                ? handleClose
+                : () => setCurrentTab("factor")
+            }
             className="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
           >
             {currentTab === "factor" ? "취소" : "이전 단계"}
           </button>
           <button
-            onClick={currentTab === "factor" ? handleFactorConfirm : handleConfirm}
-            disabled={currentTab === "factor" ? !selectedFactor : !isConfirmEnabled()}
-            className="px-6 py-2 bg-brand-primary text-white rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            onClick={
+              currentTab === "factor" ? handleFactorConfirm : handleConfirm
+            }
+            disabled={
+              currentTab === "factor" ? !selectedFactor : !isConfirmEnabled()
+            }
+            className="px-6 py-2 bg-brand-purple text-white rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {currentTab === "factor" ? "다음 단계" : "선택 완료"}
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

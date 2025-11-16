@@ -37,7 +37,7 @@ const socialLogins = [
 ];
 
 export default function LoginPage() {
-  const router = useRouter();
+  const _router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
@@ -63,12 +63,12 @@ export default function LoginPage() {
       setIsSubmitting(true);
       try {
         await authApi.login({ email, password });
-        router.push("/");
-      } catch (error) {
+        // 페이지 전체 새로고침으로 서버 컴포넌트 확실히 재실행
+        window.location.href = "/";
+      } catch (_error) {
         setErrors({
-          email: "이메일 또는 비밀번호가 올바르지 않습니다."
+          email: "이메일 또는 비밀번호가 올바르지 않습니다.",
         });
-      } finally {
         setIsSubmitting(false);
       }
     }
@@ -100,8 +100,12 @@ export default function LoginPage() {
         <div className="flex flex-col">
           <Link href="/" className="font-circular self-center my-[40px]">
             <div className="flex h-[4rem] items-start justify-center">
-              <span className="text-[2rem] font-sembold text-brand-primary">stock</span>
-              <span className="self-end text-[2rem] font-semibold text-accent-primary">lab</span>
+              <span className="text-[2rem] font-sembold text-brand-primary">
+                stock
+              </span>
+              <span className="self-end text-[2rem] font-semibold text-accent-primary">
+                lab
+              </span>
             </div>
           </Link>
           <div>

@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { autoTradingApi, AutoTradingStrategyResponse } from "@/lib/api/auto-trading";
+import { useState } from "react";
+import {
+  type AutoTradingStrategyResponse,
+  autoTradingApi,
+} from "@/lib/api/auto-trading";
 
 interface AutoTradingSectionProps {
   sessionId: string;
   sessionStatus: string;
 }
 
-export function AutoTradingSection({ sessionId, sessionStatus }: AutoTradingSectionProps) {
+export function AutoTradingSection({
+  sessionId,
+  sessionStatus,
+}: AutoTradingSectionProps) {
   const queryClient = useQueryClient();
   const [isActivating, setIsActivating] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
@@ -25,7 +31,7 @@ export function AutoTradingSection({ sessionId, sessionStatus }: AutoTradingSect
   // 현재 세션에 해당하는 활성화된 전략 찾기
   const activeStrategy = strategies?.find(
     (s: AutoTradingStrategyResponse) =>
-      s.simulation_session_id === sessionId && s.is_active
+      s.simulation_session_id === sessionId && s.is_active,
   );
 
   // 활성화 mutation
@@ -58,17 +64,20 @@ export function AutoTradingSection({ sessionId, sessionStatus }: AutoTradingSect
       setIsDeactivating(false);
     },
     onError: (error: any) => {
-      alert(error.response?.data?.detail || "자동매매 비활성화에 실패했습니다.");
+      alert(
+        error.response?.data?.detail || "자동매매 비활성화에 실패했습니다.",
+      );
       setIsDeactivating(false);
     },
   });
 
   // 수동 실행 mutation (테스트용)
   const executeMutation = useMutation({
-    mutationFn: (strategyId: string) => autoTradingApi.executeAutoTrading(strategyId),
+    mutationFn: (strategyId: string) =>
+      autoTradingApi.executeAutoTrading(strategyId),
     onSuccess: (data) => {
       alert(
-        `${data.message}\n선정: ${data.selected_count}개, 매수: ${data.bought_count}개`
+        `${data.message}\n선정: ${data.selected_count}개, 매수: ${data.bought_count}개`,
       );
       setIsExecuting(false);
     },
@@ -130,19 +139,28 @@ export function AutoTradingSection({ sessionId, sessionStatus }: AutoTradingSect
               <div>
                 <p className="text-xs text-text-muted mb-1">초기 자본금</p>
                 <p className="text-base font-semibold text-text-strong">
-                  {Math.round(activeStrategy.initial_capital).toLocaleString('ko-KR')}원
+                  {Math.round(activeStrategy.initial_capital).toLocaleString(
+                    "ko-KR",
+                  )}
+                  원
                 </p>
               </div>
               <div>
                 <p className="text-xs text-text-muted mb-1">현재 자본금</p>
                 <p className="text-base font-semibold text-text-strong">
-                  {Math.round(activeStrategy.current_capital).toLocaleString('ko-KR')}원
+                  {Math.round(activeStrategy.current_capital).toLocaleString(
+                    "ko-KR",
+                  )}
+                  원
                 </p>
               </div>
               <div>
                 <p className="text-xs text-text-muted mb-1">현금 잔고</p>
                 <p className="text-base font-semibold text-text-strong">
-                  {Math.round(activeStrategy.cash_balance).toLocaleString('ko-KR')}원
+                  {Math.round(activeStrategy.cash_balance).toLocaleString(
+                    "ko-KR",
+                  )}
+                  원
                 </p>
               </div>
               <div>
@@ -160,7 +178,9 @@ export function AutoTradingSection({ sessionId, sessionStatus }: AutoTradingSect
               <div>
                 <p className="text-xs text-text-muted mb-1">리밸런싱 주기</p>
                 <p className="text-base font-semibold text-text-strong">
-                  {activeStrategy.rebalance_frequency === "DAILY" ? "매일" : activeStrategy.rebalance_frequency}
+                  {activeStrategy.rebalance_frequency === "DAILY"
+                    ? "매일"
+                    : activeStrategy.rebalance_frequency}
                 </p>
               </div>
             </div>
@@ -170,7 +190,8 @@ export function AutoTradingSection({ sessionId, sessionStatus }: AutoTradingSect
           {activeStrategy && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
               <p className="text-xs text-blue-700 dark:text-blue-300">
-                💡 매일 오전 8시에 종목을 선정하고, 오전 9시에 자동으로 매수/매도를 실행합니다.
+                💡 매일 오전 8시에 종목을 선정하고, 오전 9시에 자동으로
+                매수/매도를 실행합니다.
                 <br />
                 실시간 수익률은 &quot;내 잔고&quot; 페이지에서 확인하세요.
               </p>
@@ -183,13 +204,15 @@ export function AutoTradingSection({ sessionId, sessionStatus }: AutoTradingSect
           {!activeStrategy ? (
             <button
               onClick={handleActivate}
-              disabled={isActivating || sessionStatus?.toUpperCase() !== "COMPLETED"}
+              disabled={
+                isActivating || sessionStatus?.toUpperCase() !== "COMPLETED"
+              }
               className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
                 sessionStatus?.toUpperCase() !== "COMPLETED"
                   ? "bg-gray-300 cursor-not-allowed"
                   : isActivating
-                  ? "bg-red-400 cursor-wait"
-                  : "bg-red-500 hover:bg-red-600"
+                    ? "bg-red-400 cursor-wait"
+                    : "bg-red-500 hover:bg-red-600"
               }`}
             >
               {isActivating ? "활성화 중..." : "자동매매 활성화"}

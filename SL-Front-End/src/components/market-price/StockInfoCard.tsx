@@ -1,7 +1,7 @@
 "use client";
 
-import { companyApi, CompanyInfoResponse } from "@/lib/api/company";
 import { useEffect, useState } from "react";
+import { type CompanyInfoResponse, companyApi } from "@/lib/api/company";
 import { StockPriceChart } from "./StockPriceChart";
 
 interface StockInfoCardProps {
@@ -9,30 +9,24 @@ interface StockInfoCardProps {
   code: string;
 }
 
-const periodTabs = [
-  "30일",
-  "90일",
-  "120일",
-  "180일",
-  "1년",
-  "2년",
-  "3년",
-];
+const periodTabs = ["30일", "90일", "120일", "180일", "1년", "2년", "3년"];
 
 /**
  * 기간 텍스트를 일 단위 숫자로 변환
  */
 function periodToDays(period: string): number {
   if (period.includes("년")) {
-    const years = parseInt(period);
+    const years = parseInt(period, 10);
     return years * 365;
   }
-  return parseInt(period);
+  return parseInt(period, 10);
 }
 
 export function StockInfoCard({ name, code }: StockInfoCardProps) {
   const [activePeriod, setActivePeriod] = useState(periodTabs[0]);
-  const [companyData, setCompanyData] = useState<CompanyInfoResponse | null>(null);
+  const [companyData, setCompanyData] = useState<CompanyInfoResponse | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -87,8 +81,18 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         ? `${Math.floor(basicInfo.marketCap / 1000000000000)}조 ${Math.floor((basicInfo.marketCap % 1000000000000) / 100000000)}억원`
         : "-",
     },
-    { label: "PSR", value: investmentIndicators.psr ? `${investmentIndicators.psr.toFixed(2)}배` : "-" },
-    { label: "PBR", value: investmentIndicators.pbr ? `${investmentIndicators.pbr.toFixed(2)}배` : "-" },
+    {
+      label: "PSR",
+      value: investmentIndicators.psr
+        ? `${investmentIndicators.psr.toFixed(2)}배`
+        : "-",
+    },
+    {
+      label: "PBR",
+      value: investmentIndicators.pbr
+        ? `${investmentIndicators.pbr.toFixed(2)}배`
+        : "-",
+    },
   ];
 
   return (
@@ -99,15 +103,18 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         </p>
         <h2 className="text-[1.5rem] font-semibold">{name}</h2>
         <div className="mt-[-0.5rem] text-[1.5rem] font-semibold">
-          {basicInfo.currentPrice ? `${basicInfo.currentPrice.toLocaleString()}원` : "-"}
+          {basicInfo.currentPrice
+            ? `${basicInfo.currentPrice.toLocaleString()}원`
+            : "-"}
         </div>
         <p
-          className={`font-semibold ${(basicInfo.changevs1d || 0) > 0
-            ? "text-brand-primary"
-            : (basicInfo.changevs1d || 0) < 0
-              ? "text-accent-primary"
-              : "text-text-muted"
-            }`}
+          className={`font-semibold ${
+            (basicInfo.changevs1d || 0) > 0
+              ? "text-brand-primary"
+              : (basicInfo.changevs1d || 0) < 0
+                ? "text-accent-primary"
+                : "text-text-muted"
+          }`}
         >
           {basicInfo.changevs1d
             ? `${basicInfo.changevs1d > 0 ? "+" : ""}${basicInfo.changevs1d.toLocaleString()}원 (${basicInfo.fluctuationRate?.toFixed(2) || 0}%)`
@@ -116,10 +123,10 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         <p className="pt-[0.25rem] text-[0.8rem] text-text-muted font-normal">
           {basicInfo.tradeDate
             ? new Date(basicInfo.tradeDate).toLocaleDateString("ko-KR", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })
             : "-"}{" "}
           기준
         </p>
@@ -131,8 +138,11 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
             <button
               key={tab}
               type="button"
-              className={`rounded-[8px] px-[0.75rem] py-[0.25rem] text-[1rem] font-normal transition ${isActive ? "bg-brand-primary text-white font-semibold" : "text-text-body font-normal"
-                }`}
+              className={`rounded-[8px] px-[0.75rem] py-[0.25rem] text-[1rem] font-normal transition ${
+                isActive
+                  ? "bg-brand-primary text-white font-semibold"
+                  : "text-text-body font-normal"
+              }`}
               onClick={() => setActivePeriod(tab)}
             >
               {tab}
@@ -168,10 +178,15 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
                 ? "items-center text-center"
                 : "items-end text-right";
           const isPositive = stat.value.includes("+");
-          const valueColor = isPositive ? "text-brand-primary" : "text-[#007DFC]";
+          const valueColor = isPositive
+            ? "text-brand-primary"
+            : "text-[#007DFC]";
 
           return (
-            <div key={stat.label} className={`flex flex-col gap-1 ${alignment}`}>
+            <div
+              key={stat.label}
+              className={`flex flex-col gap-1 ${alignment}`}
+            >
               <span className="text-sm text-[#A0A0A0]">{stat.label}</span>
               <span className={`text-base font-semibold ${valueColor}`}>
                 {stat.value}
@@ -208,8 +223,12 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
                 key={stat.label}
                 className={`flex flex-col gap-1 ${alignment}`}
               >
-                <p className="text-[0.8rem] font-normal text-text-muted">{stat.label}</p>
-                <p className="text-[1.2rem] font-semibold text-text-strong">{stat.value}</p>
+                <p className="text-[0.8rem] font-normal text-text-muted">
+                  {stat.label}
+                </p>
+                <p className="text-[1.2rem] font-semibold text-text-strong">
+                  {stat.value}
+                </p>
               </div>
             );
           })}
@@ -229,7 +248,8 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
 
 function Divider() {
   return (
-    <div className="h-[1rem] w-full"
+    <div
+      className="h-[1rem] w-full"
       style={{
         backgroundColor: "var(--color-bg-app)",
         marginLeft: "-2rem",
@@ -239,7 +259,6 @@ function Divider() {
     />
   );
 }
-
 
 interface SectionHeaderProps {
   title: string;
@@ -261,12 +280,18 @@ interface CardProps {
   caption?: string;
 }
 
-function Card({ title, value, caption }: CardProps) {
+function _Card({ title, value, caption }: CardProps) {
   return (
     <div className="rounded-[8px] border border-border py-[1rem] pl-[1rem] text-start">
       <p className="text-[0.9rem] font-normal text-text-muted">{title}</p>
-      <p className="pt-[0.5rem] text-[1.5rem] font-semibold text-text-strong">{value}</p>
-      {caption && <p className="pt-[0.25rem] text-[0.9rem] font-normal text-text-muted">{caption}</p>}
+      <p className="pt-[0.5rem] text-[1.5rem] font-semibold text-text-strong">
+        {value}
+      </p>
+      {caption && (
+        <p className="pt-[0.25rem] text-[0.9rem] font-normal text-text-muted">
+          {caption}
+        </p>
+      )}
     </div>
   );
 }
@@ -276,14 +301,21 @@ interface DiagnosisCircleProps {
   delta: number;
 }
 
-function DiagnosisCircle({ score, delta }: DiagnosisCircleProps) {
+function _DiagnosisCircle({ score, delta }: DiagnosisCircleProps) {
   const circumference = 2 * Math.PI * 60;
   const progress = (score / 100) * circumference;
 
   return (
     <div className="relative h-[12rem] w-[12rem]">
       <svg viewBox="0 0 160 160" className="h-full w-full">
-        <circle cx="80" cy="80" r="60" fill="none" stroke="#C8C8C8" strokeWidth="10" />
+        <circle
+          cx="80"
+          cy="80"
+          r="60"
+          fill="none"
+          stroke="#C8C8C8"
+          strokeWidth="10"
+        />
         <circle
           cx="80"
           cy="80"
@@ -298,8 +330,12 @@ function DiagnosisCircle({ score, delta }: DiagnosisCircleProps) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
         <p className="text-[0.8rem] font-normal text-text-muted">종합점수</p>
-        <p className="text-[1.8rem] font-semibold text-text-strong">{score}점</p>
-        <p className="text-[0.8rem] font-normal text-text-muted">전일 대비 {delta}점</p>
+        <p className="text-[1.8rem] font-semibold text-text-strong">
+          {score}점
+        </p>
+        <p className="text-[0.8rem] font-normal text-text-muted">
+          전일 대비 {delta}점
+        </p>
       </div>
     </div>
   );
@@ -323,7 +359,10 @@ function StockInfoSkeleton() {
       {/* 기간 탭 스켈레톤 */}
       <div className="flex flex-wrap justify-center gap-3">
         {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="h-8 w-16 bg-gray-200 rounded-[8px] animate-pulse" />
+          <div
+            key={i}
+            className="h-8 w-16 bg-gray-200 rounded-[8px] animate-pulse"
+          />
         ))}
       </div>
 

@@ -102,6 +102,6 @@ export function StockDetailModal({
         <StockInfoCard name={stockName} code={stockCode} />
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

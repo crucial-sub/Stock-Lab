@@ -3,9 +3,9 @@
  * - 함수 목록 조회 쿼리를 제공합니다
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { getSubFactorById, getSubFactors } from "@/lib/api";
 import type { SubFactor } from "@/types/api";
-import { useQuery } from "@tanstack/react-query";
 
 /**
  * 함수 목록 조회 쿼리 키

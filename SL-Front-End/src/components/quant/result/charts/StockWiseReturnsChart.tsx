@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState } from "react";
 import * as am5 from "@amcharts/amcharts5";
-import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
+import * as am5xy from "@amcharts/amcharts5/xy";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BacktestResult } from "@/types/api";
 
 interface StockWiseReturnsChartProps {
@@ -23,7 +23,10 @@ interface TradePoint {
   quantity: number;
 }
 
-export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsChartProps) {
+export function StockWiseReturnsChart({
+  trades,
+  yieldPoints,
+}: StockWiseReturnsChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
@@ -33,8 +36,9 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
 
     trades.forEach((trade) => {
       const holdingDays = Math.floor(
-        (new Date(trade.sellDate).getTime() - new Date(trade.buyDate).getTime()) /
-          (1000 * 60 * 60 * 24)
+        (new Date(trade.sellDate).getTime() -
+          new Date(trade.buyDate).getTime()) /
+          (1000 * 60 * 60 * 24),
       );
 
       // 매수 포인트
@@ -86,7 +90,7 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
         wheelX: "panX",
         wheelY: "zoomX",
         pinchZoomX: true,
-      })
+      }),
     );
 
     // X축 (날짜)
@@ -96,14 +100,14 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
         renderer: am5xy.AxisRendererX.new(root, {
           minGridDistance: 50,
         }),
-      })
+      }),
     );
 
     // Y축 (수익률 %)
     const yAxis = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {}),
-      })
+      }),
     );
 
     // 스캐터 시리즈 (모션 차트)
@@ -118,14 +122,14 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
           labelText: "{stockName}\n{type}: {profitRate.formatNumber('#.##')}%",
         }),
         connect: false,
-      })
+      }),
     );
 
     series.strokes.template.set("visible", false);
     series.data.setAll(allTradePoints);
 
     // 버블 마커 추가 (매수/매도 구분, 선택된 날짜 강조)
-    series.bullets.push((root, series, dataItem) => {
+    series.bullets.push((root, _series, dataItem) => {
       const dataContext = dataItem.dataContext as TradePoint;
       const isBuy = dataContext.type === "buy";
       const isSelected = selectedDate === dataContext.date;
@@ -167,7 +171,7 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
       });
 
       // 클릭 이벤트
-      circle.events.on("click", (ev) => {
+      circle.events.on("click", (_ev) => {
         if (selectedDate === dataContext.date) {
           // 같은 날짜 클릭 시 선택 해제
           setSelectedDate(null);
@@ -192,7 +196,7 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
       "cursor",
       am5xy.XYCursor.new(root, {
         behavior: "zoomX",
-      })
+      }),
     );
 
     // 스크롤바
@@ -200,7 +204,7 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
       "scrollbarX",
       am5.Scrollbar.new(root, {
         orientation: "horizontal",
-      })
+      }),
     );
 
     return () => {
@@ -255,7 +259,10 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
               <tbody>
                 {selectedDateTrades.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-text-muted">
+                    <td
+                      colSpan={6}
+                      className="px-4 py-8 text-center text-text-muted"
+                    >
                       거래 내역이 없습니다.
                     </td>
                   </tr>
@@ -278,7 +285,9 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
                       <td className="px-4 py-3 text-center">
                         <span
                           className={`font-medium ${
-                            trade.type === "buy" ? "text-red-500" : "text-blue-500"
+                            trade.type === "buy"
+                              ? "text-red-500"
+                              : "text-blue-500"
                           }`}
                         >
                           {trade.type === "buy" ? "목표가 매도" : "손절가 매도"}
@@ -286,7 +295,9 @@ export function StockWiseReturnsChart({ trades, yieldPoints }: StockWiseReturnsC
                       </td>
                       <td
                         className={`px-4 py-3 text-right font-semibold ${
-                          trade.profitRate >= 0 ? "text-red-500" : "text-blue-500"
+                          trade.profitRate >= 0
+                            ? "text-red-500"
+                            : "text-blue-500"
                         }`}
                       >
                         {trade.profitRate.toFixed(2)}

@@ -40,49 +40,54 @@ export interface BacktestRunRequest {
   slippage: number; // 슬리피지(%)
 
   /* 매수 조건 */
-  buy_conditions: { // 매수 조건식
+  buy_conditions: {
+    // 매수 조건식
     name: string; // 조건식 이름 e.g. "A"
     exp_left_side: string; // 조건식 좌변 = "함수({팩터}, {함수인자})" e.g. "이동평균({PER},{20일})"
     inequality: string; // 부등호 e.g. ">"
     exp_right_side: number; // 조건식 우변 e.g. 10
-  }[]
+  }[];
   buy_logic: string; // 논리 조건식 e.g. "A and B"
   priority_factor: string; // 매수 종목 선택 우선순위 e.g. "{PBR}"
   priority_order: string; // 우선순위 방향 e.g. "desc"
   per_stock_ratio: number; // 종목당 매수 비중(%)
-  max_holdings: number; // 최대 보유 종목 수 
+  max_holdings: number; // 최대 보유 종목 수
   max_buy_value: number | null; // 종목당 최대 매수 금액(만원 단위); Nullable(토글 off 시)
   max_daily_stock: number | null; // 일일 최대 매수 종목 종류 수; Nullable
   buy_price_basis: string; // 매수 가격 기준 e.g. "전일 종가"
   buy_price_offset: number; // 기준가 대비 증감값(%) e.g. 10
 
   /* 매도 조건 */
-  target_and_loss: { // 목표가 / 손절가; Nullable
+  target_and_loss: {
+    // 목표가 / 손절가; Nullable
     target_gain: number | null; // 매도 목표가(%); Nullable
     stop_loss: number | null; // 매도 손절가(%); Nullable
-  } | null
-  hold_days: {  // 보유 기간; Nullable
+  } | null;
+  hold_days: {
+    // 보유 기간; Nullable
     min_hold_days: number; // 최소 종목 보유일
     max_hold_days: number; // 최대 종목 보유일
     sell_price_basis: string; // 매도 가격 기준 e.g. "전일 종가"
     sell_price_offset: number; // 기준가 대비 증감값(%) e.g. 10
-  } | null
-  condition_sell: { // 조건 매도; Nullable
-    sell_conditions: { // 매도 조건식
+  } | null;
+  condition_sell: {
+    // 조건 매도; Nullable
+    sell_conditions: {
+      // 매도 조건식
       name: string; // 조건식 이름 e.g. "A"
       exp_left_side: string; // 조건식 좌변 = "함수({팩터}, {함수인자})" e.g. "이동평균({PER},{20일})"
       inequality: string; // 부등호 e.g. ">"
       exp_right_side: number; // 조건식 우변 e.g. 10
-    }[]
+    }[];
     sell_logic: string; // 논리 조건식 e.g. "A and B"
     sell_price_basis: string; // 매도 가격 기준 e.g. "전일 종가"
     sell_price_offset: number; // 기준가 대비 증감값(%) e.g. 10
-  } | null
+  } | null;
 
   /* 매매 대상 */
   trade_targets: {
     use_all_stocks: boolean; // 전체 종목을 그대로 쓸지 여부(true면 아래 선택 목록 무시하거나 참고만 함)
-    selected_universes: string[];// 선택한 유니버스 코드 목록 e.g. ["KOSPI_LARGE", "KOSPI_MID"]
+    selected_universes: string[]; // 선택한 유니버스 코드 목록 e.g. ["KOSPI_LARGE", "KOSPI_MID"]
     selected_themes: string[]; // 선택한 테마 ID/코드 목록
     selected_stocks: string[]; // 개별로 지정한 종목 코드 목록 e.g. ["005930", "207940"]
     // UI 전용 필드 (백엔드 요청에는 포함되지 않음)

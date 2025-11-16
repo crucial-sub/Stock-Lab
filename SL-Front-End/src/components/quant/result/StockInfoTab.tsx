@@ -1,7 +1,7 @@
 "use client";
 
-import type { BacktestResult, UniverseStock } from "@/types/api";
 import { useMemo, useState } from "react";
+import type { BacktestResult, UniverseStock } from "@/types/api";
 
 /**
  * 매매종목 정보 탭 컴포넌트
@@ -21,7 +21,10 @@ interface StockInfo {
   hasSell: boolean;
 }
 
-export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps) {
+export function StockInfoTab({
+  trades,
+  universeStocks = [],
+}: StockInfoTabProps) {
   const [showAll, setShowAll] = useState(false);
   const INITIAL_DISPLAY_COUNT = 30;
 
@@ -57,15 +60,19 @@ export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps)
     });
 
     return Array.from(stockMap.values()).sort((a, b) =>
-      a.stockName.localeCompare(b.stockName, "ko")
+      a.stockName.localeCompare(b.stockName, "ko"),
     );
   }, [trades, universeStocks]);
 
   // 거래한 종목과 거래하지 않은 종목 구분
-  const tradedStocksCount = stockList.filter((s) => s.hasBuy || s.hasSell).length;
+  const tradedStocksCount = stockList.filter(
+    (s) => s.hasBuy || s.hasSell,
+  ).length;
 
   // 표시할 종목 리스트
-  const displayedStocks = showAll ? stockList : stockList.slice(0, INITIAL_DISPLAY_COUNT);
+  const displayedStocks = showAll
+    ? stockList
+    : stockList.slice(0, INITIAL_DISPLAY_COUNT);
   const hasMore = stockList.length > INITIAL_DISPLAY_COUNT;
 
   return (
@@ -75,7 +82,8 @@ export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps)
           유니버스 종목 목록 ({stockList.length}개)
         </h3>
         <p className="text-sm text-text-muted mt-1">
-          선택한 테마/유니버스의 전체 종목입니다. 실제 거래한 종목은 {tradedStocksCount}개입니다.
+          선택한 테마/유니버스의 전체 종목입니다. 실제 거래한 종목은{" "}
+          {tradedStocksCount}개입니다.
         </p>
       </div>
 
@@ -159,9 +167,7 @@ export function StockInfoTab({ trades, universeStocks = [] }: StockInfoTabProps)
             onClick={() => setShowAll(!showAll)}
             className="px-6 py-2 text-sm font-medium text-accent-primary border border-accent-primary rounded-lg hover:bg-accent-primary hover:text-white transition-colors"
           >
-            {showAll
-              ? "접기"
-              : "더보기"}
+            {showAll ? "접기" : "더보기"}
           </button>
         </div>
       )}

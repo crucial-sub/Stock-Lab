@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import * as am5 from "@amcharts/amcharts5";
-import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
+import * as am5xy from "@amcharts/amcharts5/xy";
+import { useEffect, useRef } from "react";
 import type { BacktestResult } from "@/types/api";
 
 interface TotalAssetsChartProps {
@@ -26,7 +26,7 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
         wheelX: "panX",
         wheelY: "zoomX",
         pinchZoomX: true,
-      })
+      }),
     );
 
     // 데이터 변환
@@ -45,7 +45,7 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
           minGridDistance: 50,
         }),
         tooltip: am5.Tooltip.new(root, {}),
-      })
+      }),
     );
 
     // Y축 (자산 금액)
@@ -53,7 +53,7 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {}),
         tooltip: am5.Tooltip.new(root, {}),
-      })
+      }),
     );
 
     // 포트폴리오 총 가치 라인 시리즈
@@ -68,7 +68,7 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#,###')}원",
         }),
-      })
+      }),
     );
     portfolioSeries.strokes.template.setAll({ strokeWidth: 2 });
     portfolioSeries.data.setAll(chartData);
@@ -85,9 +85,12 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#,###')}원",
         }),
-      })
+      }),
     );
-    cashSeries.strokes.template.setAll({ strokeWidth: 2, strokeDasharray: [5, 5] });
+    cashSeries.strokes.template.setAll({
+      strokeWidth: 2,
+      strokeDasharray: [5, 5],
+    });
     cashSeries.data.setAll(chartData);
 
     // 포지션 가치 라인 시리즈
@@ -102,9 +105,12 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#,###')}원",
         }),
-      })
+      }),
     );
-    positionSeries.strokes.template.setAll({ strokeWidth: 2, strokeDasharray: [5, 5] });
+    positionSeries.strokes.template.setAll({
+      strokeWidth: 2,
+      strokeDasharray: [5, 5],
+    });
     positionSeries.data.setAll(chartData);
 
     // 커서
@@ -112,7 +118,7 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
       "cursor",
       am5xy.XYCursor.new(root, {
         behavior: "zoomX",
-      })
+      }),
     );
 
     // 스크롤바
@@ -120,7 +126,7 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
       "scrollbarX",
       am5.Scrollbar.new(root, {
         orientation: "horizontal",
-      })
+      }),
     );
 
     // 범례 (차트 상단에 배치하여 스크롤바와 겹치지 않도록)
@@ -130,7 +136,7 @@ export function TotalAssetsChart({ yieldPoints }: TotalAssetsChartProps) {
         x: am5.p50,
         y: 0,
         layout: root.horizontalLayout,
-      })
+      }),
     );
     legend.data.setAll(chart.series.values);
 

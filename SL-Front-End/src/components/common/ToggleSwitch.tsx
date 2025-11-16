@@ -28,15 +28,17 @@ export function ToggleSwitch({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative w-8 h-[18px] rounded-full transition-colors duration-500 ease-in-out ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-        } ${className}`}
+      className={`relative w-8 h-[18px] rounded-full transition-colors duration-500 ease-in-out ${
+        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+      } ${className}`}
       style={{
         backgroundColor: checked ? activeColor : "#c8c8c8",
       }}
     >
       <div
-        className={`absolute w-4 h-4 bg-white rounded-full transition-all duration-500 ease-in-out ${checked ? "right-[1px]" : "left-[1px]"
-          }`}
+        className={`absolute w-4 h-4 bg-white rounded-full transition-all duration-500 ease-in-out ${
+          checked ? "right-[1px]" : "left-[1px]"
+        }`}
         style={{
           top: "50%",
           transform: "translateY(-50%)",

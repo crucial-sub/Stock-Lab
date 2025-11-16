@@ -3,56 +3,139 @@
 @tailwind utilities;
 
 /**
- * Design token playground for the refreshed UI.
- * - 값만 조정해도 전체 UI에 즉시 반영할 수 있도록 CSS 변수로 정의합니다.
+ * Design token system for the trading strategy platform.
+ * - CSS 변수로 정의하여 값만 조정해도 전체 UI에 즉시 반영됩니다.
  * - Tailwind 확장은 tailwind.config.js에서 이 토큰을 그대로 참조합니다.
  */
 
+/* =========================
+   1. Palette Tokens (색 정의용)
+   ========================= */
+
 :root {
-  /* Base palette */
-  --color-white: #ffffff; /* 카드/헤더 등 밝은 표면 */
-  --color-black: #000000; /* 가장 강한 텍스트 대비 */
+  /* Main background gradient */
+  --color-base-0: 255 255 255; /* #FFFFFF */
+  --color-base-soft-blue: 239 244 255; /* #EFF4FF */
 
-  /* Background & surface */
-  --color-bg-app: #f4f9ff; /* 전체 페이지 공통 배경 */
-  --color-surface: #ffffff; /* 카드/패널 기본 표면 */
-  --color-surface-muted: #eff6ff; /* 옅은 구분 섹션 배경 */
-  --color-surface-positive: #fff6f6; /* 상승/알림 영역 배경 */
+  /* Nav / Surface / Gray */
+  --color-navy-900: 24 34 52; /* #182234 */
+  --color-gray-400: 200 200 200; /* #C8C8C8 */
+  --color-gray-600: 100 100 100; /* #646464 */
+  --color-gray-700: 80 80 80; /* #505050 */
 
-  /* Text */
-  --color-text-strong: #000000; /* 제목/헤더 텍스트 */
-  --color-text-body: #505050; /* 일반 본문 텍스트 */
-  --color-text-muted: #a0a0a0; /* 부가 설명/타임스탬프 */
+  /* Brand / States */
+  --color-brand-purple: 172 100 255; /* #AC64FF */
+  --color-red-500: 255 100 100; /* #FF6464 */
+  --color-pink: 255 246 246; /* #FFF6F6 */
+  --color-blue-500: 0 125 252; /* #007DFC */
+  --color-orange-400: 255 172 100; /* #FFAC64 */
+  --color-green-600: 26 143 0; /* #1A8F00 */
+  --color-black: 0 0 0; /* #000000 */
+}
 
-  /* Brand & accents */
-  --color-brand-primary: #ff6464; /* 주 브랜드/CTA 색상 */
-  --color-accent-primary: #007dfc; /* 기본 포커스/링크 색상 */
-  --color-accent-secondary: #4c7cff; /* 보조 블루 하이라이트 */
-  --color-success: #00cd00; /* 긍정 지표 및 태그 텍스트 */
+/* =========================
+   2. Semantic Tokens (역할 기준)
+   ========================= */
 
-  /* Tag & badge surfaces */
-  --color-tag-neutral: #c8c8c8; /* 중립 pill 테두리/텍스트 */
-  --color-news-positive-bg: #ddffe5; /* 뉴스 긍정 태그 배경 */
-  --color-news-positive-text: #00cd00; /* 뉴스 긍정 태그 텍스트 */
-  --color-news-neutral-bg: #fff1d6; /* 뉴스 중립 태그 배경 */
-  --color-news-neutral-text: #ffaa00; /* 뉴스 중립 태그 텍스트 */
-  --color-news-negative-bg: #ffe5e5; /* 뉴스 부정 태그 배경 */
-  --color-news-negative-text: #ff6464; /* 뉴스 부정 태그 텍스트 */
-  --color-news-theme-bg: #f4e2ff; /* 뉴스 테마 태그 배경 */
-  --color-news-theme-text: #a000fc; /* 뉴스 테마 태그 텍스트 */
-  --color-news-press-bg: #eaf5ff; /* 뉴스 언론사 태그 배경 */
-  --color-news-press-text: #007dfc; /* 뉴스 언론사 태그 텍스트 */
+/* --- 메인 배경 및 텍스트 --- */
+:root {
+  --bg-app-main-from: var(--color-base-0); /* #FFFFFF */
+  --bg-app-main-via: var(--color-base-soft-blue); /* #EFF4FF */
+  --bg-app-main-to: var(--color-base-soft-blue); /* #EFF4FF */
 
-  /* Border */
-  --color-border-default: #c8c8c8; /* 컴포넌트 외곽선 */
-  --color-border-subtle: #e1e1e1; /* 카드 내부 구분선 */
+  --text-body: var(--color-black); /* #000000 */
+}
 
-  /* Shadows */
-  --shadow-header: 0px 4px 16px rgba(150, 150, 150, 0.1); /* 상단 헤더 그림자 */
-  --shadow-card-soft: 0px 0px 8px rgba(0, 0, 0, 0.1); /* 카드 기본 그림자 */
-  --shadow-card-muted: 0px 0px 8px rgba(0, 0, 0, 0.08); /* 완만한 그림자 */
+/* --- 사이드바 --- */
+:root {
+  /* 전체 사이드바 배경 */
+  --bg-sidebar: var(--color-navy-900); /* #182234 */
+  /* #182234 */
 
-  /* Radii */
+  /* 1차 Nav 선택된 메뉴 배경: #FFFFFF33 = alpha 0.2 */
+  --bg-sidebar-item-active: rgb(var(--color-base-0) / 0.2);
+
+  /* 2차 Nav 선택된 메뉴 옅은 배경: #FFFFFF0D ≒ alpha 0.05 */
+  --bg-sidebar-item-sub-active: rgb(var(--color-base-0) / 0.05);
+
+  /* 텍스트 */
+  --text-sidebar-item: var(--color-gray-400); /* #C8C8C8 */
+  --text-sidebar-item-active: var(--color-base-0); /* #FFFFFF */
+
+  /* 보더 / 구분선 */
+  --border-sidebar: var(--color-gray-700); /* #505050 */
+  --border-sidebar-item-active: var(--color-base-0); /* #FFFFFF */
+}
+
+/* --- 메인 input & 카드 --- */
+:root {
+  /* 배경: #1822340D ≒ navy 5% */
+  --bg-surface: rgb(var(--color-navy-900) / 0.05);
+
+  /* border: #18223433 ≒ navy 20% */
+  --border-surface: rgb(var(--color-navy-900) / 0.2);
+
+  /* 텍스트: #646464 */
+  --text-muted: var(--color-gray-600);
+  /* #646464 */
+
+  /* 보내기 버튼 배경: #AC64FF80 ≒ alpha 0.5 */
+  --bg-button-primary-soft: rgb(var(--color-brand-purple) / 0.5);
+}
+
+/* --- Brand / 공통 상태 색 --- */
+:root {
+  /* 브랜드 보라 – 텍스트/아이콘/보더 주 컬러 */
+  --text-brand: var(--color-brand-purple); /* #AC64FF */
+
+  /* 옅은 보라 배경: #AC64FF0D ≒ alpha 0.05 */
+  --bg-brand-soft: rgb(var(--color-brand-purple) / 0.05);
+
+  /* 테두리용 보라: #AC64FF33 ≒ alpha 0.2 */
+  --border-brand-soft: rgb(var(--color-brand-purple) / 0.2);
+
+  /* 주식 상승/하락 */
+  --text-price-up: var(--color-red-500); /* #FF6464 */
+  --bg-price-up: rgb(var(--color-red-500)); /* #FF6464 */
+  --bg-price-up-soft: rgb(var(--color-red-500) / 0.1); /* 연한 빨강 10% */
+
+  --text-price-down: var(--color-blue-500); /* #007DFC */
+  --bg-price-down: rgb(var(--color-blue-500)); /* #007DFC */
+  --bg-price-down-soft: rgb(var(--color-blue-500) / 0.1); /* 연한 파랑 10% */
+
+  /* 활성 포트폴리오 태그 */
+  --bg-tag-portfolio-active: rgb(var(--color-orange-400)); /* #FFAC64 */
+  --text-tag-portfolio-active: rgb(var(--color-base-0)); /* #FFFFFF */
+
+  /* 초록색: 수익률 등 positive 텍스트 */
+  --text-positive: rgb(var(--color-green-600)); /* #1A8F00 */
+}
+
+/* --- 모달 오버레이 --- */
+:root {
+  /* #00000033 ≒ alpha 0.2 */
+  --bg-overlay: rgb(var(--color-black) / 0.2);
+}
+
+/* --- 그림자 및 라운드 정의 --- */
+:root {
+  /* ===== Shadows (elevation 계층) ===== */
+  /* 작은 기본 표면용: 아주 은은한 그림자 */
+  --shadow-elev-sm: 0px 0px 8px 0px rgba(0, 0, 0, 0.05);
+
+  /* 브랜드 컬러 글로우: 호버/포커스 상태용 */
+  --shadow-elev-brand: 0px 0px 8px 0px rgba(172, 100, 255, 0.2); /* #AC64FF */
+
+  /* 메인 카드/패널: 살짝 떠 있는 카드 느낌 (spread 4px) */
+  --shadow-elev-card: 0px 0px 8px 4px rgba(0, 0, 0, 0.1);
+
+  /* 서브 카드/인풋: 기본 카드보다 살짝 약한 그림자 */
+  --shadow-elev-card-soft: 0px 0px 8px 0px rgba(0, 0, 0, 0.1);
+
+  /* 강한 강조용: 모달/강조 카드 등에 사용 */
+  --shadow-elev-strong: 0px 0px 8px 0px rgba(0, 0, 0, 0.2);
+
+  /* ===== Border Radius ===== */
   --radius-xs: 2px; /* 아주 작은 pill */
   --radius-sm: 4px; /* 태그/버튼 */
   --radius-md: 8px; /* 카드 경계 */
@@ -62,9 +145,17 @@
 
 @layer base {
   body {
-    background-color: var(--color-surface);
-    color: var(--color-text-body);
-    font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont,
-      "Segoe UI", sans-serif;
+    /* 메인 배경: linear-gradient */
+    background-image: linear-gradient(
+      135deg,
+      rgb(var(--bg-app-main-from) / 1),
+      rgb(var(--bg-app-main-via) / 1),
+      rgb(var(--bg-app-main-to) / 1)
+    );
+
+    @apply text-body;
+    @apply font-pretendard;
+
+    min-height: 100vh;
   }
 }

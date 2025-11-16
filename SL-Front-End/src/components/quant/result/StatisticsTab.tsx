@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import * as am5 from "@amcharts/amcharts5";
-import * as am5xy from "@amcharts/amcharts5/xy";
 import * as am5percent from "@amcharts/amcharts5/percent";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
+import * as am5xy from "@amcharts/amcharts5/xy";
+import { useEffect, useRef } from "react";
 import type { BacktestResult } from "@/types/api";
 
 /**
@@ -18,7 +18,7 @@ interface StatisticsTabProps {
 
 export function StatisticsTab({ statistics }: StatisticsTabProps) {
   // 실제 통계 데이터 기반 계산
-  const winRate = (statistics.winRate || 0);
+  const winRate = statistics.winRate || 0;
   const loseRate = 100 - winRate;
 
   // 차트 데이터 - 실제 데이터 기반
@@ -43,13 +43,18 @@ export function StatisticsTab({ statistics }: StatisticsTabProps) {
 
   return (
     <div className="bg-bg-surface rounded-lg shadow-card p-6">
-      <h3 className="text-lg font-bold text-text-strong mb-6">매매 결과 통계</h3>
+      <h3 className="text-lg font-bold text-text-strong mb-6">
+        매매 결과 통계
+      </h3>
 
       {/* 통계 지표 그리드 - 실제 데이터 */}
       <div className="grid grid-cols-3 gap-8 mb-12">
         {/* 왼쪽 섹션 */}
         <div className="space-y-6">
-          <StatItem label="총 거래 횟수" value={`${statistics.totalTrades}회`} />
+          <StatItem
+            label="총 거래 횟수"
+            value={`${statistics.totalTrades}회`}
+          />
           <StatItem
             label="승리 거래"
             value={`${statistics.winningTrades}회`}
@@ -89,12 +94,18 @@ export function StatisticsTab({ statistics }: StatisticsTabProps) {
           <StatItem
             label="연 환산 수익률"
             value={`${statistics.annualizedReturn.toFixed(2)}%`}
-            valueColor={statistics.annualizedReturn >= 0 ? "text-red-500" : "text-blue-500"}
+            valueColor={
+              statistics.annualizedReturn >= 0
+                ? "text-red-500"
+                : "text-blue-500"
+            }
           />
           <StatItem
             label="총 수익률"
             value={`${statistics.totalReturn.toFixed(2)}%`}
-            valueColor={statistics.totalReturn >= 0 ? "text-red-500" : "text-blue-500"}
+            valueColor={
+              statistics.totalReturn >= 0 ? "text-red-500" : "text-blue-500"
+            }
           />
         </div>
 
@@ -107,25 +118,37 @@ export function StatisticsTab({ statistics }: StatisticsTabProps) {
           <StatItem
             label="최종 자본"
             value={`${Math.round(statistics.finalCapital).toLocaleString()}원`}
-            valueColor={statistics.finalCapital >= statistics.initialCapital ? "text-red-500" : "text-blue-500"}
+            valueColor={
+              statistics.finalCapital >= statistics.initialCapital
+                ? "text-red-500"
+                : "text-blue-500"
+            }
           />
           <StatItem
             label="순손익"
             value={`${Math.round(statistics.finalCapital - statistics.initialCapital).toLocaleString()}원`}
-            valueColor={statistics.finalCapital >= statistics.initialCapital ? "text-red-500" : "text-blue-500"}
+            valueColor={
+              statistics.finalCapital >= statistics.initialCapital
+                ? "text-red-500"
+                : "text-blue-500"
+            }
           />
           <StatItem
             label="평균 거래당 수익"
-            value={statistics.totalTrades > 0
-              ? `${Math.round((statistics.finalCapital - statistics.initialCapital) / statistics.totalTrades).toLocaleString()}원`
-              : "0원"
+            value={
+              statistics.totalTrades > 0
+                ? `${Math.round((statistics.finalCapital - statistics.initialCapital) / statistics.totalTrades).toLocaleString()}원`
+                : "0원"
             }
           />
           <StatItem
             label="수익률 / MDD"
-            value={statistics.maxDrawdown !== 0
-              ? (statistics.totalReturn / Math.abs(statistics.maxDrawdown)).toFixed(2)
-              : "N/A"
+            value={
+              statistics.maxDrawdown !== 0
+                ? (
+                    statistics.totalReturn / Math.abs(statistics.maxDrawdown)
+                  ).toFixed(2)
+                : "N/A"
             }
           />
         </div>
@@ -184,7 +207,11 @@ function StatItem({
 /**
  * 매매 성공률 바 차트 (amcharts5)
  */
-function SuccessRateChart({ data }: { data: Array<{ name: string; value: number; color: number }> }) {
+function SuccessRateChart({
+  data,
+}: {
+  data: Array<{ name: string; value: number; color: number }>;
+}) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -199,7 +226,7 @@ function SuccessRateChart({ data }: { data: Array<{ name: string; value: number;
         panY: false,
         wheelX: "none",
         wheelY: "none",
-      })
+      }),
     );
 
     // X축 (카테고리)
@@ -209,7 +236,7 @@ function SuccessRateChart({ data }: { data: Array<{ name: string; value: number;
         renderer: am5xy.AxisRendererX.new(root, {
           minGridDistance: 20,
         }),
-      })
+      }),
     );
     xAxis.data.setAll(data);
 
@@ -217,7 +244,7 @@ function SuccessRateChart({ data }: { data: Array<{ name: string; value: number;
     const yAxis = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {}),
-      })
+      }),
     );
 
     // 바 시리즈
@@ -231,14 +258,16 @@ function SuccessRateChart({ data }: { data: Array<{ name: string; value: number;
         tooltip: am5.Tooltip.new(root, {
           labelText: "{categoryX}: {valueY}%",
         }),
-      })
+      }),
     );
 
     // 색상 적용
     series.columns.template.adapters.add("fill", (fill, target) => {
       const dataItem = target.dataItem;
       if (dataItem) {
-        const index = data.findIndex(d => d.name === dataItem.get("categoryX"));
+        const index = data.findIndex(
+          (d) => d.name === dataItem.get("categoryX"),
+        );
         if (index !== -1) {
           return am5.color(data[index].color);
         }
@@ -259,7 +288,11 @@ function SuccessRateChart({ data }: { data: Array<{ name: string; value: number;
 /**
  * 유니버스별 파이 차트 (amcharts5)
  */
-function UniversePieChart({ data }: { data: Array<{ name: string; value: number; color: number }> }) {
+function UniversePieChart({
+  data,
+}: {
+  data: Array<{ name: string; value: number; color: number }>;
+}) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -271,14 +304,14 @@ function UniversePieChart({ data }: { data: Array<{ name: string; value: number;
     const chart = root.container.children.push(
       am5percent.PieChart.new(root, {
         layout: root.verticalLayout,
-      })
+      }),
     );
 
     const series = chart.series.push(
       am5percent.PieSeries.new(root, {
         valueField: "value",
         categoryField: "name",
-      })
+      }),
     );
 
     // 색상 적용
@@ -286,7 +319,7 @@ function UniversePieChart({ data }: { data: Array<{ name: string; value: number;
       const dataItem = target.dataItem;
       if (dataItem) {
         const category = dataItem.get("category");
-        const item = data.find(d => d.name === category);
+        const item = data.find((d) => d.name === category);
         if (item) {
           return am5.color(item.color);
         }
@@ -313,7 +346,11 @@ function UniversePieChart({ data }: { data: Array<{ name: string; value: number;
 /**
  * 매도 조건별 파이 차트 (amcharts5)
  */
-function SellConditionPieChart({ data }: { data: Array<{ name: string; value: number; color: number }> }) {
+function SellConditionPieChart({
+  data,
+}: {
+  data: Array<{ name: string; value: number; color: number }>;
+}) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -325,14 +362,14 @@ function SellConditionPieChart({ data }: { data: Array<{ name: string; value: nu
     const chart = root.container.children.push(
       am5percent.PieChart.new(root, {
         layout: root.verticalLayout,
-      })
+      }),
     );
 
     const series = chart.series.push(
       am5percent.PieSeries.new(root, {
         valueField: "value",
         categoryField: "name",
-      })
+      }),
     );
 
     // 색상 적용
@@ -340,7 +377,7 @@ function SellConditionPieChart({ data }: { data: Array<{ name: string; value: nu
       const dataItem = target.dataItem;
       if (dataItem) {
         const category = dataItem.get("category");
-        const item = data.find(d => d.name === category);
+        const item = data.find((d) => d.name === category);
         if (item) {
           return am5.color(item.color);
         }

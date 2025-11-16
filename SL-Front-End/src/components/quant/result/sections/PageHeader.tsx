@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 /**
  * Result 페이지 헤더 섹션
  * - 페이지 제목 및 액션 버튼

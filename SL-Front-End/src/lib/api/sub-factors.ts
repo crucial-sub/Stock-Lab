@@ -17,7 +17,9 @@ import { axiosInstance, axiosServerInstance } from "../axios";
 export async function getSubFactors(isServer = false): Promise<SubFactor[]> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
-  const response = await axios.get<{ sub_factors: SubFactor[] }>("/sub-factors/list");
+  const response = await axios.get<{ sub_factors: SubFactor[] }>(
+    "/sub-factors/list",
+  );
   return response.data.sub_factors;
 }
 

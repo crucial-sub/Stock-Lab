@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7일 (7 * 24 * 60)
 
     # Performance
     CHUNK_SIZE: int = 10000  # 대용량 데이터 청크 크기

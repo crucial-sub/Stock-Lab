@@ -34,8 +34,7 @@ export function useRemoveFavoriteMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (stockCode: string) =>
-      marketQuoteApi.removeFavorite(stockCode),
+    mutationFn: (stockCode: string) => marketQuoteApi.removeFavorite(stockCode),
     onSuccess: () => {
       // 관심 종목 목록 캐시 갱신
       queryClient.invalidateQueries({

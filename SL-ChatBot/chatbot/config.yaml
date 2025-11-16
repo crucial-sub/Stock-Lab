@@ -6,7 +6,7 @@ llm:
   model: "mistral.mistral-7b-instruct-v0:2"
   temperature: 0.7
   max_tokens: 2000
-  region: "us-east-1"
+  region: "ap-northeast-2"
 
 rag:
   vectordb_path: "../rag/vectordb/chroma"

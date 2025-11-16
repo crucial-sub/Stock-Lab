@@ -2,27 +2,120 @@
 import os
 import re
 import asyncio
-from typing import Optional
+import types
+import sys
+import warnings
+import uuid
+from typing import Optional, List
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock").lower()
+# LangChain deprecation 경고 무시
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', message='.*migration guide.*')
+
+_pydantic_v1_module = None
 try:
-    from langchain_aws import ChatBedrock
-    # Claude 도구 호출 에이전트
-    from langchain.agents import create_tool_calling_agent, AgentExecutor
-    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-    from langchain_core.messages import BaseMessage
-    from langchain.memory import ConversationBufferWindowMemory
+    import pydantic as _pydantic
+    import pydantic.class_validators as _pydantic_class_validators
+
+    _pydantic_v1_module = types.ModuleType("langchain_core.pydantic_v1")
+    for attr in dir(_pydantic):
+        if attr.startswith("__"):
+            continue
+        setattr(_pydantic_v1_module, attr, getattr(_pydantic, attr))
+    for attr in dir(_pydantic_class_validators):
+        if attr.startswith("__"):
+            continue
+        if hasattr(_pydantic_v1_module, attr):
+            continue
+        setattr(_pydantic_v1_module, attr, getattr(_pydantic_class_validators, attr))
+    _pydantic_v1_module.__all__ = [name for name in dir(_pydantic_v1_module) if not name.startswith("__")]
+    sys.modules.setdefault("langchain_core.pydantic_v1", _pydantic_v1_module)
+except ImportError:
+    pass
+
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock").lower()
+
+# LangChain 의존성은 버전에 따라 모듈 경로가 달라지므로 개별적으로 로드한다.
+ChatBedrock = None
+create_tool_calling_agent = None
+AgentExecutor = None
+ChatPromptTemplate = None
+MessagesPlaceholder = None
+BaseMessage = None
+ConversationBufferWindowMemory = None
+create_react_agent = None
+initialize_agent = None
+AgentType = None
+
+try:
+    from langchain_aws import ChatBedrock  # type: ignore
 except ImportError as e:
-    print(f"경고: LangChain 컴포넌트가 설치되지 않았습니다. 실행: pip install langchain langchain-aws. 오류: {e}")
-    ChatBedrock = None
-    create_tool_calling_agent = None
-    AgentExecutor = None
+    print(f"경고: LangChain AWS(ChatBedrock) 컴포넌트가 없습니다. pip install langchain-aws 실행 필요. 오류: {e}")
+
+# LangChain 0.2.x 호환 간단한 에이전트 래퍼
+class SimpleLLMAgent:
+    """LangChain 0.2.x 호환 간단한 LLM 에이전트"""
+    def __init__(self, llm, tools, prompt):
+        self.llm = llm
+        self.tools = tools
+        self.prompt = prompt
+        self.tool_map = {tool.name: tool for tool in tools}
+
+    def invoke(self, inputs):
+        """에이전트 호출"""
+        try:
+            # 프롬프트에 입력 바인딩
+            if hasattr(self.prompt, 'format_prompt'):
+                formatted = self.prompt.format_prompt(**inputs)
+                response = self.llm.invoke(formatted)
+            elif hasattr(self.prompt, 'format'):
+                # ChatPromptTemplate는 format 대신 다른 방식 사용
+                messages = self.prompt.format_messages(**inputs)
+                response = self.llm.invoke(messages)
+            else:
+                response = self.llm.invoke(inputs)
+            return response
+        except Exception as e:
+            return f"에러: {str(e)}"
+
+def _create_simple_agent(llm, tools, prompt):
+    """SimpleLLMAgent 생성 함수"""
+    return SimpleLLMAgent(llm, tools, prompt)
+
+create_tool_calling_agent = _create_simple_agent
+AgentExecutor = None
+try:
+    from langchain.agents import create_react_agent, AgentType, initialize_agent  # type: ignore
+except ImportError:
+    # Fallbacks may not be available depending on LangChain version
+    pass
+
+try:
+    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder  # type: ignore
+except ImportError as e:
+    print(f"경고: LangChain Prompt 컴포넌트를 불러오지 못했습니다. 오류: {e}")
     ChatPromptTemplate = None
-    ConversationBufferWindowMemory = None
+    MessagesPlaceholder = None
+
+try:
+    from langchain_core.messages import BaseMessage  # type: ignore
+except ImportError as e:
+    print(f"경고: LangChain Message 컴포넌트를 불러오지 못했습니다. 오류: {e}")
     BaseMessage = None
+
+try:
+    from langchain.memory import ConversationBufferWindowMemory  # type: ignore
+except ImportError:
+    try:
+        # LangChain 0.3+는 메모리 API가 classic 패키지로 이동했다.
+        from langchain_classic.memory import ConversationBufferWindowMemory  # type: ignore
+        print('정보: langchain.memory 대신 langchain_classic.memory에서 ConversationBufferWindowMemory를 로드했습니다.')
+    except ImportError as e:
+        print(f"경고: ConversationBufferWindowMemory를 불러오지 못했습니다. pip install langchain-classic 실행 필요. 오류: {e}")
+        ConversationBufferWindowMemory = None
 
 # Load environment variables
 env_path = Path(__file__).parent.parent.parent / ".env"
@@ -35,10 +128,12 @@ except ImportError:
     FactorSync = None
 
 try:
-    from rag_retriever import RAGRetriever
+    from retrievers.factory import RetrieverFactory
+    from retrievers.base_retriever import BaseRetriever
 except ImportError:
-    print("Warning: RAGRetriever not imported")
-    RAGRetriever = None
+    print("Warning: Retriever modules not imported")
+    RetrieverFactory = None
+    BaseRetriever = None
 
 try:
     from news_retriever import NewsRetriever
@@ -51,6 +146,60 @@ try:
 except ImportError:
     print("Warning: Tools not imported")
     get_tools = None
+
+try:
+    from ui_language import (
+        QUESTIONS_DATA,
+        STRATEGY_TAGS_MAPPING,
+        UILanguageType,
+        UILanguageQuestionnaire,
+        UILanguageRecommendation,
+        UILanguageBacktestConfiguration,
+        Question,
+        OptionCard,
+        StrategyRecommendation,
+        ConditionPreview,
+        UserProfileSummary,
+        ConfigurationField
+    )
+except ImportError:
+    print("Warning: UI Language modules not imported")
+    QUESTIONS_DATA = None
+    STRATEGY_TAGS_MAPPING = None
+
+
+class SimpleAgentExecutor:
+    """LangChain 0.2.x 호환 간단한 에이전트 실행기"""
+    def __init__(self, agent, tools, **kwargs):
+        self.agent = agent
+        self.tools = {tool.name: tool for tool in tools}
+        self.verbose = kwargs.get('verbose', False)
+        self.return_intermediate_steps = kwargs.get('return_intermediate_steps', False)
+        self.handle_parsing_errors = kwargs.get('handle_parsing_errors', True)
+
+    def invoke(self, inputs):
+        """에이전트 실행"""
+        try:
+            # Agent에 input 전달
+            result = self.agent.invoke(inputs)
+
+            # LangChain 0.2.x: AIMessage 객체 처리
+            if hasattr(result, 'content'):
+                # AIMessage 객체
+                return {"output": result.content}
+            elif isinstance(result, dict):
+                # 딕셔너리 반환
+                return {"output": result.get("output") or result}
+            elif isinstance(result, str):
+                # 문자열 반환
+                return {"output": result}
+            else:
+                # 기타 객체
+                return {"output": str(result)}
+        except Exception as e:
+            if self.verbose:
+                print(f"Agent execution error: {e}")
+            return {"output": str(e)}
 
 
 class ChatHandler:
@@ -65,6 +214,10 @@ class ChatHandler:
         self.agent_executor = None
         self.conversation_history = {}
         self.agent_type = None  # Track which agent type is being used
+
+        # UI Language 및 세션 관리
+        self.session_data = {}  # {session_id: {question_answers, current_question, user_tags}}
+        self.session_state = {}  # {session_id: {"in_questionnaire": bool, "answers": {...}}}
 
         self._load_config()
         self._init_components()
@@ -104,9 +257,18 @@ class ChatHandler:
             print("FactorSync initialized - Backend integration enabled")
 
         # Initialize RAG retriever
-        if RAGRetriever:
-            self.rag_retriever = RAGRetriever(self.config.get("rag", {}))
-            print("RAG Retriever initialized - Knowledge base loaded")
+        if RetrieverFactory:
+            try:
+                self.rag_retriever = RetrieverFactory.create_retriever(
+                    retriever_type=os.getenv("RETRIEVER_TYPE"),
+                    config=self.config.get("rag", {})
+                )
+                print("RAG Retriever initialized - Knowledge base loaded")
+                
+                # 헬스 체크
+            except Exception as e:
+                print(f"Warning: RAG Retriever initialization failed: {e}")
+                self.rag_retriever = None
 
         # Initialize News retriever
         if NewsRetriever:
@@ -172,45 +334,79 @@ class ChatHandler:
 
                 # 5. Claude 에이전트 생성
                 print("Step 5: Claude 에이전트와 Executor 생성 중...")
-                # Claude는 도구 호출(Tool Calling)을 기본 지원
-                agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
-                self.agent_type = "tool_calling"
-                print(f"  Claude 에이전트 생성 완료, AgentExecutor 생성 중...")
-                self.agent_executor = AgentExecutor(
-                    agent=agent,
-                    tools=tools,
-                    verbose=True,
-                    return_intermediate_steps=True,
-                    handle_parsing_errors=True
-                )
-                print("Step 5 OK: AgentExecutor 생성 완료")
+                agent = None
+                self.agent_type = None
 
-                print("✅ LangChain AgentExecutor 생성 성공")
+                # Claude는 도구 호출(Tool Calling)을 기본 지원
+                if create_tool_calling_agent:
+                    try:
+                        agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
+                        self.agent_type = "simple_llm"
+                        print("  SimpleLLMAgent 기반 에이전트를 생성했습니다.")
+                    except Exception as e:
+                        print(f"  에이전트 생성 실패: {e}")
+                        agent = None
+
+                # 에이전트가 성공적으로 생성되었으면 SimpleAgentExecutor로 래핑
+                if agent:
+                    try:
+                        self.agent_executor = SimpleAgentExecutor(
+                            agent=agent,
+                            tools=tools,
+                            verbose=True,
+                            return_intermediate_steps=True,
+                            handle_parsing_errors=True
+                        )
+                        print("Step 5 OK: SimpleAgentExecutor 생성 완료")
+                    except Exception as e:
+                        print(f"  SimpleAgentExecutor 생성 실패: {e}")
+                        self.agent_executor = None
+
+                if not self.agent_executor:
+                    print("경고: 사용 가능한 LangChain 에이전트를 생성하지 못했습니다.")
+                    return
+
+                print("[OK] LangChain 에이전트 생성 성공")
             except Exception as e:
-                print(f"❌ LangChain 에이전트 초기화 오류: {e}")
+                print(f"[ERROR] LangChain 에이전트 초기화 오류: {e}")
                 import traceback
                 traceback.print_exc()
         else:
             print(f"경고: 에이전트 초기화 건너뜀. 제공자={self.provider}, get_tools={get_tools is not None}")
 
-    async def handle(self, message: str, session_id: Optional[str] = None) -> dict:
+    async def handle(self, message: str, session_id: Optional[str] = None, answer: Optional[dict] = None) -> dict:
         """사용자 메시지를 처리합니다.
 
         Args:
             message: 사용자 입력
             session_id: 선택사항 세션 ID
+            answer: 선택사항 질문 응답 데이터 {question_id, option_id}
 
         Returns:
-            응답 딕셔너리
+            응답 딕셔너리 (ui_language 포함)
         """
+        # 세션 ID가 없으면 생성
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
         # 0. 정책 검사 (투자 조언 금지 정책)
         policy_violation = self._check_investment_advisory_policy(message)
         if policy_violation:
+            print(f"DEBUG: Policy violation detected")
             return {
-                "response": policy_violation,
+                "answer": policy_violation,
                 "intent": "policy_violation",
+                "session_id": session_id,
                 "sources": []
             }
+
+        # 전략 추천 플로우 감지
+        print(f"DEBUG: Checking _is_strategy_recommendation_request...")
+        # 이미 설문조사 진행 중이거나 새로운 전략 추천 요청인 경우
+        in_questionnaire = session_id in self.session_state
+        if in_questionnaire or self._is_strategy_recommendation_request(message):
+            print(f"DEBUG: Strategy recommendation flow triggered! (in_questionnaire={in_questionnaire})")
+            return await self._handle_strategy_recommendation_flow(message, session_id, answer)
 
         # 1. Classify intent
         intent = await self._classify_intent(message)
@@ -223,6 +419,7 @@ class ChatHandler:
             message, intent, context, session_id
         )
 
+        response["session_id"] = session_id
         return response
 
     async def _classify_intent(self, message: str) -> str:
@@ -280,7 +477,7 @@ class ChatHandler:
         # 2. RAG 지식 베이스 검색 (설명 의도일 때만)
         if self.rag_retriever and intent == "explain":
             try:
-                rag_context = self.rag_retriever.get_context(
+                rag_context = await self.rag_retriever.get_context(
                     message,
                     top_k=self.config.get("rag", {}).get("top_k", 3)
                 )
@@ -317,9 +514,11 @@ class ChatHandler:
 
         # Get or create conversation memory for the session
         if session_id not in self.conversation_history:
-            self.conversation_history[session_id] = ConversationBufferWindowMemory(
-                k=5, memory_key="chat_history", return_messages=True
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                self.conversation_history[session_id] = ConversationBufferWindowMemory(
+                    k=5, memory_key="chat_history", return_messages=True
+                )
         memory = self.conversation_history[session_id]
 
         try:
@@ -347,6 +546,20 @@ class ChatHandler:
             )
 
             answer = response.get("output", "No response generated.")
+            if isinstance(answer, list):
+                formatted_parts = []
+                for element in answer:
+                    if isinstance(element, str):
+                        formatted_parts.append(element)
+                    elif isinstance(element, dict):
+                        text = element.get("text") or element.get("message") or element.get("output")
+                        if isinstance(text, str):
+                            formatted_parts.append(text)
+                        else:
+                            formatted_parts.append(str(text))
+                    else:
+                        formatted_parts.append(str(element))
+                answer = "\n".join(formatted_parts)
 
             
             answer = self._clean_tool_calls_from_response(answer)
@@ -386,6 +599,16 @@ class ChatHandler:
 
         # 연속된 빈 줄 제거
         response = re.sub(r'\n\n+', '\n\n', response)
+
+        # CP949에서 인코딩 불가능한 문자 제거 (이모지, 특수 기호 등)
+        try:
+            response.encode('cp949')
+        except UnicodeEncodeError:
+            # 한글과 ASCII만 남기고 나머지는 제거
+            response = ''.join(
+                c if ord(c) < 128 or '\uac00' <= c <= '\ud7a3' or c in '\n\t '
+                else '' for c in response
+            )
 
         return response.strip()
 
@@ -492,3 +715,351 @@ class ChatHandler:
             )
 
         return base_response
+
+    # =============== UI Language 메서드 ===============
+
+    async def _handle_strategy_recommendation_flow(self, message: str, session_id: str, answer: Optional[dict]) -> dict:
+        """전략 추천 플로우 핸들러"""
+        # 세션 초기화
+        if session_id not in self.session_state:
+            self.session_state[session_id] = {
+                "in_questionnaire": True,
+                "current_question": 1,
+                "answers": {}
+            }
+
+        state = self.session_state[session_id]
+
+        # 질문 진행 중
+        if state["in_questionnaire"]:
+            # 유저 응답 저장
+            if answer:
+                state["answers"][answer["question_id"]] = answer["option_id"]
+                state["current_question"] += 1
+
+            # 5개 질문 모두 완료
+            if state["current_question"] > 5:
+                # 전략 추천 생성
+                user_tags = self._collect_user_tags(state["answers"])
+                ui_language = self._generate_strategy_recommendations(user_tags)
+
+                # 투자 프로필 저장
+                state["user_tags"] = user_tags
+                state["in_questionnaire"] = False
+
+                return {
+                    "answer": "분석 완료! 당신의 투자 성향에 맞는 3가지 전략을 추천합니다.",
+                    "intent": "strategy_recommendation_complete",
+                    "session_id": session_id,
+                    "ui_language": ui_language
+                }
+            else:
+                # 다음 질문 렌더링
+                ui_language = self._generate_questionnaire_response(session_id, state["current_question"])
+
+                question_message = f"질문 {state['current_question']}/5: {ui_language['question']['text']}"
+
+                return {
+                    "answer": question_message,
+                    "intent": "questionnaire_progress",
+                    "session_id": session_id,
+                    "ui_language": ui_language
+                }
+        else:
+            # 전략 선택 처리
+            if answer and "strategy_id" in answer:
+                strategy_id = answer["strategy_id"]
+                state["selected_strategy"] = strategy_id
+
+                # 백테스트 설정 UI 생성
+                ui_language = self._generate_backtest_configuration_response(strategy_id)
+
+                if ui_language:
+                    return {
+                        "answer": f"선택하신 전략으로 백테스트 설정을 진행하겠습니다.",
+                        "intent": "backtest_configuration",
+                        "session_id": session_id,
+                        "ui_language": ui_language
+                    }
+
+        return {
+            "answer": "요청을 처리할 수 없습니다.",
+            "intent": "error",
+            "session_id": session_id
+        }
+
+    def _collect_user_tags(self, answers: dict) -> List[str]:
+        """답변으로부터 유저 태그 수집"""
+        user_tags = []
+
+        if not QUESTIONS_DATA:
+            return user_tags
+
+        for question_id, option_id in answers.items():
+            if question_id in QUESTIONS_DATA:
+                question_data = QUESTIONS_DATA[question_id]
+                for option in question_data["options"]:
+                    if option["id"] == option_id:
+                        user_tags.extend(option["tags"])
+                        break
+
+        return user_tags
+
+    def _is_strategy_recommendation_request(self, message: str) -> bool:
+        """전략 추천 요청인지 판단 - 명시적인 추천 요청만 감지"""
+        if not QUESTIONS_DATA:
+            # UI Language 데이터 미로드 시 전략 추천 비활성화
+            print(f"DEBUG: QUESTIONS_DATA not loaded")
+            return False
+
+        msg_lower = message.lower().strip()
+
+        # 명시적인 추천 요청 패턴만 감지
+        explicit_patterns = [
+            "전략 추천",
+            "추천해",
+            "추천 받",
+            "추천 해",
+            "strategy recommend",
+            "recommend strategy"
+        ]
+
+        result = any(pattern in msg_lower for pattern in explicit_patterns)
+        print(f"DEBUG: _is_strategy_recommendation_request('{message}') = {result}")
+        return result
+
+    def _generate_questionnaire_response(self, session_id: str, question_num: int) -> dict:
+        """질문 UI Language 응답 생성"""
+        if not QUESTIONS_DATA:
+            return {}
+
+        # 질문 순서대로 가져오기
+        questions_list = sorted(QUESTIONS_DATA.values(), key=lambda x: x["order"])
+        if question_num > len(questions_list):
+            return {}
+
+        question_data = questions_list[question_num - 1]
+
+        # OptionCard 객체 생성
+        options = [
+            OptionCard(
+                id=opt["id"],
+                label=opt["label"],
+                description=opt["description"],
+                icon=opt["icon"],
+                tags=opt["tags"]
+            )
+            for opt in question_data["options"]
+        ]
+
+        # Question 객체 생성
+        question = Question(
+            question_id=question_data["question_id"],
+            text=question_data["text"],
+            options=options
+        )
+
+        # UILanguageQuestionnaire 생성
+        ui_language_type = UILanguageType.QUESTIONNAIRE_START if question_num == 1 else UILanguageType.QUESTIONNAIRE_PROGRESS
+        progress_percentage = (question_num / 5) * 100
+
+        ui_lang = UILanguageQuestionnaire(
+            type=ui_language_type,
+            total_questions=5,
+            current_question=question_num,
+            progress_percentage=int(progress_percentage) if question_num > 1 else None,
+            question=question
+        )
+
+        return ui_lang.to_dict()
+
+    def _calculate_strategy_match_score(self, user_tags: List[str], strategy_tags: List[str]) -> tuple:
+        """전략 매칭 점수 계산 (점수, 퍼센티지)"""
+        if not strategy_tags:
+            return 0.0, 0
+
+        matching_tags = set(user_tags) & set(strategy_tags)
+        match_score = len(matching_tags) / len(strategy_tags)
+        match_percentage = int(match_score * 100)
+
+        return match_score, match_percentage
+
+    def _generate_matching_reasons(self, user_tags: List[str], strategy_tags: List[str]) -> List[str]:
+        """매칭 이유 생성"""
+        reasons = []
+
+        if "long_term" in user_tags and "long_term" in strategy_tags:
+            reasons.append("장기 투자 성향 일치")
+        if "short_term" in user_tags and "short_term" in strategy_tags:
+            reasons.append("단기 매매 성향 일치")
+
+        for style in ["style_value", "style_growth", "style_momentum", "style_dividend"]:
+            if style in user_tags and style in strategy_tags:
+                style_name = {
+                    "style_value": "저평가주 선호",
+                    "style_growth": "성장주 선호",
+                    "style_momentum": "모멘텀 선호",
+                    "style_dividend": "배당주 선호"
+                }
+                reasons.append(style_name.get(style, ""))
+
+        for risk in ["risk_high", "risk_mid", "risk_low"]:
+            if risk in user_tags and risk in strategy_tags:
+                risk_name = {
+                    "risk_high": "높은 위험 감수 의향",
+                    "risk_mid": "중간 정도의 위험 감수",
+                    "risk_low": "저위험 선호"
+                }
+                reasons.append(risk_name.get(risk, ""))
+
+        return [r for r in reasons if r]
+
+    def _generate_strategy_recommendations(self, user_tags: List[str]) -> dict:
+        """전략 추천 응답 생성"""
+        if not STRATEGY_TAGS_MAPPING:
+            return {}
+
+        # 모든 전략의 점수 계산
+        strategy_scores = []
+
+        for strategy_id, strategy_data in STRATEGY_TAGS_MAPPING.items():
+            match_score, match_percentage = self._calculate_strategy_match_score(
+                user_tags, strategy_data["tags"]
+            )
+            matching_reasons = self._generate_matching_reasons(user_tags, strategy_data["tags"])
+
+            # ConditionPreview 생성
+            conditions_preview = [
+                ConditionPreview(
+                    condition=cond["condition"],
+                    condition_info=cond["condition_info"]
+                )
+                for cond in strategy_data.get("conditions", [])
+            ]
+
+            recommendation = StrategyRecommendation(
+                rank=0,  # 임시, 정렬 후 설정
+                strategy_id=strategy_id,
+                strategy_name=strategy_data["strategy_name"],
+                summary=strategy_data["summary"],
+                match_score=round(match_score, 2),
+                match_percentage=match_percentage,
+                match_reasons=matching_reasons,
+                tags=strategy_data["tags"],
+                conditions_preview=conditions_preview,
+                icon="",  # 전략에 맞게 설정
+                badge=None
+            )
+
+            strategy_scores.append((match_score, recommendation))
+
+        # 점수로 정렬 및 상위 3개 선택
+        strategy_scores.sort(key=lambda x: x[0], reverse=True)
+        top_3_strategies = strategy_scores[:3]
+
+        # rank 설정 및 badge 추가
+        recommendations = []
+        for rank, (_, recommendation) in enumerate(top_3_strategies, 1):
+            recommendation.rank = rank
+            if rank == 1:
+                recommendation.badge = "최고 추천"
+            recommendations.append(recommendation)
+
+        # UserProfileSummary 생성 (태그로부터)
+        profile = UserProfileSummary(
+            investment_period=self._get_tag_display_name("investment_period", user_tags),
+            investment_style=self._get_tag_display_name("investment_style", user_tags),
+            risk_tolerance=self._get_tag_display_name("risk_tolerance", user_tags),
+            dividend_preference=self._get_tag_display_name("dividend_preference", user_tags),
+            sector_preference=self._get_tag_display_name("sector_preference", user_tags)
+        )
+
+        ui_lang = UILanguageRecommendation(
+            type=UILanguageType.STRATEGY_RECOMMENDATION,
+            recommendations=recommendations,
+            user_profile_summary=profile
+        )
+
+        return ui_lang.to_dict()
+
+    def _get_tag_display_name(self, category: str, user_tags: List[str]) -> str:
+        """태그로부터 표시 이름 추출"""
+        if not QUESTIONS_DATA or category not in QUESTIONS_DATA:
+            return ""
+
+        question_data = QUESTIONS_DATA[category]
+        for option in question_data["options"]:
+            if option["id"] in user_tags:
+                return option["label"]
+        return ""
+
+    def _generate_backtest_configuration_response(self, strategy_id: str) -> dict:
+        """백테스트 설정 UI Language 응답 생성"""
+        if not STRATEGY_TAGS_MAPPING or strategy_id not in STRATEGY_TAGS_MAPPING:
+            return {}
+
+        strategy_data = STRATEGY_TAGS_MAPPING[strategy_id]
+
+        configuration_fields = [
+            ConfigurationField(
+                field_id="initial_capital",
+                label="초기 투자 금액",
+                type="number",
+                unit="원",
+                default_value=100000000,
+                min_value=10000000,
+                max_value=1000000000,
+                step=10000000,
+                required=True,
+                description="백테스트에 사용할 초기 투자 금액을 설정하세요."
+            ),
+            ConfigurationField(
+                field_id="start_date",
+                label="백테스트 시작일",
+                type="date",
+                default_value="2024-01-01",
+                min_value="2020-01-01",
+                max_value="2024-12-31",
+                required=True
+            ),
+            ConfigurationField(
+                field_id="end_date",
+                label="백테스트 종료일",
+                type="date",
+                default_value="2024-12-31",
+                min_value="2020-01-01",
+                max_value="2024-12-31",
+                required=True
+            ),
+            ConfigurationField(
+                field_id="rebalance_frequency",
+                label="리밸런싱 주기",
+                type="select",
+                default_value="MONTHLY",
+                options=[
+                    {"value": "DAILY", "label": "매일"},
+                    {"value": "WEEKLY", "label": "매주"},
+                    {"value": "MONTHLY", "label": "매월"}
+                ],
+                required=True
+            ),
+            ConfigurationField(
+                field_id="max_positions",
+                label="최대 보유 종목 수",
+                type="number",
+                unit="개",
+                default_value=20,
+                min_value=5,
+                max_value=50,
+                step=5,
+                required=True
+            )
+        ]
+
+        ui_lang = UILanguageBacktestConfiguration(
+            type=UILanguageType.BACKTEST_CONFIGURATION,
+            strategy={"strategy_id": strategy_id, "strategy_name": strategy_data["strategy_name"]},
+            configuration_fields=configuration_fields
+        )
+
+        return ui_lang.to_dict()

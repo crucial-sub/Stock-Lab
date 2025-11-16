@@ -62,6 +62,18 @@ python main.py
 
 서버가 http://localhost:8001 에서 실행됩니다.
 
+### Docker로 Chatbot 실행
+
+로컬 Python 환경을 건드리지 않고 CLI 챗봇을 실행하려면 Docker 이미지를 사용하세요.
+
+```bash
+# 프로젝트 루트에서 실행
+docker build -t quant-chatbot ./SL-ChatBot/chatbot
+docker run --rm -it --env-file ./SL-ChatBot/.env quant-chatbot
+```
+
+`.env` 파일에는 AWS 자격 증명과 Bedrock 설정이 필요합니다. 컨테이너는 `src/main.py`를 실행하여 터미널 기반 챗봇을 시작합니다.
+
 ### 4. API 테스트
 
 ```bash

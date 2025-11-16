@@ -44,19 +44,18 @@ export function PortfolioDashboard({
   return (
     <section className="mb-[60px]" aria-label="포트폴리오 대시보드">
       {/* 제목 */}
-      <h1 className="text-[32px] font-bold text-black mb-[40px]">
+      <h1 className="text-[2rem] font-bold text-black mb-[40px]">
         포트폴리오 대시보드
       </h1>
 
       {/* 대시보드 카드 그리드 */}
-      <div className="grid grid-cols-3 gap-[20px]">
+      <div className="grid grid-cols-3 gap-5">
         {/* 총 모의 자산 */}
-        <div className="bg-surface border border-surface rounded-lg px-5 py-4 h-[100px]">
-          <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-base font-semibold text-black">총 모의 자산</h2>
+        <div className="bg-[#AC64FF0D] border border-[#AC64FF33] rounded-lg px-5 py-5 h-[9.25rem]">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-[1.25rem] font-semibold text-black">총 모의 자산</h2>
             <span
-              className={[
-                "text-xs font-medium px-2 py-0.5 rounded",
+              className={["px-3 py-1 rounded-[100px] bg-[#FF646433] font-semibold text-[0.75rem]",
                 isPositive(totalAssetsChange)
                   ? "bg-red-50 text-red-500"
                   : "bg-blue-50 text-blue-500",
@@ -67,36 +66,37 @@ export function PortfolioDashboard({
               {formatPercent(totalAssetsChange)}
             </span>
           </div>
-          <p className="text-[28px] font-bold text-black">
-            {formatNumber(totalAssets)}
-            <span className="text-xl font-normal ml-1">원</span>
-          </p>
-          <p
-            className={[
-              "text-sm font-medium mt-1",
-              isPositive(totalAssetsChange)
-                ? "text-red-500"
-                : "text-blue-500",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {isPositive(totalAssetsChange) ? "+" : ""}
-            {formatNumber(
-              Math.floor(totalAssets * (totalAssetsChange / 100))
-            )}
-            원
-          </p>
+          <div>
+            <p className="text-[1.5rem] font-semibold text-black">
+              {formatNumber(totalAssets)}
+              <span className="text-[1rem] text-normal ml-1">원</span>
+            </p>
+            <p
+              className={[
+                "",
+                isPositive(totalAssetsChange)
+                  ? "text-red-500"
+                  : "text-blue-500",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {isPositive(totalAssetsChange) ? "+" : ""}
+              {formatNumber(
+                Math.floor(totalAssets * (totalAssetsChange / 100))
+              )}
+              원
+            </p>
+          </div>
         </div>
 
         {/* 이번주 수익 */}
-        <div className="bg-surface border border-surface rounded-lg px-5 py-4 h-[100px]">
-          <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-base font-semibold text-black">이번주 수익</h2>
+        <div className="bg-[#AC64FF0D] border border-[#AC64FF33] rounded-lg px-5 py-5 h-[9.25rem]">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-[1.25rem] font-semibold text-black">이번주 수익</h2>
             <span
-              className={[
-                "text-xs font-medium px-2 py-0.5 rounded",
-                isPositive(weeklyProfitChange)
+              className={["px-3 py-1 rounded-[100px] bg-[#FF646433] font-semibold text-[0.75rem]",
+                isPositive(totalAssetsChange)
                   ? "bg-red-50 text-red-500"
                   : "bg-blue-50 text-blue-500",
               ]
@@ -106,22 +106,38 @@ export function PortfolioDashboard({
               {formatPercent(weeklyProfitChange)}
             </span>
           </div>
-          <p className="text-[28px] font-bold text-black">
+          <p className="text-[1.5rem] font-semibold text-black">
             {formatNumber(weeklyProfit)}
-            <span className="text-xl font-normal ml-1">원</span>
+            <span className="text-[1rem] text-normal ml-1">원</span>
+          </p>
+          <p
+            className={[
+              "",
+              isPositive(weeklyProfitChange)
+                ? "text-red-500"
+                : "text-blue-500",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {isPositive(weeklyProfitChange) ? "+" : ""}
+            {formatNumber(
+              Math.floor(totalAssets * (weeklyProfitChange / 100))
+            )}
+            원
           </p>
         </div>
 
         {/* 활성 포트폴리오 */}
-        <div className="bg-surface border border-surface rounded-lg px-5 py-4 h-[100px]">
-          <h2 className="text-base font-semibold text-black mb-2">
+        <div className="bg-[#AC64FF0D] border border-[#AC64FF33] rounded-lg px-5 py-5 h-[9.25rem]">
+          <h2 className="text-[1.25rem] font-semibold text-black mb-6">
             활성 포트폴리오
           </h2>
-          <p className="text-[28px] font-bold text-black">
+          <p className="text-[1.5rem] font-semibold text-black">
             {activePortfolioCount}
-            <span className="text-xl font-normal ml-1">개</span>
+            <span className="text-[1rem] text-normal ml-1">개</span>
           </p>
-          <p className="text-sm font-normal text-muted mt-1">
+          <p className="">
             현재 활성 중인 포트폴리오 개수
           </p>
         </div>

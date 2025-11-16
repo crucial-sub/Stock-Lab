@@ -3,7 +3,9 @@
 import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
 import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
+import { strategyApi } from "@/lib/api/strategy";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 /**
  * 포트폴리오 페이지 클라이언트 컴포넌트
@@ -42,10 +44,18 @@ export function PortfolioPageClient({
   weeklyProfit,
   weeklyProfitChange,
   activePortfolioCount,
-  portfolios,
+  portfolios: initialPortfolios,
 }: PortfolioPageClientProps) {
+  const router = useRouter();
+
+  // 포트폴리오 목록 상태 (삭제 후 UI 업데이트를 위해)
+  const [portfolios, setPortfolios] = useState<Portfolio[]>(initialPortfolios);
+
   // 선택된 포트폴리오 ID 목록
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 삭제 진행 중 상태
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // 포트폴리오 선택/해제 핸들러
   const handleSelect = (id: string) => {
@@ -60,10 +70,60 @@ export function PortfolioPageClient({
     });
   };
 
-  // 포트폴리오 클릭 핸들러
+  // 포트폴리오 클릭 핸들러 - 백테스트 결과 상세 페이지로 이동
   const handlePortfolioClick = (id: string) => {
-    // TODO: 포트폴리오 상세 페이지로 이동
-    console.log("Portfolio clicked:", id);
+    router.push(`/quant/result/${id}`);
+  };
+
+  // 선택 항목 삭제 핸들러
+  const handleDeleteSelected = async () => {
+    // 선택된 항목이 없으면 종료
+    if (selectedIds.size === 0) {
+      alert("삭제할 포트폴리오를 선택해주세요.");
+      return;
+    }
+
+    // 사용자 확인
+    const confirmed = window.confirm(
+      `선택한 ${selectedIds.size}개의 포트폴리오를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+
+      // API 호출 - 선택된 ID 배열로 변환
+      const sessionIds = Array.from(selectedIds);
+      await strategyApi.deleteBacktestSessions(sessionIds);
+
+      // 성공: 로컬 상태에서 삭제된 항목 제거
+      setPortfolios((prev) =>
+        prev.filter((portfolio) => !selectedIds.has(portfolio.id))
+      );
+
+      // 선택 상태 초기화
+      setSelectedIds(new Set());
+
+      // 성공 메시지
+      alert(`${sessionIds.length}개의 포트폴리오가 삭제되었습니다.`);
+
+      // 페이지 새로고침 (대시보드 통계 업데이트를 위해)
+      router.refresh();
+    } catch (error: any) {
+      console.error("포트폴리오 삭제 실패:", error);
+
+      // 에러 메시지 표시
+      const errorMessage =
+        error?.response?.data?.detail ||
+        error?.message ||
+        "포트폴리오 삭제 중 오류가 발생했습니다.";
+      alert(errorMessage);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // 활성 포트폴리오를 맨 앞으로, 나머지는 최신순으로 정렬
@@ -76,7 +136,7 @@ export function PortfolioPageClient({
   });
 
   return (
-    <main className="flex-1 px-10 pt-[60px] pb-20 overflow-auto">
+    <main className="flex-1 px-[18.75rem] py-[3.75rem] overflow-auto">
       {/* 대시보드 */}
       <PortfolioDashboard
         totalAssets={totalAssets}
@@ -90,12 +150,14 @@ export function PortfolioPageClient({
       <section aria-label="내 포트폴리오">
         {/* 섹션 헤더 */}
         <div className="flex items-center justify-between mb-[40px]">
-          <h2 className="text-2xl font-bold text-black">내 포트폴리오</h2>
+          <h2 className="text-[2rem] font-bold text-black">내 포트폴리오</h2>
           <button
             type="button"
-            className="text-sm font-medium text-muted hover:text-black transition-colors"
+            onClick={handleDeleteSelected}
+            disabled={isDeleting || selectedIds.size === 0}
+            className="text-[#c8c8c8] hover:text-black transition-colors underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            전체삭제
+            {isDeleting ? "삭제 중..." : "선택항목 삭제"}
           </button>
         </div>
 

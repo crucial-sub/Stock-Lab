@@ -14,10 +14,10 @@ export function CreatePortfolioCard() {
   return (
     <Link
       href="/quant/new" // TODO: 전략 생성 페이지 경로로 변경
-      className="bg-surface border border-surface rounded-lg p-5 h-[170px] flex flex-col items-center justify-center gap-4 transition-all duration-200 hover:border-brand-soft hover:shadow-elev-card"
+      className="bg-surface border border-surface rounded-lg p-5 h-[12.5rem] flex flex-col items-center justify-center gap-4 transition-all duration-200 hover:border-brand-soft hover:shadow-elev-card"
     >
       {/* 플러스 아이콘 */}
-      <div className="relative w-[60px] h-[60px]">
+      <div className="relative w-[80px] h-[80px]">
         <Image
           src="/icons/circle-plus.svg"
           alt=""
@@ -28,7 +28,7 @@ export function CreatePortfolioCard() {
       </div>
 
       {/* 텍스트 */}
-      <span className="text-base font-medium text-muted">새로 만들기</span>
+      <span className="text-[1.5rem] font-bold text-[#c8c8c8]">새로 만들기</span>
     </Link>
   );
 }

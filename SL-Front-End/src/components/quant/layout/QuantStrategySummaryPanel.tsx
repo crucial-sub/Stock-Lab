@@ -115,7 +115,7 @@ export default function QuantStrategySummaryPanel({
 
   return (
     <div
-      className={`relative
+      className={`relative bg-[#FFFFFF66]
         transition-all duration-300 ease-in-out
         ${isOpen ? "w-[26.25rem]" : "w-10"}
       `}

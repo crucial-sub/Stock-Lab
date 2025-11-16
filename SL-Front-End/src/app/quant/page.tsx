@@ -3,8 +3,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 // 2. Internal imports (프로젝트 내부)
-import { PortfolioPageClient } from "./PortfolioPageClient";
 import { strategyApi } from "@/lib/api/strategy";
+import { formatDateToCard } from "@/lib/date-utils";
+import { PortfolioPageClient } from "./PortfolioPageClient";
 
 // 포트폴리오 타입 정의 (PortfolioPageClient의 Portfolio 타입과 동일)
 interface Portfolio {
@@ -45,8 +46,8 @@ export default async function PortfolioPage() {
       title: strategy.strategyName,
       profitRate: strategy.totalReturn ?? 0,
       isActive: strategy.isActive,
-      lastModified: strategy.updatedAt,
-      createdAt: strategy.createdAt,
+      lastModified: formatDateToCard(strategy.updatedAt),
+      createdAt: formatDateToCard(strategy.createdAt),
     }));
 
     // 대시보드 통계 계산

@@ -52,12 +52,12 @@ export function PortfolioCard({
 
   return (
     <div
-      className="bg-surface border border-surface rounded-lg p-5 h-[170px] flex flex-col cursor-pointer transition-all duration-200 hover:border-brand-soft hover:shadow-elev-card"
+      className="bg-surface border border-surface rounded-lg h-[12.5rem] flex flex-col cursor-pointer transition-all duration-200 hover:border-brand-soft hover:shadow-elev-sm p-5"
       onClick={() => onClick(id)}
     >
       {/* 헤더: 제목과 체크박스 */}
-      <div className="flex items-start justify-between mb-3">
-        <h3 className="text-xl font-semibold text-black">{title}</h3>
+      <div className="flex items-start justify-between">
+        <h3 className="text-[1.25rem] font-semibold text-black">{title}</h3>
         <button
           type="button"
           onClick={(e) => {
@@ -86,7 +86,7 @@ export function PortfolioCard({
       {/* 수익률 */}
       <p
         className={[
-          "text-[28px] font-bold mb-2",
+          "text-[1.25rem] font-semibold mb-3",
           isPositive ? "text-red-500" : "text-blue-500",
         ]
           .filter(Boolean)
@@ -98,12 +98,12 @@ export function PortfolioCard({
       {/* 상태 태그 */}
       <div className="mb-auto">
         {isActive ? (
-          <span className="inline-block bg-brand-soft text-brand-base text-xs font-medium px-3 py-1 rounded-full">
-            가상 매매 中
+          <span className="inline-block bg-tag-portfolio-active font-semibold px-4 py-1 rounded-full text-white">
+            가상 매매
           </span>
         ) : (
-          <span className="inline-block bg-muted/20 text-muted text-xs font-medium px-3 py-1 rounded-full">
-            대기중 +
+          <span className="inline-block bg-[#c8c8c8] font-semibold px-4 py-1 rounded-full text-white">
+            백테스팅
           </span>
         )}
       </div>

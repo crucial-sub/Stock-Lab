@@ -75,7 +75,7 @@ async def get_my_strategies(
                 session_id=session.session_id,
                 strategy_id=strategy.strategy_id,
                 strategy_name=strategy.strategy_name,
-                is_active=session.is_active if hasattr(session, 'is_active') else True,
+                is_active=session.is_active if hasattr(session, 'is_active') else False,
                 status=session.status,
                 total_return=float(stats.total_return) if stats and stats.total_return else None,
                 created_at=session.created_at,

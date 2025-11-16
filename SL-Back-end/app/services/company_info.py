@@ -275,7 +275,8 @@ class CompanyInfoService:
             balance_data = await self._parse_balance_sheet(fs.stmt_id)
 
             # 최신 재무 데이터 저장 (지표 계산용)
-            if idx == 0:
+            # 데이터가 있는 첫 번째 분기를 사용 (미공시 분기 건너뛰기)
+            if not latest_financial_data and (income_data.get("revenue") or balance_data.get("total_equity")):
                 latest_financial_data = {**income_data, **balance_data}
 
             # 분기별 실적 계산

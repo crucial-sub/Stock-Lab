@@ -5,6 +5,7 @@ import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
 import * as am5xy from "@amcharts/amcharts5/xy";
 import { useEffect, useRef, useState } from "react";
 import type { BacktestResult } from "@/types/api";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
 
 /**
  * 매매 내역 탭 컴포넌트
@@ -25,6 +26,10 @@ export function TradingHistoryTab({
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<"all" | "byDate">("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
+  const [selectedStock, setSelectedStock] = useState<{
+    name: string;
+    code: string;
+  } | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const itemsPerPage = 10;
 
@@ -275,9 +280,18 @@ export function TradingHistoryTab({
                 key={`${trade.stockCode}-${idx}`}
                 className="grid grid-cols-[1fr_150px_150px_120px_120px] gap-4 px-6 py-4 border-b border-border-subtle hover:bg-bg-muted transition-colors"
               >
-                <div className="text-text-body font-medium">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedStock({
+                      name: trade.stockName,
+                      code: trade.stockCode,
+                    })
+                  }
+                  className="text-text-body font-medium text-left hover:text-accent-primary hover:underline transition-colors"
+                >
                   {trade.stockName}
-                </div>
+                </button>
                 <div className="text-text-body text-right">{trade.buyDate}</div>
                 <div className="text-text-body text-right">
                   {trade.sellDate}
@@ -352,6 +366,14 @@ export function TradingHistoryTab({
           </div>
         )}
       </div>
+
+      {/* 종목 상세 모달 */}
+      <StockDetailModal
+        isOpen={!!selectedStock}
+        onClose={() => setSelectedStock(null)}
+        stockName={selectedStock?.name || ""}
+        stockCode={selectedStock?.code || ""}
+      />
     </div>
   );
 }

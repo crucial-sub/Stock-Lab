@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { BacktestResult, UniverseStock } from "@/types/api";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
 
 /**
  * 매매종목 정보 탭 컴포넌트
@@ -26,6 +27,10 @@ export function StockInfoTab({
   universeStocks = [],
 }: StockInfoTabProps) {
   const [showAll, setShowAll] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<{
+    name: string;
+    code: string;
+  } | null>(null);
   const INITIAL_DISPLAY_COUNT = 30;
 
   // 종목별 매수/매도 여부 계산
@@ -113,9 +118,16 @@ export function StockInfoTab({
           displayedStocks.map((stock, index) => {
             const hasTraded = stock.hasBuy || stock.hasSell;
             return (
-              <div
+              <button
+                type="button"
                 key={stock.stockCode}
-                className={`relative p-4 rounded border transition-all ${
+                onClick={() =>
+                  setSelectedStock({
+                    name: stock.stockName,
+                    code: stock.stockCode,
+                  })
+                }
+                className={`relative p-4 rounded border transition-all cursor-pointer text-left ${
                   hasTraded
                     ? "bg-bg-muted border-border-subtle hover:border-accent-primary hover:bg-bg-surface"
                     : "bg-bg-surface border-border-subtle opacity-50 hover:opacity-75"
@@ -146,14 +158,14 @@ export function StockInfoTab({
 
                 {/* 종목 정보 */}
                 <div className="mt-6 space-y-1">
-                  <div className="text-sm font-semibold text-text-strong truncate">
+                  <div className="text-sm font-semibold text-text-strong truncate hover:text-accent-primary transition-colors">
                     {stock.stockName}
                   </div>
                   <div className="text-xs text-text-muted">
                     {stock.stockCode}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })
         )}
@@ -171,6 +183,14 @@ export function StockInfoTab({
           </button>
         </div>
       )}
+
+      {/* 종목 상세 모달 */}
+      <StockDetailModal
+        isOpen={!!selectedStock}
+        onClose={() => setSelectedStock(null)}
+        stockName={selectedStock?.name || ""}
+        stockCode={selectedStock?.code || ""}
+      />
     </div>
   );
 }

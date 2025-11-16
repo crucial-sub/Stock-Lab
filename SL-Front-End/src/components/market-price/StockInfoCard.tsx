@@ -73,25 +73,66 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
     },
   ];
 
+  // 시가총액 포맷팅 (1조 미만이면 억 단위만 표시)
+  const formatMarketCap = (marketCap: number): string => {
+    const trillion = Math.floor(marketCap / 1000000000000);
+    const billion = Math.floor((marketCap % 1000000000000) / 100000000);
+
+    if (trillion > 0) {
+      return `${trillion}조 ${billion}억원`;
+    }
+    return `${billion}억원`;
+  };
+
+  // PSR 계산 (API에서 안 오면 계산)
+  const calculatePSR = (): number | null => {
+    if (investmentIndicators.psr) {
+      return investmentIndicators.psr;
+    }
+    // Fallback: 시가총액 / 최근 분기 매출액으로 계산
+    if (basicInfo.marketCap && companyData.quarterlyPerformance?.[0]?.revenue) {
+      const revenue = companyData.quarterlyPerformance[0].revenue;
+      if (revenue && revenue !== 0) {
+        return basicInfo.marketCap / revenue;
+      }
+    }
+    return null;
+  };
+
+  // PBR 계산 (API에서 안 오면 계산)
+  const calculatePBR = (): number | null => {
+    if (investmentIndicators.pbr) {
+      return investmentIndicators.pbr;
+    }
+    // Fallback: 시가총액 / 자본총계로 계산
+    if (basicInfo.marketCap && companyData.balanceSheets?.[0]?.totalEquity) {
+      const totalEquity = companyData.balanceSheets[0].totalEquity;
+      if (totalEquity && totalEquity !== 0) {
+        return basicInfo.marketCap / totalEquity;
+      }
+    }
+    return null;
+  };
+
   // 개요 통계
   const overviewStats = [
     {
       label: "시가총액",
-      value: basicInfo.marketCap
-        ? `${Math.floor(basicInfo.marketCap / 1000000000000)}조 ${Math.floor((basicInfo.marketCap % 1000000000000) / 100000000)}억원`
-        : "-",
+      value: basicInfo.marketCap ? formatMarketCap(basicInfo.marketCap) : "-",
     },
     {
       label: "PSR",
-      value: investmentIndicators.psr
-        ? `${investmentIndicators.psr.toFixed(2)}배`
-        : "-",
+      value: (() => {
+        const psr = calculatePSR();
+        return psr ? `${psr.toFixed(2)}배` : "-";
+      })(),
     },
     {
       label: "PBR",
-      value: investmentIndicators.pbr
-        ? `${investmentIndicators.pbr.toFixed(2)}배`
-        : "-",
+      value: (() => {
+        const pbr = calculatePBR();
+        return pbr ? `${pbr.toFixed(2)}배` : "-";
+      })(),
     },
   ];
 

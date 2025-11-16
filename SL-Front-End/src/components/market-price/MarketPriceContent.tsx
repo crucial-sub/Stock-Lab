@@ -1,20 +1,21 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Icon } from "@/components/common/Icon";
 import { StockDetailModal } from "@/components/modal/StockDetailModal";
-import { type SortBy } from "@/lib/api/market-quote";
-import {
-  useMarketQuotesQuery,
-  useFavoriteStocksQuery,
-  useRecentViewedStocksQuery,
-} from "@/hooks/useMarketQuoteQuery";
 import {
   useAddFavoriteMutation,
   useRemoveFavoriteMutation,
 } from "@/hooks/useFavoriteStockMutation";
+import {
+  useFavoriteStocksQuery,
+  useMarketQuotesQuery,
+  useRecentViewedStocksQuery,
+} from "@/hooks/useMarketQuoteQuery";
 import { useAddRecentViewedMutation } from "@/hooks/useRecentViewedMutation";
+import { authApi } from "@/lib/api/auth";
+import type { SortBy } from "@/lib/api/market-quote";
 
 type TabType = "sort" | "favorite" | "recent";
 
@@ -46,25 +47,36 @@ type MarketRow = {
 export function MarketPriceContent() {
   // 기본 탭을 시가총액 순으로 설정 (로그인 불필요)
   const [selectedTab, setSelectedTab] = useState(
-    marketTabs.find((tab) => tab.sortBy === "market_cap") || marketTabs[0]
+    marketTabs.find((tab) => tab.sortBy === "market_cap") || marketTabs[0],
   );
   const [selectedRow, setSelectedRow] = useState<MarketRow | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [userId, setUserId] = useState<string | undefined>(undefined);
 
-  const todayLabel = new Date().toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  // 현재 로그인한 사용자 정보 가져오기
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const user = await authApi.getCurrentUser();
+        setUserId(user.user_id);
+      } catch {
+        // 로그인하지 않은 경우 userId는 undefined로 유지
+        setUserId(undefined);
+      }
+    };
+    fetchUser();
+  }, []);
 
   // Queries
   const marketQuotesQuery = useMarketQuotesQuery(
     selectedTab.sortBy || "market_cap",
     1,
-    50
+    50,
+    userId,
   );
-  const favoritesQuery = useFavoriteStocksQuery();
-  const recentViewedQuery = useRecentViewedStocksQuery();
+  // 로그인한 사용자만 즐겨찾기/최근 본 종목 조회
+  const favoritesQuery = useFavoriteStocksQuery(!!userId);
+  const recentViewedQuery = useRecentViewedStocksQuery(!!userId);
 
   // Mutations
   const addFavoriteMutation = useAddFavoriteMutation();
@@ -82,6 +94,13 @@ export function MarketPriceContent() {
   // 데이터 포맷팅 - 중복 제거 및 최적화
   const rows = useMemo<MarketRow[]>(() => {
     if (!currentQuery.data) return [];
+
+    // 즐겨찾기 종목 코드 Set 생성 (최근 본 주식 탭에서 사용)
+    const favoriteStockCodes = new Set(
+      favoritesQuery.isSuccess && favoritesQuery.data
+        ? favoritesQuery.data.items.map((item) => item.stockCode ?? "")
+        : [],
+    );
 
     // 공통 포맷팅 함수
     const formatStockItem = (
@@ -101,19 +120,26 @@ export function MarketPriceContent() {
         isFavorite?: boolean;
       },
       index: number,
-      isFav: boolean = false
+      isFav: boolean = false,
     ): MarketRow => {
       const changeRateValue = item.changeRate ?? 0;
+      const stockCode = item.stockCode ?? item.code ?? "";
+
+      // 즐겨찾기 여부:
+      // 1. API 응답의 isFavorite (시세 탭)
+      // 2. isFav 파라미터 (즐겨찾기 탭)
+      // 3. favoriteStockCodes Set (최근 본 주식 탭)
+      const isFavorite = item.isFavorite ?? (isFav || favoriteStockCodes.has(stockCode));
+
       return {
         rank: item.rank ?? index + 1,
         name: item.stockName ?? item.name ?? "",
-        code: item.stockCode ?? item.code ?? "",
-        price: (item.currentPrice ?? item.price)
-          ? `${(item.currentPrice ?? item.price)!.toLocaleString()}원`
-          : "-",
-        change: changeRateValue !== 0
-          ? `${changeRateValue > 0 ? "+" : ""}${changeRateValue.toFixed(2)}%`
-          : "-",
+        code: stockCode,
+        price:
+          (item.currentPrice ?? item.price)
+            ? `${(item.currentPrice ?? item.price)?.toLocaleString()}원`
+            : "-",
+        change: `${changeRateValue > 0 ? "+" : ""}${changeRateValue.toFixed(2)}%`,
         trend: (item.trend ??
           (changeRateValue > 0
             ? "up"
@@ -122,32 +148,32 @@ export function MarketPriceContent() {
               : "flat")) as "up" | "down" | "flat",
         volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
         tradingValue: item.tradingValue
-          ? `${Math.floor(item.tradingValue / 100000000)}억원`
+          ? `${Math.floor(item.tradingValue / 100000000).toLocaleString()}억원`
           : "-",
         marketCap: item.marketCap
-          ? `${Math.floor(item.marketCap / 100000000)}억원`
+          ? `${Math.floor(item.marketCap / 100000000).toLocaleString()}억원`
           : "-",
-        isFavorite: item.isFavorite ?? isFav,
+        isFavorite,
       };
     };
 
     // 탭 타입별 데이터 처리
     if (selectedTab.type === "favorite" && favoritesQuery.data) {
       return favoritesQuery.data.items.map((item, index) =>
-        formatStockItem(item, index, true)
+        formatStockItem(item, index, true),
       );
     }
 
     if (selectedTab.type === "recent" && recentViewedQuery.data) {
       return recentViewedQuery.data.items.map((item, index) =>
-        formatStockItem(item, index, false)
+        formatStockItem(item, index, false),
       );
     }
 
     // 일반 시세 조회
     if (marketQuotesQuery.data) {
       return marketQuotesQuery.data.items.map((item, index) =>
-        formatStockItem(item, index)
+        formatStockItem(item, index),
       );
     }
 
@@ -156,6 +182,7 @@ export function MarketPriceContent() {
     currentQuery.data,
     selectedTab.type,
     favoritesQuery.data,
+    favoritesQuery.isSuccess,
     recentViewedQuery.data,
     marketQuotesQuery.data,
   ]);
@@ -165,9 +192,10 @@ export function MarketPriceContent() {
     if (!searchQuery.trim()) return rows;
 
     const query = searchQuery.toLowerCase().trim();
-    return rows.filter((row) =>
-      row.name.toLowerCase().includes(query) ||
-      row.code.toLowerCase().includes(query)
+    return rows.filter(
+      (row) =>
+        row.name.toLowerCase().includes(query) ||
+        row.code.toLowerCase().includes(query),
     );
   }, [rows, searchQuery]);
 
@@ -202,10 +230,18 @@ export function MarketPriceContent() {
 
   return (
     <>
-      <div className="rounded-[8px] bg-white p-6 shadow-card">
-        <div className="flex flex-col gap-4">
+      {/*
+        Figma 디자인 기준:
+        - 컨테이너: 흰색 배경, rounded-lg(12px), shadow-elev-sm
+        - 탭: pill 형태 (rounded-full), 활성 탭은 보라색 배경
+        - 검색: surface 배경색과 테두리 적용
+      */}
+      <div className="rounded-lg shadow-elev-sm overflow-hidden">
+        <div className="flex flex-col gap-4 p-5">
+          {/* 탭과 검색 영역 */}
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-wrap gap-2">
+            {/* 탭 버튼 그룹 */}
+            <div className="flex flex-wrap gap-1">
               {marketTabs.map((tab) => {
                 const isActive =
                   tab.type === "sort"
@@ -216,30 +252,31 @@ export function MarketPriceContent() {
                     key={tab.label}
                     type="button"
                     onClick={() => setSelectedTab(tab)}
-                    className={`rounded-[8px] px-[1.5rem] py-[0.5rem] text-[1.25rem] font-semibold transition ${
-                      isActive
-                        ? "bg-brand-primary text-white"
-                        : "text-text-body font-normal"
-                    }`}
+                    className={`rounded-full px-3 py-2 text-[1rem] tracking-[-0.02em] transition ${isActive
+                      ? "bg-brand-purple text-white font-semibold"
+                      : "text-black font-normal"
+                      }`}
                   >
                     {tab.label}
                   </button>
                 );
               })}
             </div>
-            <div className="flex items-center gap-[0.75rem]">
-              <div className="relative w-full max-w-[15rem]">
+
+            {/* 검색 영역 */}
+            <div className="flex items-center gap-3">
+              <div className="relative w-full max-w-[260px]">
                 <input
                   type="search"
-                  placeholder="종목 이름으로 검색하기"
+                  placeholder="전략 이름으로 검색하기"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-[8px] border border-border-default py-[0.7rem] px-[1rem] text-[0.75rem] text-text-body placeholder:text-tag-neutral focus:border-brand-primary focus:outline-none"
+                  className="w-full h-9 rounded-lg bg-surface border-[0.5px] border-surface py-[0.5rem] px-[0.813rem] text-[0.75rem] text-gray-600 placeholder:text-gray-600 focus:border-brand-purple focus:outline-none"
                 />
               </div>
               <button
                 type="button"
-                className="flex p-[0.7rem] items-center justify-center rounded-[8px] bg-brand-primary hover:bg-brand-primary/90 transition"
+                className="flex size-9 items-center justify-center rounded-lg bg-brand-purple hover:bg-brand-purple/90 transition"
                 aria-label="검색"
               >
                 <Icon
@@ -253,16 +290,15 @@ export function MarketPriceContent() {
           </div>
         </div>
 
-        <div className="pt-[1rem] overflow-hidden">
-          <div className="flex flex-col gap-3 px-1">
+        {/* 테이블 영역 */}
+        <div className="px-5 pb-5">
+          <div className="flex flex-col gap-2">
+            {/* 테이블 헤더 */}
             <div
-              className={`${columnTemplate} items-center py-[0.7rem] text-[1rem] font-normal text-tag-neutral`}
+              className={`${columnTemplate} items-center h-10 border-b-[0.5px] border-gray-400 text-[1rem] text-gray-400`}
             >
-              <div className="flex items-center">
-                <span className="inline-block" />
-                <div className="flex flex-col">
-                  <span>순위 및 종목 {todayLabel} 기준</span>
-                </div>
+              <div className="flex items-center pl-[105px]">
+                <span>종목명</span>
               </div>
               <div className="text-right">전일 종가</div>
               <div className="text-right">등락률</div>
@@ -294,16 +330,26 @@ export function MarketPriceContent() {
                 </p>
               </div>
             ) : (
-              filteredRows.map((row) => (
+              filteredRows.map((row, index) => (
                 <div
                   key={row.rank}
-                  className={`${columnTemplate} py-[1rem] items-center rounded-[8px] text-text-body transition hover:bg-white hover:shadow-card cursor-pointer`}
+                  role="button"
+                  tabIndex={0}
+                  className={`${columnTemplate} h-12 items-center rounded-lg border-[0.5px] border-surface text-black transition hover:shadow-[0px_0px_9px_0px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-[#1822340D]`}
                   onClick={() => handleRowClick(row)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleRowClick(row);
+                    }
+                  }}
                 >
-                  <div className="flex">
+                  {/* 순위 + 즐겨찾기 + 종목명 */}
+                  <div className="flex items-center gap-0">
+                    {/* 즐겨찾기 아이콘 */}
                     <button
                       type="button"
-                      className="px-[0.5rem]"
+                      className="px-3"
                       onClick={(event) => {
                         event.stopPropagation();
                         handleToggleFavorite(row.code, row.isFavorite);
@@ -316,59 +362,60 @@ export function MarketPriceContent() {
                             : "/icons/star.svg"
                         }
                         alt="즐겨찾기"
-                        size={28}
+                        size={24}
                         color={
                           row.isFavorite
-                            ? "var(--color-brand-primary)"
-                            : "var(--color-border-default)"
+                            ? "rgb(172, 100, 255)"
+                            : "rgba(0, 0, 0, 0.2)"
                         }
                       />
                     </button>
-                    <div className="flex">
-                      <span className="pr-[1rem] text-[1.2rem] font-semibold text-text-strong">
-                        {row.rank}
+                    {/* 순위 */}
+                    <span className="text-[1rem] font-normal text-black text-right w-8">
+                      {row.rank}
+                    </span>
+                    {/* 종목명 */}
+                    <div className="ml-5">
+                      <span className="text-[1rem] font-normal text-black">
+                        {row.name}
                       </span>
-                      <div className="">
-                        <span className="text-[1.2rem] font-semibold text-text-strong">
-                          {row.name}
-                        </span>
-                      </div>
                     </div>
                   </div>
-                  <div className="text-[1.2rem] font-medium text-text-strong text-right">
+
+                  {/* 전일 종가 */}
+                  <div className="text-[1rem] font-normal text-black text-right">
                     {row.price}
                   </div>
+
+                  {/* 등락률 */}
                   <div
-                    className={`text-[1.2rem] font-semibold text-right ${
-                      row.trend === "up"
-                        ? "text-brand-primary"
-                        : "text-accent-primary"
-                    }`}
+                    className={`text-[1rem] font-normal text-right ${row.trend === "up"
+                      ? "text-red-500"
+                      : row.trend === "down"
+                        ? "text-blue-500"
+                        : "text-black"
+                      }`}
                   >
                     {row.change}
                   </div>
-                  <div className="text-[1.2rem] font-semibold text-right">
+
+                  {/* 체결량 */}
+                  <div className="text-[1rem] font-normal text-black text-right">
                     {row.volume}
                   </div>
-                  <div className="text-[1.2rem] font-semibold text-right">
+
+                  {/* 거래대금 */}
+                  <div className="text-[1rem] font-normal text-black text-right overflow-hidden text-ellipsis whitespace-nowrap">
                     {row.tradingValue}
                   </div>
-                  <div className="text-[1.2rem] font-semibold text-right">
+
+                  {/* 시가총액 */}
+                  <div className="text-[1rem] font-normal text-black text-right overflow-hidden text-ellipsis whitespace-nowrap">
                     {row.marketCap}
                   </div>
                 </div>
               ))
             )}
-          </div>
-
-          <div className="flex items-center justify-center gap-6 px-4 py-4 text-sm text-text-body">
-            <button type="button" className="text-tag-neutral">
-              &lt;
-            </button>
-            <span className="text-base font-semibold text-text-strong">1</span>
-            <button type="button" className="text-tag-neutral">
-              &gt;
-            </button>
           </div>
         </div>
       </div>

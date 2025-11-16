@@ -7,7 +7,7 @@ import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
 import { NewsDetailModal } from "@/components/news/NewsDetailModal";
 import { useAvailableThemesQuery, useDebounce, useNewsListQuery } from "@/hooks";
-import type { NewsListParams, NewsItem } from "@/types/news";
+import type { NewsItem, NewsListParams } from "@/types/news";
 
 const NewsPage: NextPage = () => {
   const [selectedThemes, setSelectedThemes] = useState<string[]>(["전체"]);
@@ -63,7 +63,7 @@ const NewsPage: NextPage = () => {
   };
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-4 px-[18.75rem] py-[3.75rem]">
       <h1 className="text-[1.8rem] font-semibold text-text-strong">테마별 뉴스 요약</h1>
       <div className="flex flex-col gap-4 md:grid md:grid-cols-[2fr_auto_auto]">
         <input

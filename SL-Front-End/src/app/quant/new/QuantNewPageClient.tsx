@@ -67,7 +67,7 @@ export function QuantNewPageClient() {
       {/* 중앙 컨텐츠 영역 */}
       <main
         id="quant-main-content"
-        className="flex-1 overflow-y-auto px-10 py-12"
+        className="flex-1 overflow-y-auto px-10 py-12 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
       >
         {/* Tab Content - Suspense로 감싸서 lazy loading 처리 */}
         <Suspense

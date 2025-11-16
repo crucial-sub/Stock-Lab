@@ -2,7 +2,7 @@ const hasDocument = typeof document !== "undefined";
 const hasWindow = typeof window !== "undefined";
 
 export const AUTH_TOKEN_COOKIE_KEY = "access_token";
-const DEFAULT_MAX_AGE_SECONDS = 60 * 60; // 1 day
+const DEFAULT_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7일
 
 /**
  * access token을 쿠키에 저장합니다.

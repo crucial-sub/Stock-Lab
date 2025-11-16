@@ -325,7 +325,7 @@ export function FactorSelectionModal({
           <button
             onClick={currentTab === "factor" ? handleFactorConfirm : handleConfirm}
             disabled={currentTab === "factor" ? !selectedFactor : !isConfirmEnabled()}
-            className="px-6 py-2 bg-brand-primary text-white rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="px-6 py-2 bg-brand-purple text-white rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {currentTab === "factor" ? "다음 단계" : "선택 완료"}
           </button>

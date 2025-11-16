@@ -35,19 +35,21 @@ export function GeneralSettingsSection() {
           </Title>
           <div className="flex items-center gap-3">
             <button
-              className={`font-normal ${is_day_or_month === "daily"
-                ? "bg-price-up-soft border border-red-500 font-semibold text-price-up"
-                : "bg-surface"
-                } rounded-md px-6 py-2`}
+              className={`font-normal ${
+                is_day_or_month === "daily"
+                  ? "bg-price-up-soft border border-red-500 font-semibold text-price-up"
+                  : "bg-surface"
+              } rounded-md px-6 py-2`}
               onClick={() => setIsDayOrMonth("daily")}
             >
               일봉
             </button>
             <button
-              className={`font-normal ${is_day_or_month === "monthly"
-                ? "bg-price-up-soft border border-brand border-red-500 font-semibold text-price-up"
-                : "bg-surface"
-                } rounded-md px-6 py-2`}
+              className={`font-normal ${
+                is_day_or_month === "monthly"
+                  ? "bg-price-up-soft border border-brand border-red-500 font-semibold text-price-up"
+                  : "bg-surface"
+              } rounded-md px-6 py-2`}
               onClick={() => setIsDayOrMonth("monthly")}
             >
               월봉
@@ -74,9 +76,9 @@ export function GeneralSettingsSection() {
               value={
                 start_date
                   ? `${start_date.slice(0, 4)}-${start_date.slice(
-                    4,
-                    6
-                  )}-${start_date.slice(6, 8)}`
+                      4,
+                      6,
+                    )}-${start_date.slice(6, 8)}`
                   : ""
               }
               onChange={(e) => {
@@ -95,9 +97,9 @@ export function GeneralSettingsSection() {
               value={
                 end_date
                   ? `${end_date.slice(0, 4)}-${end_date.slice(
-                    4,
-                    6
-                  )}-${end_date.slice(6, 8)}`
+                      4,
+                      6,
+                    )}-${end_date.slice(6, 8)}`
                   : ""
               }
               onChange={(e) => {

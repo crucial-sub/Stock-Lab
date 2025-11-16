@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState } from "react";
 import * as am5 from "@amcharts/amcharts5";
-import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
+import * as am5xy from "@amcharts/amcharts5/xy";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BacktestResult } from "@/types/api";
 
 interface MonthlyReturnsChartProps {
@@ -45,7 +45,8 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
 
   // 월별 데이터 계산
   const monthlyData = useMemo(() => {
-    if (!yieldPoints || yieldPoints.length === 0 || selectedYear === null) return [];
+    if (!yieldPoints || yieldPoints.length === 0 || selectedYear === null)
+      return [];
 
     const monthMap = new Map<number, any[]>();
 
@@ -57,7 +58,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
         if (!monthMap.has(month)) {
           monthMap.set(month, []);
         }
-        monthMap.get(month)!.push(point);
+        monthMap.get(month)?.push(point);
       });
 
     // 각 월의 수익률 계산
@@ -65,11 +66,12 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
     for (let month = 1; month <= 12; month++) {
       const points = monthMap.get(month);
       if (points && points.length > 0) {
-        const sortedPoints = points.sort((a, b) =>
-          new Date(a.date).getTime() - new Date(b.date).getTime()
+        const sortedPoints = points.sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
         );
         const startReturn = sortedPoints[0].cumulativeReturn || 0;
-        const endReturn = sortedPoints[sortedPoints.length - 1].cumulativeReturn || 0;
+        const endReturn =
+          sortedPoints[sortedPoints.length - 1].cumulativeReturn || 0;
         const returnRate = endReturn - startReturn;
 
         result.push({
@@ -96,7 +98,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
         panY: false,
         wheelX: "none",
         wheelY: "none",
-      })
+      }),
     );
 
     // X축 (연월)
@@ -106,7 +108,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
         renderer: am5xy.AxisRendererX.new(root, {
           minGridDistance: 30,
         }),
-      })
+      }),
     );
     xAxis.data.setAll(monthlyData);
 
@@ -114,7 +116,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
     const yAxis = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {}),
-      })
+      }),
     );
 
     // 포트폴리오 수익률 시리즈
@@ -129,7 +131,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{name}: {valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
     portfolioSeries.columns.template.setAll({
       width: am5.percent(80),
@@ -162,7 +164,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{name}: {valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
     kospiSeries.columns.template.setAll({
       width: am5.percent(80),
@@ -183,7 +185,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{name}: {valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
     kosdaqSeries.columns.template.setAll({
       width: am5.percent(80),
@@ -197,7 +199,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
       am5.Legend.new(root, {
         centerX: am5.p50,
         x: am5.p50,
-      })
+      }),
     );
     legend.data.setAll(chart.series.values);
 

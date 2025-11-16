@@ -27,7 +27,8 @@ export function StatisticsSection({
 
   // 일 평균 수익률 계산 (CAGR 기반, 연간 252 거래일 기준)
   // 공식: (1 + CAGR)^(1/252) - 1
-  const dailyReturn = (Math.pow(1 + stats.annualizedReturn / 100, 1 / 252) - 1) * 100;
+  const dailyReturn =
+    ((1 + stats.annualizedReturn / 100) ** (1 / 252) - 1) * 100;
 
   return (
     <div className="space-y-6 mb-6">
@@ -49,13 +50,17 @@ export function StatisticsSection({
               <StatMetric
                 label="누적 수익률"
                 value={`${stats.totalReturn.toFixed(2)}%`}
-                color={stats.totalReturn >= 0 ? "text-red-500" : "text-blue-500"}
+                color={
+                  stats.totalReturn >= 0 ? "text-red-500" : "text-blue-500"
+                }
                 tooltip="전체 기간 누적 수익률"
               />
               <StatMetric
                 label="CAGR"
                 value={`${stats.annualizedReturn.toFixed(2)}%`}
-                color={stats.annualizedReturn >= 0 ? "text-red-500" : "text-blue-500"}
+                color={
+                  stats.annualizedReturn >= 0 ? "text-red-500" : "text-blue-500"
+                }
                 tooltip="연평균 복리 수익률"
               />
               <StatMetric

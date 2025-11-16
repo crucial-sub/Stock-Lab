@@ -10,7 +10,10 @@ export const marketQuoteQueryKey = {
   all: ["marketQuote"] as const,
   lists: () => [...marketQuoteQueryKey.all, "list"] as const,
   list: (sortBy: SortBy, page: number, pageSize: number, userId?: string) =>
-    [...marketQuoteQueryKey.lists(), { sortBy, page, pageSize, userId }] as const,
+    [
+      ...marketQuoteQueryKey.lists(),
+      { sortBy, page, pageSize, userId },
+    ] as const,
   favorites: () => [...marketQuoteQueryKey.all, "favorites"] as const,
   recentViewed: () => [...marketQuoteQueryKey.all, "recentViewed"] as const,
 };
@@ -22,7 +25,7 @@ export function useMarketQuotesQuery(
   sortBy: SortBy,
   page = 1,
   pageSize = 50,
-  userId?: string
+  userId?: string,
 ) {
   return useQuery({
     queryKey: marketQuoteQueryKey.list(sortBy, page, pageSize, userId),

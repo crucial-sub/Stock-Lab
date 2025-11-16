@@ -29,7 +29,7 @@ export function Icon({
     .join(" ");
 
   const dimension =
-    typeof size === "number" ? `${size}px` : size ?? "1.25rem";
+    typeof size === "number" ? `${size}px` : (size ?? "1.25rem");
 
   return (
     <span

@@ -1,5 +1,5 @@
-import { Dropdown, UnderlineInput } from "@/components/common";
 import Image from "next/image";
+import { Dropdown, UnderlineInput } from "@/components/common";
 
 // API 명세 확정 후 수정 예정
 interface Condition {
@@ -44,7 +44,9 @@ export function ConditionCard({
       {/* 조건식 표시 영역 */}
       <div className="relative w-[31.25rem] h-12 flex items-center gap-3 rounded-md border-[0.5px]">
         {/* 조건식 ID */}
-        <div className={`w-12 h-12 rounded-tl-md rounded-bl-md flex items-center justify-center ${bgColor} text-white`}>
+        <div
+          className={`w-12 h-12 rounded-tl-md rounded-bl-md flex items-center justify-center ${bgColor} text-white`}
+        >
           {condition.id}
         </div>
 

@@ -53,9 +53,12 @@ export function PortfolioDashboard({
         {/* 총 모의 자산 */}
         <div className="bg-[#AC64FF0D] border border-[#AC64FF33] rounded-lg px-5 py-5 h-[9.25rem]">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-[1.25rem] font-semibold text-black">총 모의 자산</h2>
+            <h2 className="text-[1.25rem] font-semibold text-black">
+              총 모의 자산
+            </h2>
             <span
-              className={["px-3 py-1 rounded-[100px] bg-[#FF646433] font-semibold text-[0.75rem]",
+              className={[
+                "px-3 py-1 rounded-[100px] bg-[#FF646433] font-semibold text-[0.75rem]",
                 isPositive(totalAssetsChange)
                   ? "bg-red-50 text-red-500"
                   : "bg-blue-50 text-blue-500",
@@ -83,7 +86,7 @@ export function PortfolioDashboard({
             >
               {isPositive(totalAssetsChange) ? "+" : ""}
               {formatNumber(
-                Math.floor(totalAssets * (totalAssetsChange / 100))
+                Math.floor(totalAssets * (totalAssetsChange / 100)),
               )}
               원
             </p>
@@ -93,9 +96,12 @@ export function PortfolioDashboard({
         {/* 이번주 수익 */}
         <div className="bg-[#AC64FF0D] border border-[#AC64FF33] rounded-lg px-5 py-5 h-[9.25rem]">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-[1.25rem] font-semibold text-black">이번주 수익</h2>
+            <h2 className="text-[1.25rem] font-semibold text-black">
+              이번주 수익
+            </h2>
             <span
-              className={["px-3 py-1 rounded-[100px] bg-[#FF646433] font-semibold text-[0.75rem]",
+              className={[
+                "px-3 py-1 rounded-[100px] bg-[#FF646433] font-semibold text-[0.75rem]",
                 isPositive(totalAssetsChange)
                   ? "bg-red-50 text-red-500"
                   : "bg-blue-50 text-blue-500",
@@ -113,17 +119,13 @@ export function PortfolioDashboard({
           <p
             className={[
               "",
-              isPositive(weeklyProfitChange)
-                ? "text-red-500"
-                : "text-blue-500",
+              isPositive(weeklyProfitChange) ? "text-red-500" : "text-blue-500",
             ]
               .filter(Boolean)
               .join(" ")}
           >
             {isPositive(weeklyProfitChange) ? "+" : ""}
-            {formatNumber(
-              Math.floor(totalAssets * (weeklyProfitChange / 100))
-            )}
+            {formatNumber(Math.floor(totalAssets * (weeklyProfitChange / 100)))}
             원
           </p>
         </div>
@@ -137,9 +139,7 @@ export function PortfolioDashboard({
             {activePortfolioCount}
             <span className="text-[1rem] text-normal ml-1">개</span>
           </p>
-          <p className="">
-            현재 활성 중인 포트폴리오 개수
-          </p>
+          <p className="">현재 활성 중인 포트폴리오 개수</p>
         </div>
       </div>
     </section>

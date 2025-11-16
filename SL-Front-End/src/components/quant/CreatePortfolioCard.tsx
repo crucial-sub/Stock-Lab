@@ -28,7 +28,9 @@ export function CreatePortfolioCard() {
       </div>
 
       {/* 텍스트 */}
-      <span className="text-[1.5rem] font-bold text-[#c8c8c8]">새로 만들기</span>
+      <span className="text-[1.5rem] font-bold text-[#c8c8c8]">
+        새로 만들기
+      </span>
     </Link>
   );
 }

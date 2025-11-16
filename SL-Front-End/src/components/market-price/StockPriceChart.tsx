@@ -1,10 +1,10 @@
 "use client";
 
-import type { PriceHistoryPoint } from "@/lib/api/company";
 import * as am5 from "@amcharts/amcharts5";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
 import * as am5xy from "@amcharts/amcharts5/xy";
 import { useEffect, useRef } from "react";
+import type { PriceHistoryPoint } from "@/lib/api/company";
 
 interface StockPriceChartProps {
   /**
@@ -27,7 +27,11 @@ interface StockPriceChartProps {
  * - 기간별 필터링 지원
  * - 반응형 디자인
  */
-export function StockPriceChart({ data, period, isRising = true }: StockPriceChartProps) {
+export function StockPriceChart({
+  data,
+  period,
+  isRising = true,
+}: StockPriceChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,11 +46,19 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
     const allValidData = data
       .filter((point) => {
         // closePrice 또는 다른 가능한 필드명 확인
-        const price = (point as any).closePrice || (point as any).close_price || (point as any).price || (point as any).close;
+        const price =
+          (point as any).closePrice ||
+          (point as any).close_price ||
+          (point as any).price ||
+          (point as any).close;
         return price != null && price !== undefined;
       })
       .map((point) => {
-        const price = (point as any).closePrice || (point as any).close_price || (point as any).price || (point as any).close;
+        const price =
+          (point as any).closePrice ||
+          (point as any).close_price ||
+          (point as any).price ||
+          (point as any).close;
         return {
           date: new Date(point.date).getTime(),
           value: Number(price),
@@ -56,7 +68,9 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
       .sort((a, b) => a.date - b.date);
 
     // 기간에 따라 최근 N개 데이터만 선택
-    const filteredData = allValidData.slice(-Math.min(period, allValidData.length));
+    const filteredData = allValidData.slice(
+      -Math.min(period, allValidData.length),
+    );
 
     // 데이터가 없으면 차트를 그리지 않음
     if (filteredData.length === 0) {
@@ -67,8 +81,8 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
     const prices = filteredData.map((d) => d.value);
     const maxPrice = Math.max(...prices);
     const minPrice = Math.min(...prices);
-    const maxPoint = filteredData.find((d) => d.value === maxPrice)!;
-    const minPoint = filteredData.find((d) => d.value === minPrice)!;
+    const _maxPoint = filteredData.find((d) => d.value === maxPrice)!;
+    const _minPoint = filteredData.find((d) => d.value === minPrice)!;
 
     // 색상 결정 (상승: 빨강, 하락: 파랑)
     const chartColor = isRising ? 0xff6464 : 0x007dfc;
@@ -93,7 +107,7 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
         paddingRight: 0,
         paddingTop: 25,
         paddingBottom: 25,
-      })
+      }),
     );
 
     // X축 (날짜) - 라벨과 그리드 완전히 숨김
@@ -107,7 +121,7 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
       am5xy.DateAxis.new(root, {
         baseInterval: { timeUnit: "day", count: 1 },
         renderer: xRenderer,
-      })
+      }),
     );
 
     // Y축 (가격) - 라벨과 그리드 완전히 숨김
@@ -118,7 +132,7 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
     const yAxis = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
         renderer: yRenderer,
-      })
+      }),
     );
 
     // 라인 시리즈 생성 (깔끔한 단일 라인)
@@ -146,7 +160,7 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
             </div>
           `,
         }),
-      })
+      }),
     );
 
     // 라인 스타일 설정 (부드럽고 연속적인 라인)
@@ -179,7 +193,7 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
       });
     });
 
-    maxBullet.adapters.add("visible", (visible, target) => {
+    maxBullet.adapters.add("visible", (_visible, target) => {
       const dataItem = target.dataItem as any;
       if (!dataItem) return false;
       return dataItem.get("valueY") === maxPrice;
@@ -203,7 +217,7 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
       });
     });
 
-    minBullet.adapters.add("visible", (visible, target) => {
+    minBullet.adapters.add("visible", (_visible, target) => {
       const dataItem = target.dataItem as any;
       if (!dataItem) return false;
       return dataItem.get("valueY") === minPrice;
@@ -215,7 +229,7 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
       am5xy.XYCursor.new(root, {
         behavior: "none",
         xAxis: xAxis,
-      })
+      }),
     );
     cursor.lineY.set("visible", false);
     cursor.lineX.setAll({
@@ -232,7 +246,7 @@ export function StockPriceChart({ data, period, isRising = true }: StockPriceCha
     return () => {
       root.dispose();
     };
-  }, [data, period]);
+  }, [data, period, isRising]);
 
   // 데이터가 없거나 로딩 중일 때 placeholder 표시
   if (!data || data.length === 0) {

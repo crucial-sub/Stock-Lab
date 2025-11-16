@@ -1,8 +1,11 @@
-import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import type {
+  MyStrategiesResponse,
+  StrategyDetailItem,
+} from "@/lib/api/strategy";
 import { axiosInstance } from "@/lib/axios";
 import type { Strategy } from "@/types/strategy";
-import type { MyStrategiesResponse, StrategyDetailItem } from "@/lib/api/strategy";
 
 /**
  * 전략 쿼리 키
@@ -32,10 +35,15 @@ export function useStrategyList() {
   const queryClient = useQueryClient();
 
   // 서버에서 데이터 fetch
-  const { data: strategyData, isLoading, error } = useQuery<MyStrategiesResponse, Error>({
+  const {
+    data: strategyData,
+    isLoading,
+    error,
+  } = useQuery<MyStrategiesResponse, Error>({
     queryKey: strategyQueryKey.my(),
     queryFn: async () => {
-      const response = await axiosInstance.get<MyStrategiesResponse>("/strategies/my");
+      const response =
+        await axiosInstance.get<MyStrategiesResponse>("/strategies/my");
       return response.data;
     },
     staleTime: 1000 * 30, // 30초
@@ -51,11 +59,14 @@ export function useStrategyList() {
       dailyAverageReturn: item.statistics?.annualizedReturn ?? 0,
       cumulativeReturn: item.statistics?.totalReturn ?? 0,
       maxDrawdown: item.statistics?.maxDrawdown ?? 0,
-      createdAt: new Date(item.createdAt).toLocaleDateString("ko-KR", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).replace(/\. /g, ".").replace(/\.$/, ""),
+      createdAt: new Date(item.createdAt)
+        .toLocaleDateString("ko-KR", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+        .replace(/\. /g, ".")
+        .replace(/\.$/, ""),
       status: item.status,
       progress: item.progress ?? 0,
     }));
@@ -67,7 +78,7 @@ export function useStrategyList() {
       return allStrategies;
     }
     return allStrategies.filter((s) =>
-      s.name.toLowerCase().includes(searchKeyword.toLowerCase())
+      s.name.toLowerCase().includes(searchKeyword.toLowerCase()),
     );
   }, [allStrategies, searchKeyword]);
 
@@ -76,7 +87,9 @@ export function useStrategyList() {
    */
   const toggleStrategy = (id: string) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((strategyId) => strategyId !== id) : [...prev, id]
+      prev.includes(id)
+        ? prev.filter((strategyId) => strategyId !== id)
+        : [...prev, id],
     );
   };
 
@@ -106,7 +119,7 @@ export function useStrategyList() {
     if (selectedIds.length === 0) return;
 
     const confirmed = window.confirm(
-      `선택한 ${selectedIds.length}개의 백테스트를 삭제하시겠습니까?`
+      `선택한 ${selectedIds.length}개의 백테스트를 삭제하시겠습니까?`,
     );
 
     if (!confirmed) return;
@@ -114,7 +127,7 @@ export function useStrategyList() {
     try {
       // API 호출 - 백테스트 세션 삭제
       await axiosInstance.delete("/strategies/sessions", {
-        data: { session_ids: selectedIds }
+        data: { session_ids: selectedIds },
       });
 
       // React Query 캐시 무효화 (목록 자동 갱신)

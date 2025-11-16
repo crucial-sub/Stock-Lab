@@ -1,3 +1,6 @@
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   Dropdown,
   Title,
@@ -14,9 +17,6 @@ import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
-import Image from "next/image";
-import { useEffect, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 
 /**
  * 조건 매도 섹션
@@ -30,21 +30,21 @@ export function ConditionalSellSection() {
     useShallow((state) => ({
       sellConditionsUI: state.sellConditionsUI,
       condition_sell: state.condition_sell,
-    }))
+    })),
   );
 
   // 함수들은 별도로 선택 (안정적인 참조)
   const addSellConditionUI = useBacktestConfigStore(
-    (state) => state.addSellConditionUI
+    (state) => state.addSellConditionUI,
   );
   const updateSellConditionUI = useBacktestConfigStore(
-    (state) => state.updateSellConditionUI
+    (state) => state.updateSellConditionUI,
   );
   const removeSellConditionUI = useBacktestConfigStore(
-    (state) => state.removeSellConditionUI
+    (state) => state.removeSellConditionUI,
   );
   const setConditionSell = useBacktestConfigStore(
-    (state) => state.setConditionSell
+    (state) => state.setConditionSell,
   );
 
   const { data: subFactors = [] } = useSubFactorsQuery();
@@ -53,19 +53,19 @@ export function ConditionalSellSection() {
   // 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentConditionId, setCurrentConditionId] = useState<string | null>(
-    null
+    null,
   );
 
   // 토글 및 설정 상태
   const [isOpen, setIsOpen] = useState(condition_sell !== null);
   const [sellLogic, setSellLogic] = useState<string>(
-    condition_sell?.sell_logic || ""
+    condition_sell?.sell_logic || "",
   );
   const [sellPriceBasis, setSellPriceBasis] = useState<string>(
-    condition_sell?.sell_price_basis ?? "전일 종가"
+    condition_sell?.sell_price_basis ?? "전일 종가",
   );
   const [sellPriceOffset, setSellPriceOffset] = useState<number>(
-    condition_sell?.sell_price_offset ?? 10
+    condition_sell?.sell_price_offset ?? 10,
   );
 
   // 조건 매도 토글 시 초기 조건 추가
@@ -132,10 +132,10 @@ export function ConditionalSellSection() {
 
   // 팩터 선택
   const handleFactorSelect = (
-    factorId: string,
+    _factorId: string,
     factorName: string,
     subFactorId: string,
-    argument?: string
+    argument?: string,
   ) => {
     if (!currentConditionId) return;
 

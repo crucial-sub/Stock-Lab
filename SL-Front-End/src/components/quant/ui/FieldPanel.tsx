@@ -1,5 +1,5 @@
+import type { ReactNode } from "react";
 import ColorBorderLeft from "@/components/quant/common/ColorBorderLeft";
-import { ReactNode } from "react";
 
 /**
  * FieldPanel - 퀀트 투자 생성 페이지 필드 공통 패널 컴포넌트

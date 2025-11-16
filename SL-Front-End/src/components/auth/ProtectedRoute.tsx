@@ -55,5 +55,5 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // 인증된 경우에만 children 렌더링
-  return isAuthenticated ? <>{children}</> : null;
+  return isAuthenticated ? children : null;
 }

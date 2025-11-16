@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState } from "react";
 import * as am5 from "@amcharts/amcharts5";
-import * as am5xy from "@amcharts/amcharts5/xy";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
+import * as am5xy from "@amcharts/amcharts5/xy";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BacktestResult } from "@/types/api";
 
 interface YearlyReturnsChartProps {
@@ -38,7 +38,8 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
 
   // 선택한 연도의 데이터만 필터링
   const filteredData = useMemo(() => {
-    if (!yieldPoints || yieldPoints.length === 0 || selectedYear === null) return [];
+    if (!yieldPoints || yieldPoints.length === 0 || selectedYear === null)
+      return [];
 
     return yieldPoints.filter((point) => {
       const year = new Date(point.date).getFullYear();
@@ -59,7 +60,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
         wheelX: "panX",
         wheelY: "zoomX",
         pinchZoomX: true,
-      })
+      }),
     );
 
     // 데이터 변환 (누적 수익률 기준으로 정규화)
@@ -79,7 +80,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
           minGridDistance: 50,
         }),
         tooltip: am5.Tooltip.new(root, {}),
-      })
+      }),
     );
 
     // Y축 (수익률 %)
@@ -87,7 +88,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {}),
         tooltip: am5.Tooltip.new(root, {}),
-      })
+      }),
     );
 
     // 수익률 라인 (빨간색)
@@ -102,7 +103,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
     portfolioSeries.strokes.template.setAll({ strokeWidth: 2 });
     portfolioSeries.data.setAll(chartData);
@@ -131,7 +132,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
     kospiSeries.strokes.template.setAll({ strokeWidth: 2 });
     kospiSeries.data.setAll(chartData);
@@ -148,7 +149,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#.##')}%",
         }),
-      })
+      }),
     );
     kosdaqSeries.strokes.template.setAll({ strokeWidth: 2 });
     kosdaqSeries.data.setAll(chartData);
@@ -158,7 +159,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
       "cursor",
       am5xy.XYCursor.new(root, {
         behavior: "zoomX",
-      })
+      }),
     );
 
     // 스크롤바
@@ -166,7 +167,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
       "scrollbarX",
       am5.Scrollbar.new(root, {
         orientation: "horizontal",
-      })
+      }),
     );
 
     // 범례 (차트 상단에 배치하여 스크롤바와 겹치지 않도록)
@@ -176,7 +177,7 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
         x: am5.p50,
         y: 0,
         layout: root.horizontalLayout,
-      })
+      }),
     );
     legend.data.setAll(chart.series.values);
 

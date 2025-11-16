@@ -11,7 +11,10 @@ export function NewsCard({
   date,
 }: NewsCardProps) {
   const contentText = content || "";
-  const summary = contentText && contentText.length > 180 ? `${contentText.slice(0, 180)}…` : contentText;
+  const summary =
+    contentText && contentText.length > 180
+      ? `${contentText.slice(0, 180)}…`
+      : contentText;
   const displayDate = date?.display ?? date?.iso ?? "";
   const stockLabel = stock_name;
 
@@ -30,7 +33,9 @@ export function NewsCard({
 
       <h3 className="text-2xl font-semibold mb-3 leading-tight">{title}</h3>
 
-      <p className="line-clamp-3 text-lg font-light text-text-body mb-4">{summary}</p>
+      <p className="line-clamp-3 text-lg font-light text-text-body mb-4">
+        {summary}
+      </p>
 
       <div className="flex items-center justify-between text-sm text-text-muted">
         <span>{displayDate}</span>

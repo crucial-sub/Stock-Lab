@@ -1,5 +1,5 @@
-import { axiosInstance } from "../axios";
 import { clearAuthTokenCookie, setAuthTokenCookie } from "../auth/token";
+import { axiosInstance } from "../axios";
 
 export interface UserCreate {
   name: string;
@@ -34,7 +34,10 @@ export const authApi = {
    * 회원가입
    */
   register: async (data: UserCreate): Promise<UserResponse> => {
-    const response = await axiosInstance.post<UserResponse>("/auth/register", data);
+    const response = await axiosInstance.post<UserResponse>(
+      "/auth/register",
+      data,
+    );
     return response.data;
   },
 

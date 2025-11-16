@@ -1,8 +1,8 @@
+import { useState } from "react";
 import { Title, ToggleSwitch } from "@/components/common";
 import { FormField } from "@/components/quant/common";
 import { FieldPanel, SectionHeader } from "@/components/quant/ui";
 import { useBacktestConfigStore } from "@/stores";
-import { useState } from "react";
 
 /**
  * 매수 비중 설정 섹션
@@ -24,10 +24,10 @@ export function BuyWeightSection() {
   } = useBacktestConfigStore();
 
   const [enableMaxBuyValue, setEnableMaxBuyValue] = useState(
-    max_buy_value !== null
+    max_buy_value !== null,
   );
   const [enableMaxDailyStock, setEnableMaxDailyStock] = useState(
-    max_daily_stock !== null
+    max_daily_stock !== null,
   );
 
   return (

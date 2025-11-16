@@ -9,6 +9,8 @@
  * - 커스텀 훅으로 비즈니스 로직 분리
  */
 
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Title } from "@/components/common";
 import {
   StockCount,
@@ -19,12 +21,10 @@ import { useTradeTargetSelection } from "@/hooks/quant";
 import { runBacktest } from "@/lib/api/backtest";
 import {
   getIndustries,
-  searchStocks,
   type StockInfo,
+  searchStocks,
 } from "@/lib/api/industries";
 import { useBacktestConfigStore } from "@/stores";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { FieldPanel } from "../ui";
 
 export default function TargetSelectionTab() {
@@ -101,7 +101,7 @@ export default function TargetSelectionTab() {
     [],
     Array.from(selectedStocks),
     selectedIndustryStockCount + selectedStocks.size, // 최종 선택된 종목 수
-    totalStockCount
+    totalStockCount,
   );
 
   // 최종 선택된 종목 수 = 체크박스로 선택된 산업의 종목 + 개별 검색으로 선택된 종목
@@ -320,7 +320,7 @@ export default function TargetSelectionTab() {
             <div className="flex flex-wrap gap-2">
               {Array.from(selectedStocks).map((stockCode) => {
                 const stock = searchResults.find(
-                  (s) => s.stock_code === stockCode
+                  (s) => s.stock_code === stockCode,
                 );
                 return (
                   <span
@@ -354,10 +354,11 @@ export default function TargetSelectionTab() {
         <button
           onClick={handleStartBacktest}
           disabled={isRunning}
-          className={`px-12 py-4 rounded-lg text-lg font-bold transition-opacity ${isRunning
+          className={`px-12 py-4 rounded-lg text-lg font-bold transition-opacity ${
+            isRunning
               ? "bg-gray-400 cursor-not-allowed"
               : "bg-brand-purple text-white hover:opacity-90"
-            }`}
+          }`}
         >
           {isRunning ? "백테스트 실행 중..." : "백테스트 시작하기"}
         </button>

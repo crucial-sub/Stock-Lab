@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Dropdown,
   Title,
@@ -7,7 +8,6 @@ import {
 import { FieldPanel, SectionHeader } from "@/components/quant/ui";
 import ActivateConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { useBacktestConfigStore } from "@/stores";
-import { useEffect, useState } from "react";
 
 /**
  * 보유 기간 섹션
@@ -19,16 +19,16 @@ export function HoldPeriodSection() {
 
   const [isOpen, setIsOpen] = useState(hold_days !== null);
   const [minHoldDays, setMinHoldDays] = useState<number>(
-    hold_days?.min_hold_days ?? 10
+    hold_days?.min_hold_days ?? 10,
   );
   const [maxHoldDays, setMaxHoldDays] = useState<number>(
-    hold_days?.max_hold_days ?? 10
+    hold_days?.max_hold_days ?? 10,
   );
   const [sellPriceBasis, setSellPriceBasis] = useState<string>(
-    hold_days?.sell_price_basis ?? "전일 종가"
+    hold_days?.sell_price_basis ?? "전일 종가",
   );
   const [sellPriceOffset, setSellPriceOffset] = useState<number>(
-    hold_days?.sell_price_offset ?? 10
+    hold_days?.sell_price_offset ?? 10,
   );
 
   // 전역 스토어 업데이트

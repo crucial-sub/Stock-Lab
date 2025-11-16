@@ -1,3 +1,6 @@
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Title, UnderlineInput } from "@/components/common";
 import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 import {
@@ -8,9 +11,6 @@ import {
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
-import Image from "next/image";
-import { useEffect, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 
 /**
  * 매수 조건식 설정 섹션
@@ -27,25 +27,25 @@ export function BuyConditionsSection() {
         buy_logic: state.buy_logic,
         priority_factor: state.priority_factor,
         priority_order: state.priority_order,
-      }))
+      })),
     );
 
   // 함수들은 별도로 선택 (안정적인 참조)
   const addBuyConditionUI = useBacktestConfigStore(
-    (state) => state.addBuyConditionUI
+    (state) => state.addBuyConditionUI,
   );
   const updateBuyConditionUI = useBacktestConfigStore(
-    (state) => state.updateBuyConditionUI
+    (state) => state.updateBuyConditionUI,
   );
   const removeBuyConditionUI = useBacktestConfigStore(
-    (state) => state.removeBuyConditionUI
+    (state) => state.removeBuyConditionUI,
   );
   const setBuyLogic = useBacktestConfigStore((state) => state.setBuyLogic);
   const setPriorityFactor = useBacktestConfigStore(
-    (state) => state.setPriorityFactor
+    (state) => state.setPriorityFactor,
   );
   const setPriorityOrder = useBacktestConfigStore(
-    (state) => state.setPriorityOrder
+    (state) => state.setPriorityOrder,
   );
 
   const { data: subFactors = [] } = useSubFactorsQuery();
@@ -54,7 +54,7 @@ export function BuyConditionsSection() {
   // 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentConditionId, setCurrentConditionId] = useState<string | null>(
-    null
+    null,
   );
 
   // 우선순위 팩터 선택 모달 상태
@@ -88,10 +88,10 @@ export function BuyConditionsSection() {
 
   // 팩터 선택
   const handleFactorSelect = (
-    factorId: string,
+    _factorId: string,
     factorName: string,
     subFactorId: string,
-    argument?: string
+    argument?: string,
   ) => {
     if (!currentConditionId) return;
 
@@ -148,10 +148,10 @@ export function BuyConditionsSection() {
 
   // 우선순위 팩터 선택
   const handlePriorityFactorSelect = (
-    factorId: string,
+    _factorId: string,
     factorName: string,
     subFactorId: string,
-    argument?: string
+    argument?: string,
   ) => {
     // subFactorId로 subFactorName 찾기
     const subFactor = subFactors.find((sf) => String(sf.id) === subFactorId);
@@ -263,10 +263,11 @@ export function BuyConditionsSection() {
                   <button
                     type="button"
                     onClick={() => setPriorityOrder("desc")}
-                    className={`${priority_order === "desc"
-                      ? "text-text-strong"
-                      : "text-tag-neutral"
-                      }`}
+                    className={`${
+                      priority_order === "desc"
+                        ? "text-text-strong"
+                        : "text-tag-neutral"
+                    }`}
                   >
                     높은 값부터
                   </button>
@@ -275,18 +276,20 @@ export function BuyConditionsSection() {
                     alt=""
                     width={16}
                     height={16}
-                    className={`${priority_order === "desc" ? "opacity-100" : "opacity-30"
-                      }`}
+                    className={`${
+                      priority_order === "desc" ? "opacity-100" : "opacity-30"
+                    }`}
                   />
                 </div>
                 <div className="flex justify-center items-center">
                   <button
                     type="button"
                     onClick={() => setPriorityOrder("asc")}
-                    className={`${priority_order === "asc"
-                      ? "text-text-strong"
-                      : "text-tag-neutral"
-                      }`}
+                    className={`${
+                      priority_order === "asc"
+                        ? "text-text-strong"
+                        : "text-tag-neutral"
+                    }`}
                   >
                     낮은 값부터
                   </button>
@@ -295,8 +298,9 @@ export function BuyConditionsSection() {
                     alt=""
                     width={16}
                     height={16}
-                    className={`${priority_order === "asc" ? "opacity-100" : "opacity-30"
-                      }`}
+                    className={`${
+                      priority_order === "asc" ? "opacity-100" : "opacity-30"
+                    }`}
                   />
                 </div>
               </div>

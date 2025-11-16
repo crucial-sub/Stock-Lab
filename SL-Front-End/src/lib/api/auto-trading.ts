@@ -118,11 +118,11 @@ export const autoTradingApi = {
    * 자동매매 활성화
    */
   activateAutoTrading: async (
-    request: AutoTradingActivateRequest
+    request: AutoTradingActivateRequest,
   ): Promise<AutoTradingActivateResponse> => {
     const response = await axiosInstance.post<AutoTradingActivateResponse>(
       "/auto-trading/activate",
-      request
+      request,
     );
     return response.data;
   },
@@ -132,11 +132,11 @@ export const autoTradingApi = {
    */
   deactivateAutoTrading: async (
     strategyId: string,
-    request: AutoTradingDeactivateRequest
+    request: AutoTradingDeactivateRequest,
   ): Promise<AutoTradingDeactivateResponse> => {
     const response = await axiosInstance.post<AutoTradingDeactivateResponse>(
       `/auto-trading/strategies/${strategyId}/deactivate`,
-      request
+      request,
     );
     return response.data;
   },
@@ -145,10 +145,10 @@ export const autoTradingApi = {
    * 자동매매 전략 상태 조회
    */
   getAutoTradingStatus: async (
-    strategyId: string
+    strategyId: string,
   ): Promise<AutoTradingStatusResponse> => {
     const response = await axiosInstance.get<AutoTradingStatusResponse>(
-      `/auto-trading/strategies/${strategyId}/status`
+      `/auto-trading/strategies/${strategyId}/status`,
     );
     return response.data;
   },
@@ -156,9 +156,11 @@ export const autoTradingApi = {
   /**
    * 내 자동매매 전략 목록 조회
    */
-  getMyAutoTradingStrategies: async (): Promise<AutoTradingStrategyResponse[]> => {
+  getMyAutoTradingStrategies: async (): Promise<
+    AutoTradingStrategyResponse[]
+  > => {
     const response = await axiosInstance.get<AutoTradingStrategyResponse[]>(
-      "/auto-trading/my-strategies"
+      "/auto-trading/my-strategies",
     );
     return response.data;
   },
@@ -167,10 +169,10 @@ export const autoTradingApi = {
    * 자동매매 수동 실행 (테스트용)
    */
   executeAutoTrading: async (
-    strategyId: string
+    strategyId: string,
   ): Promise<AutoTradingExecuteResponse> => {
     const response = await axiosInstance.post<AutoTradingExecuteResponse>(
-      `/auto-trading/strategies/${strategyId}/execute`
+      `/auto-trading/strategies/${strategyId}/execute`,
     );
     return response.data;
   },

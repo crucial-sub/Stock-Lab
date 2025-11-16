@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { kiwoomApi } from "@/lib/api/kiwoom";
 
@@ -26,6 +26,14 @@ export function KiwoomConnectModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setAppKey("");
+    setAppSecret("");
+    setError(null);
+    setSuccess(false);
+    onClose();
+  }, [onClose]);
 
   // 모달 열릴 때 배경 스크롤 차단
   useEffect(() => {
@@ -58,15 +66,7 @@ export function KiwoomConnectModal({
 
     document.addEventListener("keydown", handleEsc);
     return () => document.removeEventListener("keydown", handleEsc);
-  }, [isOpen]);
-
-  const handleClose = () => {
-    setAppKey("");
-    setAppSecret("");
-    setError(null);
-    setSuccess(false);
-    onClose();
-  };
+  }, [isOpen, handleClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +74,7 @@ export function KiwoomConnectModal({
     setIsLoading(true);
 
     try {
-      const response = await kiwoomApi.registerCredentials({
+      const _response = await kiwoomApi.registerCredentials({
         app_key: appKey.trim(),
         app_secret: appSecret.trim(),
       });
@@ -206,12 +206,13 @@ export function KiwoomConnectModal({
 
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-xs text-blue-800">
-              <strong>참고:</strong> 현재 모의투자 API(https://mockapi.kiwoom.com)를 사용합니다.
+              <strong>참고:</strong> 현재 모의투자
+              API(https://mockapi.kiwoom.com)를 사용합니다.
             </p>
           </div>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

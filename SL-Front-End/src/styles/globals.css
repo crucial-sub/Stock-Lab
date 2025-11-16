@@ -146,10 +146,12 @@
 @layer base {
   body {
     /* 메인 배경: linear-gradient */
-    background-image: linear-gradient(135deg,
-        rgb(var(--bg-app-main-from) / 1),
-        rgb(var(--bg-app-main-via) / 1),
-        rgb(var(--bg-app-main-to) / 1));
+    background-image: linear-gradient(
+      135deg,
+      rgb(var(--bg-app-main-from) / 1),
+      rgb(var(--bg-app-main-via) / 1),
+      rgb(var(--bg-app-main-to) / 1)
+    );
 
     @apply text-body;
     @apply font-pretendard;

@@ -1,6 +1,5 @@
-import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
-import type { BacktestRunRequest } from "@/types/api";
 import { create } from "zustand";
+import type { BacktestRunRequest } from "@/types/api";
 
 // ========================================
 // UI 전용 조건 타입 정의
@@ -39,7 +38,10 @@ interface BacktestConfigStore extends BacktestRunRequest {
 
   // Sell 조건 관리 함수
   addSellConditionUI: () => void;
-  updateSellConditionUI: (id: string, updates: Partial<SellConditionUI>) => void;
+  updateSellConditionUI: (
+    id: string,
+    updates: Partial<SellConditionUI>,
+  ) => void;
   removeSellConditionUI: (id: string) => void;
 
   // API 변환 함수
@@ -134,197 +136,205 @@ const defaultConfig: BacktestRunRequest = {
  * const request = getBacktestRequest(); // BacktestRunRequest 형식으로 반환
  * ```
  */
-export const useBacktestConfigStore = create<BacktestConfigStore>((set, get) => ({
-  // 초기값 설정
-  ...defaultConfig,
+export const useBacktestConfigStore = create<BacktestConfigStore>(
+  (set, get) => ({
+    // 초기값 설정
+    ...defaultConfig,
 
-  // UI 전용 초기 상태
-  buyConditionsUI: [],
-  sellConditionsUI: [],
+    // UI 전용 초기 상태
+    buyConditionsUI: [],
+    sellConditionsUI: [],
 
-  // ========================================
-  // Buy 조건 관리 함수
-  // ========================================
-  addBuyConditionUI: () => set((state) => {
-    const newId = String.fromCharCode(65 + state.buyConditionsUI.length); // 65 = 'A'
-    return {
-      buyConditionsUI: [
-        ...state.buyConditionsUI,
-        {
-          id: newId,
-          factorName: null,
-          subFactorName: null,
-          operator: '>',
-          value: '',
-        }
-      ]
-    };
-  }),
-
-  updateBuyConditionUI: (id, updates) => set((state) => ({
-    buyConditionsUI: state.buyConditionsUI.map(c =>
-      c.id === id ? { ...c, ...updates } : c
-    )
-  })),
-
-  removeBuyConditionUI: (id) => set((state) => ({
-    buyConditionsUI: state.buyConditionsUI.filter(c => c.id !== id)
-  })),
-
-  // ========================================
-  // Sell 조건 관리 함수
-  // ========================================
-  addSellConditionUI: () => set((state) => {
-    const newId = String.fromCharCode(65 + state.sellConditionsUI.length); // 65 = 'A'
-    return {
-      sellConditionsUI: [
-        ...state.sellConditionsUI,
-        {
-          id: newId,
-          factorName: null,
-          subFactorName: null,
-          operator: '>',
-          value: '',
-        }
-      ]
-    };
-  }),
-
-  updateSellConditionUI: (id, updates) => set((state) => ({
-    sellConditionsUI: state.sellConditionsUI.map(c =>
-      c.id === id ? { ...c, ...updates } : c
-    )
-  })),
-
-  removeSellConditionUI: (id) => set((state) => ({
-    sellConditionsUI: state.sellConditionsUI.filter(c => c.id !== id)
-  })),
-
-  // ========================================
-  // UI → API 변환 및 동기화
-  // ========================================
-  syncUIToAPI: () => {
-    const { buyConditionsUI, sellConditionsUI } = get();
-
-    // Buy 조건 변환
-    const buyConditions = buyConditionsUI
-      .filter(c => c.factorName !== null)
-      .map(c => {
-        let expLeftSide = '';
-        if (c.subFactorName) {
-          expLeftSide = c.argument
-            ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
-            : `${c.subFactorName}({${c.factorName}})`;
-        } else {
-          expLeftSide = `{${c.factorName}}`;
-        }
-
+    // ========================================
+    // Buy 조건 관리 함수
+    // ========================================
+    addBuyConditionUI: () =>
+      set((state) => {
+        const newId = String.fromCharCode(65 + state.buyConditionsUI.length); // 65 = 'A'
         return {
-          name: c.id,
-          exp_left_side: expLeftSide,
-          inequality: c.operator,
-          exp_right_side: Number(c.value) || 0, // API 명세 확정 후 수정 예정
+          buyConditionsUI: [
+            ...state.buyConditionsUI,
+            {
+              id: newId,
+              factorName: null,
+              subFactorName: null,
+              operator: ">",
+              value: "",
+            },
+          ],
         };
-      });
+      }),
 
-    // Sell 조건 변환
-    const sellConditions = sellConditionsUI
-      .filter(c => c.factorName !== null)
-      .map(c => {
-        let expLeftSide = '';
-        if (c.subFactorName) {
-          expLeftSide = c.argument
-            ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
-            : `${c.subFactorName}({${c.factorName}})`;
-        } else {
-          expLeftSide = `{${c.factorName}}`;
-        }
+    updateBuyConditionUI: (id, updates) =>
+      set((state) => ({
+        buyConditionsUI: state.buyConditionsUI.map((c) =>
+          c.id === id ? { ...c, ...updates } : c,
+        ),
+      })),
 
+    removeBuyConditionUI: (id) =>
+      set((state) => ({
+        buyConditionsUI: state.buyConditionsUI.filter((c) => c.id !== id),
+      })),
+
+    // ========================================
+    // Sell 조건 관리 함수
+    // ========================================
+    addSellConditionUI: () =>
+      set((state) => {
+        const newId = String.fromCharCode(65 + state.sellConditionsUI.length); // 65 = 'A'
         return {
-          name: c.id,
-          exp_left_side: expLeftSide,
-          inequality: c.operator,
-          exp_right_side: Number(c.value) || 0, // API 명세 확정 후 수정 예정
+          sellConditionsUI: [
+            ...state.sellConditionsUI,
+            {
+              id: newId,
+              factorName: null,
+              subFactorName: null,
+              operator: ">",
+              value: "",
+            },
+          ],
         };
-      });
+      }),
 
-    // API 상태 업데이트
-    set({ buy_conditions: buyConditions });
+    updateSellConditionUI: (id, updates) =>
+      set((state) => ({
+        sellConditionsUI: state.sellConditionsUI.map((c) =>
+          c.id === id ? { ...c, ...updates } : c,
+        ),
+      })),
 
-    // Sell 조건도 condition_sell에 반영
-    const currentConditionSell = get().condition_sell;
-    if (currentConditionSell !== null) {
-      set({
-        condition_sell: {
-          ...currentConditionSell,
-          sell_conditions: sellConditions,
-        }
-      });
-    }
-  },
+    removeSellConditionUI: (id) =>
+      set((state) => ({
+        sellConditionsUI: state.sellConditionsUI.filter((c) => c.id !== id),
+      })),
 
-  // 기본 설정 업데이트 함수들
-  setUserId: (userId) => set({ user_id: userId }),
-  setStrategyName: (name) => set({ strategy_name: name }),
-  setIsDayOrMonth: (value) => set({ is_day_or_month: value }),
-  setStartDate: (date) => set({ start_date: date }),
-  setEndDate: (date) => set({ end_date: date }),
-  setInitialInvestment: (amount) => set({ initial_investment: amount }),
-  setCommissionRate: (rate) => set({ commission_rate: rate }),
-  setSlippage: (slippage) => set({ slippage: slippage }),
+    // ========================================
+    // UI → API 변환 및 동기화
+    // ========================================
+    syncUIToAPI: () => {
+      const { buyConditionsUI, sellConditionsUI } = get();
 
-  // 매수 조건 업데이트 함수들
-  setBuyConditions: (conditions) => set({ buy_conditions: conditions }),
-  setBuyLogic: (logic) => set({ buy_logic: logic }),
-  setPriorityFactor: (factor) => set({ priority_factor: factor }),
-  setPriorityOrder: (order) => set({ priority_order: order }),
-  setPerStockRatio: (ratio) => set({ per_stock_ratio: ratio }),
-  setMaxHoldings: (max) => set({ max_holdings: max }),
-  setMaxBuyValue: (value) => set({ max_buy_value: value }),
-  setMaxDailyStock: (max) => set({ max_daily_stock: max }),
-  setBuyPriceBasis: (basis) => set({ buy_price_basis: basis }),
-  setBuyPriceOffset: (offset) => set({ buy_price_offset: offset }),
+      // Buy 조건 변환
+      const buyConditions = buyConditionsUI
+        .filter((c) => c.factorName !== null)
+        .map((c) => {
+          let expLeftSide = "";
+          if (c.subFactorName) {
+            expLeftSide = c.argument
+              ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
+              : `${c.subFactorName}({${c.factorName}})`;
+          } else {
+            expLeftSide = `{${c.factorName}}`;
+          }
 
-  // 매도 조건 업데이트 함수들
-  setTargetAndLoss: (value) => set({ target_and_loss: value }),
-  setHoldDays: (value) => set({ hold_days: value }),
-  setConditionSell: (value) => set({ condition_sell: value }),
+          return {
+            name: c.id,
+            exp_left_side: expLeftSide,
+            inequality: c.operator,
+            exp_right_side: Number(c.value) || 0, // API 명세 확정 후 수정 예정
+          };
+        });
 
-  // 매매 대상 업데이트 함수
-  setTradeTargets: (value) => set({ trade_targets: value }),
+      // Sell 조건 변환
+      const sellConditions = sellConditionsUI
+        .filter((c) => c.factorName !== null)
+        .map((c) => {
+          let expLeftSide = "";
+          if (c.subFactorName) {
+            expLeftSide = c.argument
+              ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
+              : `${c.subFactorName}({${c.factorName}})`;
+          } else {
+            expLeftSide = `{${c.factorName}}`;
+          }
 
-  // 초기화 함수
-  reset: () => set(defaultConfig),
+          return {
+            name: c.id,
+            exp_left_side: expLeftSide,
+            inequality: c.operator,
+            exp_right_side: Number(c.value) || 0, // API 명세 확정 후 수정 예정
+          };
+        });
 
-  // BacktestRunRequest 형식으로 데이터 반환
-  getBacktestRequest: () => {
-    // UI → API 동기화
-    get().syncUIToAPI();
+      // API 상태 업데이트
+      set({ buy_conditions: buyConditions });
 
-    const state = get();
-    return {
-      user_id: state.user_id,
-      strategy_name: state.strategy_name,
-      is_day_or_month: state.is_day_or_month,
-      start_date: state.start_date,
-      end_date: state.end_date,
-      initial_investment: state.initial_investment,
-      commission_rate: state.commission_rate,
-      slippage: state.slippage,
-      buy_conditions: state.buy_conditions,
-      buy_logic: state.buy_logic,
-      priority_factor: state.priority_factor,
-      priority_order: state.priority_order,
-      per_stock_ratio: state.per_stock_ratio,
-      max_holdings: state.max_holdings,
-      max_buy_value: state.max_buy_value,
-      max_daily_stock: state.max_daily_stock,
-      buy_price_basis: state.buy_price_basis,
-      buy_price_offset: state.buy_price_offset,
-      target_and_loss: state.target_and_loss,
-      hold_days: state.hold_days,
-      condition_sell: state.condition_sell,
-      trade_targets: state.trade_targets,
-    };
-  },
-}));
+      // Sell 조건도 condition_sell에 반영
+      const currentConditionSell = get().condition_sell;
+      if (currentConditionSell !== null) {
+        set({
+          condition_sell: {
+            ...currentConditionSell,
+            sell_conditions: sellConditions,
+          },
+        });
+      }
+    },
+
+    // 기본 설정 업데이트 함수들
+    setUserId: (userId) => set({ user_id: userId }),
+    setStrategyName: (name) => set({ strategy_name: name }),
+    setIsDayOrMonth: (value) => set({ is_day_or_month: value }),
+    setStartDate: (date) => set({ start_date: date }),
+    setEndDate: (date) => set({ end_date: date }),
+    setInitialInvestment: (amount) => set({ initial_investment: amount }),
+    setCommissionRate: (rate) => set({ commission_rate: rate }),
+    setSlippage: (slippage) => set({ slippage: slippage }),
+
+    // 매수 조건 업데이트 함수들
+    setBuyConditions: (conditions) => set({ buy_conditions: conditions }),
+    setBuyLogic: (logic) => set({ buy_logic: logic }),
+    setPriorityFactor: (factor) => set({ priority_factor: factor }),
+    setPriorityOrder: (order) => set({ priority_order: order }),
+    setPerStockRatio: (ratio) => set({ per_stock_ratio: ratio }),
+    setMaxHoldings: (max) => set({ max_holdings: max }),
+    setMaxBuyValue: (value) => set({ max_buy_value: value }),
+    setMaxDailyStock: (max) => set({ max_daily_stock: max }),
+    setBuyPriceBasis: (basis) => set({ buy_price_basis: basis }),
+    setBuyPriceOffset: (offset) => set({ buy_price_offset: offset }),
+
+    // 매도 조건 업데이트 함수들
+    setTargetAndLoss: (value) => set({ target_and_loss: value }),
+    setHoldDays: (value) => set({ hold_days: value }),
+    setConditionSell: (value) => set({ condition_sell: value }),
+
+    // 매매 대상 업데이트 함수
+    setTradeTargets: (value) => set({ trade_targets: value }),
+
+    // 초기화 함수
+    reset: () => set(defaultConfig),
+
+    // BacktestRunRequest 형식으로 데이터 반환
+    getBacktestRequest: () => {
+      // UI → API 동기화
+      get().syncUIToAPI();
+
+      const state = get();
+      return {
+        user_id: state.user_id,
+        strategy_name: state.strategy_name,
+        is_day_or_month: state.is_day_or_month,
+        start_date: state.start_date,
+        end_date: state.end_date,
+        initial_investment: state.initial_investment,
+        commission_rate: state.commission_rate,
+        slippage: state.slippage,
+        buy_conditions: state.buy_conditions,
+        buy_logic: state.buy_logic,
+        priority_factor: state.priority_factor,
+        priority_order: state.priority_order,
+        per_stock_ratio: state.per_stock_ratio,
+        max_holdings: state.max_holdings,
+        max_buy_value: state.max_buy_value,
+        max_daily_stock: state.max_daily_stock,
+        buy_price_basis: state.buy_price_basis,
+        buy_price_offset: state.buy_price_offset,
+        target_and_loss: state.target_and_loss,
+        hold_days: state.hold_days,
+        condition_sell: state.condition_sell,
+        trade_targets: state.trade_targets,
+      };
+    },
+  }),
+);

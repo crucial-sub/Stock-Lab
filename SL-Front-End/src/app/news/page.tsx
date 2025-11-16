@@ -6,7 +6,11 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
 import { NewsDetailModal } from "@/components/news/NewsDetailModal";
-import { useAvailableThemesQuery, useDebounce, useNewsListQuery } from "@/hooks";
+import {
+  useAvailableThemesQuery,
+  useDebounce,
+  useNewsListQuery,
+} from "@/hooks";
 import type { NewsItem, NewsListParams } from "@/types/news";
 
 const NewsPage: NextPage = () => {
@@ -64,7 +68,9 @@ const NewsPage: NextPage = () => {
 
   return (
     <section className="flex flex-col gap-[1.875rem] px-[18.75rem] py-[3.75rem]">
-      <h1 className="text-[1.75rem] font-semibold text-black ml-[1.875rem]">테마별 요약 뉴스</h1>
+      <h1 className="text-[1.75rem] font-semibold text-black ml-[1.875rem]">
+        테마별 요약 뉴스
+      </h1>
 
       <div className="flex flex-col gap-4">
         {/* 검색 및 정렬 영역 */}
@@ -85,7 +91,12 @@ const NewsPage: NextPage = () => {
               className="flex size-9 items-center justify-center rounded-lg bg-brand-purple hover:bg-brand-purple/90 transition"
               aria-label="검색"
             >
-              <Icon src="/icons/search.svg" alt="검색" size={20} color="white" />
+              <Icon
+                src="/icons/search.svg"
+                alt="검색"
+                size={20}
+                color="white"
+              />
             </button>
           </div>
 
@@ -124,10 +135,14 @@ const NewsPage: NextPage = () => {
       </div>
 
       {isLoading && (
-        <p className="text-center text-text-body">뉴스를 불러오는 중입니다...</p>
+        <p className="text-center text-text-body">
+          뉴스를 불러오는 중입니다...
+        </p>
       )}
       {isError && (
-        <p className="text-center text-accent-primary">뉴스 데이터를 불러오지 못했습니다.</p>
+        <p className="text-center text-accent-primary">
+          뉴스 데이터를 불러오지 못했습니다.
+        </p>
       )}
 
       {!isLoading && !isError && (
@@ -141,7 +156,10 @@ const NewsPage: NextPage = () => {
               tickerLabel={item.tickerLabel || item.stockCode || "종목"}
               themeName={item.themeName}
               pressName={item.pressName}
-              sentiment={(item.sentiment as "positive" | "negative" | "neutral") || "neutral"}
+              sentiment={
+                (item.sentiment as "positive" | "negative" | "neutral") ||
+                "neutral"
+              }
               publishedAt={item.publishedAt || ""}
               source={item.source || ""}
               link={item.link || ""}
@@ -157,7 +175,10 @@ const NewsPage: NextPage = () => {
       )}
 
       {selectedNewsId && selectedNews && (
-        <NewsDetailModal news={selectedNews} onClose={() => setSelectedNewsId(null)} />
+        <NewsDetailModal
+          news={selectedNews}
+          onClose={() => setSelectedNewsId(null)}
+        />
       )}
     </section>
   );

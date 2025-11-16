@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuantTabStore } from "@/stores";
 import Image from "next/image";
 import { useState } from "react";
+import { useQuantTabStore } from "@/stores";
 
 /**
  * 퀀트 전략 생성 페이지의 2차 사이드바
@@ -27,13 +27,19 @@ interface SecondarySideNavProps {
 
 export function SecondarySideNav({ isOpen, setIsOpen }: SecondarySideNavProps) {
   const { activeTab, setActiveTab } = useQuantTabStore();
-  const [selectedSubItem, setSelectedSubItem] = useState<string>("일반 조건 설정");
+  const [selectedSubItem, setSelectedSubItem] =
+    useState<string>("일반 조건 설정");
 
   const tabItems: TabItemsType[] = [
     {
       tabName: "buy",
       tabDisplayName: "매수 조건",
-      items: ["일반 조건 설정", "매수 조건 설정", "매수 비중 설정", "매수 방법 선택"],
+      items: [
+        "일반 조건 설정",
+        "매수 조건 설정",
+        "매수 비중 설정",
+        "매수 방법 선택",
+      ],
     },
     {
       tabName: "sell",
@@ -65,7 +71,7 @@ export function SecondarySideNav({ isOpen, setIsOpen }: SecondarySideNavProps) {
   // 세부 항목 클릭 핸들러 - 탭 전환 + 아이템 선택 + 스크롤
   const handleSubItemClick = (
     tab: "buy" | "sell" | "target",
-    subItem: string
+    subItem: string,
   ) => {
     const currentTab = activeTab;
     setSelectedSubItem(subItem);
@@ -113,7 +119,7 @@ export function SecondarySideNav({ isOpen, setIsOpen }: SecondarySideNavProps) {
     const scrollContainer = document.getElementById("quant-main-content");
     if (!scrollContainer) {
       console.warn(
-        "[Scroll] 스크롤 컨테이너를 찾을 수 없습니다: quant-main-content"
+        "[Scroll] 스크롤 컨테이너를 찾을 수 없습니다: quant-main-content",
       );
       return;
     }
@@ -133,7 +139,7 @@ export function SecondarySideNav({ isOpen, setIsOpen }: SecondarySideNavProps) {
     });
 
     console.log(
-      `[Scroll] 스크롤 실행: ${sectionName} → ${sectionId}, offset: ${scrollOffset}`
+      `[Scroll] 스크롤 실행: ${sectionName} → ${sectionId}, offset: ${scrollOffset}`,
     );
   };
 
@@ -163,9 +169,7 @@ export function SecondarySideNav({ isOpen, setIsOpen }: SecondarySideNavProps) {
         >
           <div className="relative w-6 h-6">
             <Image
-              src={
-                isOpen ? "/icons/arrow_left.svg" : "/icons/arrow_right.svg"
-              }
+              src={isOpen ? "/icons/arrow_left.svg" : "/icons/arrow_right.svg"}
               alt=""
               fill
               className="object-contain"
@@ -183,7 +187,12 @@ export function SecondarySideNav({ isOpen, setIsOpen }: SecondarySideNavProps) {
               {/* 탭 제목 */}
               <button
                 onClick={() => handleTabClick(tab.tabName)}
-                className={["w-full text-left text-base font-semibold mb-3 text-sidebar-item transition-colors", activeTab === tab.tabName ? "text-white" : ""].filter(Boolean).join(" ")}
+                className={[
+                  "w-full text-left text-base font-semibold mb-3 text-sidebar-item transition-colors",
+                  activeTab === tab.tabName ? "text-white" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               >
                 {tab.tabDisplayName}
               </button>

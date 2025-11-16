@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 
 /**
  * UnderlineInput - 하단 테두리만 있는 입력 필드

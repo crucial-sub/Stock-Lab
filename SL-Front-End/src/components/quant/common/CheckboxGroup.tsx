@@ -32,9 +32,10 @@ export function CheckboxGroup({
   className = "",
 }: CheckboxGroupProps) {
   // prop이 전달되면 사용하고, 아니면 내부에서 계산
-  const isAllSelected = isAllSelectedProp !== undefined
-    ? isAllSelectedProp
-    : items.length > 0 && items.every((item) => selectedIds.has(item.id));
+  const isAllSelected =
+    isAllSelectedProp !== undefined
+      ? isAllSelectedProp
+      : items.length > 0 && items.every((item) => selectedIds.has(item.id));
 
   const gridColsClass = {
     2: "grid-cols-2",
@@ -61,12 +62,7 @@ export function CheckboxGroup({
             }`}
           >
             {isAllSelected && (
-              <Image
-                src="/icons/check_box.svg"
-                alt=""
-                width={16}
-                height={16}
-              />
+              <Image src="/icons/check_box.svg" alt="" width={16} height={16} />
             )}
           </div>
           <span className="text-sm text-accent-primary">전체선택</span>

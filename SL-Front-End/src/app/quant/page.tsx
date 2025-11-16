@@ -57,9 +57,11 @@ export default async function PortfolioPage() {
 
     // 총 수익률 계산 (활성 포트폴리오들의 평균)
     const activePortfolios = portfolios.filter((p) => p.isActive);
-    const avgReturn = activePortfolios.length > 0
-      ? activePortfolios.reduce((sum, p) => sum + p.profitRate, 0) / activePortfolios.length
-      : 0;
+    const avgReturn =
+      activePortfolios.length > 0
+        ? activePortfolios.reduce((sum, p) => sum + p.profitRate, 0) /
+          activePortfolios.length
+        : 0;
 
     // 임시 대시보드 데이터 (향후 별도 API로 교체 필요)
     const totalAssets = 10000000; // 초기 자산
@@ -77,9 +79,11 @@ export default async function PortfolioPage() {
         portfolios={portfolios}
       />
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     // 401 에러 (인증 실패): 토큰 만료 또는 유효하지 않음 -> 로그인 페이지로 리다이렉트
-    if (error?.response?.status === 401) {
+    if (
+      (error as { response?: { status?: number } })?.response?.status === 401
+    ) {
       redirect("/login?redirect=/quant");
     }
 

@@ -1,26 +1,27 @@
 /**
  * 키움증권 API 클라이언트
  */
-import { axiosInstance } from "../axios";
+
 import type {
+  AccountBalance,
   KiwoomCredentials,
   KiwoomCredentialsResponse,
   KiwoomStatusResponse,
-  AccountBalance,
   StockOrder,
   StockOrderResponse,
 } from "@/types/kiwoom";
+import { axiosInstance } from "../axios";
 
 export const kiwoomApi = {
   /**
    * 키움증권 API KEY 등록
    */
   registerCredentials: async (
-    credentials: KiwoomCredentials
+    credentials: KiwoomCredentials,
   ): Promise<KiwoomCredentialsResponse> => {
     const { data } = await axiosInstance.post<KiwoomCredentialsResponse>(
       "/kiwoom/credentials",
-      credentials
+      credentials,
     );
     return data;
   },
@@ -30,7 +31,7 @@ export const kiwoomApi = {
    */
   getStatus: async (): Promise<KiwoomStatusResponse> => {
     const { data } = await axiosInstance.get<KiwoomStatusResponse>(
-      "/kiwoom/credentials/status"
+      "/kiwoom/credentials/status",
     );
     return data;
   },
@@ -40,7 +41,7 @@ export const kiwoomApi = {
    */
   deleteCredentials: async (): Promise<{ message: string }> => {
     const { data } = await axiosInstance.delete<{ message: string }>(
-      "/kiwoom/credentials"
+      "/kiwoom/credentials",
     );
     return data;
   },
@@ -50,7 +51,7 @@ export const kiwoomApi = {
    */
   getAccountBalance: async (): Promise<AccountBalance> => {
     const { data } = await axiosInstance.get<AccountBalance>(
-      "/kiwoom/account/balance"
+      "/kiwoom/account/balance",
     );
     return data;
   },
@@ -61,7 +62,7 @@ export const kiwoomApi = {
   buyStock: async (order: StockOrder): Promise<StockOrderResponse> => {
     const { data } = await axiosInstance.post<StockOrderResponse>(
       "/kiwoom/order/buy",
-      order
+      order,
     );
     return data;
   },
@@ -72,7 +73,7 @@ export const kiwoomApi = {
   sellStock: async (order: StockOrder): Promise<StockOrderResponse> => {
     const { data } = await axiosInstance.post<StockOrderResponse>(
       "/kiwoom/order/sell",
-      order
+      order,
     );
     return data;
   },

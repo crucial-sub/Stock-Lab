@@ -35,7 +35,8 @@ export const strategyApi = {
    * 내 백테스트 결과 목록 조회 (클라이언트 사이드)
    */
   getMyStrategies: async (): Promise<MyStrategiesResponse> => {
-    const response = await axiosInstance.get<MyStrategiesResponse>("/strategies/my");
+    const response =
+      await axiosInstance.get<MyStrategiesResponse>("/strategies/my");
     return response.data;
   },
 
@@ -43,12 +44,17 @@ export const strategyApi = {
    * 내 백테스트 결과 목록 조회 (서버 사이드)
    * @param token - 인증 토큰
    */
-  getMyStrategiesServer: async (token: string): Promise<MyStrategiesResponse> => {
-    const response = await axiosServerInstance.get<MyStrategiesResponse>("/strategies/my", {
-      headers: {
-        Authorization: `Bearer ${token}`,
+  getMyStrategiesServer: async (
+    token: string,
+  ): Promise<MyStrategiesResponse> => {
+    const response = await axiosServerInstance.get<MyStrategiesResponse>(
+      "/strategies/my",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
+    );
     return response.data;
   },
 
@@ -57,7 +63,7 @@ export const strategyApi = {
    */
   deleteBacktestSessions: async (sessionIds: string[]): Promise<void> => {
     await axiosInstance.delete("/strategies/sessions", {
-      data: { session_ids: sessionIds }
+      data: { session_ids: sessionIds },
     });
   },
 };

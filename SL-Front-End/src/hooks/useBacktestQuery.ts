@@ -4,6 +4,12 @@
  */
 
 import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
   deleteBacktest,
   getBacktestList,
   getBacktestResult,
@@ -22,12 +28,6 @@ import type {
   PaginatedResponse,
   PaginationParams,
 } from "@/types/api";
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
 
 /**
  * 백테스트 쿼리 키
@@ -43,7 +43,8 @@ export const backtestQueryKey = {
   yieldPoints: (id: string) =>
     [...backtestQueryKey.detail(id), "yield-points"] as const,
   status: (id: string) => [...backtestQueryKey.detail(id), "status"] as const,
-  settings: (id: string) => [...backtestQueryKey.detail(id), "settings"] as const,
+  settings: (id: string) =>
+    [...backtestQueryKey.detail(id), "settings"] as const,
 };
 
 /**
@@ -73,10 +74,7 @@ export function useRunBacktestMutation() {
  * @param enabled - 쿼리 활성화 여부
  * @returns 백테스트 결과 쿼리
  */
-export function useBacktestResultQuery(
-  backtestId: string,
-  enabled = true,
-) {
+export function useBacktestResultQuery(backtestId: string, enabled = true) {
   return useQuery<BacktestResult, Error>({
     queryKey: backtestQueryKey.detail(backtestId),
     queryFn: () => getBacktestResult(backtestId, false),
@@ -92,10 +90,7 @@ export function useBacktestResultQuery(
  * @param enabled - 쿼리 활성화 여부
  * @returns 백테스트 설정 쿼리
  */
-export function useBacktestSettingsQuery(
-  backtestId: string,
-  enabled = true,
-) {
+export function useBacktestSettingsQuery(backtestId: string, enabled = true) {
   return useQuery<BacktestSettings, Error>({
     queryKey: backtestQueryKey.settings(backtestId),
     queryFn: () => getBacktestSettings(backtestId, false),
@@ -138,7 +133,11 @@ export function useBacktestTradesInfiniteQuery(
   >({
     queryKey: [...backtestQueryKey.trades(backtestId), { limit }],
     queryFn: ({ pageParam = 1 }) =>
-      getBacktestTrades(backtestId, { page: pageParam as number, limit }, false),
+      getBacktestTrades(
+        backtestId,
+        { page: pageParam as number, limit },
+        false,
+      ),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
       const { page, totalPages } = lastPage.pagination;
@@ -167,7 +166,11 @@ export function useBacktestYieldPointsInfiniteQuery(
   >({
     queryKey: [...backtestQueryKey.yieldPoints(backtestId), { limit }],
     queryFn: ({ pageParam = 1 }) =>
-      getBacktestYieldPoints(backtestId, { page: pageParam as number, limit }, false),
+      getBacktestYieldPoints(
+        backtestId,
+        { page: pageParam as number, limit },
+        false,
+      ),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
       const { page, totalPages } = lastPage.pagination;

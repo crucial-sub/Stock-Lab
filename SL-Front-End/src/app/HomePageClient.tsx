@@ -19,7 +19,7 @@ interface HomePageClientProps {
   isLoggedIn: boolean;
 }
 
-export function HomePageClient({ userName, isLoggedIn }: HomePageClientProps) {
+export function HomePageClient({ userName }: HomePageClientProps) {
   const handleAISubmit = (value: string) => {
     // TODO: AI 전략 요청 처리 로직 구현
     console.log("AI request:", value);

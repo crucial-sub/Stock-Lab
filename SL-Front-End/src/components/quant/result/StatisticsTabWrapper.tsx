@@ -1,7 +1,7 @@
 "use client";
 
-import type { BacktestResult } from "@/types/api";
 import dynamic from "next/dynamic";
+import type { BacktestResult } from "@/types/api";
 
 /**
  * StatisticsTab을 dynamic import로 감싸는 래퍼 컴포넌트
@@ -13,7 +13,8 @@ interface StatisticsTabWrapperProps {
 
 // dynamic import with SSR disabled
 const StatisticsTab = dynamic(
-  () => import("./StatisticsTab").then((mod) => ({ default: mod.StatisticsTab })),
+  () =>
+    import("./StatisticsTab").then((mod) => ({ default: mod.StatisticsTab })),
   {
     ssr: false,
     loading: () => (
@@ -21,9 +22,11 @@ const StatisticsTab = dynamic(
         <p className="text-text-muted">통계 로딩 중...</p>
       </div>
     ),
-  }
+  },
 );
 
-export function StatisticsTabWrapper({ statistics }: StatisticsTabWrapperProps) {
+export function StatisticsTabWrapper({
+  statistics,
+}: StatisticsTabWrapperProps) {
   return <StatisticsTab statistics={statistics} />;
 }

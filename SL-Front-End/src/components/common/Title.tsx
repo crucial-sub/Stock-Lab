@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 
 /**
  * Title - 페이지 및 섹션 제목 컴포넌트
@@ -17,7 +17,7 @@ interface TitleProps {
 export function Title({
   children,
   className = "",
-  variant = "default"
+  variant = "default",
 }: TitleProps) {
   const variantStyles = {
     default: "text-[1.75rem] font-semibold",
@@ -25,8 +25,6 @@ export function Title({
   };
 
   return (
-    <h2 className={`${variantStyles[variant]} ${className}`}>
-      {children}
-    </h2>
+    <h2 className={`${variantStyles[variant]} ${className}`}>{children}</h2>
   );
 }

@@ -3,18 +3,18 @@
  * - 백테스트 실행, 결과 조회 API를 제공합니다
  */
 
-import { axiosInstance, axiosServerInstance } from "../axios";
 import type {
+  BacktestResult,
   BacktestRunRequest,
   BacktestRunResponse,
-  BacktestResult,
   BacktestSettings,
+  Factor,
   PaginatedResponse,
   PaginationParams,
-  Factor,
   SubFactor,
   Themes,
 } from "@/types/api";
+import { axiosInstance, axiosServerInstance } from "../axios";
 
 /**
  * 백테스트 실행
@@ -113,9 +113,7 @@ export async function getBacktestTrades(
   backtestId: string,
   params?: PaginationParams,
   isServer = false,
-): Promise<
-  PaginatedResponse<BacktestResult["trades"][number]>
-> {
+): Promise<PaginatedResponse<BacktestResult["trades"][number]>> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
   const response = await axios.get<
@@ -139,9 +137,7 @@ export async function getBacktestYieldPoints(
   backtestId: string,
   params?: PaginationParams,
   isServer = false,
-): Promise<
-  PaginatedResponse<BacktestResult["yieldPoints"][number]>
-> {
+): Promise<PaginatedResponse<BacktestResult["yieldPoints"][number]>> {
   const axios = isServer ? axiosServerInstance : axiosInstance;
 
   const response = await axios.get<
@@ -182,8 +178,12 @@ export interface BacktestStatus {
   }>;
 }
 
-export async function getBacktestStatus(backtestId: string): Promise<BacktestStatus> {
-  const response = await axiosInstance.get<BacktestStatus>(`/backtest/${backtestId}/status`);
+export async function getBacktestStatus(
+  backtestId: string,
+): Promise<BacktestStatus> {
+  const response = await axiosInstance.get<BacktestStatus>(
+    `/backtest/${backtestId}/status`,
+  );
   return response.data;
 }
 

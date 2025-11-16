@@ -1,7 +1,7 @@
 "use client";
 
-import { SecondarySideNav } from "@/components/quant/layout/SecondarySideNav";
 import { useState } from "react";
+import { SecondarySideNav } from "@/components/quant/layout/SecondarySideNav";
 
 /**
  * Quant 라우트 레이아웃

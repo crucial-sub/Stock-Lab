@@ -1,7 +1,7 @@
+import { useEffect, useState } from "react";
 import { Dropdown, Title, UnderlineInput } from "@/components/common";
 import { FieldPanel, SectionHeader } from "@/components/quant/ui";
 import { useBacktestConfigStore } from "@/stores";
-import { useEffect, useState } from "react";
 
 /**
  * 매수 방법 선택 섹션
@@ -17,10 +17,10 @@ export function BuyMethodSection() {
   } = useBacktestConfigStore();
 
   const [buyCostBasisSelect, setBuyCostBasisSelect] = useState<string>(
-    buy_price_basis || "전일 종가"
+    buy_price_basis || "전일 종가",
   );
   const [buyCostBasisValue, setBuyCostBasisValue] = useState<number>(
-    buy_price_offset || 0
+    buy_price_offset || 0,
   );
 
   // Sync to global store

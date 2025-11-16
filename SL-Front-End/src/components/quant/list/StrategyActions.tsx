@@ -1,6 +1,6 @@
-import { Button } from "@/components/common";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/common";
 import { KiwoomConnectModal } from "@/components/modal/KiwoomConnectModal";
 import { kiwoomApi } from "@/lib/api/kiwoom";
 
@@ -25,18 +25,18 @@ export function StrategyActions({
   const [isKiwoomModalOpen, setIsKiwoomModalOpen] = useState(false);
   const [isKiwoomConnected, setIsKiwoomConnected] = useState(false);
 
-  useEffect(() => {
-    checkKiwoomStatus();
-  }, []);
-
-  const checkKiwoomStatus = async () => {
+  const checkKiwoomStatus = useCallback(async () => {
     try {
       const status = await kiwoomApi.getStatus();
       setIsKiwoomConnected(status.is_connected);
     } catch (error) {
       console.error("키움증권 연동 상태 확인 실패:", error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkKiwoomStatus();
+  }, [checkKiwoomStatus]);
 
   const handleCreateStrategy = () => {
     router.push("/quant/new");
@@ -63,7 +63,12 @@ export function StrategyActions({
           새 전략 만들기
         </Button>
 
-        <Button variant="secondary" size="md" onClick={onDelete} disabled={selectedCount === 0}>
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={onDelete}
+          disabled={selectedCount === 0}
+        >
           선택 전략 삭제하기
         </Button>
       </div>

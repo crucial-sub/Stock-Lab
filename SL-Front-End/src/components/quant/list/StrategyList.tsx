@@ -1,6 +1,6 @@
+import Image from "next/image";
 import { StrategyListItem } from "@/components/quant/list/StrategyListItem";
 import type { Strategy } from "@/types/strategy";
-import Image from "next/image";
 
 /**
  * 전략 목록 테이블 컴포넌트
@@ -43,8 +43,9 @@ export function StrategyList({
             {/* 전체 선택 체크박스 */}
             <th className="p-[10px] text-left">
               <Image
-                src={`/icons/${isAllSelected ? "check-box-blue" : "check-box-blank"
-                  }.svg`}
+                src={`/icons/${
+                  isAllSelected ? "check-box-blue" : "check-box-blank"
+                }.svg`}
                 alt="검색"
                 width={20}
                 height={20}

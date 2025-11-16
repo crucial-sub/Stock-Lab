@@ -1,11 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
 import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
 import { strategyApi } from "@/lib/api/strategy";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 /**
  * 포트폴리오 페이지 클라이언트 컴포넌트
@@ -85,7 +85,7 @@ export function PortfolioPageClient({
 
     // 사용자 확인
     const confirmed = window.confirm(
-      `선택한 ${selectedIds.size}개의 포트폴리오를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`
+      `선택한 ${selectedIds.size}개의 포트폴리오를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`,
     );
 
     if (!confirmed) {
@@ -101,7 +101,7 @@ export function PortfolioPageClient({
 
       // 성공: 로컬 상태에서 삭제된 항목 제거
       setPortfolios((prev) =>
-        prev.filter((portfolio) => !selectedIds.has(portfolio.id))
+        prev.filter((portfolio) => !selectedIds.has(portfolio.id)),
       );
 
       // 선택 상태 초기화
@@ -112,13 +112,18 @@ export function PortfolioPageClient({
 
       // 페이지 새로고침 (대시보드 통계 업데이트를 위해)
       router.refresh();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("포트폴리오 삭제 실패:", error);
 
       // 에러 메시지 표시
       const errorMessage =
-        error?.response?.data?.detail ||
-        error?.message ||
+        (
+          error as {
+            response?: { data?: { detail?: string } };
+            message?: string;
+          }
+        )?.response?.data?.detail ||
+        (error as { message?: string })?.message ||
         "포트폴리오 삭제 중 오류가 발생했습니다.";
       alert(errorMessage);
     } finally {

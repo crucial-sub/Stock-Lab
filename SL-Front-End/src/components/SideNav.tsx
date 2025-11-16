@@ -3,9 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { authApi } from "@/lib/api/auth";
-import { getAuthTokenFromCookie } from "@/lib/auth/token";
 
 /**
  * 전역 사이드바 네비게이션
@@ -95,7 +94,7 @@ export function SideNav({ serverHasToken }: SideNavProps) {
       try {
         await authApi.getCurrentUser();
         setIsLoggedIn(true);
-      } catch (error) {
+      } catch (_error) {
         setIsLoggedIn(false);
       }
     };
@@ -116,7 +115,9 @@ export function SideNav({ serverHasToken }: SideNavProps) {
   // 로그인 상태에 따라 유틸리티 아이템 결정
   const utilityNavItems = [
     ...COMMON_UTILITY_NAV_ITEMS,
-    ...(isLoggedIn ? LOGGED_IN_UTILITY_NAV_ITEMS : LOGGED_OUT_UTILITY_NAV_ITEMS),
+    ...(isLoggedIn
+      ? LOGGED_IN_UTILITY_NAV_ITEMS
+      : LOGGED_OUT_UTILITY_NAV_ITEMS),
   ];
 
   // 현재 경로가 활성 경로인지 확인

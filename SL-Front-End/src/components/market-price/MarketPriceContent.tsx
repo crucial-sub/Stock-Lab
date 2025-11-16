@@ -129,7 +129,8 @@ export function MarketPriceContent() {
       // 1. API 응답의 isFavorite (시세 탭)
       // 2. isFav 파라미터 (즐겨찾기 탭)
       // 3. favoriteStockCodes Set (최근 본 주식 탭)
-      const isFavorite = item.isFavorite ?? (isFav || favoriteStockCodes.has(stockCode));
+      const isFavorite =
+        item.isFavorite ?? (isFav || favoriteStockCodes.has(stockCode));
 
       return {
         rank: item.rank ?? index + 1,
@@ -252,10 +253,11 @@ export function MarketPriceContent() {
                     key={tab.label}
                     type="button"
                     onClick={() => setSelectedTab(tab)}
-                    className={`rounded-full px-3 py-2 text-[1rem] tracking-[-0.02em] transition ${isActive
-                      ? "bg-brand-purple text-white font-semibold"
-                      : "text-black font-normal"
-                      }`}
+                    className={`rounded-full px-3 py-2 text-[1rem] tracking-[-0.02em] transition ${
+                      isActive
+                        ? "bg-brand-purple text-white font-semibold"
+                        : "text-black font-normal"
+                    }`}
                   >
                     {tab.label}
                   </button>
@@ -330,7 +332,7 @@ export function MarketPriceContent() {
                 </p>
               </div>
             ) : (
-              filteredRows.map((row, index) => (
+              filteredRows.map((row, _index) => (
                 <div
                   key={row.rank}
                   role="button"
@@ -389,12 +391,13 @@ export function MarketPriceContent() {
 
                   {/* 등락률 */}
                   <div
-                    className={`text-[1rem] font-normal text-right ${row.trend === "up"
-                      ? "text-red-500"
-                      : row.trend === "down"
-                        ? "text-blue-500"
-                        : "text-black"
-                      }`}
+                    className={`text-[1rem] font-normal text-right ${
+                      row.trend === "up"
+                        ? "text-red-500"
+                        : row.trend === "down"
+                          ? "text-blue-500"
+                          : "text-black"
+                    }`}
                   >
                     {row.change}
                   </div>

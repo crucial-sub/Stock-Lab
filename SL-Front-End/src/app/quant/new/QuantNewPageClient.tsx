@@ -10,12 +10,12 @@
  * - Zustand를 통한 전역 상태 관리 (탭 상태, 전략 설정값)
  */
 
+import { lazy, Suspense, useState } from "react";
 import QuantStrategySummaryPanel from "@/components/quant/layout/QuantStrategySummaryPanel";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useQuantTabStore } from "@/stores";
-import { lazy, Suspense, useState } from "react";
 
 /**
  * 탭 컴포넌트들을 동적으로 로드 (코드 스플리팅)
@@ -23,13 +23,13 @@ import { lazy, Suspense, useState } from "react";
  * - lazy loading으로 필요할 때만 로드하여 초기 로딩 속도 대폭 개선
  */
 const BuyConditionTab = lazy(
-  () => import("@/components/quant/tabs/BuyConditionTab")
+  () => import("@/components/quant/tabs/BuyConditionTab"),
 );
 const SellConditionTab = lazy(
-  () => import("@/components/quant/tabs/SellConditionTab")
+  () => import("@/components/quant/tabs/SellConditionTab"),
 );
 const TargetSelectionTab = lazy(
-  () => import("@/components/quant/tabs/TargetSelectionTab")
+  () => import("@/components/quant/tabs/TargetSelectionTab"),
 );
 
 /**
@@ -48,10 +48,10 @@ export function QuantNewPageClient() {
   const [isSummaryPanelOpen, setIsSummaryPanelOpen] = useState(true);
 
   // React Query로 데이터 fetch (클라이언트 사이드)
-  const { data: factors, isLoading: isLoadingFactors } = useFactorsQuery();
-  const { data: subFactors, isLoading: isLoadingSubFactors } =
-    useSubFactorsQuery();
-  const { data: themes, isLoading: isLoadingThemes } = useThemesQuery();
+  // 데이터는 하위 컴포넌트에서 사용하므로 여기서는 캐싱 목적으로만 fetch
+  const { isLoading: isLoadingFactors } = useFactorsQuery();
+  const { isLoading: isLoadingSubFactors } = useSubFactorsQuery();
+  const { isLoading: isLoadingThemes } = useThemesQuery();
 
   // 로딩 상태 표시
   if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes) {

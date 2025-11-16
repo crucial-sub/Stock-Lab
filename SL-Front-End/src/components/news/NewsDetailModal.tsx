@@ -8,7 +8,10 @@ interface NewsDetailModalProps {
 
 export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
       <div
         className="relative w-full max-w-3xl rounded-[8px] bg-white p-[1rem] shadow-card max-h-[90vh] overflow-y-auto"
         onClick={(event) => event.stopPropagation()}
@@ -16,7 +19,9 @@ export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
         <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-[8px] border-b border-border-default bg-white px-3 py-2">
           <div className="flex flex-col gap-0.5 text-sm text-text-muted">
             <span>{news.tickerLabel || "종목"}</span>
-            <span className="text-text-body font-semibold">{news.publishedAt || ""}</span>
+            <span className="text-text-body font-semibold">
+              {news.publishedAt || ""}
+            </span>
           </div>
           <button
             type="button"
@@ -29,11 +34,15 @@ export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
         </div>
 
         <div className="p-4">
-          <h2 className="text-[1.75rem] font-semibold text-text-strong">{news.title}</h2>
+          <h2 className="text-[1.75rem] font-semibold text-text-strong">
+            {news.title}
+          </h2>
           <p className="mt-2 text-sm text-text-muted">{news.source || ""}</p>
 
           {news.content && (
-            <p className="mt-4 text-base leading-relaxed text-text-body whitespace-pre-line">{news.content}</p>
+            <p className="mt-4 text-base leading-relaxed text-text-body whitespace-pre-line">
+              {news.content}
+            </p>
           )}
 
           {news.link && (
@@ -43,7 +52,12 @@ export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
               rel="noreferrer"
               className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-brand-primary"
             >
-              <Icon src="/icons/link.svg" alt="원문 링크 아이콘" size={20} color="currentColor" />
+              <Icon
+                src="/icons/link.svg"
+                alt="원문 링크 아이콘"
+                size={20}
+                color="currentColor"
+              />
               원문에서 보기
             </a>
           )}

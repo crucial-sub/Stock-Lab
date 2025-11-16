@@ -1,8 +1,8 @@
+import { useEffect, useState } from "react";
 import { Title, ToggleSwitch, UnderlineInput } from "@/components/common";
 import { FieldPanel, SectionHeader } from "@/components/quant/ui";
 import ActiveConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
 import { useBacktestConfigStore } from "@/stores";
-import { useEffect, useState } from "react";
 
 /**
  * 목표가 / 손절가 섹션
@@ -14,16 +14,16 @@ export function TargetLossSection() {
 
   const [isOpen, setIsOpen] = useState(target_and_loss !== null);
   const [profitTargetEnabled, setProfitTargetEnabled] = useState(
-    target_and_loss?.target_gain !== null
+    target_and_loss?.target_gain !== null,
   );
   const [stopLossEnabled, setStopLossEnabled] = useState(
-    target_and_loss?.stop_loss !== null
+    target_and_loss?.stop_loss !== null,
   );
   const [targetGain, setTargetGain] = useState<number>(
-    target_and_loss?.target_gain ?? 10
+    target_and_loss?.target_gain ?? 10,
   );
   const [stopLoss, setStopLoss] = useState<number>(
-    target_and_loss?.stop_loss ?? 10
+    target_and_loss?.stop_loss ?? 10,
   );
 
   // 전역 스토어 업데이트

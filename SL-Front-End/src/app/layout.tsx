@@ -1,8 +1,8 @@
 import { SideNav } from "@/components/SideNav";
 import "@/styles/globals.css";
 import type { Metadata } from "next";
-import { Providers } from "./providers";
 import { cookies } from "next/headers";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "Stock Lab - 퀀트 투자 백테스트",

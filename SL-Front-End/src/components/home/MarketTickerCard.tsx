@@ -23,7 +23,7 @@ export function MarketTickerCard({
   logoSrc = "",
   logoAlt = "",
   graph = "",
-  onDetailClick
+  onDetailClick,
 }: MarketTickerCardProps) {
   const changeColor =
     trend === "up" ? "text-brand-primary" : "text-accent-primary";

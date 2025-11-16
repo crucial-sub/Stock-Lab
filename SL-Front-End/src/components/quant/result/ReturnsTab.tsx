@@ -1,12 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { CumulativeReturnsChart } from "@/components/quant/result/charts/CumulativeReturnsChart";
 import { MonthlyReturnsChart } from "@/components/quant/result/charts/MonthlyReturnsChart";
 import { StockWiseReturnsChart } from "@/components/quant/result/charts/StockWiseReturnsChart";
 import { TotalAssetsChart } from "@/components/quant/result/charts/TotalAssetsChart";
 import { YearlyReturnsChart } from "@/components/quant/result/charts/YearlyReturnsChart";
 import type { BacktestResult } from "@/types/api";
-import { useState } from "react";
 
 /**
  * 수익률 탭 컴포넌트
@@ -44,10 +44,11 @@ export function ReturnsTab({ yieldPoints, trades }: ReturnsTabProps) {
           <button
             key={tab.id}
             onClick={() => setActiveChartTab(tab.id)}
-            className={`px-4 py-2 text-sm font-medium rounded-sm transition-colors ${activeChartTab === tab.id
-              ? "bg-brand-purple text-white"
-              : "text-text-body hover:text-text-strong border border-border-default hover:bg-bg-muted"
-              }`}
+            className={`px-4 py-2 text-sm font-medium rounded-sm transition-colors ${
+              activeChartTab === tab.id
+                ? "bg-brand-purple text-white"
+                : "text-text-body hover:text-text-strong border border-border-default hover:bg-bg-muted"
+            }`}
           >
             {tab.label}
           </button>

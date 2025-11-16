@@ -20,10 +20,12 @@ logger = logging.getLogger(__name__)
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DATABASE_ECHO if hasattr(settings, 'DATABASE_ECHO') else False,
-    # 🔧 COMPATIBILITY FIX: NullPool 사용 (run_until_complete 호환성 문제 해결)
-    # AsyncAdaptedQueuePool은 advanced_backtest.py의 동기/비동기 혼용과 충돌
-    # 대신 다른 최적화(Redis 캐싱, Dictionary lookup, 로깅 최소화)로 성능 확보
-    poolclass=NullPool,  # 연결 풀링 비활성화 (호환성 우선)
+    # ✅ 커넥션 풀 활성화 (완전 비동기 전환으로 호환성 문제 해결)
+    # advanced_backtest.py의 동기/비동기 혼용 제거 완료
+    pool_size=10,  # 기본 커넥션 10개
+    max_overflow=20,  # 최대 30개까지 확장 가능
+    pool_timeout=30,  # 커넥션 대기 시간 (초)
+    pool_recycle=3600,  # 1시간마다 커넥션 재생성
     pool_pre_ping=True,  # 커넥션 유효성 검증
     # 대용량 쿼리 최적화
     connect_args={

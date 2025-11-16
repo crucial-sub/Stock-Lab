@@ -266,6 +266,14 @@ class RedisCache:
 cache = RedisCache()
 
 
+def get_cache() -> RedisCache:
+    """
+    RedisCache 인스턴스 반환
+    데이터 캐싱용
+    """
+    return cache
+
+
 def get_redis() -> Optional[redis.Redis]:
     """
     Redis 클라이언트 인스턴스 반환 (Event Loop 안전)

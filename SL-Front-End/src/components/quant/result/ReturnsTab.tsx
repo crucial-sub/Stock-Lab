@@ -45,7 +45,7 @@ export function ReturnsTab({ yieldPoints, trades }: ReturnsTabProps) {
             key={tab.id}
             onClick={() => setActiveChartTab(tab.id)}
             className={`px-4 py-2 text-sm font-medium rounded-sm transition-colors ${activeChartTab === tab.id
-              ? "bg-accent-primary text-white"
+              ? "bg-brand-purple text-white"
               : "text-text-body hover:text-text-strong border border-border-default hover:bg-bg-muted"
               }`}
           >

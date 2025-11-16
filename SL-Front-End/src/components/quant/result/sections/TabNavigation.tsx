@@ -47,9 +47,9 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`px-6 py-2.5 rounded-sm font-medium transition-colors ${active
-        ? "bg-accent-primary text-white"
-        : "bg-bg-surface text-text-body hover:bg-bg-muted"
+      className={`px-6 py-2 rounded-lg font-semibold text-[1.25rem] transition-colors ${active
+        ? "bg-brand-purple text-white"
+        : "hover:bg-brand-soft"
         }`}
     >
       {label}

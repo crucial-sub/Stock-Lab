@@ -50,10 +50,10 @@ export default async function PortfolioPage() {
     }));
 
     // 대시보드 통계 계산
-    // TODO: 실제로는 서버에서 별도 API로 받아와야 하지만, 
+    // TODO: 실제로는 서버에서 별도 API로 받아와야 하지만,
     // 현재는 전략 목록 데이터로부터 계산
     const activeCount = portfolios.filter((p) => p.isActive).length;
-    
+
     // 총 수익률 계산 (활성 포트폴리오들의 평균)
     const activePortfolios = portfolios.filter((p) => p.isActive);
     const avgReturn = activePortfolios.length > 0
@@ -76,10 +76,15 @@ export default async function PortfolioPage() {
         portfolios={portfolios}
       />
     );
-  } catch (error) {
+  } catch (error: any) {
+    // 401 에러 (인증 실패): 토큰 만료 또는 유효하지 않음 -> 로그인 페이지로 리다이렉트
+    if (error?.response?.status === 401) {
+      redirect("/login?redirect=/quant");
+    }
+
     console.error("Error fetching strategies:", error);
-    
-    // 에러 발생 시 빈 데이터로 렌더링
+
+    // 기타 에러 발생 시 빈 데이터로 렌더링
     return (
       <PortfolioPageClient
         totalAssets={0}

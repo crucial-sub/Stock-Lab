@@ -66,9 +66,14 @@ export function PortfolioPageClient({
     console.log("Portfolio clicked:", id);
   };
 
-  // 활성 포트폴리오를 맨 앞으로, 나머지는 그대로 유지
-  const activePortfolio = portfolios.find((p) => p.isActive);
-  const inactivePortfolios = portfolios.filter((p) => !p.isActive);
+  // 활성 포트폴리오를 맨 앞으로, 나머지는 최신순으로 정렬
+  const sortedPortfolios = [...portfolios].sort((a, b) => {
+    // 1. 활성 상태 우선
+    if (a.isActive && !b.isActive) return -1;
+    if (!a.isActive && b.isActive) return 1;
+    // 2. 같은 활성 상태면 최신순 (createdAt 기준)
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 
   return (
     <main className="flex-1 px-10 pt-[60px] pb-20 overflow-auto">
@@ -99,19 +104,8 @@ export function PortfolioPageClient({
           {/* 새로 만들기 카드 */}
           <CreatePortfolioCard />
 
-          {/* 활성 포트폴리오 (새로 만들기 바로 다음) */}
-          {activePortfolio && (
-            <PortfolioCard
-              key={activePortfolio.id}
-              {...activePortfolio}
-              isSelected={selectedIds.has(activePortfolio.id)}
-              onSelect={handleSelect}
-              onClick={handlePortfolioClick}
-            />
-          )}
-
-          {/* 비활성 포트폴리오들 */}
-          {inactivePortfolios.map((portfolio) => (
+          {/* 모든 포트폴리오 (활성 우선, 최신순) */}
+          {sortedPortfolios.map((portfolio) => (
             <PortfolioCard
               key={portfolio.id}
               {...portfolio}

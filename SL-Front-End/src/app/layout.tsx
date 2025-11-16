@@ -14,16 +14,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // 쿠키에서 로그인 상태 확인
   const cookieStore = await cookies();
   const token = cookieStore.get("access_token")?.value;
-  const isLoggedIn = !!token;
+  const hasToken = !!token;
 
   return (
     <html lang="ko">
       <body className="flex h-screen overflow-hidden antialiased">
         <Providers>
-          <SideNav isLoggedIn={isLoggedIn} />
+          <SideNav serverHasToken={hasToken} />
           <main className="flex-1 h-full overflow-auto bg-background">
             {children}
           </main>

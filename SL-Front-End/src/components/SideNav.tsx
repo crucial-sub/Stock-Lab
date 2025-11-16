@@ -3,7 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { authApi } from "@/lib/api/auth";
+import { getAuthTokenFromCookie } from "@/lib/auth/token";
 
 /**
  * 전역 사이드바 네비게이션
@@ -80,13 +82,36 @@ const LOGGED_OUT_UTILITY_NAV_ITEMS = [
 ];
 
 interface SideNavProps {
-  /** 로그인 여부 (서버에서 전달) */
-  isLoggedIn: boolean;
+  serverHasToken: boolean;
 }
 
-export function SideNav({ isLoggedIn }: SideNavProps) {
+export function SideNav({ serverHasToken }: SideNavProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(serverHasToken);
   const pathname = usePathname();
+
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      try {
+        await authApi.getCurrentUser();
+        setIsLoggedIn(true);
+      } catch (error) {
+        setIsLoggedIn(false);
+      }
+    };
+
+    checkLoginStatus();
+
+    const handleFocus = () => {
+      checkLoginStatus();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   // 로그인 상태에 따라 유틸리티 아이템 결정
   const utilityNavItems = [

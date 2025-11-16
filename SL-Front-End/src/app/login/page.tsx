@@ -63,12 +63,12 @@ export default function LoginPage() {
       setIsSubmitting(true);
       try {
         await authApi.login({ email, password });
-        router.push("/");
+        // 페이지 전체 새로고침으로 서버 컴포넌트 확실히 재실행
+        window.location.href = "/";
       } catch (error) {
         setErrors({
           email: "이메일 또는 비밀번호가 올바르지 않습니다."
         });
-      } finally {
         setIsSubmitting(false);
       }
     }

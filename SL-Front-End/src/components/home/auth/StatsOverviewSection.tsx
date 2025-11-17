@@ -21,7 +21,7 @@ export function StatsOverviewSection({ stats }: StatsOverviewSectionProps) {
         {stats.map((stat) => (
           <article
             key={stat.id}
-            className="rounded-[12px] border border-[#18223433] bg-[#1822340D] p-5 shadow-elev-card"
+            className="rounded-[12px] border border-[#18223433] bg-[#18223405] p-5 shadow-elev-card"
           >
             <div className="flex items-center justify-between text-[1.25rem] font-semibold text-text-muted">
               <span>{stat.title}</span>

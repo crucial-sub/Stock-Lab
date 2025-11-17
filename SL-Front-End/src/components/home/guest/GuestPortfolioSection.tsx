@@ -34,7 +34,7 @@ function GuestPortfolioCard({ portfolio }: GuestPortfolioCardProps) {
     : null;
 
   return (
-    <article className="rounded-[12px] border-[1/2px] border-[#18223433] bg-[#1822340D] shadow-elev-card">
+    <article className="rounded-[12px] border-[1/2px] border-[#18223433] bg-[#18223405] shadow-elev-card">
       <div className="flex h-full flex-col justify-between rounded-[12px] border border-[#18223433] px-5 py-5 text-text-body">
         <div className="flex items-center gap-3">
           <div

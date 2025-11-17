@@ -27,7 +27,7 @@ export function MarketInsightSection({
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5">
+        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#18223405] shadow-elev-card p-5">
           <div className="flex flex-col">
             {stocks.map((stock) => (
               <div
@@ -52,7 +52,7 @@ export function MarketInsightSection({
           </div>
         </article>
 
-        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5">
+        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#18223405] shadow-elev-card p-5">
           <div className="flex flex-col">
             {news.map((item) => (
               <div

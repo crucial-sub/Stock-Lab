@@ -30,7 +30,7 @@ export function GuestCommunityPreviewSection({
             className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center justify-center rounded-[4px] border-[0.5px] border-[#007DFC] bg-[#EAF5FF] px-3 pt-0.5 text-[0.75rem] font-semibold text-[#2D62AB]">
+              <span className="inline-flex items-center justify-center rounded-[4px] border-[0.5px] border-[#007DFC] bg-[#EAF5FF] px-3 pt-0.5 text-[0.75rem] font-semibold text-[#007DFC]">
                 {post.tag}
               </span>
               <h3 className="text-[1.25rem] font-semibold text-text-body">

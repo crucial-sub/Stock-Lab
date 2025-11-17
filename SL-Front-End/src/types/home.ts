@@ -40,3 +40,44 @@ export interface GuestCommunityPost {
   likes: string;
   comments: string;
 }
+
+export interface HomeStatCardData {
+  id: string;
+  title: string;
+  value: string;
+  change: string;
+  badge?: string;
+  description?: string;
+}
+
+export interface MarketStock {
+  id: string;
+  name: string;
+  tag: string;
+  change: string;
+  price: string;
+  volume: string;
+}
+
+export interface MarketNews {
+  id: string;
+  title: string;
+  badge: string;
+}
+
+export interface HomePortfolioHighlight {
+  id: string;
+  name: string;
+  returnRate: number;
+  rank: number;
+}
+
+export interface HomeCommunityHighlight {
+  id: string;
+  title: string;
+  preview: string;
+  tag: string;
+  views: string;
+  likes: string;
+  comments: string;
+}

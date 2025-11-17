@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 import sys
 from pathlib import Path
+from fastapi.responses import JSONResponse
 
 # Add chatbot to path for FactorSync (when running in Docker, chatbot is at /app/sl-chatbot/chatbot/src)
 chatbot_path = Path("/app/sl-chatbot/chatbot/src")
@@ -21,6 +22,7 @@ except ImportError as e:
 
 from models.request import RecommendRequest, BuildConditionsRequest
 from models.response import RecommendResponse, ConditionsResponse
+from errors import make_error
 
 
 router = APIRouter()
@@ -49,9 +51,9 @@ async def recommend_strategy(request: RecommendRequest):
     """
     sync = get_factor_sync()
     if not sync:
-        raise HTTPException(
+        return JSONResponse(
             status_code=500,
-            detail="FactorSync not available"
+            content=make_error("E004", "FactorSync not available", "전략 추천 구성을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."),
         )
 
     try:
@@ -70,9 +72,9 @@ async def recommend_strategy(request: RecommendRequest):
         )
 
     except Exception as e:
-        raise HTTPException(
+        return JSONResponse(
             status_code=500,
-            detail=f"Recommendation failed: {str(e)}"
+            content=make_error("E004", f"Recommendation failed: {str(e)}", "전략 추천 중 오류가 발생했습니다. 다시 시도해주세요."),
         )
 
 
@@ -103,9 +105,9 @@ async def build_conditions(request: BuildConditionsRequest):
         )
 
     except Exception as e:
-        raise HTTPException(
+        return JSONResponse(
             status_code=500,
-            detail=f"Condition building failed: {str(e)}"
+            content=make_error("E006", f"Condition building failed: {str(e)}", "백테스트 조건 생성 중 오류가 발생했습니다. 다시 시도해주세요."),
         )
 
 

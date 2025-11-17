@@ -117,6 +117,7 @@ export interface ChatResponse {
   ui_language?: UILanguage;
   context?: string;
   sources?: any[];
+  backtest_conditions?: DSLCondition[];  // 매수/매도 조건이 있을 경우
 }
 
 // ============ API Functions ============
@@ -141,5 +142,34 @@ export async function deleteSession(sessionId: string): Promise<void> {
  */
 export async function checkHealth(): Promise<{ status: string; version: string }> {
   const response = await chatbotAxios.get("/api/v1/health");
+  return response.data;
+}
+
+// ============ DSL API ============
+
+export interface DSLCondition {
+  factor: string;
+  params: any[];
+  operator: string;
+  right_factor?: string;
+  right_params?: any[];
+  value?: number;
+}
+
+export interface DSLRequest {
+  text: string;
+}
+
+export interface DSLResponse {
+  conditions: DSLCondition[];
+}
+
+/**
+ * 자연어 전략 설명을 DSL JSON으로 변환
+ */
+export async function parseDSL(text: string): Promise<DSLResponse> {
+  const response = await chatbotAxios.post<DSLResponse>("/api/v1/dsl/parse", {
+    text,
+  });
   return response.data;
 }

@@ -1,8 +1,11 @@
 """Chat API Endpoints."""
-from fastapi import APIRouter, HTTPException
-from typing import Optional
+import json
 import sys
 from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 # Add chatbot to path (when running in Docker, chatbot is at /app/sl-chatbot/chatbot/src)
 chatbot_path = Path("/app/sl-chatbot/chatbot/src")
@@ -29,6 +32,7 @@ except Exception as e:
 
 from models.request import ChatRequest
 from models.response import ChatResponse
+from ..errors import make_error_response
 
 
 router = APIRouter()
@@ -62,41 +66,64 @@ async def chat_message(request: ChatRequest):
     chatbot = get_bot()
 
     if not chatbot:
-        raise HTTPException(
+        return make_error_response(
             status_code=500,
-            detail="Chatbot not initialized"
+            code="E002",
+            message="Chatbot not initialized",
+            user_message="챗봇을 초기화하지 못했습니다. 잠시 후 다시 시도해주세요.",
+            error_type="INVALID_RESPONSE",
+            retry_allowed=True,
         )
 
     try:
         result = await chatbot.chat(
             message=request.message,
-            session_id=request.session_id
+            session_id=request.session_id,
+            answer=request.answer
         )
+
+        print(f"DEBUG CHAT: User message: {request.message}")
+        print(f"DEBUG CHAT: Bot answer: {result.get('answer', 'N/A')[:200]}")
+        print(f"DEBUG CHAT: Intent: {result.get('intent', 'N/A')}")
+        print(f"DEBUG CHAT: Sources count: {len(result.get('sources', []))}")
 
         return ChatResponse(
             answer=result["answer"],
             intent=result.get("intent"),
             context=result.get("context"),
             conditions=result.get("conditions"),
-            session_id=request.session_id
+            session_id=request.session_id,
+            ui_language=result.get("ui_language"),
+            backtest_conditions=result.get("backtest_conditions")
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Chat processing failed: {str(e)}"
+        error_str = str(e)
+
+        # Throttling 에러 감지
+        if "ThrottlingException" in error_str or "Too many requests" in error_str:
+            user_message = "요청이 많아 일시적으로 응답이 지연되고 있습니다.\n잠시 후(30초~1분) 다시 시도해주세요."
+        else:
+            user_message = "응답 생성 중 오류가 발생했습니다. 다시 시도해주세요."
+
+        # 에러를 ChatResponse 형식으로 반환 (HTTPException 대신)
+        return ChatResponse(
+            answer=user_message,
+            intent="error",
+            context=None,
+            conditions=None,
+            session_id=request.session_id or "error",
+            ui_language=None,
+            backtest_conditions=None
         )
 
 
 @router.post("/stream")
 async def chat_stream(request: ChatRequest):
-    """Stream chat response (SSE).
-
-    TODO: Implement streaming response
-    """
+    """Stream chat response (SSE)."""
     raise HTTPException(
         status_code=501,
-        detail="Streaming not implemented yet"
+        detail="Streaming not implemented"
     )
 
 

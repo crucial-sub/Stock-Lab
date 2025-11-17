@@ -8,4 +8,5 @@ export * from "./factors";
 export * from "./industries";
 export * from "./sub-factors";
 export * from "./themes";
+export * from "./chat-history";
 export * from "./community";

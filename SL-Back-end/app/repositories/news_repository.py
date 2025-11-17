@@ -44,10 +44,10 @@ THEME_MAPPING = {
     "publishing": "출판·매체복제",
 }
 
-# Reverse mapping: Korean -> English (프론트에서 받은 한글 테마명을 영어로 변환)
+#프론트에서 받은 한글 테마명을 영어로 변환
 THEME_MAPPING_REVERSE = {v: k for k, v in THEME_MAPPING.items()}
 
-# Stock code to company name mapping
+
 STOCK_CODE_MAPPING = {
     "005930": "삼성전자",
     "051910": "LG화학",
@@ -101,7 +101,7 @@ class NewsRepository:
             query = select(NewsArticle).where(
                 NewsArticle.stock_code == stock_code
             ).order_by(
-                NewsArticle.news_date.desc()
+                NewsArticle.analyzed_at.desc()
             ).limit(limit)
 
             result = await db.execute(query)
@@ -138,7 +138,7 @@ class NewsRepository:
                     NewsArticle.stock_code.contains(keyword)  # 종목코드로 검색
                 )
             ).order_by(
-                NewsArticle.analyzed_at.desc()  # analyzed_at으로 정렬
+                NewsArticle.analyzed_at.desc()  # 분석 완료 시간 기준 정렬
             ).limit(limit)
 
             result = await db.execute(query)
@@ -174,7 +174,7 @@ class NewsRepository:
             query = select(NewsArticle).where(
                 NewsArticle.theme == search_theme
             ).order_by(
-                NewsArticle.news_date.desc()
+                NewsArticle.analyzed_at.desc()
             ).limit(limit)
 
             result = await db.execute(query)
@@ -212,10 +212,10 @@ class NewsRepository:
 
 def _serialize_news(article: NewsArticle) -> Dict:
     """뉴스 기사를 직렬화 - 프론트 스키마에 맞게"""
-    # 날짜 선택 (우선순위: analyzed_at(실제 업로드 날짜, UTC) > crawled_at > news_date)
+    # 날짜 선택 (우선순위: analyzed_at(분석 완료 시간) > crawled_at > news_date)
     published_at = ""
 
-    # analyzed_at이 실제 뉴스 업로드 날짜이므로 우선순위를 높임
+    # 분석 완료 시간을 우선순위로 표시
     date_obj = article.analyzed_at or article.crawled_at or article.news_date
 
     if date_obj:
@@ -271,7 +271,7 @@ def _serialize_news(article: NewsArticle) -> Dict:
         "themeName": theme_name,  # 테마명 (한글)
         "themeNameKor": theme_name,  # 테마명 (한글) - 프론트 요청
         "sentiment": sentiment,
-        "publishedAt": published_at,  # analyzed_at(UTC) -> KST로 변환된 날짜
+        "publishedAt": published_at,  # 분석 완료 시간 (analyzed_at)
         "source": article.source or "",
         "link": article.link or "",
         "pressName": None

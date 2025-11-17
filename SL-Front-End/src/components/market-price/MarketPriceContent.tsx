@@ -67,12 +67,13 @@ export function MarketPriceContent() {
     fetchUser();
   }, []);
 
-  // Queries
+  // Queries (검색어 포함)
   const marketQuotesQuery = useMarketQuotesQuery(
     selectedTab.sortBy || "market_cap",
     1,
     50,
     userId,
+    searchQuery.trim() || undefined, // 검색어가 있으면 전달
   );
   // 로그인한 사용자만 즐겨찾기/최근 본 종목 조회
   const favoritesQuery = useFavoriteStocksQuery(!!userId);
@@ -188,17 +189,7 @@ export function MarketPriceContent() {
     marketQuotesQuery.data,
   ]);
 
-  // 검색 필터링 적용
-  const filteredRows = useMemo(() => {
-    if (!searchQuery.trim()) return rows;
-
-    const query = searchQuery.toLowerCase().trim();
-    return rows.filter(
-      (row) =>
-        row.name.toLowerCase().includes(query) ||
-        row.code.toLowerCase().includes(query),
-    );
-  }, [rows, searchQuery]);
+  // 검색은 이제 Backend에서 처리 (filteredRows 제거)
 
   const handleToggleFavorite = (code: string, isFavorite: boolean) => {
     if (isFavorite) {
@@ -270,7 +261,7 @@ export function MarketPriceContent() {
               <div className="relative w-full max-w-[260px]">
                 <input
                   type="search"
-                  placeholder="전략 이름으로 검색하기"
+                  placeholder="종목명/종목코드로 검색하기"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full h-9 rounded-lg bg-surface border-[0.5px] border-surface py-[0.5rem] px-[0.813rem] text-[0.75rem] text-gray-600 placeholder:text-gray-600 focus:border-brand-purple focus:outline-none"
@@ -323,7 +314,7 @@ export function MarketPriceContent() {
                   데이터를 불러오는데 실패했습니다.
                 </p>
               </div>
-            ) : filteredRows.length === 0 ? (
+            ) : rows.length === 0 ? (
               <div className="flex items-center justify-center py-20">
                 <p className="text-text-body">
                   {searchQuery.trim()
@@ -332,7 +323,7 @@ export function MarketPriceContent() {
                 </p>
               </div>
             ) : (
-              filteredRows.map((row, _index) => (
+              rows.map((row, _index) => (
                 <div
                   key={row.rank}
                   role="button"

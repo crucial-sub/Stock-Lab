@@ -22,6 +22,20 @@ class StrategySharingUpdate(BaseModel):
     hide_strategy_details: Optional[bool] = None
 
 
+class StrategyListItem(BaseModel):
+    """백테스트 목록 아이템 (quant/main 페이지용 - 간소화)"""
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
+    session_id: str = Field(..., serialization_alias="sessionId")
+    strategy_id: str = Field(..., serialization_alias="strategyId")
+    strategy_name: str = Field(..., serialization_alias="strategyName")
+    is_active: bool = Field(default=True, serialization_alias="isActive")
+    status: str = Field(..., description="상태 (PENDING/RUNNING/COMPLETED/FAILED)")
+    total_return: Optional[float] = Field(None, serialization_alias="totalReturn", description="누적 수익률 (%)")
+    created_at: datetime = Field(..., serialization_alias="createdAt")
+    updated_at: datetime = Field(..., serialization_alias="updatedAt")
+
+
 class StrategyStatisticsSummary(BaseModel):
     """투자전략 통계 요약 (목록용)"""
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
@@ -34,9 +48,10 @@ class StrategyStatisticsSummary(BaseModel):
 
 
 class StrategyDetailItem(BaseModel):
-    """투자전략 상세 정보 (내 투자전략 목록용)"""
+    """백테스트 결과 상세 정보 (내 백테스트 목록용)"""
     model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
+    session_id: str = Field(..., serialization_alias="sessionId")
     strategy_id: str = Field(..., serialization_alias="strategyId")
     strategy_name: str = Field(..., serialization_alias="strategyName")
     strategy_type: Optional[str] = Field(None, serialization_alias="strategyType")
@@ -46,13 +61,22 @@ class StrategyDetailItem(BaseModel):
     is_public: bool = Field(..., serialization_alias="isPublic")
     is_anonymous: bool = Field(..., serialization_alias="isAnonymous")
     hide_strategy_details: bool = Field(..., serialization_alias="hideStrategyDetails")
+    is_active: bool = Field(default=True, serialization_alias="isActive")
 
     # 백테스트 정보
     initial_capital: Optional[float] = Field(None, serialization_alias="initialCapital")
     backtest_start_date: Optional[date] = Field(None, serialization_alias="backtestStartDate")
     backtest_end_date: Optional[date] = Field(None, serialization_alias="backtestEndDate")
 
-    # 통계 (최신 시뮬레이션 기준)
+    # 실행 상태
+    status: str = Field(..., description="상태 (PENDING/RUNNING/COMPLETED/FAILED)")
+    progress: int = Field(default=0, description="진행률 (%)")
+    error_message: Optional[str] = Field(None, serialization_alias="errorMessage")
+
+    # 주요 통계 (빠른 접근용)
+    total_return: Optional[float] = Field(None, serialization_alias="totalReturn", description="누적 수익률 (%)")
+
+    # 통계 상세 (완료된 경우에만)
     statistics: Optional[StrategyStatisticsSummary] = None
 
     # 메타데이터
@@ -97,7 +121,7 @@ class StrategyRankingItem(BaseModel):
 
 class MyStrategiesResponse(BaseModel):
     """내 투자전략 목록 응답"""
-    strategies: List[StrategyDetailItem]
+    strategies: List[StrategyListItem]
     total: int
 
 
@@ -108,3 +132,8 @@ class StrategyRankingResponse(BaseModel):
     page: int
     limit: int
     sort_by: str = Field(..., serialization_alias="sortBy")  # "total_return" or "annualized_return"
+
+
+class BacktestDeleteRequest(BaseModel):
+    """백테스트 삭제 요청"""
+    session_ids: List[str] = Field(..., description="삭제할 백테스트 세션 ID 목록")

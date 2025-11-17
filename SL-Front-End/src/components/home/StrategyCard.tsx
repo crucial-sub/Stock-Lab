@@ -37,19 +37,18 @@ export function StrategyCard({
     >
       <header className="flex flex-col gap-1 mb-2">
         <div className="flex items-end gap-1">
-          <h3 className="text-2xl font-semibold">
-            {title}
-          </h3>
+          <h3 className="text-2xl font-semibold">{title}</h3>
           <span className="whitespace-nowrap text-xs font-extralight font-sans">
             made by. {author}
           </span>
         </div>
         <div className="flex flex-wrap gap-1">
           {tags.map((tag, index) => (
-            <div key={`${tag}-${index}`} className="px-1 py-0.5 rounded-[2px] inline-flex bg-[#FFEFEF] justify-center items-center gap-1 overflow-hidden">
-              <span
-                className="text-center justify-center text-sm font-normal font-sans"
-              >
+            <div
+              key={`${tag}-${index}`}
+              className="px-1 py-0.5 rounded-[2px] inline-flex bg-[#FFEFEF] justify-center items-center gap-1 overflow-hidden"
+            >
+              <span className="text-center justify-center text-sm font-normal font-sans">
                 {tag}
               </span>
             </div>
@@ -63,8 +62,13 @@ export function StrategyCard({
 
       <div className="flex justify-between mb-7">
         {metrics.map((metric) => (
-          <div key={`${metric.label}-${metric.value}`} className="flex flex-col gap-1">
-            <span className="text-sm font-extralight font-sans">{metric.label}</span>
+          <div
+            key={`${metric.label}-${metric.value}`}
+            className="flex flex-col gap-1"
+          >
+            <span className="text-sm font-extralight font-sans">
+              {metric.label}
+            </span>
             <span
               className={`text-xl font-semibold font-sans ${toneClass[metric.tone ?? "default"]}`}
             >

@@ -15,7 +15,10 @@ export function FeaturedStrategiesSection({
       <Title>에디터가 추천하는 수익률이 높은 전략</Title>
       <div className="flex flex-nowrap gap-10 w-full">
         {strategies.map((strategy, index) => (
-          <div key={`${strategy.title}-${index}`} className="basis-[calc((100%-5rem)/3)]">
+          <div
+            key={`${strategy.title}-${index}`}
+            className="basis-[calc((100%-5rem)/3)]"
+          >
             <StrategyCard {...strategy} />
           </div>
         ))}

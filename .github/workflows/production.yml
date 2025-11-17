@@ -1,0 +1,589 @@
+name: Production Deployment Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests (use with caution)'
+        required: false
+        default: 'false'
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_BACKEND_REPO: stocklab-backend
+  ECR_FRONTEND_REPO: stocklab-frontend
+  ENVIRONMENT: production
+
+jobs:
+  # Job 1: 코드 품질 및 보안 검사
+  quality-checks:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.skip_tests != 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('SL-Back-end/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Backend dependencies
+        run: |
+          cd SL-Back-end
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 pytest pytest-asyncio pytest-cov
+
+      - name: Run Backend linter
+        run: |
+          cd SL-Back-end
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Run Backend tests with coverage
+        run: |
+          cd SL-Back-end
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=term
+        continue-on-error: false
+
+      - name: Check test coverage threshold
+        run: |
+          cd SL-Back-end
+          COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(root.attrib['line-rate'])")
+          COVERAGE_PERCENT=$(echo "$COVERAGE * 100" | bc)
+          echo "Test coverage: ${COVERAGE_PERCENT}%"
+          # Uncomment to enforce minimum coverage
+          # if (( $(echo "$COVERAGE < 0.60" | bc -l) )); then
+          #   echo "Error: Test coverage is below 60%"
+          #   exit 1
+          # fi
+        continue-on-error: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache Node modules
+        uses: actions/cache@v3
+        with:
+          path: SL-Front-End/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('SL-Front-End/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install Frontend dependencies
+        run: |
+          cd SL-Front-End
+          corepack enable
+          corepack prepare pnpm@latest --activate
+          pnpm install --frozen-lockfile
+
+      - name: Run Frontend linter
+        run: |
+          cd SL-Front-End
+          pnpm run lint
+
+      - name: Run Frontend type check and build
+        run: |
+          cd SL-Front-End
+          pnpm run build
+        continue-on-error: false
+
+  # Job 2: 보안 스캔
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: quality-checks
+    if: always() && (needs.quality-checks.result == 'success' || github.event.inputs.skip_tests == 'true')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner - Backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './SL-Back-end'
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-backend-results.sarif'
+          category: 'backend-security'
+
+      - name: Run Trivy vulnerability scanner - Frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './SL-Front-End'
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-frontend-results.sarif'
+          category: 'frontend-security'
+
+  # Job 3: Docker 이미지 빌드 및 스캔
+  build-and-scan:
+    needs: [quality-checks, security-scan]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      (needs.quality-checks.result == 'success' || github.event.inputs.skip_tests == 'true') &&
+      needs.security-scan.result == 'success' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
+
+    outputs:
+      backend-image: ${{ steps.build-backend.outputs.image }}
+      frontend-image: ${{ steps.build-frontend.outputs.image }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Backend image
+        id: build-backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd SL-Back-end
+          docker build -t $ECR_REGISTRY/$ECR_BACKEND_REPO:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_BACKEND_REPO:$IMAGE_TAG $ECR_REGISTRY/$ECR_BACKEND_REPO:latest
+          echo "image=$ECR_REGISTRY/$ECR_BACKEND_REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Scan Backend Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-backend.outputs.image }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push Backend image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPO:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPO:latest
+
+      - name: Build Frontend image
+        id: build-frontend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd SL-Front-End
+          docker build \
+            --build-arg NEXT_PUBLIC_API_BASE_URL=${{ secrets.ALB_DNS_URL }}/api/v1 \
+            -t $ECR_REGISTRY/$ECR_FRONTEND_REPO:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_FRONTEND_REPO:$IMAGE_TAG $ECR_REGISTRY/$ECR_FRONTEND_REPO:latest
+          echo "image=$ECR_REGISTRY/$ECR_FRONTEND_REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Scan Frontend Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-frontend.outputs.image }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push Frontend image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPO:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPO:latest
+
+  # Job 4: 수동 승인 (Production)
+  approval:
+    needs: build-and-scan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://${{ secrets.DOMAIN_NAME }}
+
+    steps:
+      - name: Manual approval checkpoint
+        run: |
+          echo "Production deployment approved by ${{ github.actor }}"
+          echo "Deploying commit: ${{ github.sha }}"
+
+  # Job 5: Production 배포
+  deploy-production:
+    needs: approval
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Store current state for rollback
+        id: store-state
+        run: |
+          # Get current launch template version
+          CURRENT_VERSION=$(aws ec2 describe-launch-template-versions \
+            --launch-template-name ${{ secrets.LAUNCH_TEMPLATE_NAME }} \
+            --query 'LaunchTemplateVersions[?DefaultVersion==`true`].VersionNumber' \
+            --output text)
+          echo "current_lt_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+          # Get current ASG desired capacity
+          CURRENT_CAPACITY=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ secrets.ASG_NAME }} \
+            --query 'AutoScalingGroups[0].DesiredCapacity' \
+            --output text)
+          echo "current_capacity=$CURRENT_CAPACITY" >> $GITHUB_OUTPUT
+
+          echo "Stored state - LT Version: $CURRENT_VERSION, Capacity: $CURRENT_CAPACITY"
+
+      - name: Create new Launch Template version
+        id: new-lt-version
+        run: |
+          # Get latest version
+          LATEST_VERSION=$(aws ec2 describe-launch-template-versions \
+            --launch-template-name ${{ secrets.LAUNCH_TEMPLATE_NAME }} \
+            --query 'LaunchTemplateVersions[0].VersionNumber' \
+            --output text)
+
+          echo "Latest Launch Template version: $LATEST_VERSION"
+          echo "new_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Trigger Auto Scaling Group Instance Refresh
+        id: instance-refresh
+        run: |
+          REFRESH_ID=$(aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name ${{ secrets.ASG_NAME }} \
+            --preferences '{
+              "MinHealthyPercentage": 90,
+              "InstanceWarmup": 300,
+              "CheckpointPercentages": [25, 50, 75, 100],
+              "CheckpointDelay": 300,
+              "ScaleInProtectedInstances": "Wait"
+            }' \
+            --desired-configuration '{
+              "LaunchTemplate": {
+                "LaunchTemplateName": "${{ secrets.LAUNCH_TEMPLATE_NAME }}",
+                "Version": "$Latest"
+              }
+            }' \
+            --query 'InstanceRefreshId' \
+            --output text)
+
+          echo "refresh_id=$REFRESH_ID" >> $GITHUB_OUTPUT
+          echo "Instance Refresh ID: $REFRESH_ID"
+
+      - name: Wait for deployment to complete
+        id: wait-deployment
+        run: |
+          REFRESH_ID="${{ steps.instance-refresh.outputs.refresh_id }}"
+
+          for i in {1..60}; do
+            REFRESH_INFO=$(aws autoscaling describe-instance-refreshes \
+              --auto-scaling-group-name ${{ secrets.ASG_NAME }} \
+              --instance-refresh-ids $REFRESH_ID \
+              --query 'InstanceRefreshes[0]' \
+              --output json)
+
+            STATUS=$(echo $REFRESH_INFO | jq -r '.Status')
+            PERCENTAGE=$(echo $REFRESH_INFO | jq -r '.PercentageComplete // 0')
+
+            echo "[$i/60] Status: $STATUS, Progress: ${PERCENTAGE}%"
+
+            if [ "$STATUS" = "Successful" ]; then
+              echo "deployment_status=success" >> $GITHUB_OUTPUT
+              echo "Deployment completed successfully!"
+              exit 0
+            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ]; then
+              echo "deployment_status=failed" >> $GITHUB_OUTPUT
+              echo "Deployment failed with status: $STATUS"
+              exit 1
+            fi
+
+            sleep 30
+          done
+
+          echo "deployment_status=timeout" >> $GITHUB_OUTPUT
+          echo "Deployment timeout after 30 minutes"
+          exit 1
+
+      - name: Verify deployment health
+        if: steps.wait-deployment.outputs.deployment_status == 'success'
+        run: |
+          HEALTHY_COUNT=$(aws elbv2 describe-target-health \
+            --target-group-arn ${{ secrets.TARGET_GROUP_ARN }} \
+            --query 'length(TargetHealthDescriptions[?TargetHealth.State==`healthy`])' \
+            --output text)
+
+          echo "Healthy instances in target group: $HEALTHY_COUNT"
+
+          DESIRED=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ secrets.ASG_NAME }} \
+            --query 'AutoScalingGroups[0].DesiredCapacity' \
+            --output text)
+
+          if [ "$HEALTHY_COUNT" -ge "$DESIRED" ]; then
+            echo "Deployment verified: All $HEALTHY_COUNT/$DESIRED instances are healthy"
+          else
+            echo "Warning: Only $HEALTHY_COUNT/$DESIRED instances are healthy"
+            exit 1
+          fi
+
+      - name: Run smoke tests
+        if: steps.wait-deployment.outputs.deployment_status == 'success'
+        run: |
+          ALB_URL="${{ secrets.ALB_DNS_URL }}"
+
+          # Test backend health
+          echo "Testing backend health endpoint..."
+          BACKEND_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "${ALB_URL}/health")
+
+          if [ "$BACKEND_RESPONSE" = "200" ]; then
+            echo "Backend health check passed"
+          else
+            echo "Backend health check failed with status: $BACKEND_RESPONSE"
+            exit 1
+          fi
+
+          # Test frontend
+          echo "Testing frontend..."
+          FRONTEND_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "${ALB_URL}")
+
+          if [ "$FRONTEND_RESPONSE" = "200" ]; then
+            echo "Frontend check passed"
+          else
+            echo "Frontend check failed with status: $FRONTEND_RESPONSE"
+            exit 1
+          fi
+
+      - name: Automatic rollback on failure
+        if: failure() && steps.instance-refresh.outputs.refresh_id != ''
+        run: |
+          echo "Deployment failed. Initiating automatic rollback..."
+
+          # Cancel current instance refresh
+          aws autoscaling cancel-instance-refresh \
+            --auto-scaling-group-name ${{ secrets.ASG_NAME }} || true
+
+          sleep 10
+
+          # Rollback to previous launch template version
+          ROLLBACK_VERSION="${{ steps.store-state.outputs.current_lt_version }}"
+
+          if [ "$ROLLBACK_VERSION" != "" ] && [ "$ROLLBACK_VERSION" != "null" ]; then
+            echo "Rolling back to Launch Template version: $ROLLBACK_VERSION"
+
+            aws autoscaling start-instance-refresh \
+              --auto-scaling-group-name ${{ secrets.ASG_NAME }} \
+              --preferences '{
+                "MinHealthyPercentage": 90,
+                "InstanceWarmup": 300
+              }' \
+              --desired-configuration "{
+                \"LaunchTemplate\": {
+                  \"LaunchTemplateName\": \"${{ secrets.LAUNCH_TEMPLATE_NAME }}\",
+                  \"Version\": \"$ROLLBACK_VERSION\"
+                }
+              }"
+
+            echo "Rollback initiated successfully"
+          else
+            echo "No valid previous version found for rollback"
+          fi
+
+  # Job 6: Slack 알림
+  notify:
+    needs: [build-and-scan, deploy-production]
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Determine deployment status
+        id: status
+        run: |
+          if [ "${{ needs.deploy-production.result }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "color=#36a64f" >> $GITHUB_OUTPUT
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "color=#ff0000" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "Production Deployment ${{ steps.status.outputs.status == 'success' && 'Successful' || 'Failed' }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.status.outputs.emoji }} Production Deployment ${{ steps.status.outputs.status == 'success' && 'Successful' || 'Failed' }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nProduction"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ needs.deploy-production.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Commit Message:* ${{ github.event.head_commit.message }}"
+                  }
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Details:*\n• Backend Image: `${{ needs.build-and-scan.outputs.backend-image }}`\n• Frontend Image: `${{ needs.build-and-scan.outputs.frontend-image }}`"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Application"
+                      },
+                      "url": "https://${{ secrets.DOMAIN_NAME }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Send failure alert to on-call
+        if: needs.deploy-production.result == 'failure'
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "🚨 URGENT: Production Deployment Failed 🚨",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚨 URGENT: Production Deployment Failed"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Production deployment has failed and may require immediate attention.\n\n*Automatic rollback has been initiated.*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered by:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Failed Workflow"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                      "style": "danger"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ONCALL_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        continue-on-error: true

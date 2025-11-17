@@ -47,7 +47,6 @@ yarn-error.log*
 next-env.d.ts
 
 #etc
-/docs
 /.claude
 *.log
 /.playwright-mcp
@@ -58,6 +57,9 @@ __pycache__/
 .DS_Store
 SL-Back-end/logs/quant_api.log
 .venv/
+/docs
+/.cursor
+/scripts
 
 # Docker
 *.log

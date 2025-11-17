@@ -14,11 +14,11 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Copy requirements and install dependencies
-COPY ./api/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY api/ .
+COPY . .
 
 # Expose port
 EXPOSE 8001

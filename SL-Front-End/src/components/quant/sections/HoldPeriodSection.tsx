@@ -1,9 +1,13 @@
-import { Dropdown, Title } from "@/components/common";
-import { useBacktestConfigStore } from "@/stores";
 import { useEffect, useState } from "react";
+import {
+  Dropdown,
+  Title,
+  ToggleSwitch,
+  UnderlineInput,
+} from "@/components/common";
 import { FieldPanel, SectionHeader } from "@/components/quant/ui";
-import { ToggleSwitch, UnderlineInput } from "@/components/common";
 import ActivateConditionBtn from "@/components/quant/ui/ActivateConditionBtn";
+import { useBacktestConfigStore } from "@/stores";
 
 /**
  * 보유 기간 섹션
@@ -15,16 +19,16 @@ export function HoldPeriodSection() {
 
   const [isOpen, setIsOpen] = useState(hold_days !== null);
   const [minHoldDays, setMinHoldDays] = useState<number>(
-    hold_days?.min_hold_days ?? 10
+    hold_days?.min_hold_days ?? 10,
   );
   const [maxHoldDays, setMaxHoldDays] = useState<number>(
-    hold_days?.max_hold_days ?? 10
+    hold_days?.max_hold_days ?? 10,
   );
   const [sellPriceBasis, setSellPriceBasis] = useState<string>(
-    hold_days?.sell_price_basis ?? "전일 종가"
+    hold_days?.sell_price_basis ?? "전일 종가",
   );
   const [sellPriceOffset, setSellPriceOffset] = useState<number>(
-    hold_days?.sell_price_offset ?? 10
+    hold_days?.sell_price_offset ?? 10,
   );
 
   // 전역 스토어 업데이트
@@ -70,9 +74,7 @@ export function HoldPeriodSection() {
                   onChange={(e) => setMinHoldDays(Number(e.target.value))}
                   className="!h-full"
                 />
-                <span className="absolute right-0 top-[5px]">
-                  일
-                </span>
+                <span className="absolute right-0 top-[5px]">일</span>
               </div>
             </div>
 
@@ -87,9 +89,7 @@ export function HoldPeriodSection() {
                   onChange={(e) => setMaxHoldDays(Number(e.target.value))}
                   className="!h-full"
                 />
-                <span className="absolute right-0 top-[5px]">
-                  일
-                </span>
+                <span className="absolute right-0 top-[5px]">일</span>
               </div>
             </div>
 
@@ -113,9 +113,7 @@ export function HoldPeriodSection() {
                     onChange={(e) => setSellPriceOffset(Number(e.target.value))}
                     className=" !h-full"
                   />
-                  <span className="absolute right-0 top-[5px]">
-                    %
-                  </span>
+                  <span className="absolute right-0 top-[5px]">%</span>
                 </div>
               </div>
             </div>

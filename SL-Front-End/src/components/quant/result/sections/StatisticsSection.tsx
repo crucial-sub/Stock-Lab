@@ -1,5 +1,4 @@
 import { PeriodReturnsChart, StatMetric } from "../common";
-import { TradingActivityChart } from "../TradingActivityChart";
 
 /**
  * Result 페이지 통계 섹션
@@ -13,23 +12,12 @@ interface StatisticsSectionProps {
   };
   initialCapital: number;
   periodReturns: Array<{ label: string; value: number }>;
-  yieldPoints?: Array<{
-    date: string;
-    buyCount?: number;
-    sellCount?: number;
-    cumulativeReturn?: number;
-  }>;
-  startDate?: string;
-  endDate?: string;
 }
 
 export function StatisticsSection({
   statistics,
   initialCapital,
   periodReturns,
-  yieldPoints,
-  startDate,
-  endDate,
 }: StatisticsSectionProps) {
   const stats = statistics;
 
@@ -39,7 +27,8 @@ export function StatisticsSection({
 
   // 일 평균 수익률 계산 (CAGR 기반, 연간 252 거래일 기준)
   // 공식: (1 + CAGR)^(1/252) - 1
-  const dailyReturn = (Math.pow(1 + stats.annualizedReturn / 100, 1 / 252) - 1) * 100;
+  const dailyReturn =
+    ((1 + stats.annualizedReturn / 100) ** (1 / 252) - 1) * 100;
 
   return (
     <div className="space-y-6 mb-6">
@@ -55,25 +44,29 @@ export function StatisticsSection({
               <StatMetric
                 label="일 평균 수익률"
                 value={`${dailyReturn.toFixed(3)}%`}
-                color={dailyReturn >= 0 ? "text-brand-primary" : "text-accent-primary"}
+                color={dailyReturn >= 0 ? "text-red-500" : "text-blue-500"}
                 tooltip="일별 평균 수익률 (연간 252 거래일 기준)"
               />
               <StatMetric
                 label="누적 수익률"
                 value={`${stats.totalReturn.toFixed(2)}%`}
-                color={stats.totalReturn >= 0 ? "text-brand-primary" : "text-accent-primary"}
+                color={
+                  stats.totalReturn >= 0 ? "text-red-500" : "text-blue-500"
+                }
                 tooltip="전체 기간 누적 수익률"
               />
               <StatMetric
                 label="CAGR"
                 value={`${stats.annualizedReturn.toFixed(2)}%`}
-                color={stats.annualizedReturn >= 0 ? "text-brand-primary" : "text-accent-primary"}
+                color={
+                  stats.annualizedReturn >= 0 ? "text-red-500" : "text-blue-500"
+                }
                 tooltip="연평균 복리 수익률"
               />
               <StatMetric
                 label="MDD"
                 value={`${Math.abs(stats.maxDrawdown).toFixed(2)}%`}
-                color="text-red-500"
+                color="text-text-strong"
                 tooltip="최대 낙폭 (Maximum Drawdown)"
               />
             </div>
@@ -87,8 +80,8 @@ export function StatisticsSection({
               />
               <StatMetric
                 label="총 손익"
-                value={`${totalProfit >= 0 ? '+' : ''}${Math.round(totalProfit).toLocaleString()}원`}
-                color={totalProfit >= 0 ? "text-brand-primary" : "text-accent-primary"}
+                value={`${Math.round(totalProfit).toLocaleString()}원`}
+                color={totalProfit >= 0 ? "text-red-500" : "text-blue-500"}
                 size="large"
                 tooltip="총 수익금 (최종 자산 - 투자 원금)"
               />
@@ -106,18 +99,6 @@ export function StatisticsSection({
           </div>
         </div>
       </div>
-
-      {/* 매수/매도 활동 차트 섹션 */}
-      {yieldPoints && yieldPoints.length > 0 && (
-        <div className="bg-bg-surface rounded-lg shadow-card p-6">
-          <h2 className="text-lg font-bold text-text-strong mb-4">매수/매도 활동</h2>
-          <TradingActivityChart
-            yieldPoints={yieldPoints}
-            startDate={startDate}
-            endDate={endDate}
-          />
-        </div>
-      )}
     </div>
   );
 }

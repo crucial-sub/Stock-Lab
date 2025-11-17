@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Input } from "@/components/common/Input";
+import { authApi } from "@/lib/api/auth";
 
 interface SignUpErrors {
   name?: string;
@@ -28,15 +29,15 @@ export default function SignUpPage() {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleChange = (field: keyof typeof form) => (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const value = event.target.value;
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (field === "email") {
-      setIsEmailVerified(false);
-    }
-  };
+  const handleChange =
+    (field: keyof typeof form) =>
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const value = event.target.value;
+      setForm((prev) => ({ ...prev, [field]: value }));
+      if (field === "email") {
+        setIsEmailVerified(false);
+      }
+    };
 
   const validate = () => {
     const nextErrors: SignUpErrors = {};
@@ -53,16 +54,26 @@ export default function SignUpPage() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
-    // TODO: 실제 회원가입 API 연동
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await authApi.register({
+        name: form.name,
+        email: form.email,
+        phone_number: form.phone,
+        password: form.password,
+      });
       router.push("/login");
-    }, 800);
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.detail || "회원가입에 실패했습니다.";
+      setErrors({ email: errorMessage });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const labelClass = (hasError?: string) =>
@@ -105,7 +116,9 @@ export default function SignUpPage() {
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div>
-            <p className={`mb-2 text-sm font-normal ${labelClass(errors.name)}`}>
+            <p
+              className={`mb-2 text-sm font-normal ${labelClass(errors.name)}`}
+            >
               이름을 입력해주세요.
             </p>
             <Input
@@ -113,14 +126,17 @@ export default function SignUpPage() {
               placeholder="이름"
               value={form.name}
               onChange={handleChange("name")}
-              className={`h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none ${errors.name
-                ? "border-brand-primary bg-[#FFF6F6]"
-                : "border-border-default bg-white focus:border-accent-primary"
-                }`}
+              className={`h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none ${
+                errors.name
+                  ? "border-brand-primary bg-[#FFF6F6]"
+                  : "border-border-default bg-white focus:border-accent-primary"
+              }`}
             />
           </div>
           <div>
-            <p className={`mb-2 text-sm font-normal ${labelClass(errors.phone)}`}>
+            <p
+              className={`mb-2 text-sm font-normal ${labelClass(errors.phone)}`}
+            >
               전화번호를 입력해주세요.
             </p>
             <Input
@@ -129,10 +145,11 @@ export default function SignUpPage() {
               placeholder="01012345678 (- 없이)"
               value={form.phone}
               onChange={handleChange("phone")}
-              className={`h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none ${errors.phone
-                ? "border-brand-primary bg-[#FFF6F6]"
-                : "border-border-default bg-white focus:border-accent-primary"
-                }`}
+              className={`h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none ${
+                errors.phone
+                  ? "border-brand-primary bg-[#FFF6F6]"
+                  : "border-border-default bg-white focus:border-accent-primary"
+              }`}
             />
           </div>
           <div>
@@ -221,9 +238,7 @@ export default function SignUpPage() {
           </button>
         </form>
 
-        <p
-          className={`mt-10 text-center text-sm text-text-body `}
-        >
+        <p className={`mt-10 text-center text-sm text-text-body `}>
           이미 계정이 있으신가요?{" "}
           <Link
             href="/login"

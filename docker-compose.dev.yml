@@ -16,7 +16,7 @@ services:
     networks:
       - quant_network_dev
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U stocklabadmin -d stock_lab_investment_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -79,6 +79,7 @@ services:
     container_name: sl_frontend_dev
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
+      NEXT_PUBLIC_CHATBOT_API_URL: ${NEXT_PUBLIC_CHATBOT_API_URL:-http://localhost:8003}
       API_BASE_URL: ${API_BASE_URL:-http://backend:8000/api/v1}
       NODE_ENV: development
       WATCHPACK_POLLING: "true"
@@ -100,6 +101,29 @@ services:
       # Exclude node_modules from mounting (use container's node_modules)
       - /app/node_modules
       - /app/.next
+    networks:
+      - quant_network_dev
+    stdin_open: true
+    tty: true
+
+  # ChatBot API (Development with hot-reload)
+  chatbot:
+    build:
+      context: ./SL-ChatBot/chatbot
+      dockerfile: Dockerfile
+    container_name: sl_chatbot_dev
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: 1
+      DEBUG: "true"
+    ports:
+      - "${CHATBOT_PORT:-8003}:8003"
+    volumes:
+      # Mount source code for hot-reload
+      - ./SL-ChatBot/chatbot/src:/app/src
+      - ./SL-ChatBot/chatbot/requirements.txt:/app/requirements.txt
+      - ./SL-ChatBot/chatbot/config.yaml:/app/config.yaml
     networks:
       - quant_network_dev
     stdin_open: true

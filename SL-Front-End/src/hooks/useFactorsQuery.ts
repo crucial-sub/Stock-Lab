@@ -4,7 +4,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { getFactors, getFactorsByCategory, getFactorById } from "@/lib/api";
+import { getFactorById, getFactors, getFactorsByCategory } from "@/lib/api";
 import type { Factor } from "@/types/api";
 
 /**

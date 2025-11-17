@@ -1,33 +1,95 @@
-import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import type {
+  MyStrategiesResponse,
+  StrategyDetailItem,
+} from "@/lib/api/strategy";
+import { axiosInstance } from "@/lib/axios";
 import type { Strategy } from "@/types/strategy";
 
 /**
+ * 전략 쿼리 키
+ */
+const strategyQueryKey = {
+  all: ["strategies"] as const,
+  lists: () => [...strategyQueryKey.all, "list"] as const,
+  my: () => [...strategyQueryKey.lists(), "my"] as const,
+};
+
+/**
  * 전략 목록 관리 커스텀 훅
+ * - 서버에서 직접 데이터 fetch
  * - 전략 목록 상태 관리
  * - 선택, 검색, 삭제 등의 로직 처리
- * - 향후 서버 연동을 위한 구조 준비
  *
  * Note: React Compiler가 자동으로 메모이제이션을 처리하므로 useCallback 제거
  */
-export function useStrategyList(initialStrategies: Strategy[] = []) {
-  // 전략 목록 상태
-  const [strategies, setStrategies] = useState<Strategy[]>(initialStrategies);
-
+export function useStrategyList() {
   // 선택된 전략 ID 배열
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // 검색 키워드
   const [searchKeyword, setSearchKeyword] = useState("");
 
-  // 로딩 상태
-  const [isLoading, setIsLoading] = useState(false);
+  // React Query Client (캐시 무효화용)
+  const queryClient = useQueryClient();
+
+  // 서버에서 데이터 fetch
+  const {
+    data: strategyData,
+    isLoading,
+    error,
+  } = useQuery<MyStrategiesResponse, Error>({
+    queryKey: strategyQueryKey.my(),
+    queryFn: async () => {
+      const response =
+        await axiosInstance.get<MyStrategiesResponse>("/strategies/my");
+      return response.data;
+    },
+    staleTime: 1000 * 30, // 30초
+  });
+
+  // API 응답을 Strategy 타입으로 변환
+  const allStrategies = useMemo<Strategy[]>(() => {
+    if (!strategyData?.strategies) return [];
+
+    return strategyData.strategies.map((item: StrategyDetailItem) => ({
+      id: item.sessionId,
+      name: item.strategyName,
+      dailyAverageReturn: item.statistics?.annualizedReturn ?? 0,
+      cumulativeReturn: item.statistics?.totalReturn ?? 0,
+      maxDrawdown: item.statistics?.maxDrawdown ?? 0,
+      createdAt: new Date(item.createdAt)
+        .toLocaleDateString("ko-KR", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+        .replace(/\. /g, ".")
+        .replace(/\.$/, ""),
+      status: item.status,
+      progress: item.progress ?? 0,
+    }));
+  }, [strategyData]);
+
+  // 검색 키워드에 따라 필터링된 전략 목록
+  const strategies = useMemo(() => {
+    if (!searchKeyword.trim()) {
+      return allStrategies;
+    }
+    return allStrategies.filter((s) =>
+      s.name.toLowerCase().includes(searchKeyword.toLowerCase()),
+    );
+  }, [allStrategies, searchKeyword]);
 
   /**
    * 개별 전략 선택/해제
    */
-  const toggleStrategy = (id: number) => {
+  const toggleStrategy = (id: string) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((strategyId) => strategyId !== id) : [...prev, id]
+      prev.includes(id)
+        ? prev.filter((strategyId) => strategyId !== id)
+        : [...prev, id],
     );
   };
 
@@ -50,83 +112,43 @@ export function useStrategyList(initialStrategies: Strategy[] = []) {
   };
 
   /**
-   * 검색 실행
-   * TODO: 향후 서버 API 연동 예정
-   */
-  const executeSearch = async () => {
-    setIsLoading(true);
-    try {
-      // TODO: API 호출
-      // const response = await fetch(`/api/strategies?keyword=${searchKeyword}`);
-      // const data = await response.json();
-      // setStrategies(data.strategies);
-
-      // 현재는 로컬 필터링
-      if (searchKeyword.trim()) {
-        const filtered = initialStrategies.filter((s) =>
-          s.name.toLowerCase().includes(searchKeyword.toLowerCase())
-        );
-        setStrategies(filtered);
-      } else {
-        setStrategies(initialStrategies);
-      }
-    } catch (error) {
-      console.error("검색 실패:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  /**
    * 선택된 전략 삭제
-   * TODO: 향후 서버 API 연동 예정
+   * - 서버 API 호출 및 캐시 무효화
    */
   const deleteSelectedStrategies = async () => {
     if (selectedIds.length === 0) return;
 
     const confirmed = window.confirm(
-      `선택한 ${selectedIds.length}개의 전략을 삭제하시겠습니까?`
+      `선택한 ${selectedIds.length}개의 백테스트를 삭제하시겠습니까?`,
     );
 
     if (!confirmed) return;
 
-    setIsLoading(true);
     try {
-      // TODO: API 호출
-      // await fetch('/api/strategies', {
-      //   method: 'DELETE',
-      //   body: JSON.stringify({ strategyIds: selectedIds }),
-      // });
+      // API 호출 - 백테스트 세션 삭제
+      await axiosInstance.delete("/strategies/sessions", {
+        data: { session_ids: selectedIds },
+      });
 
-      // 현재는 로컬 상태만 업데이트
-      setStrategies((prev) => prev.filter((s) => !selectedIds.includes(s.id)));
+      // React Query 캐시 무효화 (목록 자동 갱신)
+      queryClient.invalidateQueries({ queryKey: strategyQueryKey.my() });
+
+      // 선택 상태 초기화
       setSelectedIds([]);
+
+      alert("백테스트가 삭제되었습니다.");
     } catch (error) {
-      console.error("삭제 실패:", error);
-      alert("전략 삭제 중 오류가 발생했습니다.");
-    } finally {
-      setIsLoading(false);
+      console.error("백테스트 삭제 실패:", error);
+      alert("백테스트 삭제 중 오류가 발생했습니다.");
     }
   };
 
   /**
    * 전략 목록 새로고침
-   * TODO: 향후 서버 API 연동 예정
    */
   const refreshStrategies = async () => {
-    setIsLoading(true);
-    try {
-      // TODO: API 호출
-      // const response = await fetch('/api/strategies');
-      // const data = await response.json();
-      // setStrategies(data.strategies);
-
-      setStrategies(initialStrategies);
-    } catch (error) {
-      console.error("목록 새로고침 실패:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    // React Query 캐시 무효화하여 재fetch
+    queryClient.invalidateQueries({ queryKey: strategyQueryKey.my() });
   };
 
   return {
@@ -135,12 +157,12 @@ export function useStrategyList(initialStrategies: Strategy[] = []) {
     selectedIds,
     searchKeyword,
     isLoading,
+    error,
 
     // 액션
     toggleStrategy,
     toggleAllStrategies,
     updateSearchKeyword,
-    executeSearch,
     deleteSelectedStrategies,
     refreshStrategies,
   };

@@ -17,6 +17,7 @@ interface StockDetailModalProps {
  * - ESC 키로 닫기
  * - 배경 클릭 시 닫기
  * - 스크롤 가능한 세부 정보 표시
+ * - 모달 열림 시 배경 스크롤 차단
  */
 export function StockDetailModal({
   isOpen,
@@ -24,6 +25,29 @@ export function StockDetailModal({
   stockName,
   stockCode,
 }: StockDetailModalProps) {
+  // 모달 열릴 때 배경 스크롤 차단
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // 현재 스크롤 위치 저장
+    const scrollY = window.scrollY;
+
+    // body 스크롤 차단
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    // 클린업: 모달 닫힐 때 스크롤 복원
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [isOpen]);
+
   // ESC 키로 모달 닫기
   useEffect(() => {
     if (!isOpen) return;
@@ -78,6 +102,6 @@ export function StockDetailModal({
         <StockInfoCard name={stockName} code={stockCode} />
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

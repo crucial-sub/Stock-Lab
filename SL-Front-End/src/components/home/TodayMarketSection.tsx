@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Title } from "@/components/common/Title";
-import { MarketTickerCard, type MarketTickerCardProps } from "./MarketTickerCard";
+import {
+  MarketTickerCard,
+  type MarketTickerCardProps,
+} from "./MarketTickerCard";
 
 interface TodayMarketSectionProps {
   items: MarketTickerCardProps[];
@@ -60,9 +63,11 @@ export function TodayMarketSection({
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-4">
           <Title>오늘의 주식 시장</Title>
-          <span className="text-base font-normal text-text-muted">등락률 상위20 종목</span>
+          <span className="text-base font-normal text-text-muted">
+            등락률 상위20 종목
+          </span>
         </div>
-        <Link href={'/market-price'} className="text-xl font-light transition">
+        <Link href={"/market-price"} className="text-xl font-light transition">
           더보기
         </Link>
       </div>

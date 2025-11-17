@@ -16,11 +16,16 @@ from app.core.config import get_settings
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-# 비동기 엔진 생성 (대용량 데이터 처리 최적화)
+# 비동기 엔진 생성 (프로덕션 환경 최적화 - Connection Pooling)
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DATABASE_ECHO if hasattr(settings, 'DATABASE_ECHO') else False,
-    poolclass=NullPool,  # 비동기 엔진에서는 NullPool 사용 (asyncio와 호환)
+    # ✅ 커넥션 풀 활성화 (완전 비동기 전환으로 호환성 문제 해결)
+    # advanced_backtest.py의 동기/비동기 혼용 제거 완료
+    pool_size=10,  # 기본 커넥션 10개
+    max_overflow=20,  # 최대 30개까지 확장 가능
+    pool_timeout=30,  # 커넥션 대기 시간 (초)
+    pool_recycle=3600,  # 1시간마다 커넥션 재생성
     pool_pre_ping=True,  # 커넥션 유효성 검증
     # 대용량 쿼리 최적화
     connect_args={
@@ -55,9 +60,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         async def get_items(db: AsyncSession = Depends(get_db)):
             ...
     """
+    from fastapi import HTTPException
+
     async with AsyncSessionLocal() as session:
         try:
             yield session
+        except HTTPException:
+            # HTTPException은 그대로 전달 (429, 404 등)
+            raise
         except Exception as e:
             await session.rollback()
             logger.error(f"Database session error: {e}")
@@ -97,12 +107,13 @@ def set_postgresql_pragma(dbapi_conn, connection_record):
     cursor.close()
 
 
+# 🚀 최적화: SQL 쿼리 로그 비활성화 (성능 향상)
 # 쿼리 성능 모니터링 (개발 환경)
-@event.listens_for(engine.sync_engine, "before_cursor_execute")
-def receive_before_cursor_execute(conn, cursor, statement, params, context, executemany):
-    """쿼리 실행 전 로깅"""
-    if settings.DEBUG:
-        logger.debug(f"SQL Query: {statement}")
+# @event.listens_for(engine.sync_engine, "before_cursor_execute")
+# def receive_before_cursor_execute(conn, cursor, statement, params, context, executemany):
+#     """쿼리 실행 전 로깅"""
+#     if settings.DEBUG:
+#         logger.debug(f"SQL Query: {statement}")
 
 
 # 대용량 데이터 배치 처리 헬퍼

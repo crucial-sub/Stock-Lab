@@ -4,13 +4,10 @@
  * - 백테스트 ID를 URL 파라미터로 받아옵니다
  */
 
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { backtestQueryKey } from "@/hooks/useBacktestQuery";
 import { getBacktestResult } from "@/lib/api";
 import { getQueryClient } from "@/lib/query-client";
-import {
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
 import { QuantResultPageClient } from "../QuantResultPageClient";
 
 /**

@@ -1,198 +1,195 @@
+#!/usr/bin/env python3
 """
-백테스트 엔진 테스트
+백테스트 테스트 스크립트
+간단한 백테스트를 실행하여 문제점을 파악합니다.
 """
 
 import asyncio
+import sys
 import logging
-from datetime import date, datetime
-from decimal import Decimal
-from uuid import uuid4
+from datetime import date, timedelta
+from pathlib import Path
+import uuid
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+# 프로젝트 경로 추가
+sys.path.append(str(Path(__file__).parent))
 
-from app.services.backtest import BacktestEngine
-from app.core.config import settings
+from app.core.database import AsyncSessionLocal
+from app.api.routes.backtest import execute_backtest_wrapper
 
-logging.basicConfig(level=logging.INFO)
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
+async def test_minimal_backtest():
+    """최소 설정으로 백테스트 테스트"""
 
-async def test_backtest():
-    """백테스트 테스트"""
+    # 간단한 요청 데이터
+    request_data = {
+        "user_id": "test_user",
+        "strategy_name": "테스트 전략",
+        "start_date": "20241201",  # 1개월만
+        "end_date": "20241231",
+        "initial_investment": 10000000,
+        "is_day_or_month": "daily",
+        "commission_rate": 0.15,
+        "slippage": 0.1,
+        "rebalance_frequency": "WEEKLY",
+        "max_holdings": 5,
 
-    # 데이터베이스 연결
-    engine = create_async_engine(settings.DATABASE_URL, echo=False)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    async with async_session() as db:
-        # 백테스트 엔진 생성
-        engine = BacktestEngine(db)
-
-        # 백테스트 파라미터 설정
-        backtest_id = uuid4()
-
-        # 매수 조건: 저PER + 고ROE + 모멘텀
-        buy_conditions = [
+        # 매수 조건 (단순)
+        "buy_conditions": [
             {
-                "factor": "PER",
-                "operator": "<",
-                "value": 15,
-                "weight": 1.0
-            },
-            {
-                "factor": "ROE",
-                "operator": ">",
-                "value": 10,
-                "weight": 1.0
-            },
-            {
-                "factor": "MOMENTUM_3M",
-                "operator": ">",
-                "value": 0,
-                "weight": 0.5
+                "name": "A",
+                "exp_left_side": "기본값({PBR})",
+                "inequality": "<",
+                "exp_right_side": 5.0
             }
-        ]
+        ],
+        "buy_logic": "A",
+        "priority_factor": "PER",
+        "priority_order": "asc",
+        "per_stock_ratio": 20,
+        "buy_price_basis": "시가",
+        "buy_price_offset": 0,
 
-        # 매도 조건: 손절(-10%), 익절(20%), 보유기간(60일)
-        sell_conditions = [
-            {
-                "type": "STOP_LOSS",
-                "value": 10  # -10% 손절
-            },
-            {
-                "type": "TAKE_PROFIT",
-                "value": 20  # 20% 익절
-            },
-            {
-                "type": "HOLD_DAYS",
-                "value": 60  # 60일 보유
-            }
-        ]
+        # 매도 조건 (익절/손절)
+        "target_and_loss": {
+            "profit_target": 10,
+            "stop_loss": -5
+        },
 
-        # 백테스트 실행
-        try:
-            result = await engine.run_backtest(
-                backtest_id=backtest_id,
-                buy_conditions=buy_conditions,
-                sell_conditions=sell_conditions,
-                start_date=date(2023, 1, 1),
-                end_date=date(2024, 1, 1),
-                initial_capital=Decimal("100000000"),  # 1억원
-                rebalance_frequency="MONTHLY",
-                max_positions=20,
-                position_sizing="EQUAL_WEIGHT",
+        # 매매 대상 (1개 종목)
+        "trade_targets": {
+            "use_all_stocks": False,
+            "selected_themes": [],
+            "selected_stocks": ["005930"],  # 삼성전자만
+            "selected_stock_count": 1
+        }
+    }
+
+    # 백테스트 실행
+    logger.info("=" * 80)
+    logger.info("백테스트 테스트 시작")
+    logger.info("=" * 80)
+
+    try:
+        async with AsyncSessionLocal() as db:
+            # mock request 객체 생성
+            class MockRequest:
+                def __init__(self, data):
+                    for key, value in data.items():
+                        setattr(self, key, value)
+
+            request = MockRequest(request_data)
+
+            # 백테스트 실행
+            import uuid
+            session_id = str(uuid.uuid4())
+            strategy_id = str(uuid.uuid4())
+
+            result = await execute_backtest_wrapper(
+                session_id=session_id,
+                strategy_id=strategy_id,
+                start_date=date(2024, 12, 1),
+                end_date=date(2024, 12, 31),
+                initial_capital=10000000,
                 benchmark="KOSPI",
-                commission_rate=0.00015,  # 0.015% 수수료 (사용자 설정 가능)
-                slippage=0.001  # 0.1% 슬리피지 (사용자 설정 가능)
+                target_themes=[],
+                target_stocks=["005930"],  # 삼성전자
+                use_all_stocks=False,
+                buy_conditions=[{
+                    "exp_left_side": "기본값({PBR})",
+                    "inequality": "<",
+                    "exp_right_side": 5.0
+                }],
+                buy_logic="A",
+                priority_factor="PER",
+                priority_order="asc",
+                max_holdings=5,
+                per_stock_ratio=20.0,
+                rebalance_frequency="WEEKLY",
+                commission_rate=0.15,
+                slippage=0.1,
+                target_and_loss={"profit_target": 10, "stop_loss": -5},
+                hold_days=None,
+                condition_sell=None
             )
 
-            # 결과 출력
             logger.info("=" * 80)
-            logger.info("백테스트 완료!")
-            logger.info("=" * 80)
-
-            # 설정 출력
-            logger.info("백테스트 설정:")
-            logger.info(f"  - 수수료율: {result.settings.commission_rate*100:.3f}%")
-            logger.info(f"  - 거래세율: {result.settings.tax_rate*100:.2f}% (고정)")
-            logger.info(f"  - 슬리피지: {result.settings.slippage*100:.2f}%")
-            logger.info("")
-
-            # 통계 출력
-            stats = result.statistics
-            logger.info(f"총 수익률: {stats.total_return:.2f}%")
-            logger.info(f"연환산 수익률: {stats.annualized_return:.2f}%")
-            logger.info(f"최대 낙폭: {stats.max_drawdown:.2f}%")
-            logger.info(f"샤프 비율: {stats.sharpe_ratio:.2f}")
-            logger.info(f"소르티노 비율: {stats.sortino_ratio:.2f}")
-            logger.info(f"변동성: {stats.volatility:.2f}%")
-
-            # 거래 통계
-            logger.info("=" * 80)
-            logger.info("거래 통계")
-            logger.info("=" * 80)
-            logger.info(f"총 거래 수: {stats.total_trades}")
-            logger.info(f"승리 거래: {stats.winning_trades}")
-            logger.info(f"패배 거래: {stats.losing_trades}")
-            logger.info(f"승률: {stats.win_rate:.2f}%")
-            logger.info(f"평균 수익: {stats.avg_win:.2f}%")
-            logger.info(f"평균 손실: {stats.avg_loss:.2f}%")
-            logger.info(f"손익비: {stats.profit_loss_ratio:.2f}")
-
-            # 자본 정보
-            logger.info("=" * 80)
-            logger.info("자본 정보")
-            logger.info("=" * 80)
-            logger.info(f"초기 자본: {stats.initial_capital:,.0f}원")
-            logger.info(f"최종 자본: {stats.final_capital:,.0f}원")
-            logger.info(f"최고 자본: {stats.peak_capital:,.0f}원")
-            logger.info(f"거래일 수: {stats.trading_days}")
-
-            # 현재 보유 종목
-            if result.current_holdings:
-                logger.info("=" * 80)
-                logger.info("현재 보유 종목")
-                logger.info("=" * 80)
-                for holding in result.current_holdings[:5]:  # 상위 5개만
-                    logger.info(f"{holding.stock_name} ({holding.stock_code})")
-                    logger.info(f"  - 수량: {holding.quantity:,}")
-                    logger.info(f"  - 평균가: {holding.avg_price:,.0f}원")
-                    logger.info(f"  - 현재가: {holding.current_price:,.0f}원")
-                    logger.info(f"  - 수익률: {holding.profit_rate:.2f}%")
-                    logger.info(f"  - 비중: {holding.weight:.2f}%")
-
-            # 월별 성과
-            if result.monthly_performance:
-                logger.info("=" * 80)
-                logger.info("월별 성과 (최근 6개월)")
-                logger.info("=" * 80)
-                for monthly in result.monthly_performance[-6:]:
-                    logger.info(f"{monthly.year}년 {monthly.month}월: {monthly.return_rate:.2f}%")
-
-            # 연도별 성과
-            if result.yearly_performance:
-                logger.info("=" * 80)
-                logger.info("연도별 성과")
-                logger.info("=" * 80)
-                for yearly in result.yearly_performance:
-                    logger.info(f"{yearly.year}년:")
-                    logger.info(f"  - 수익률: {yearly.return_rate:.2f}%")
-                    logger.info(f"  - MDD: {yearly.max_drawdown:.2f}%")
-                    logger.info(f"  - 샤프: {yearly.sharpe_ratio:.2f}")
-                    logger.info(f"  - 거래: {yearly.trades}건")
-
-            # 차트 데이터 샘플
-            if result.chart_data:
-                logger.info("=" * 80)
-                logger.info("차트 데이터 샘플")
-                logger.info("=" * 80)
-                logger.info(f"데이터 포인트 수: {len(result.chart_data.get('dates', []))}")
-                if result.chart_data.get('dates'):
-                    logger.info(f"시작일: {result.chart_data['dates'][0]}")
-                    logger.info(f"종료일: {result.chart_data['dates'][-1]}")
-
-                    # 최종 누적 수익률
-                    if result.chart_data.get('cumulative_returns'):
-                        final_return = result.chart_data['cumulative_returns'][-1]
-                        logger.info(f"최종 누적 수익률: {final_return:.2f}%")
-
-                    # 최대 낙폭
-                    if result.chart_data.get('drawdowns'):
-                        max_dd = min(result.chart_data['drawdowns'])
-                        logger.info(f"차트상 최대 낙폭: {max_dd:.2f}%")
-
-            logger.info("=" * 80)
-            logger.info("백테스트 테스트 완료!")
+            logger.info("✅ 백테스트 완료!")
+            logger.info(f"Session ID: {result.get('backtestId', 'Unknown')}")
+            logger.info(f"Status: {result.get('status', 'Unknown')}")
             logger.info("=" * 80)
 
             return result
 
-        except Exception as e:
-            logger.error(f"백테스트 실행 중 오류: {e}", exc_info=True)
-            raise
+    except Exception as e:
+        logger.error("=" * 80)
+        logger.error(f"❌ 백테스트 실패: {e}")
+        logger.error("=" * 80)
+        import traceback
+        traceback.print_exc()
+        return None
 
+async def test_factor_calculation_speed():
+    """팩터 계산 속도 테스트"""
+    from app.services.backtest import BacktestEngine
+    import time
+
+    async with AsyncSessionLocal() as db:
+        engine = BacktestEngine(db=db)
+
+        # 1주일 데이터로 테스트
+        start = date(2024, 12, 23)
+        end = date(2024, 12, 30)
+
+        logger.info("=" * 80)
+        logger.info("팩터 계산 속도 테스트")
+        logger.info(f"기간: {start} ~ {end}")
+        logger.info("=" * 80)
+
+        start_time = time.time()
+
+        # 가격 데이터 로드
+        price_data = await engine._load_price_data(
+            start_date=start,
+            end_date=end,
+            target_themes=["증권"],
+            target_stocks=["005930"]
+        )
+
+        load_time = time.time() - start_time
+        logger.info(f"가격 데이터 로드: {load_time:.2f}초 ({len(price_data)}개 레코드)")
+
+        # 재무 데이터 로드
+        start_time = time.time()
+        financial_data = await engine._load_financial_data(start, end)
+
+        fin_time = time.time() - start_time
+        logger.info(f"재무 데이터 로드: {fin_time:.2f}초")
+
+        # 팩터 계산
+        start_time = time.time()
+        factor_data = await engine._calculate_all_factors(
+            price_data, financial_data, start, end
+        )
+
+        calc_time = time.time() - start_time
+        logger.info(f"팩터 계산: {calc_time:.2f}초 ({len(factor_data)}개 팩터)")
+
+        logger.info("=" * 80)
+        logger.info(f"전체 시간: {load_time + fin_time + calc_time:.2f}초")
+        logger.info("=" * 80)
 
 if __name__ == "__main__":
-    # 비동기 실행
-    asyncio.run(test_backtest())
+    # 테스트 선택
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "speed":
+        asyncio.run(test_factor_calculation_speed())
+    else:
+        asyncio.run(test_minimal_backtest())

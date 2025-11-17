@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBacktestConfigStore } from "@/stores";
 
 /**
@@ -12,7 +12,7 @@ export function useTradeTargetSelection(
   _unused: Array<{ id: string; name: string }>,
   individualStocks: string[] = [],
   selectedStockCount: number = 0,
-  totalStockCount: number = 0
+  totalStockCount: number = 0,
 ) {
   const { setTradeTargets } = useBacktestConfigStore();
   const individualStocksRef = useRef<string[]>(individualStocks);
@@ -24,7 +24,7 @@ export function useTradeTargetSelection(
 
   // 선택된 산업 (초기에는 모두 선택됨)
   const [selectedIndustries, setSelectedIndustries] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -38,7 +38,7 @@ export function useTradeTargetSelection(
 
   // 전체선택 여부 확인
   const isAllIndustriesSelected = industries.every((ind) =>
-    selectedIndustries.has(ind)
+    selectedIndustries.has(ind),
   );
 
   // 선택된 산업과 개별 종목을 전역 스토어에 업데이트
@@ -54,7 +54,13 @@ export function useTradeTargetSelection(
       selected_stock_count: selectedStockCount, // 선택된 종목 수 (ref 대신 직접 사용)
       total_stock_count: totalStockCount, // 전체 종목 수 (ref 대신 직접 사용)
     });
-  }, [selectedIndustries, industries, setTradeTargets, selectedStockCount, totalStockCount]);
+  }, [
+    selectedIndustries,
+    industries,
+    setTradeTargets,
+    selectedStockCount,
+    totalStockCount,
+  ]);
 
   // 전체선택 토글
   const toggleAllIndustries = () => {

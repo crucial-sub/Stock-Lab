@@ -6,6 +6,7 @@
  */
 
 import axios from "axios";
+import { getAuthTokenFromCookie } from "./auth/token";
 
 /**
  * Axios 기본 인스턴스
@@ -13,7 +14,8 @@ import axios from "axios";
  * - baseURL은 환경변수에서 가져옵니다
  */
 export const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1",
+  baseURL:
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1",
   timeout: 30000, // 30초
   headers: {
     "Content-Type": "application/json",
@@ -30,10 +32,11 @@ export const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     // 요청 전 처리 (예: 토큰 추가)
-    // const token = getAuthToken();
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const token = getAuthTokenFromCookie();
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
 
     return config;
   },
@@ -56,7 +59,17 @@ axiosInstance.interceptors.response.use(
     // 에러 응답 처리
     if (error.response) {
       // 서버가 응답을 반환한 경우
-      const { status, data } = error.response;
+      const { status, data, config } = error.response;
+      const requestUrl = config?.url || "";
+
+      // /auth/me 요청의 401/403 에러는 로그 출력 안 함 (정상적인 비로그인 상태)
+      const isAuthMeRequest = requestUrl.includes("/auth/me");
+      const isAuthError = status === 401 || status === 403;
+
+      if (isAuthMeRequest && isAuthError) {
+        // 로그인하지 않은 상태에서의 정상적인 에러이므로 무시
+        return Promise.reject(error);
+      }
 
       // 401 에러: 인증 실패
       if (status === 401) {
@@ -91,7 +104,10 @@ axiosInstance.interceptors.response.use(
  * - 서버 내부 URL을 사용할 수 있습니다
  */
 export const axiosServerInstance = axios.create({
-  baseURL: process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1",
+  baseURL:
+    process.env.API_BASE_URL ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    "http://localhost:8000/api/v1",
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
@@ -114,7 +130,17 @@ axiosServerInstance.interceptors.response.use(
   },
   (error) => {
     if (error.response) {
-      const { status, data } = error.response;
+      const { status, data, config } = error.response;
+      const requestUrl = config?.url || "";
+
+      // /strategies/my 요청의 401 에러는 로그 출력 안 함 (페이지 레벨에서 리다이렉트 처리)
+      const isStrategiesRequest = requestUrl.includes("/strategies/my");
+      const isAuthError = status === 401;
+
+      if (isStrategiesRequest && isAuthError) {
+        // 로그인 리다이렉트로 처리되므로 무시
+        return Promise.reject(error);
+      }
 
       if (status === 401) {
         console.error("인증 실패:", data);

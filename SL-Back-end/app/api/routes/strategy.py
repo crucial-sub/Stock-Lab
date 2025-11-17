@@ -21,13 +21,16 @@ from app.models.simulation import (
 )
 from app.models.user import User
 from app.schemas.strategy import (
+    StrategyListItem,
     StrategyDetailItem,
     StrategyRankingItem,
     MyStrategiesResponse,
     StrategyRankingResponse,
     StrategySharingUpdate,
-    StrategyStatisticsSummary
+    StrategyStatisticsSummary,
+    BacktestDeleteRequest
 )
+from app.schemas.community import CloneStrategyData
 
 logger = logging.getLogger(__name__)
 
@@ -40,73 +43,44 @@ async def get_my_strategies(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    내 투자전략 목록 조회
-    - 로그인한 사용자의 모든 투자전략 반환
-    - 각 전략의 최신 백테스트 결과 통계 포함
+    내 백테스트 결과 목록 조회
+    - 로그인한 사용자의 모든 백테스트 결과 반환 (진행중/완료/실패 모두 포함)
+    - 최신 순으로 정렬
     """
     try:
         user_id = current_user.user_id
 
-        # 1. 사용자의 모든 전략 조회
-        strategies_query = (
-            select(PortfolioStrategy)
-            .where(PortfolioStrategy.user_id == user_id)
-            .order_by(PortfolioStrategy.created_at.desc())
-        )
-        strategies_result = await db.execute(strategies_query)
-        strategies = strategies_result.scalars().all()
-
-        # 2. 각 전략의 최신 시뮬레이션 통계 조회
-        my_strategies = []
-        for strategy in strategies:
-            # 최신 완료된 시뮬레이션 찾기
-            latest_session_query = (
-                select(SimulationSession)
-                .where(
-                    and_(
-                        SimulationSession.strategy_id == strategy.strategy_id,
-                        SimulationSession.status == "COMPLETED"
-                    )
-                )
-                .order_by(SimulationSession.completed_at.desc())
-                .limit(1)
+        # 1. 사용자의 모든 시뮬레이션 세션 조회 (전략 정보 포함)
+        sessions_query = (
+            select(SimulationSession, PortfolioStrategy, SimulationStatistics)
+            .join(
+                PortfolioStrategy,
+                PortfolioStrategy.strategy_id == SimulationSession.strategy_id
             )
-            session_result = await db.execute(latest_session_query)
-            latest_session = session_result.scalar_one_or_none()
+            .outerjoin(
+                SimulationStatistics,
+                SimulationStatistics.session_id == SimulationSession.session_id
+            )
+            .where(SimulationSession.user_id == user_id)
+            .order_by(SimulationSession.created_at.desc())
+        )
 
-            # 통계 조회
-            statistics_summary = None
-            if latest_session:
-                stats_query = select(SimulationStatistics).where(
-                    SimulationStatistics.session_id == latest_session.session_id
-                )
-                stats_result = await db.execute(stats_query)
-                stats = stats_result.scalar_one_or_none()
+        result = await db.execute(sessions_query)
+        rows = result.all()
 
-                if stats:
-                    statistics_summary = StrategyStatisticsSummary(
-                        total_return=float(stats.total_return) if stats.total_return else None,
-                        annualized_return=float(stats.annualized_return) if stats.annualized_return else None,
-                        max_drawdown=float(stats.max_drawdown) if stats.max_drawdown else None,
-                        sharpe_ratio=float(stats.sharpe_ratio) if stats.sharpe_ratio else None,
-                        win_rate=float(stats.win_rate) if stats.win_rate else None
-                    )
-
-            # strategyDetailItem 생성
-            strategy_item = StrategyDetailItem(
+        # 2. 백테스트 결과 리스트 생성
+        my_strategies = []
+        for session, strategy, stats in rows:
+            # 간소화된 목록 아이템 생성
+            strategy_item = StrategyListItem(
+                session_id=session.session_id,
                 strategy_id=strategy.strategy_id,
                 strategy_name=strategy.strategy_name,
-                strategy_type=strategy.strategy_type,
-                description=strategy.description,
-                is_public=strategy.is_public,
-                is_anonymous=strategy.is_anonymous,
-                hide_strategy_details=strategy.hide_strategy_details,
-                initial_capital=float(strategy.initial_capital) if strategy.initial_capital else None,
-                backtest_start_date=strategy.backtest_start_date,
-                backtest_end_date=strategy.backtest_end_date,
-                statistics=statistics_summary,
-                created_at=strategy.created_at,
-                updated_at=strategy.updated_at
+                is_active=session.is_active if hasattr(session, 'is_active') else False,
+                status=session.status,
+                total_return=float(stats.total_return) if stats and stats.total_return else None,
+                created_at=session.created_at,
+                updated_at=session.updated_at
             )
             my_strategies.append(strategy_item)
 
@@ -116,7 +90,7 @@ async def get_my_strategies(
         )
 
     except Exception as e:
-        logger.error(f"내 투자전략 목록 조회 실패: {e}", exc_info=True)
+        logger.error(f"내 백테스트 결과 목록 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -311,4 +285,146 @@ async def update_strategy_sharing_settings(
     except Exception as e:
         logger.error(f"투자전략 공개 설정 변경 실패: {e}", exc_info=True)
         await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/strategies/sessions")
+async def delete_backtest_sessions(
+    delete_request: BacktestDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    백테스트 세션 삭제
+    - 본인이 소유한 백테스트 세션만 삭제 가능
+    - 여러 세션을 한 번에 삭제 가능
+    """
+    try:
+        user_id = current_user.user_id
+        session_ids = delete_request.session_ids
+
+        if not session_ids:
+            raise HTTPException(status_code=400, detail="삭제할 세션 ID가 없습니다")
+
+        # 1. 세션 조회 및 권한 확인
+        sessions_query = select(SimulationSession).where(
+            SimulationSession.session_id.in_(session_ids)
+        )
+        sessions_result = await db.execute(sessions_query)
+        sessions = sessions_result.scalars().all()
+
+        if not sessions:
+            raise HTTPException(status_code=404, detail="백테스트 세션을 찾을 수 없습니다")
+
+        # 2. 권한 확인 - 모든 세션이 현재 사용자 소유인지 확인
+        unauthorized_sessions = [
+            session.session_id for session in sessions
+            if session.user_id != user_id
+        ]
+
+        if unauthorized_sessions:
+            raise HTTPException(
+                status_code=403,
+                detail=f"삭제 권한이 없는 세션이 포함되어 있습니다: {unauthorized_sessions}"
+            )
+
+        # 3. 세션 삭제
+        deleted_count = 0
+        for session in sessions:
+            await db.delete(session)
+            deleted_count += 1
+
+        await db.commit()
+
+        return {
+            "message": f"{deleted_count}개의 백테스트가 삭제되었습니다",
+            "deleted_session_ids": session_ids,
+            "deleted_count": deleted_count
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"백테스트 세션 삭제 실패: {e}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/strategies/sessions/{session_id}/clone-data", response_model=CloneStrategyData)
+async def get_session_clone_data(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    백테스트 세션 복제 데이터 조회 (백테스트 창으로 전달)
+    - 본인이 소유한 세션만 조회 가능
+    - 매수/매도 조건, 기간, 종목 등 모든 설정을 포함
+    """
+    try:
+        user_id = current_user.user_id
+
+        # 세션, 전략, 트레이딩 룰 조회
+        query = (
+            select(SimulationSession, PortfolioStrategy, TradingRule)
+            .join(
+                PortfolioStrategy,
+                PortfolioStrategy.strategy_id == SimulationSession.strategy_id
+            )
+            .join(
+                TradingRule,
+                TradingRule.strategy_id == PortfolioStrategy.strategy_id
+            )
+            .where(
+                and_(
+                    SimulationSession.session_id == session_id,
+                    SimulationSession.user_id == user_id  # 본인 세션만
+                )
+            )
+        )
+
+        result = await db.execute(query)
+        row = result.one_or_none()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="백테스트 세션을 찾을 수 없거나 접근 권한이 없습니다")
+
+        session, strategy, trading_rule = row
+
+        # buy_condition과 sell_condition 파싱
+        buy_condition = trading_rule.buy_condition or {}
+        sell_condition = trading_rule.sell_condition or {}
+
+        return CloneStrategyData(
+            strategy_name=f"{strategy.strategy_name} (복제)",
+            is_day_or_month="daily",  # 기본값
+            initial_investment=int(session.initial_capital / 10000),  # 원 -> 만원
+            start_date=session.start_date.strftime("%Y%m%d"),
+            end_date=session.end_date.strftime("%Y%m%d"),
+            commission_rate=float(trading_rule.commission_rate * 100) if trading_rule.commission_rate else 0.015,
+            slippage=0.1,  # 기본값
+            buy_conditions=buy_condition.get('conditions', []),
+            buy_logic=buy_condition.get('logic', 'AND'),
+            priority_factor=buy_condition.get('priority_factor'),
+            priority_order=buy_condition.get('priority_order', 'desc'),
+            per_stock_ratio=buy_condition.get('per_stock_ratio', 5.0),
+            max_holdings=trading_rule.max_positions or 20,
+            max_buy_value=buy_condition.get('max_buy_value'),
+            max_daily_stock=buy_condition.get('max_daily_stock'),
+            buy_price_basis=buy_condition.get('buy_price_basis', 'CLOSE'),
+            buy_price_offset=buy_condition.get('buy_price_offset', 0.0),
+            target_and_loss=sell_condition.get('target_and_loss'),
+            hold_days=sell_condition.get('hold_days'),
+            condition_sell=sell_condition.get('condition_sell'),
+            trade_targets=buy_condition.get('trade_targets', {
+                "use_all_stocks": True,
+                "selected_themes": [],
+                "selected_stocks": []
+            })
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"백테스트 세션 복제 데이터 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

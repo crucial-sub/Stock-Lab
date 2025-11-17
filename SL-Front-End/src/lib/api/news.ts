@@ -1,5 +1,5 @@
-import { axiosInstance } from "../axios";
 import type { NewsItem, NewsListParams } from "@/types/news";
+import { axiosInstance } from "../axios";
 
 interface NewsListResponse {
   total: number;
@@ -11,39 +11,49 @@ interface NewsListResponse {
  * - 키워드 검색: 제목, 내용, 회사명, 출처에서 검색
  * - 테마 필터: 테마명으로 필터링
  */
-export async function fetchNewsList(params?: NewsListParams): Promise<NewsItem[]> {
+export async function fetchNewsList(
+  params?: NewsListParams,
+): Promise<NewsItem[]> {
   try {
-    // 테마 필터만 있는 경우 (우선순위 1)
-    if (params?.themes && params.themes.length && !params.themes.includes("전체")) {
+    // 테마 필터만 있는 경우
+    if (params?.themes?.length && !params.themes.includes("전체")) {
       // 모든 테마에 대해 데이터 수집
       const allNews: NewsItem[] = [];
       for (const theme of params.themes) {
-        const response = await axiosInstance.get<NewsListResponse>("/news/db/theme", {
-          params: {
-            theme,
-            limit: 100,
+        const response = await axiosInstance.get<NewsListResponse>(
+          "/news/db/theme",
+          {
+            params: {
+              theme,
+              limit: 100,
+            },
           },
-        });
+        );
         allNews.push(...(response.data.news ?? []));
       }
       return allNews;
     }
 
-    // 키워드가 있으면 검색 API 사용 (우선순위 2)
-    if (params?.keyword && params.keyword.trim()) {
-      const response = await axiosInstance.get<NewsListResponse>("/news/db/search", {
-        params: {
-          keyword: params.keyword,
-          limit: 100,
+    // 키워드가 있으면 검색 API 사용
+    if (params?.keyword?.trim()) {
+      const response = await axiosInstance.get<NewsListResponse>(
+        "/news/db/search",
+        {
+          params: {
+            keyword: params.keyword,
+            limit: 100,
+          },
         },
-      });
+      );
 
       let filtered = response.data.news ?? [];
 
-      // 테마로 추가 필터링 (키워드 + 테마)
-      if (params.themes && params.themes.length && !params.themes.includes("전체")) {
+      //  키워드 + 테마 필터링
+      if (params.themes?.length && !params.themes.includes("전체")) {
         filtered = filtered.filter((item: NewsItem) =>
-          params.themes?.some((theme) => item.themeName?.includes(theme) ?? false)
+          params.themes?.some(
+            (theme) => item.themeName?.includes(theme) ?? false,
+          ),
         );
       }
 
@@ -51,12 +61,15 @@ export async function fetchNewsList(params?: NewsListParams): Promise<NewsItem[]
     }
 
     // 기본: 모든 뉴스 조회 (최근 뉴스부터)
-    const response = await axiosInstance.get<NewsListResponse>("/news/db/search", {
-      params: {
-        keyword: "뉴스",
-        limit: 100,
+    const response = await axiosInstance.get<NewsListResponse>(
+      "/news/db/search",
+      {
+        params: {
+          keyword: "뉴스",
+          limit: 100,
+        },
       },
-    });
+    );
 
     return response.data.news ?? [];
   } catch (error) {
@@ -70,12 +83,15 @@ export async function fetchNewsList(params?: NewsListParams): Promise<NewsItem[]
  */
 export async function fetchNewsById(id: string): Promise<NewsItem | undefined> {
   try {
-    const response = await axiosInstance.get<NewsListResponse>("/news/db/search", {
-      params: {
-        keyword: "",
-        limit: 1,
+    const response = await axiosInstance.get<NewsListResponse>(
+      "/news/db/search",
+      {
+        params: {
+          keyword: "",
+          limit: 1,
+        },
       },
-    });
+    );
 
     // ID로 필터링 (실제로는 상세 조회 엔드포인트가 있으면 그걸 사용)
     const news = response.data.news?.find((item: NewsItem) => item.id === id);

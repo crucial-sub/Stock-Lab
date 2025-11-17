@@ -3,9 +3,9 @@
  * - 테마 목록 조회 쿼리를 제공합니다
  */
 
+import { useQuery } from "@tanstack/react-query";
 import { getThemes, getThemesById } from "@/lib/api";
 import type { Themes } from "@/types/api";
-import { useQuery } from "@tanstack/react-query";
 
 /**
  * 테마 목록 조회 쿼리 키

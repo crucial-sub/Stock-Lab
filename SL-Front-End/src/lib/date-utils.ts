@@ -85,3 +85,16 @@ export function formatDateToServerFromDate(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}${month}${day}`;
 }
+
+/**
+ * ISO 8601 날짜 문자열을 YY.MM.DD 형식으로 변환
+ * @param isoDateStr ISO 8601 형식 날짜 문자열 (예: "2025-12-31T00:00:00.000Z")
+ * @returns YY.MM.DD 형식 문자열 (예: "25.12.31")
+ */
+export function formatDateToCard(isoDateStr: string): string {
+  const date = new Date(isoDateStr);
+  const year = String(date.getFullYear()).slice(-2); // 뒤 2자리
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day}`;
+}

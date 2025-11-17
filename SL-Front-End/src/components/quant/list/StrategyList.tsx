@@ -1,6 +1,6 @@
-import type { Strategy } from "@/types/strategy";
 import Image from "next/image";
 import { StrategyListItem } from "@/components/quant/list/StrategyListItem";
+import type { Strategy } from "@/types/strategy";
 
 /**
  * 전략 목록 테이블 컴포넌트
@@ -11,20 +11,20 @@ interface StrategyListProps {
   /** 전략 목록 */
   strategies: Strategy[];
   /** 선택된 전략 ID 배열 */
-  selectedIds: number[];
+  selectedIds: string[];
   /** 전체 선택/해제 핸들러 */
   onToggleAll: () => void;
   /** 개별 선택/해제 핸들러 */
-  onToggleItem: (id: number) => void;
+  onToggleItem: (id: string) => void;
 }
 
 const STRATEGY_TH = [
   "전략 이름",
-  "일평균 수익률",
+  "연환산 수익률",
   "누적 수익률",
-  "투자 수익률",
+  "MDD",
   "생성일",
-]
+];
 
 export function StrategyList({
   strategies,
@@ -43,7 +43,9 @@ export function StrategyList({
             {/* 전체 선택 체크박스 */}
             <th className="p-[10px] text-left">
               <Image
-                src={`/icons/${isAllSelected ? "check-box-blue" : "check-box-blank"}.svg`}
+                src={`/icons/${
+                  isAllSelected ? "check-box-blue" : "check-box-blank"
+                }.svg`}
                 alt="검색"
                 width={20}
                 height={20}
@@ -51,7 +53,10 @@ export function StrategyList({
               />
             </th>
             {STRATEGY_TH.map((st, index) => (
-              <th key={`${st}-${index}`} className="p-[10px] text-left font-normal text-tag-neutral">
+              <th
+                key={`${st}-${index}`}
+                className="p-[10px] text-left font-normal text-tag-neutral"
+              >
                 {st}
               </th>
             ))}

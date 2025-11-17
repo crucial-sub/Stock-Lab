@@ -58,3 +58,10 @@ class TokenData(BaseModel):
     """JWT 토큰 데이터 스키마"""
     user_id: Optional[UUID] = None
     email: Optional[str] = None
+
+
+class UserDeleteRequest(BaseModel):
+    """회원탈퇴 요청 스키마"""
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=100)
+    phone_number: str = Field(..., min_length=10, max_length=20, pattern=r'^\d+$')

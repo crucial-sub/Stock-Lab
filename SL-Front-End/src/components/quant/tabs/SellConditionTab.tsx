@@ -10,9 +10,9 @@
  */
 
 import {
-  TargetLossSection,
-  HoldPeriodSection,
   ConditionalSellSection,
+  HoldPeriodSection,
+  TargetLossSection,
 } from "@/components/quant/sections";
 
 export default function SellConditionTab() {

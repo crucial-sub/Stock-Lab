@@ -233,6 +233,7 @@ class SimulationSession(Base):
     is_public = Column(Boolean, default=False, comment="공개 여부 (랭킹 노출)")
     is_anonymous = Column(Boolean, default=False, comment="익명 공개 여부")
     show_strategy = Column(Boolean, default=False, comment="전략 상세 공개 여부")
+    is_active = Column(Boolean, default=False, nullable=False, comment="활성화 여부 (계좌 연동)")
     description = Column(Text, nullable=True, comment="포트폴리오 설명")
     share_url = Column(String(100), nullable=True, unique=True, index=True, comment="공유 URL 슬러그")
 

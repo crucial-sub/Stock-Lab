@@ -5,7 +5,7 @@
 
 export * from "./backtest";
 export * from "./factors";
+export * from "./industries";
 export * from "./sub-factors";
 export * from "./themes";
-export * from "./industries";
-
+export * from "./community";

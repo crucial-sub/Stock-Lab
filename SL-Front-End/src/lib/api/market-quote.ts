@@ -76,6 +76,7 @@ export const marketQuoteApi = {
     page?: number;
     pageSize?: number;
     userId?: string;
+    search?: string;
   }): Promise<MarketQuoteListResponse> => {
     const { data } = await axiosInstance.get<MarketQuoteListResponse>(
       "/market/quotes",
@@ -86,6 +87,7 @@ export const marketQuoteApi = {
           page: params.page || 1,
           page_size: params.pageSize || 50,
           user_id: params.userId,
+          search: params.search,
         },
       },
     );

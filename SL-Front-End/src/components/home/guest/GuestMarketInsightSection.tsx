@@ -78,7 +78,7 @@ export function GuestMarketInsightSection({
                 key={item.id}
                 className="flex items-center justify-between border-t border-[#18223433] py-3 first:border-t-0"
               >
-                <span className="line-clamp-2 text-base font-normal text-text-body">
+                <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-base font-normal text-text-body">
                   {item.title}
                 </span>
                 <span className="rounded-full bg-brand-purple px-3 pt-0.5 text-[0.75rem] font-semibold text-white">

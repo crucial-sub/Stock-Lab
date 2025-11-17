@@ -28,3 +28,15 @@ export interface GuestMarketNews {
   title: string;
   badge: string;
 }
+
+export interface GuestCommunityPost {
+  id: string;
+  title: string;
+  preview: string;
+  author: string;
+  date: string;
+  tag: string;
+  views: string;
+  likes: string;
+  comments: string;
+}

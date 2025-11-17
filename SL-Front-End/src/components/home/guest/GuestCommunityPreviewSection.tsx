@@ -1,53 +1,75 @@
 "use client";
 
 import { Title } from "@/components/common/Title";
+import { Icon } from "@/components/common/Icon";
+import type { GuestCommunityPost } from "@/types";
 
-const guestPosts = Array.from({ length: 2 }).map((_, index) => ({
-  id: index,
-  title: "게시물 이름은 이렇게 들어갑니다.",
-  preview:
-    "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
-  author: "FMJS",
-  date: "2025.12.31 19:00",
-  likes: "999+",
-  comments: "999+",
-}));
+const statIcons = [
+  { key: "views", icon: "/icons/visibility.svg", label: "조회수" },
+  { key: "likes", icon: "/icons/favorite.svg", label: "좋아요" },
+  { key: "comments", icon: "/icons/chat-bubble.svg", label: "댓글" },
+] as const;
 
-export function GuestCommunityPreviewSection() {
+interface GuestCommunityPreviewSectionProps {
+  posts: GuestCommunityPost[];
+}
+
+export function GuestCommunityPreviewSection({
+  posts,
+}: GuestCommunityPreviewSectionProps) {
   return (
     <section className="flex w-full flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <Title>커뮤니티 인기 글</Title>
-        <p className="text-base text-text-muted">
-          지금 주목받는 게시글을 미리 둘러보세요.
-        </p>
+        <Title>커뮤니티</Title>
       </div>
 
       <div className="flex flex-col gap-4">
-        {guestPosts.map((post) => (
+        {posts.map((post) => (
           <article
             key={post.id}
-            className="flex flex-col gap-4 rounded-lg border border-[#18223433] bg-white px-6 py-5 shadow-card"
+            className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5"
           >
-            <div className="flex items-center gap-2 text-sm text-text-muted">
-              <span aria-hidden="true" className="text-lg">
-                💬
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center justify-center rounded-[4px] border-[0.5px] border-[#007DFC] bg-[#EAF5FF] px-3 pt-0.5 text-[0.75rem] font-semibold text-[#2D62AB]">
+                {post.tag}
               </span>
-              <span>{post.author}</span>
-              <span aria-hidden="true">·</span>
-              <span>{post.date}</span>
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-text-body">
+              <h3 className="text-[1.25rem] font-semibold text-text-body">
                 {post.title}
               </h3>
-              <p className="mt-2 line-clamp-2 text-sm text-text-muted">
-                {post.preview}
-              </p>
+              <span className="text-sm text-muted font-normal">
+                by. {post.author}
+              </span>
+              <span className="text-sm text-muted font-normal">{post.date}</span>
             </div>
-            <div className="flex gap-4 text-sm text-text-muted">
-              <span>👍 {post.likes}</span>
-              <span>💬 {post.comments}</span>
+
+            <p className="pt-[1rem] pb-[0.75rem] line-clamp-1 text-sm text-muted font-normal">
+              {post.preview}
+            </p>
+
+            <div className="flex items-center gap-4 text-sm text-muted">
+              {statIcons.map((stat) => (
+                <div
+                  key={stat.key}
+                  className="flex items-center gap-2 font-semibold"
+                >
+                  <Icon
+                    src={stat.icon}
+                    alt={stat.label}
+                    size={20}
+                    color="#646464"
+                  />
+                  <span>
+                    {
+                      post[
+                      stat.key as keyof Pick<
+                        GuestCommunityPost,
+                        "views" | "likes" | "comments"
+                      >
+                      ]
+                    }
+                  </span>
+                </div>
+              ))}
             </div>
           </article>
         ))}

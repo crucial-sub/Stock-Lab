@@ -10,6 +10,7 @@ import {
   WelcomeSection,
 } from "@/components/home/sections";
 import type {
+  GuestCommunityPost,
   GuestMarketIndex,
   GuestMarketNews,
   GuestMarketStock,
@@ -88,6 +89,21 @@ const guestMarketNews: GuestMarketNews[] = Array.from({ length: 5 }).map(
   }),
 );
 
+const guestCommunityPosts: GuestCommunityPost[] = Array.from({ length: 3 }).map(
+  (_, index) => ({
+    id: `post-${index}`,
+    title: "게시물 이름은 이렇게 들어갑니다.",
+    preview:
+      "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
+    author: "FMJS",
+    date: "2025.12.31 19:00",
+    tag: "태그",
+    views: "999+",
+    likes: "999+",
+    comments: "999+",
+  }),
+);
+
 export function HomePageClient({
   userName,
   isLoggedIn,
@@ -102,7 +118,7 @@ export function HomePageClient({
             stocks={guestMarketStocks}
             news={guestMarketNews}
           />
-          <GuestCommunityPreviewSection />
+          <GuestCommunityPreviewSection posts={guestCommunityPosts} />
         </div>
       </div>
     );

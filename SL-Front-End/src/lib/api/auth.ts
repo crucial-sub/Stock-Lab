@@ -57,9 +57,24 @@ export const authApi = {
 
   /**
    * 로그아웃
+   *
+   * @description
+   * 1. 백엔드에 로그아웃 요청 (Redis 있으면 토큰 블랙리스트 추가)
+   * 2. 클라이언트 쿠키에서 토큰 삭제
+   *
+   * Redis가 없어도 작동하도록 설계됨 (Graceful degradation)
    */
   logout: async (): Promise<void> => {
-    clearAuthTokenCookie();
+    try {
+      // 백엔드 로그아웃 엔드포인트 호출 (Redis 블랙리스트)
+      await axiosInstance.post("/auth/logout");
+    } catch (error) {
+      // 백엔드 에러는 무시하고 계속 진행 (클라이언트 측 로그아웃은 항상 성공)
+      console.warn("Backend logout failed, proceeding with client-side logout:", error);
+    } finally {
+      // 항상 클라이언트 쿠키 삭제
+      clearAuthTokenCookie();
+    }
   },
 
   /**

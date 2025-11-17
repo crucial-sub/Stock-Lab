@@ -2,18 +2,24 @@
 인증 관련 API 엔드포인트
 """
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from uuid import UUID
+import logging
 
 from app.core.database import get_db
-from app.core.security import verify_password, get_password_hash, create_access_token
+from app.core.security import verify_password, get_password_hash, create_access_token, decode_access_token
 from app.core.dependencies import get_current_user, get_current_active_user
+from app.core.cache import get_redis
+from app.core.config import settings
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, Token, UserDeleteRequest
 
 router = APIRouter()
+security = HTTPBearer()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -133,6 +139,57 @@ async def login(
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """
+    로그아웃
+
+    Args:
+        credentials: HTTP Authorization 헤더의 토큰
+
+    Returns:
+        dict: 로그아웃 성공 메시지
+
+    Notes:
+        - Redis가 연결되어 있으면 토큰을 블랙리스트에 추가 (만료 시간까지)
+        - Redis가 없으면 클라이언트 측 쿠키 삭제만으로 충분 (Stateless JWT)
+    """
+    token = credentials.credentials
+
+    # Redis가 연결되어 있으면 토큰을 블랙리스트에 추가
+    try:
+        redis_client = get_redis()
+        if redis_client:
+            # 토큰 디코딩하여 만료 시간 확인
+            payload = decode_access_token(token)
+            if payload and "exp" in payload:
+                import time
+                exp_timestamp = payload["exp"]
+                current_timestamp = int(time.time())
+                ttl = exp_timestamp - current_timestamp
+
+                # 만료 시간이 남아있으면 블랙리스트에 추가
+                if ttl > 0:
+                    blacklist_key = f"token_blacklist:{token}"
+                    await redis_client.setex(blacklist_key, ttl, "1")
+                    logger.info(f"Token added to blacklist with TTL: {ttl}s")
+                    return {
+                        "message": "로그아웃되었습니다 (토큰 무효화됨)",
+                        "redis_enabled": True
+                    }
+    except Exception as e:
+        # Redis 에러는 로깅만 하고 계속 진행
+        logger.warning(f"Redis blacklist add failed: {e}")
+
+    # Redis가 없거나 에러 발생 시 클라이언트 측 처리에만 의존
+    return {
+        "message": "로그아웃되었습니다",
+        "redis_enabled": False
+    }
 
 
 @router.get("/me", response_model=UserResponse)

@@ -18,6 +18,14 @@ interface ChatSession {
   title: string;
   lastMessage: string;
   timestamp: number;
+  messages: Message[];
+  mode: "initial" | "chat" | "questionnaire";
+  chatResponse?: ChatResponse | null;
+  questionHistory?: Array<{
+    questionId: string;
+    selectedOptionId: string;
+    question: any;
+  }>;
 }
 
 /**
@@ -66,6 +74,10 @@ export function AIAssistantPageClient({
       title: firstMessage.length > 20 ? firstMessage.substring(0, 20) + "..." : firstMessage,
       lastMessage: firstMessage,
       timestamp: Date.now(),
+      messages: messages,
+      mode: currentMode,
+      chatResponse: chatResponse,
+      questionHistory: questionHistory,
     };
 
     setChatSessions((prev) => {
@@ -78,10 +90,41 @@ export function AIAssistantPageClient({
     });
   };
 
-  // 채팅 세션 클릭 핸들러
+  // 현재 세션 상태 업데이트 (메시지가 추가될 때마다)
+  const updateCurrentSession = useCallback(() => {
+    if (!sessionId) return;
+
+    setChatSessions((prev) => {
+      const existingIndex = prev.findIndex(s => s.id === sessionId);
+      if (existingIndex === -1) return prev;
+
+      const updated = [...prev];
+      updated[existingIndex] = {
+        ...updated[existingIndex],
+        messages: messages,
+        mode: currentMode,
+        chatResponse: chatResponse,
+        questionHistory: questionHistory,
+        lastMessage: messages.length > 0 ? messages[messages.length - 1].content : "",
+        timestamp: Date.now(),
+      };
+      return updated;
+    });
+  }, [sessionId, messages, currentMode, chatResponse, questionHistory]);
+
+  // 채팅 세션 클릭 핸들러 - 이전 대화 불러오기
   const handleChatSessionClick = (chatId: string) => {
     console.log("Chat session clicked:", chatId);
-    // TODO: 해당 세션 로드 로직 구현
+
+    const session = chatSessions.find(s => s.id === chatId);
+    if (!session) return;
+
+    // 세션 상태 복원
+    setSessionId(session.id);
+    setMessages(session.messages || []);
+    setCurrentMode(session.mode || "chat");
+    setChatResponse(session.chatResponse || null);
+    setQuestionHistory(session.questionHistory || []);
   };
 
   const handleLargeCardClick = async () => {
@@ -240,6 +283,13 @@ export function AIAssistantPageClient({
       localStorage.setItem("ai-chat-sessions", JSON.stringify(chatSessions));
     }
   }, [chatSessions]);
+
+  // 메시지 변경 시 현재 세션 업데이트
+  useEffect(() => {
+    if (messages.length > 0) {
+      updateCurrentSession();
+    }
+  }, [messages, updateCurrentSession]);
 
   const handleAnswerSelect = async (questionId: string, optionId: string, answerText: string) => {
     // 설문조사 답변 전송

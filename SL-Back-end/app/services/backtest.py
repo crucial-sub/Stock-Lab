@@ -2469,7 +2469,7 @@ class BacktestEngine:
                 sell_reason = f"Max hold days reached ({hold_days_count}d)"
                 sell_reason_key = "hold"
 
-            if not should_sell and target_cfg:
+            if not should_sell and not enforce_min_hold and target_cfg:
                 target_gain = target_cfg.get('target_gain')
                 stop_loss = target_cfg.get('stop_loss')
 
@@ -2532,7 +2532,7 @@ class BacktestEngine:
                             sell_reason_key = "hold"
                             break
 
-            if (not should_sell) and condition_sell and not date_factors.empty:
+            if (not should_sell) and not enforce_min_hold and condition_sell and not date_factors.empty:
                 condition_list = condition_sell.get('sell_conditions') or []
                 logic = condition_sell.get('sell_logic')
                 evaluator = self.condition_evaluator
@@ -2550,6 +2550,7 @@ class BacktestEngine:
                     if stock_code in selected:
                         should_sell = True
                         sell_reason = "Condition sell triggered"
+                        sell_reason_key = "condition"
                 elif condition_list:
                     passed, _, _ = evaluator.evaluate_condition_group(
                         factor_data=date_factors,

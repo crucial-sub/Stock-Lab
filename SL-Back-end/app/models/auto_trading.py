@@ -33,6 +33,39 @@ class AutoTradingStrategy(Base):
     # 리밸런싱 주기
     rebalance_frequency = Column(String(20), default="DAILY")
 
+    # 매수 조건 (백테스트와 동일)
+    buy_conditions = Column(JSONB, nullable=True)  # 매수 조건식 리스트
+    buy_logic = Column(String(500), nullable=True)  # 논리 조건식 (e.g., "A and B")
+    priority_factor = Column(String(50), nullable=True)  # 우선순위 팩터
+    priority_order = Column(String(10), default="desc")  # asc/desc
+    max_buy_value = Column(DECIMAL(20, 2), nullable=True)  # 종목당 최대 매수 금액
+    max_daily_stock = Column(Integer, nullable=True)  # 일일 최대 매수 종목 수
+    buy_price_basis = Column(String(20), default="전일 종가")  # 매수 가격 기준
+    buy_price_offset = Column(DECIMAL(10, 4), default=0)  # 매수 가격 조정 (%)
+
+    # 매도 조건 - 목표가/손절가
+    target_gain = Column(DECIMAL(10, 4), nullable=True)  # 목표가 (%)
+    stop_loss = Column(DECIMAL(10, 4), nullable=True)  # 손절가 (%)
+
+    # 매도 조건 - 보유 기간
+    min_hold_days = Column(Integer, nullable=True)  # 최소 보유일
+    max_hold_days = Column(Integer, nullable=True)  # 최대 보유일
+    hold_days_sell_price_basis = Column(String(20), nullable=True)  # 보유기간 매도 가격 기준
+    hold_days_sell_price_offset = Column(DECIMAL(10, 4), nullable=True)  # 보유기간 매도 가격 조정
+
+    # 매도 조건 - 조건 매도
+    sell_conditions = Column(JSONB, nullable=True)  # 매도 조건식 리스트
+    sell_logic = Column(String(500), nullable=True)  # 매도 논리식
+    condition_sell_price_basis = Column(String(20), nullable=True)  # 조건 매도 가격 기준
+    condition_sell_price_offset = Column(DECIMAL(10, 4), nullable=True)  # 조건 매도 가격 조정
+
+    # 수수료/슬리피지
+    commission_rate = Column(DECIMAL(10, 6), default=0.00015)  # 수수료율
+    slippage = Column(DECIMAL(10, 6), default=0.001)  # 슬리피지
+
+    # 매매 대상
+    trade_targets = Column(JSONB, nullable=True)  # 테마, 유니버스, 개별 종목
+
     # 타임스탬프
     created_at = Column(TIMESTAMP, default=datetime.now)
     activated_at = Column(TIMESTAMP, nullable=True)

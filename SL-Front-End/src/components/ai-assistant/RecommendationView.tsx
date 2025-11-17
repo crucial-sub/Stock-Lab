@@ -1,6 +1,8 @@
 "use client";
 
-import { RecommendationUILanguage } from "@/lib/api/chatbot";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { RecommendationUILanguage, parseDSL } from "@/lib/api/chatbot";
 
 interface RecommendationViewProps {
   uiLanguage: RecommendationUILanguage;
@@ -13,6 +15,38 @@ interface RecommendationViewProps {
  */
 export function RecommendationView({ uiLanguage }: RecommendationViewProps) {
   const { recommendations, user_profile_summary } = uiLanguage;
+  const router = useRouter();
+  const [loadingStrategy, setLoadingStrategy] = useState<string | null>(null);
+
+  /**
+   * 백테스트 버튼 클릭 핸들러
+   */
+  const handleBacktest = async (strategyId: string, conditionsPreview: any[]) => {
+    try {
+      setLoadingStrategy(strategyId);
+
+      // 조건 설명을 텍스트로 변환
+      const conditionsText = conditionsPreview
+        .map((cond) => cond.condition)
+        .join(", ");
+
+      // DSL API 호출하여 JSON 조건 생성
+      const dslResponse = await parseDSL(conditionsText);
+
+      // 백테스트 페이지로 이동하며 DSL 조건 전달
+      const queryParams = new URLSearchParams({
+        strategy_id: strategyId,
+        conditions: JSON.stringify(dslResponse.conditions),
+      });
+
+      router.push(`/quant?${queryParams.toString()}`);
+    } catch (error) {
+      console.error("DSL 변환 실패:", error);
+      alert("전략 조건을 변환하는 중 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setLoadingStrategy(null);
+    }
+  };
 
   return (
     <div className="w-full max-w-[1200px] mx-auto p-8">
@@ -119,16 +153,18 @@ export function RecommendationView({ uiLanguage }: RecommendationViewProps) {
                         <p className="text-sm font-medium text-gray-700">
                           {cond.condition}
                         </p>
-                        <ul className="ml-4 space-y-1">
-                          {cond.condition_info.map((info, infoIdx) => (
-                            <li
-                              key={infoIdx}
-                              className="text-xs text-gray-600"
-                            >
-                              - {info}
-                            </li>
-                          ))}
-                        </ul>
+                        {cond.condition_info && cond.condition_info.length > 0 && (
+                          <ul className="ml-4 space-y-1">
+                            {cond.condition_info.map((info, infoIdx) => (
+                              <li
+                                key={infoIdx}
+                                className="text-xs text-gray-600"
+                              >
+                                - {info}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -186,9 +222,13 @@ export function RecommendationView({ uiLanguage }: RecommendationViewProps) {
             <div className="mt-4 pt-4 border-t">
               <button
                 type="button"
-                className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                onClick={() => handleBacktest(rec.strategy_id, rec.conditions_preview)}
+                disabled={loadingStrategy === rec.strategy_id}
+                className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                이 전략으로 백테스트 실행하기
+                {loadingStrategy === rec.strategy_id
+                  ? "조건 생성 중..."
+                  : "이 전략으로 백테스트 실행하기"}
               </button>
             </div>
           </div>

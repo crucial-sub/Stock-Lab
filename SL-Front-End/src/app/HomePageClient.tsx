@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   RecommendedQuestionsSection,
   WelcomeSection,
@@ -20,14 +21,21 @@ interface HomePageClientProps {
 }
 
 export function HomePageClient({ userName }: HomePageClientProps) {
+  const router = useRouter();
+
   const handleAISubmit = (value: string) => {
-    // TODO: AI 전략 요청 처리 로직 구현
+    // AI 어시스턴트 페이지로 이동하면서 질문 전달
     console.log("AI request:", value);
+    // sessionStorage에 초기 메시지 저장
+    sessionStorage.setItem("ai-initial-message", value);
+    router.push("/ai-assistant");
   };
 
   const handleQuestionClick = (question: string) => {
-    // TODO: 추천 질문 클릭 처리 로직 구현
+    // 추천 질문 클릭 시에도 AI 어시스턴트로 이동
     console.log("Question clicked:", question);
+    sessionStorage.setItem("ai-initial-message", question);
+    router.push("/ai-assistant");
   };
 
   return (

@@ -17,7 +17,7 @@ if chatbot_path.exists() and str(chatbot_path) not in sys.path:
     sys.path.insert(0, str(chatbot_path))
 sys.path.insert(0, str(chatbot_path))
 
-from routes import chat, recommend
+from routes import chat, recommend, dsl
 from models.request import ChatRequest, RecommendRequest
 from models.response import ChatResponse, RecommendResponse
 
@@ -49,6 +49,7 @@ app.add_middleware(
 # Include routers
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 app.include_router(recommend.router, prefix="/api/v1/recommend", tags=["recommend"])
+app.include_router(dsl.router, prefix="/api/v1/dsl", tags=["dsl"])
 
 
 @app.get("/")

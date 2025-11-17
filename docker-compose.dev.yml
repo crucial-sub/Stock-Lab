@@ -112,16 +112,11 @@ services:
       context: ./SL-ChatBot/chatbot
       dockerfile: Dockerfile
     container_name: sl_chatbot_dev
+    env_file:
+      - .env
     environment:
       PYTHONUNBUFFERED: 1
       DEBUG: "true"
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
-      AWS_DEFAULT_REGION: ${AWS_REGION:-ap-northeast-2}
-      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID}
-      AWS_KB_ID: ${AWS_KB_ID}
-      RETRIEVER_TYPE: ${RETRIEVER_TYPE}
     ports:
       - "${CHATBOT_PORT:-8003}:8003"
     volumes:

@@ -1959,6 +1959,7 @@ class BacktestEngine:
         # ⚡ 배치 commit 전략: 20개 거래일마다 commit
         progress_batch_count = 0
         PROGRESS_BATCH_SIZE = 20
+        saved_execution_ids = set()  # ✅ BUG FIX: 이미 DB에 저장된 execution ID 추적 (중복 저장 방지)
 
         # 🚀 EXTREME OPTIMIZATION: Price data 사전 색인화 (완전 벡터화 - 100배 빠름!)
         logger.info("🚀 가격 데이터 색인화 시작...")
@@ -1999,6 +2000,7 @@ class BacktestEngine:
             daily_buy_count = 0  # 당일 매수 횟수
             daily_sell_count = 0  # 당일 매도 횟수
             daily_rebalance_sell_count = 0  # 리밸런싱 매도 횟수
+            daily_sold_stocks = set()  # ✅ BUG FIX: 당일 매도한 종목 추적 (같은 날 재매수 방지)
 
             # 🚀 최적화: O(1) 리밸런싱 날짜 체크
             is_rebalance_day = pd.Timestamp(trading_day) in rebalance_dates_set
@@ -2019,12 +2021,23 @@ class BacktestEngine:
                         trading_date=pd.Timestamp(trading_day)
                     )
 
-                    # 조건 불만족 종목 매도
+                    # 조건 불만족 종목 매도 (최소 보유기간 준수!)
                     stocks_to_sell = [stock for stock in holding_stocks if stock not in valid_holdings]
+
+                    # 최소 보유기간 설정 가져오기
+                    hold_cfg = self.hold_days or {}
+                    min_hold = hold_cfg.get('min_hold_days')
+
                     for stock_code in stocks_to_sell:
                         holding = holdings.get(stock_code)
                         if not holding:
                             continue
+
+                        # ✅ 최소 보유기간 체크 추가!
+                        hold_days_count = (trading_day - holding.entry_date).days
+                        if min_hold is not None and hold_days_count < min_hold:
+                            logger.debug(f"⏸️  리밸런싱 매도 보류: {stock_code} (보유 {hold_days_count}일 < 최소 {min_hold}일)")
+                            continue  # 최소 보유기간 미달이면 리밸런싱도 안 함!
 
                         # 🚀 EXTREME OPTIMIZATION: O(1) dictionary 조회
                         price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
@@ -2061,11 +2074,13 @@ class BacktestEngine:
                             'commission': commission,
                             'tax': tax,
                             'realized_pnl': holding.realized_pnl,
-                            'selection_reason': 'REBALANCE'
+                            'selection_reason': 'REBALANCE',
+                            'hold_days': hold_days_count  # ✅ 보유일수 추가!
                         })
 
                         del holdings[stock_code]
                         daily_rebalance_sell_count += 1
+                        daily_sold_stocks.add(stock_code)  # ✅ 당일 매도 종목 기록
 
             # 2단계: 목표가/손절가 등 일반 매도 (매일 체크)
             sell_trades = await self._execute_sells(
@@ -2088,6 +2103,7 @@ class BacktestEngine:
                     position.realized_pnl = (trade['price'] - position.entry_price) * position.quantity
                     self.closed_positions.append(position)
                     del holdings[trade['stock_code']]
+                    daily_sold_stocks.add(trade['stock_code'])  # ✅ 당일 매도 종목 기록
 
             # 3단계: 매수 (리밸런싱 날짜에만)
             if is_rebalance_day:
@@ -2110,7 +2126,10 @@ class BacktestEngine:
                 # 이미 보유 중인 종목은 매수 후보에서 제외 (리밸런싱에서는 유지)
                 new_buy_candidates = [s for s in buy_candidates if s not in holdings]
 
-                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개, 보유 {len(holdings)}개/{max_positions}개")
+                # ✅ BUG FIX: 당일 매도한 종목도 매수 후보에서 제외 (같은 날 재매수 방지)
+                new_buy_candidates = [s for s in new_buy_candidates if s not in daily_sold_stocks]
+
+                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개 (당일 매도 제외 {len(daily_sold_stocks)}개), 보유 {len(holdings)}개/{max_positions}개")
 
                 buy_candidates = new_buy_candidates
 
@@ -2279,39 +2298,47 @@ class BacktestEngine:
                     stmt = insert(SimulationDailyValue).values(daily_values_to_upsert)
                     await self.db.execute(stmt)
 
-                # 거래 내역 UPSERT (bulk)
-                trades_to_upsert = []
+                # ✅ BUG FIX: 중복 저장 방지 - 아직 저장되지 않은 거래만 필터링
+                trades_to_insert = []
                 for execution in executions:
-                    trades_to_upsert.append({
-                        'session_id': str(backtest_id),
-                        'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
-                        'stock_code': execution['stock_code'],
-                        'trade_type': execution['trade_type'],  # BUY or SELL
-                        'quantity': int(execution['quantity']),
-                        'price': float(execution['price']),
-                        'amount': float(execution['amount']),
-                        'commission': float(execution['commission']),
-                        'tax': float(execution.get('tax', 0)),
-                        'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
-                        'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None
-                    })
+                    exec_id = execution.get('execution_id')
+                    if exec_id and exec_id not in saved_execution_ids:
+                        trades_to_insert.append({
+                            'session_id': str(backtest_id),
+                            'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
+                            'stock_code': execution['stock_code'],
+                            'stock_name': execution.get('stock_name'),  # ✅ 종목명 추가!
+                            'trade_type': execution['trade_type'],  # BUY or SELL
+                            'quantity': int(execution['quantity']),
+                            'price': float(execution['price']),
+                            'amount': float(execution['amount']),
+                            'commission': float(execution['commission']),
+                            'tax': float(execution.get('tax', 0)),
+                            'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
+                            'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None,
+                            'holding_days': int(execution['hold_days']) if execution.get('hold_days') is not None else None,  # ✅ 보유일수 추가!
+                            'reason': execution.get('selection_reason')  # ✅ 매도 사유 추가!
+                        })
+                        saved_execution_ids.add(exec_id)
 
                 # Bulk INSERT (기존 데이터는 백테스트 시작 시 삭제됨)
-                if trades_to_upsert:
-                    stmt = insert(SimulationTrade).values(trades_to_upsert)
+                if trades_to_insert:
+                    stmt = insert(SimulationTrade).values(trades_to_insert)
                     await self.db.execute(stmt)
+                    logger.debug(f"✅ {len(trades_to_insert)}건 거래 저장 완료 (중복 제외)")
 
                 # ⚡ commit 제거 - 루프 완료 후 한 번만 commit!
 
                 # 진행률 로그 (사용자가 진행 상황 확인)
                 logger.info(f"📊 [{progress_percentage}%] {trading_day.date()} | 💰 {float(portfolio_value):,.0f}원 | 📈 {current_return:.2f}% | 📉 MDD {current_mdd:.2f}% | 매수 {daily_buy_count} | 매도 {total_sell_count} (리밸 {daily_rebalance_sell_count})")
 
-        # 백테스트 종료 시 모든 보유 종목 강제 매도
+        # 백테스트 종료 시 보유 종목 평가 (매도하지 않고 보유)
         if holdings:
             last_trading_day = trading_days[-1]
-            logger.info(f"🏁 백테스트 종료: {len(holdings)}개 보유 종목 강제 매도")
+            total_stock_value = Decimal("0")
+            logger.info(f"🏁 백테스트 종료: {len(holdings)}개 보유 종목 평가 (매도하지 않음)")
 
-            for stock_code, holding in list(holdings.items()):
+            for stock_code, holding in holdings.items():
                 # 마지막 거래일 가격 조회
                 current_price_data = price_data[
                     (price_data['stock_code'] == stock_code) &
@@ -2319,53 +2346,25 @@ class BacktestEngine:
                 ]
 
                 if current_price_data.empty:
-                    logger.warning(f"⚠️ {stock_code}: 마지막 거래일 가격 없음, 평균 매수가로 매도")
+                    logger.warning(f"⚠️ {stock_code}: 마지막 거래일 가격 없음, 평균 매수가로 평가")
                     current_price = holding.entry_price
                 else:
                     current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
 
-                execution_price = current_price * (1 - self.slippage)
-                amount = execution_price * holding.quantity
-                commission = amount * self.commission_rate
-                tax = amount * self.tax_rate
+                # 평가 금액 계산 (슬리피지/수수료/세금 없음)
+                stock_value = current_price * holding.quantity
+                total_stock_value += stock_value
 
-                logger.debug(f"  🔚 강제 매도: {stock_code} {holding.quantity}주 @ {execution_price:,.0f}원")
+                # 보유 종목 정보 업데이트 (매도하지 않음!)
+                holding.current_price = current_price
+                holding.unrealized_pnl = (current_price - holding.entry_price) * holding.quantity
+                holding.unrealized_pnl_pct = ((current_price / holding.entry_price) - 1) * 100
 
-                # 매도 거래 기록
-                cash_balance += amount - commission - tax
-                holding.is_open = False
-                holding.exit_date = last_trading_day
-                holding.exit_price = execution_price
-                holding.realized_pnl = (execution_price - holding.entry_price) * holding.quantity
-                self.closed_positions.append(holding)
+                logger.debug(f"  📊 평가: {stock_code} {holding.quantity}주 @ {current_price:,.0f}원 = {stock_value:,.0f}원")
 
-                # 체결 기록 추가
-                executions.append({
-                    'execution_id': len(executions) + 1,
-                    'execution_date': last_trading_day,
-                    'stock_code': stock_code,
-                    'side': 'SELL',
-                    'quantity': holding.quantity,
-                    'price': execution_price,
-                    'amount': amount,
-                    'commission': commission,
-                    'tax': tax,
-                    'reason': 'BACKTEST_END'
-                })
-                orders.append({
-                    'order_id': f"ORD-S-{stock_code}-{last_trading_day}-FORCE",
-                    'order_date': last_trading_day,
-                    'stock_code': stock_code,
-                    'stock_name': holding.stock_name,
-                    'side': 'SELL',
-                    'order_type': 'MARKET',
-                    'quantity': holding.quantity,
-                    'status': 'FILLED',
-                    'reason': 'BACKTEST_END'
-                })
+            logger.info(f"💰 총 평가금액: 현금 {cash_balance:,.0f}원 + 주식 {total_stock_value:,.0f}원 = {cash_balance + total_stock_value:,.0f}원")
 
-            # holdings 비우기
-            holdings.clear()
+            # ⚠️ 매도 기록을 남기지 않음! holdings도 유지!
 
         # ⚡ 극한 최적화: 시뮬레이션 완료 후 단 한 번만 commit!
         # Before: 20% 단위로 commit (5회)

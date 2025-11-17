@@ -71,6 +71,11 @@ export function AIAssistantPageClient({
   const [currentMode, setCurrentMode] = useState<"initial" | "chat" | "questionnaire">("initial");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const MIN_REQUEST_INTERVAL = 2000; // 최소 2초 간격
+  const dedupeSessions = useCallback((list: ChatSession[]) => {
+    const map = new Map<string, ChatSession>();
+    list.forEach((s) => map.set(s.id, s));
+    return Array.from(map.values());
+  }, []);
 
   // 채팅 세션 저장 함수 (로컬 상태)
   const saveChatSession = (sessionId: string, firstMessage: string) => {
@@ -86,12 +91,10 @@ export function AIAssistantPageClient({
     };
 
     setChatSessions((prev) => {
-      // 이미 존재하는 세션이면 업데이트하지 않음
-      if (prev.find(s => s.id === sessionId)) {
-        return prev;
-      }
-      // 최신 세션을 앞에 추가
-      return [newSession, ...prev];
+      const next = prev.find((s) => s.id === sessionId)
+        ? prev
+        : [newSession, ...prev];
+      return dedupeSessions(next);
     });
   };
 
@@ -378,7 +381,7 @@ export function AIAssistantPageClient({
             messages: [], // 세션 클릭 시 따로 불러옴
             mode: session.mode as "initial" | "chat" | "questionnaire",
           }));
-          setChatSessions(formattedSessions);
+          setChatSessions(dedupeSessions(formattedSessions));
           console.log("Loaded chat sessions from DB:", formattedSessions.length);
         } catch (error) {
           console.error("Failed to load chat sessions from DB:", error);
@@ -395,7 +398,7 @@ export function AIAssistantPageClient({
       const savedSessions = localStorage.getItem("ai-chat-sessions");
       if (savedSessions) {
         try {
-          setChatSessions(JSON.parse(savedSessions));
+          setChatSessions(dedupeSessions(JSON.parse(savedSessions)));
           console.log("Loaded chat sessions from localStorage");
         } catch (error) {
           console.error("Failed to load chat sessions from localStorage:", error);
@@ -404,7 +407,7 @@ export function AIAssistantPageClient({
     };
 
     loadChatSessions();
-  }, []);
+  }, [dedupeSessions]);
 
   // 홈 페이지에서 전달된 초기 메시지 확인
   useEffect(() => {
@@ -424,11 +427,13 @@ export function AIAssistantPageClient({
     }
   }, [chatSessions]);
 
-  // 메시지 변경 시 현재 세션 업데이트
+  // 메시지 변경 시 현재 세션 업데이트 (과도한 실행 방지용 디바운스)
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length === 0) return;
+    const debounce = setTimeout(() => {
       updateCurrentSession();
-    }
+    }, 300);
+    return () => clearTimeout(debounce);
   }, [messages, updateCurrentSession]);
 
   // 채팅 삭제 핸들러

@@ -9,10 +9,10 @@ import { marketQuoteApi, type SortBy } from "@/lib/api/market-quote";
 export const marketQuoteQueryKey = {
   all: ["marketQuote"] as const,
   lists: () => [...marketQuoteQueryKey.all, "list"] as const,
-  list: (sortBy: SortBy, page: number, pageSize: number, userId?: string) =>
+  list: (sortBy: SortBy, page: number, pageSize: number, userId?: string, search?: string) =>
     [
       ...marketQuoteQueryKey.lists(),
-      { sortBy, page, pageSize, userId },
+      { sortBy, page, pageSize, userId, search },
     ] as const,
   favorites: () => [...marketQuoteQueryKey.all, "favorites"] as const,
   recentViewed: () => [...marketQuoteQueryKey.all, "recentViewed"] as const,
@@ -26,9 +26,10 @@ export function useMarketQuotesQuery(
   page = 1,
   pageSize = 50,
   userId?: string,
+  search?: string,
 ) {
   return useQuery({
-    queryKey: marketQuoteQueryKey.list(sortBy, page, pageSize, userId),
+    queryKey: marketQuoteQueryKey.list(sortBy, page, pageSize, userId, search),
     queryFn: () =>
       marketQuoteApi.getMarketQuotes({
         sortBy,
@@ -36,6 +37,7 @@ export function useMarketQuotesQuery(
         page,
         pageSize,
         userId,
+        search,
       }),
     staleTime: 1000 * 30, // 30초
   });

@@ -10,6 +10,7 @@ import { authApi } from "@/lib/api/auth";
 
 interface SignUpErrors {
   name?: string;
+  nickname?: string;
   phone?: string;
   email?: string;
   password?: string;
@@ -20,6 +21,7 @@ export default function SignUpPage() {
   const router = useRouter();
   const [form, setForm] = useState({
     name: "",
+    nickname: "",
     phone: "",
     email: "",
     password: "",
@@ -27,6 +29,7 @@ export default function SignUpPage() {
   });
   const [errors, setErrors] = useState<SignUpErrors>({});
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [isNicknameChecked, setIsNicknameChecked] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange =
@@ -37,11 +40,21 @@ export default function SignUpPage() {
       if (field === "email") {
         setIsEmailVerified(false);
       }
+      if (field === "nickname") {
+        setIsNicknameChecked(false);
+      }
     };
 
   const validate = () => {
     const nextErrors: SignUpErrors = {};
     if (!form.name.trim()) nextErrors.name = "이름을 입력해주세요.";
+    if (!form.nickname.trim()) {
+      nextErrors.nickname = "닉네임을 입력해주세요.";
+    } else if (form.nickname.length < 2 || form.nickname.length > 8) {
+      nextErrors.nickname = "닉네임은 2~8자로 입력해주세요.";
+    } else if (!isNicknameChecked) {
+      nextErrors.nickname = "닉네임 중복 확인을 해주세요.";
+    }
     if (!form.phone.trim()) nextErrors.phone = "전화번호를 입력해주세요.";
     if (!form.email.trim()) nextErrors.email = "이메일을 입력해주세요.";
     if (!form.password.trim()) nextErrors.password = "비밀번호를 입력해주세요.";
@@ -62,6 +75,7 @@ export default function SignUpPage() {
     try {
       await authApi.register({
         name: form.name,
+        nickname: form.nickname,
         email: form.email,
         phone_number: form.phone,
         password: form.password,
@@ -87,6 +101,32 @@ export default function SignUpPage() {
     }
     setErrors((prev) => ({ ...prev, email: undefined }));
     setIsEmailVerified(true);
+  };
+
+  const handleNicknameCheck = async () => {
+    if (!form.nickname.trim()) {
+      setErrors((prev) => ({ ...prev, nickname: "닉네임을 입력해주세요." }));
+      setIsNicknameChecked(false);
+      return;
+    }
+    if (form.nickname.length < 2 || form.nickname.length > 8) {
+      setErrors((prev) => ({ ...prev, nickname: "닉네임은 2~8자로 입력해주세요." }));
+      setIsNicknameChecked(false);
+      return;
+    }
+    try {
+      const result = await authApi.checkNickname(form.nickname);
+      if (result.available) {
+        setErrors((prev) => ({ ...prev, nickname: undefined }));
+        setIsNicknameChecked(true);
+      } else {
+        setErrors((prev) => ({ ...prev, nickname: "이미 사용 중인 닉네임입니다." }));
+        setIsNicknameChecked(false);
+      }
+    } catch (error) {
+      setErrors((prev) => ({ ...prev, nickname: "닉네임 확인에 실패했습니다." }));
+      setIsNicknameChecked(false);
+    }
   };
 
   return (
@@ -132,6 +172,45 @@ export default function SignUpPage() {
                   : "border-border-default bg-white focus:border-accent-primary"
               }`}
             />
+          </div>
+          <div>
+            <p
+              className={`mb-2 text-sm font-normal ${labelClass(errors.nickname)}`}
+            >
+              닉네임을 입력해주세요.
+            </p>
+            <div className="flex gap-3">
+              <Input
+                type="text"
+                placeholder="닉네임 (2~8자)"
+                value={form.nickname}
+                onChange={handleChange("nickname")}
+                maxLength={8}
+                className={
+                  "h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none " +
+                  (errors.nickname
+                    ? "border-brand-primary bg-[#FFF6F6]"
+                    : "border-border-default bg-white focus:border-accent-primary")
+                }
+              />
+              <button
+                type="button"
+                onClick={handleNicknameCheck}
+                className={`h-14 w-[6.5rem] rounded-[8px] border border-border-subtle bg-[#F5F5F5] text-sm font-semibold text-text-muted `}
+              >
+                중복 확인
+              </button>
+            </div>
+            {isNicknameChecked && !errors.nickname && (
+              <p className="mt-2 text-sm font-semibold text-brand-primary">
+                사용 가능한 닉네임입니다.
+              </p>
+            )}
+            {errors.nickname && (
+              <p className="mt-2 text-sm font-semibold text-brand-primary">
+                {errors.nickname}
+              </p>
+            )}
           </div>
           <div>
             <p

@@ -14,13 +14,13 @@ import {
  */
 
 interface HomePageClientProps {
-  /** 사용자 이름 (서버에서 전달) */
-  userName: string;
+  /** 사용자 닉네임 (서버에서 전달) */
+  nickname: string;
   /** 로그인 여부 (서버에서 전달) */
   isLoggedIn: boolean;
 }
 
-export function HomePageClient({ userName }: HomePageClientProps) {
+export function HomePageClient({ nickname }: HomePageClientProps) {
   const router = useRouter();
 
   const handleAISubmit = (value: string) => {
@@ -41,7 +41,7 @@ export function HomePageClient({ userName }: HomePageClientProps) {
   return (
     <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
       {/* 환영 섹션 */}
-      <WelcomeSection userName={userName} onSubmit={handleAISubmit} />
+      <WelcomeSection nickname={nickname} onSubmit={handleAISubmit} />
 
       {/* 추천 질문 섹션 */}
       <RecommendedQuestionsSection onQuestionClick={handleQuestionClick} />

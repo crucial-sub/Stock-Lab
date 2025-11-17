@@ -15,7 +15,7 @@ class User(Base):
 
     user_id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False)
-    nickname = Column(String(50), unique=True, index=True, nullable=True, comment="사용자 닉네임 (커뮤니티용)")
+    nickname = Column(String(8), unique=True, index=True, nullable=True, comment="사용자 닉네임 (2~8자)")
     email = Column(String(255), unique=True, index=True, nullable=False)
     phone_number = Column(String(20), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)

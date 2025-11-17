@@ -25,14 +25,14 @@ async def register(
     회원가입
 
     Args:
-        user_in: 회원가입 정보 (name, email, phone_number, password)
+        user_in: 회원가입 정보 (name, nickname, email, phone_number, password)
         db: 데이터베이스 세션
 
     Returns:
         UserResponse: 생성된 유저 정보
 
     Raises:
-        HTTPException: 이메일 또는 전화번호가 이미 존재하는 경우
+        HTTPException: 이메일, 닉네임 또는 전화번호가 이미 존재하는 경우
     """
     # 이메일 중복 확인
     result = await db.execute(select(User).where(User.email == user_in.email))
@@ -40,6 +40,14 @@ async def register(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="이미 등록된 이메일입니다"
+        )
+
+    # 닉네임 중복 확인
+    result = await db.execute(select(User).where(User.nickname == user_in.nickname))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 사용 중인 닉네임입니다"
         )
 
     # 전화번호 중복 확인
@@ -56,6 +64,7 @@ async def register(
     # 유저 생성
     new_user = User(
         name=user_in.name,
+        nickname=user_in.nickname,
         email=user_in.email,
         phone_number=user_in.phone_number,
         hashed_password=hashed_password
@@ -172,6 +181,74 @@ async def get_user_by_id(
         )
 
     return user
+
+
+@router.get("/check-nickname/{nickname}")
+async def check_nickname_availability(
+    nickname: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    닉네임 중복 확인
+
+    Args:
+        nickname: 확인할 닉네임
+        db: 데이터베이스 세션
+
+    Returns:
+        dict: 사용 가능 여부
+    """
+    result = await db.execute(select(User).where(User.nickname == nickname))
+    user = result.scalar_one_or_none()
+
+    return {
+        "nickname": nickname,
+        "available": user is None
+    }
+
+
+@router.patch("/update-nickname", response_model=UserResponse)
+async def update_nickname(
+    new_nickname: str,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    닉네임 변경
+
+    Args:
+        new_nickname: 새 닉네임
+        current_user: 현재 로그인한 유저
+        db: 데이터베이스 세션
+
+    Returns:
+        UserResponse: 업데이트된 유저 정보
+
+    Raises:
+        HTTPException: 닉네임이 이미 사용 중인 경우
+    """
+    # 닉네임 중복 확인
+    result = await db.execute(select(User).where(User.nickname == new_nickname))
+    existing_user = result.scalar_one_or_none()
+
+    if existing_user and existing_user.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 사용 중인 닉네임입니다"
+        )
+
+    # 닉네임 업데이트
+    current_user.nickname = new_nickname
+    try:
+        await db.commit()
+        await db.refresh(current_user)
+        return current_user
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="닉네임 변경에 실패했습니다"
+        )
 
 
 @router.delete("/delete-account", status_code=status.HTTP_200_OK)

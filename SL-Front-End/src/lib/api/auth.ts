@@ -3,6 +3,7 @@ import { axiosInstance } from "../axios";
 
 export interface UserCreate {
   name: string;
+  nickname: string;
   email: string;
   phone_number: string;
   password: string;
@@ -11,6 +12,7 @@ export interface UserCreate {
 export interface UserResponse {
   user_id: string;
   name: string;
+  nickname: string;
   email: string;
   phone_number: string;
   is_active: boolean;
@@ -65,6 +67,26 @@ export const authApi = {
    */
   getCurrentUser: async (): Promise<UserResponse> => {
     const response = await axiosInstance.get<UserResponse>("/auth/me");
+    return response.data;
+  },
+
+  /**
+   * 닉네임 중복 확인
+   */
+  checkNickname: async (nickname: string): Promise<{ nickname: string; available: boolean }> => {
+    const response = await axiosInstance.get(`/auth/check-nickname/${nickname}`);
+    return response.data;
+  },
+
+  /**
+   * 닉네임 변경
+   */
+  updateNickname: async (newNickname: string): Promise<UserResponse> => {
+    const response = await axiosInstance.patch<UserResponse>(
+      "/auth/update-nickname",
+      null,
+      { params: { new_nickname: newNickname } }
+    );
     return response.data;
   },
 };

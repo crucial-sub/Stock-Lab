@@ -117,6 +117,7 @@ export interface ChatResponse {
   ui_language?: UILanguage;
   context?: string;
   sources?: any[];
+  backtest_conditions?: DSLCondition[];  // 매수/매도 조건이 있을 경우
 }
 
 // ============ API Functions ============

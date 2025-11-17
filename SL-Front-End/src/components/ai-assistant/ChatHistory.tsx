@@ -5,6 +5,7 @@ import { ChatMessage } from "./ChatMessage";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  backtestConditions?: any[];
 }
 
 interface ChatHistoryProps {
@@ -23,6 +24,7 @@ export function ChatHistory({ messages }: ChatHistoryProps) {
             key={index}
             role={message.role}
             content={message.content}
+            backtestConditions={message.backtestConditions}
           />
         ))}
       </div>

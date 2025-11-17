@@ -182,25 +182,41 @@ def get_tools(news_retriever=None, factor_sync=None) -> List:
         }
 
     @tool
-    def build_backtest_conditions(buy_conditions: List[Dict], sell_conditions: Optional[List[Dict]] = None, start_date: str = "2020-01-01", end_date: str = "2024-12-31") -> Dict:
-        """백테스트용 매수/매도 조건을 정형화된 구조로 생성합니다. 조건은 'factor', 'operator', 'value'를 포함해야 합니다."""
-        valid_operators = ["<", ">", "<=", ">=", "=="]
-        all_conditions = buy_conditions + (sell_conditions or [])
-        for condition in all_conditions:
-            if condition.get("operator") not in valid_operators:
-                return {"success": False, "error": f"Invalid operator: {condition.get('operator')}"}
-            if not all(k in condition for k in ["factor", "operator", "value"]):
-                return {"success": False, "error": f"Invalid condition structure: {condition}"}
-        
-        return {
-            "success": True,
-            "backtest_config": {
-                "buy_conditions": buy_conditions,
-                "sell_conditions": sell_conditions or [],
-                "start_date": start_date,
-                "end_date": end_date,
+    async def build_backtest_conditions(strategy_description: str) -> Dict:
+        """사용자의 자연어 전략 설명(예: 'PER 10 이하면 매수', 'ROE 15% 이상일 때 매수')을 백테스트 가능한 DSL JSON 조건으로 변환합니다.
+
+        Args:
+            strategy_description: 자연어로 된 매수/매도 조건 설명
+
+        Returns:
+            변환된 DSL 조건 리스트와 성공 여부
+        """
+        try:
+            from schemas.dsl_generator import parse_strategy_text
+
+            # 자연어 → DSL 변환
+            result = parse_strategy_text(strategy_description)
+
+            # Condition 객체를 딕셔너리로 변환
+            conditions = [condition.model_dump() for condition in result.conditions]
+
+            if not conditions:
+                return {
+                    "success": False,
+                    "error": "조건을 파싱할 수 없습니다. 더 구체적인 조건을 입력해주세요."
+                }
+
+            return {
+                "success": True,
+                "conditions": conditions,
+                "description": strategy_description,
+                "message": f"{len(conditions)}개의 조건이 생성되었습니다."
             }
-        }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"DSL 변환 중 오류 발생: {str(e)}"
+            }
 
     @tool
     async def analyze_stock_sentiment(stock_code: str, stock_name: Optional[str] = None, max_results: int = 400) -> Dict:

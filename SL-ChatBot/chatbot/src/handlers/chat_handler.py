@@ -409,14 +409,34 @@ class ChatHandler:
                     return
 
                 # AWS Bedrock으로 Claude LLM 초기화
-                self.llm_client = ChatBedrock(
+                # Throttling 대응: 재시도 설정 추가
+                import boto3
+                from botocore.config import Config
+
+                retry_config = Config(
+                    retries={
+                        'max_attempts': 3,  # 최대 재시도 횟수 줄임 (기본 4 → 3)
+                        'mode': 'adaptive'  # 적응형 재시도 (점진적 백오프)
+                    },
+                    read_timeout=120,  # 읽기 타임아웃 증가
+                    connect_timeout=10
+                )
+
+                # Bedrock 클라이언트를 직접 생성 (retry_config 적용)
+                bedrock_client = boto3.client(
+                    service_name='bedrock-runtime',
                     region_name=aws_region,
+                    config=retry_config
+                )
+
+                self.llm_client = ChatBedrock(
+                    client=bedrock_client,
                     model_id=os.getenv("BEDROCK_MODEL_ID", self.config["llm"]["model"]),
                     model_kwargs={
                         "temperature": self.config["llm"]["temperature"],
                         "max_tokens": self.config["llm"]["max_tokens"],
                     },
-                    streaming=False,
+                    streaming=False
                 )
                 print(f"Step 1 OK: AWS Bedrock 사용 - 리전: {aws_region}, 모델: {self.llm_client.model_id}")
 
@@ -430,7 +450,10 @@ class ChatHandler:
 
                 # 3. 시스템 프롬프트 로드
                 print("Step 3: 시스템 프롬프트 로드 중...")
-                prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "system.txt"
+                # Docker: /app/prompts/system.txt, Local: 상대경로
+                prompt_path = Path("/app/prompts/system.txt")
+                if not prompt_path.exists():
+                    prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "system.txt"
                 system_prompt = prompt_path.read_text(encoding='utf-8') if prompt_path.exists() else "당신은 정량 투자 자문가입니다."
                 print(f"Step 3 OK: 시스템 프롬프트 로드 완료 ({len(system_prompt)} 자)")
 
@@ -808,17 +831,34 @@ class ChatHandler:
                         formatted_parts.append(str(element))
                 answer = "\n".join(formatted_parts)
 
-            
+
             answer = self._clean_tool_calls_from_response(answer)
 
             # Manually save conversation history to the session's memory
             memory.save_context({"input": message}, {"output": answer})
 
-            return {
+            # Extract backtest conditions from intermediate steps if build_backtest_conditions was called
+            backtest_conditions = None
+            intermediate_steps = response.get("intermediate_steps", [])
+            for step in intermediate_steps:
+                if len(step) >= 2:
+                    action, result = step[0], step[1]
+                    # Check if this was a build_backtest_conditions tool call
+                    if hasattr(action, 'tool') and action.tool == 'build_backtest_conditions':
+                        if isinstance(result, dict) and result.get("success"):
+                            backtest_conditions = result.get("conditions", [])
+                            break
+
+            result_dict = {
                 "answer": answer,
                 "intent": intent,
                 "context": context
             }
+
+            if backtest_conditions:
+                result_dict["backtest_conditions"] = backtest_conditions
+
+            return result_dict
         except Exception as e:
             print(f"LangChain Agent execution error: {e}")
             return {

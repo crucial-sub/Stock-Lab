@@ -11,6 +11,7 @@ import { ChatHistory } from "@/components/ai-assistant/ChatHistory";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  backtestConditions?: any[];  // DSL 조건이 있을 경우
 }
 
 interface ChatSession {
@@ -66,6 +67,8 @@ export function AIAssistantPageClient({
   }>>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentMode, setCurrentMode] = useState<"initial" | "chat" | "questionnaire">("initial");
+  const [lastRequestTime, setLastRequestTime] = useState<number>(0);
+  const MIN_REQUEST_INTERVAL = 2000; // 최소 2초 간격
 
   // 채팅 세션 저장 함수
   const saveChatSession = (sessionId: string, firstMessage: string) => {
@@ -195,7 +198,11 @@ export function AIAssistantPageClient({
       // AI 응답 메시지 추가
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: response.answer },
+        {
+          role: "assistant",
+          content: response.answer,
+          backtestConditions: response.backtest_conditions
+        },
       ]);
 
       // 채팅 세션 저장
@@ -212,6 +219,29 @@ export function AIAssistantPageClient({
   const handleAISubmit = useCallback(async (value: string) => {
     // AI 요청 처리
     console.log("AI request:", value);
+
+    // 이미 로딩 중이면 요청 무시 (연속 요청 방지)
+    if (isLoading) {
+      console.log("Already loading, ignoring request");
+      return;
+    }
+
+    // 요청 간격 제한 (Rate Limiting)
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+      const waitTime = Math.ceil((MIN_REQUEST_INTERVAL - timeSinceLastRequest) / 1000);
+      setMessages((prev: Message[]) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `요청이 너무 빠릅니다. ${waitTime}초 후에 다시 시도해주세요.`,
+        },
+      ]);
+      return;
+    }
+
+    setLastRequestTime(now);
 
     // 사용자 메시지 추가
     setMessages((prev) => [...prev, { role: "user", content: value }]);
@@ -237,7 +267,11 @@ export function AIAssistantPageClient({
       // AI 응답 메시지 추가
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: response.answer },
+        {
+          role: "assistant",
+          content: response.answer,
+          backtestConditions: response.backtest_conditions
+        },
       ]);
 
       // 채팅 세션 저장
@@ -249,10 +283,23 @@ export function AIAssistantPageClient({
       console.log("UI Language:", response.ui_language);
     } catch (error) {
       console.error("Failed to send message:", error);
+
+      // 사용자 친화적인 에러 메시지 표시
+      const errorMessage = error instanceof Error && error.message.includes("ThrottlingException")
+        ? "요청이 많아 일시적으로 응답이 지연되고 있습니다.\n잠시 후(30초~1분) 다시 시도해주세요."
+        : "메시지 전송에 실패했습니다. 잠시 후 다시 시도해주세요.";
+
+      setMessages((prev: Message[]) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: errorMessage,
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId]);
+  }, [sessionId, isLoading, lastRequestTime]);
 
   // localStorage에서 채팅 세션 불러오기
   useEffect(() => {

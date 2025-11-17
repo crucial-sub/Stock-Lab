@@ -1,8 +1,11 @@
 """Chat API Endpoints."""
-from fastapi import APIRouter, HTTPException
-from typing import Optional
+import json
 import sys
 from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 # Add chatbot to path (when running in Docker, chatbot is at /app/sl-chatbot/chatbot/src)
 chatbot_path = Path("/app/sl-chatbot/chatbot/src")
@@ -29,6 +32,7 @@ except Exception as e:
 
 from models.request import ChatRequest
 from models.response import ChatResponse
+from ..errors import make_error_response
 
 
 router = APIRouter()
@@ -62,15 +66,20 @@ async def chat_message(request: ChatRequest):
     chatbot = get_bot()
 
     if not chatbot:
-        raise HTTPException(
+        return make_error_response(
             status_code=500,
-            detail="Chatbot not initialized"
+            code="E002",
+            message="Chatbot not initialized",
+            user_message="챗봇을 초기화하지 못했습니다. 잠시 후 다시 시도해주세요.",
+            error_type="INVALID_RESPONSE",
+            retry_allowed=True,
         )
 
     try:
         result = await chatbot.chat(
             message=request.message,
-            session_id=request.session_id
+            session_id=request.session_id,
+            answer=request.answer
         )
 
         return ChatResponse(
@@ -78,25 +87,27 @@ async def chat_message(request: ChatRequest):
             intent=result.get("intent"),
             context=result.get("context"),
             conditions=result.get("conditions"),
-            session_id=request.session_id
+            session_id=request.session_id,
+            ui_language=result.get("ui_language")
         )
 
     except Exception as e:
-        raise HTTPException(
+        return make_error_response(
             status_code=500,
-            detail=f"Chat processing failed: {str(e)}"
+            code="E002",
+            message=f"Chat processing failed: {str(e)}",
+            user_message="응답 생성 중 오류가 발생했습니다. 다시 시도해주세요.",
+            error_type="INVALID_RESPONSE",
+            retry_allowed=True,
         )
 
 
 @router.post("/stream")
 async def chat_stream(request: ChatRequest):
-    """Stream chat response (SSE).
-
-    TODO: Implement streaming response
-    """
+    """Stream chat response (SSE)."""
     raise HTTPException(
         status_code=501,
-        detail="Streaming not implemented yet"
+        detail="Streaming not implemented"
     )
 
 

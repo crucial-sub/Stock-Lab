@@ -109,8 +109,8 @@ export function AIAssistantPageClient({
       });
 
       setSessionId(response.session_id);
-      // 작은 카드 클릭 시에는 ui_language 무시 (일반 채팅만)
-      setChatResponse(null);
+      // 전략 카드 클릭 시에도 설문/추천 UI를 그대로 노출한다.
+      setChatResponse(response);
 
       // AI 응답 메시지 추가
       setMessages((prev) => [

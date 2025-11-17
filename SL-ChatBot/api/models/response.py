@@ -10,6 +10,7 @@ class ChatResponse(BaseModel):
     context: Optional[str] = Field(None, description="Retrieved context")
     conditions: Optional[Dict[str, Any]] = Field(None, description="Generated conditions if applicable")
     session_id: Optional[str] = Field(None, description="Session ID")
+    ui_language: Optional[Dict[str, Any]] = Field(None, description="UI Language JSON payload for frontend rendering")
 
 
 class RecommendResponse(BaseModel):

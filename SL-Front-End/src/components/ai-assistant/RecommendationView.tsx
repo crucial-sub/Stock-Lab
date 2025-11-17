@@ -119,16 +119,18 @@ export function RecommendationView({ uiLanguage }: RecommendationViewProps) {
                         <p className="text-sm font-medium text-gray-700">
                           {cond.condition}
                         </p>
-                        <ul className="ml-4 space-y-1">
-                          {cond.condition_info.map((info, infoIdx) => (
-                            <li
-                              key={infoIdx}
-                              className="text-xs text-gray-600"
-                            >
-                              - {info}
-                            </li>
-                          ))}
-                        </ul>
+                        {cond.condition_info && cond.condition_info.length > 0 && (
+                          <ul className="ml-4 space-y-1">
+                            {cond.condition_info.map((info, infoIdx) => (
+                              <li
+                                key={infoIdx}
+                                className="text-xs text-gray-600"
+                              >
+                                - {info}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     ))}
                   </div>

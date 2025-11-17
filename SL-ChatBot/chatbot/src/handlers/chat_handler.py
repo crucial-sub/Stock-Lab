@@ -1,19 +1,13 @@
-"""챗 핸들러 - RAG와 LLM을 오케스트레이션합니다."""
 import os
 import re
 import asyncio
 import types
 import sys
-import warnings
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
-
-# LangChain deprecation 경고 무시
-warnings.filterwarnings('ignore', category=DeprecationWarning)
-warnings.filterwarnings('ignore', message='.*migration guide.*')
 
 _pydantic_v1_module = None
 try:
@@ -46,52 +40,39 @@ ChatPromptTemplate = None
 MessagesPlaceholder = None
 BaseMessage = None
 ConversationBufferWindowMemory = None
-create_react_agent = None
-initialize_agent = None
-AgentType = None
 
 try:
     from langchain_aws import ChatBedrock  # type: ignore
 except ImportError as e:
     print(f"경고: LangChain AWS(ChatBedrock) 컴포넌트가 없습니다. pip install langchain-aws 실행 필요. 오류: {e}")
 
-# LangChain 0.2.x 호환 간단한 에이전트 래퍼
-class SimpleLLMAgent:
-    """LangChain 0.2.x 호환 간단한 LLM 에이전트"""
-    def __init__(self, llm, tools, prompt):
-        self.llm = llm
-        self.tools = tools
-        self.prompt = prompt
-        self.tool_map = {tool.name: tool for tool in tools}
-
-    def invoke(self, inputs):
-        """에이전트 호출"""
-        try:
-            # 프롬프트에 입력 바인딩
-            if hasattr(self.prompt, 'format_prompt'):
-                formatted = self.prompt.format_prompt(**inputs)
-                response = self.llm.invoke(formatted)
-            elif hasattr(self.prompt, 'format'):
-                # ChatPromptTemplate는 format 대신 다른 방식 사용
-                messages = self.prompt.format_messages(**inputs)
-                response = self.llm.invoke(messages)
-            else:
-                response = self.llm.invoke(inputs)
-            return response
-        except Exception as e:
-            return f"에러: {str(e)}"
-
-def _create_simple_agent(llm, tools, prompt):
-    """SimpleLLMAgent 생성 함수"""
-    return SimpleLLMAgent(llm, tools, prompt)
-
-create_tool_calling_agent = _create_simple_agent
-AgentExecutor = None
 try:
-    from langchain.agents import create_react_agent, AgentType, initialize_agent  # type: ignore
+    from langchain.agents.tool_calling_agent.base import create_tool_calling_agent  # type: ignore
+    from langchain.agents.agent import AgentExecutor  # type: ignore
 except ImportError:
-    # Fallbacks may not be available depending on LangChain version
-    pass
+    try:
+        from langchain.agents.tool_calling_agent import create_tool_calling_agent  # type: ignore
+        from langchain.agents.agent import AgentExecutor  # type: ignore
+    except ImportError:
+        try:
+            from langchain.agents import create_tool_calling_agent  # type: ignore
+            from langchain.agents import AgentExecutor  # type: ignore
+        except ImportError:
+            try:
+                # LangChain 0.3+ 계열에선 classic 네임스페이스로 이동
+                from langchain_classic.agents import create_tool_calling_agent, AgentExecutor  # type: ignore
+            except ImportError:
+                try:
+                    from langchain_core.agents import create_tool_calling_agent  # type: ignore
+                    from langchain.agents import AgentExecutor  # type: ignore
+                except ImportError as e:
+                    print(
+                        "경고: LangChain Agent 컴포넌트를 불러오지 못했습니다. "
+                        "pip install langchain>=0.1,<0.3 또는 langchain-classic 설치를 확인하세요. "
+                        f"오류: {e}"
+                    )
+                    create_tool_calling_agent = None
+                    AgentExecutor = None
 
 try:
     from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder  # type: ignore
@@ -147,60 +128,6 @@ except ImportError:
     print("Warning: Tools not imported")
     get_tools = None
 
-try:
-    from ui_language import (
-        QUESTIONS_DATA,
-        STRATEGY_TAGS_MAPPING,
-        UILanguageType,
-        UILanguageQuestionnaire,
-        UILanguageRecommendation,
-        UILanguageBacktestConfiguration,
-        Question,
-        OptionCard,
-        StrategyRecommendation,
-        ConditionPreview,
-        UserProfileSummary,
-        ConfigurationField
-    )
-except ImportError:
-    print("Warning: UI Language modules not imported")
-    QUESTIONS_DATA = None
-    STRATEGY_TAGS_MAPPING = None
-
-
-class SimpleAgentExecutor:
-    """LangChain 0.2.x 호환 간단한 에이전트 실행기"""
-    def __init__(self, agent, tools, **kwargs):
-        self.agent = agent
-        self.tools = {tool.name: tool for tool in tools}
-        self.verbose = kwargs.get('verbose', False)
-        self.return_intermediate_steps = kwargs.get('return_intermediate_steps', False)
-        self.handle_parsing_errors = kwargs.get('handle_parsing_errors', True)
-
-    def invoke(self, inputs):
-        """에이전트 실행"""
-        try:
-            # Agent에 input 전달
-            result = self.agent.invoke(inputs)
-
-            # LangChain 0.2.x: AIMessage 객체 처리
-            if hasattr(result, 'content'):
-                # AIMessage 객체
-                return {"output": result.content}
-            elif isinstance(result, dict):
-                # 딕셔너리 반환
-                return {"output": result.get("output") or result}
-            elif isinstance(result, str):
-                # 문자열 반환
-                return {"output": result}
-            else:
-                # 기타 객체
-                return {"output": str(result)}
-        except Exception as e:
-            if self.verbose:
-                print(f"Agent execution error: {e}")
-            return {"output": str(e)}
-
 
 class ChatHandler:
     """Handles conversation flow and orchestrates components."""
@@ -214,13 +141,203 @@ class ChatHandler:
         self.agent_executor = None
         self.conversation_history = {}
         self.agent_type = None  # Track which agent type is being used
-
-        # UI Language 및 세션 관리
-        self.session_data = {}  # {session_id: {question_answers, current_question, user_tags}}
-        self.session_state = {}  # {session_id: {"in_questionnaire": bool, "answers": {...}}}
+        # 설문/추천 상태
+        self.session_state: Dict[str, Dict[str, Any]] = {}
 
         self._load_config()
         self._init_components()
+
+        # 설문 질문 세트 (프론트 UI 사양 반영)
+        self.questions = [
+            {
+                "question_id": "investment_period",
+                "text": "보통 얼마 동안 보유할 생각으로 투자하시나요?",
+                "order": 1,
+                "options": [
+                    {
+                        "id": "short_term",
+                        "label": "단기 투자 (며칠 ~ 몇 주)",
+                        "description": "짧게 사고 팔면서 단기 수익을 노려요.",
+                        "icon": "⚡",
+                        "tags": ["short_term", "style_momentum"],
+                    },
+                    {
+                        "id": "mid_term",
+                        "label": "중기 투자 (몇 개월)",
+                        "description": "몇 달 정도 흐름을 보면서 가져가는 편이에요.",
+                        "icon": "📊",
+                        "tags": ["mid_term"],
+                    },
+                    {
+                        "id": "long_term",
+                        "label": "장기 투자 (1년 이상)",
+                        "description": "좋은 기업을 골라 오래 들고 가고 싶어요.",
+                        "icon": "🏆",
+                        "tags": ["long_term", "style_value"],
+                    },
+                ],
+            },
+            {
+                "question_id": "investment_style",
+                "text": "아래 중에서 가장 본인 스타일에 가까운 걸 골라주세요.",
+                "order": 2,
+                "options": [
+                    {
+                        "id": "value",
+                        "label": "가치 / 저평가 위주",
+                        "description": "싸게 사서 안전마진을 확보하는 것이 좋아요.",
+                        "icon": "💎",
+                        "tags": ["style_value"],
+                    },
+                    {
+                        "id": "growth",
+                        "label": "성장 / 실적 위주",
+                        "description": "매출·이익이 빠르게 커지는 기업이 좋아요.",
+                        "icon": "📈",
+                        "tags": ["style_growth"],
+                    },
+                    {
+                        "id": "momentum",
+                        "label": "모멘텀 / 추세 위주",
+                        "description": "최근에 많이 오르고 있는 강한 종목이 좋아요.",
+                        "icon": "🚀",
+                        "tags": ["style_momentum"],
+                    },
+                    {
+                        "id": "dividend",
+                        "label": "배당 수익 위주",
+                        "description": "배당을 꾸준히 받으면서 안정적으로 가고 싶어요.",
+                        "icon": "💰",
+                        "tags": ["style_dividend"],
+                    },
+                ],
+            },
+            {
+                "question_id": "risk_tolerance",
+                "text": "투자 중에 일시적으로 -20% 같은 큰 손실이 나도 버틸 수 있나요?",
+                "order": 3,
+                "options": [
+                    {
+                        "id": "risk_high",
+                        "label": "크게 흔들려도 괜찮아요",
+                        "description": "-30% 변동도 상관없어요.",
+                        "icon": "🎢",
+                        "tags": ["risk_high"],
+                    },
+                    {
+                        "id": "risk_mid",
+                        "label": "어느 정도는 괜찮아요",
+                        "description": "-10% ~ -20% 정도는 감수할 수 있어요.",
+                        "icon": "⚖️",
+                        "tags": ["risk_mid"],
+                    },
+                    {
+                        "id": "risk_low",
+                        "label": "손실은 최소화하고 싶어요",
+                        "description": "-10%만 넘어가도 스트레스를 많이 받아요.",
+                        "icon": "🛡️",
+                        "tags": ["risk_low"],
+                    },
+                ],
+            },
+            {
+                "question_id": "dividend_preference",
+                "text": "아래 둘 중, 더 끌리는 쪽은 어디인가요?",
+                "order": 4,
+                "options": [
+                    {
+                        "id": "prefer_dividend",
+                        "label": "배당이 중요하다",
+                        "description": "꾸준한 현금 배당이 중요해요.",
+                        "icon": "💵",
+                        "tags": ["prefer_dividend"],
+                    },
+                    {
+                        "id": "prefer_capital_gain",
+                        "label": "배당보다 시세차익이 중요하다",
+                        "description": "주가 상승이 더 중요해요.",
+                        "icon": "📈",
+                        "tags": ["prefer_capital_gain"],
+                    },
+                    {
+                        "id": "prefer_both",
+                        "label": "둘 다 적당히 있으면 좋다",
+                        "description": "배당도 받고 주가도 오르면 베스트죠.",
+                        "icon": "🎯",
+                        "tags": ["prefer_both"],
+                    },
+                ],
+            },
+            {
+                "question_id": "sector_preference",
+                "text": "어떤 종류의 기업에 더 끌리나요?",
+                "order": 5,
+                "options": [
+                    {
+                        "id": "innovation",
+                        "label": "혁신 기술/성장 섹터",
+                        "description": "AI, 로봇, 바이오, 핀테크 같은 미래 기술 기업이 좋다.",
+                        "icon": "🚀",
+                        "tags": ["sector_innovation"],
+                    },
+                    {
+                        "id": "bluechip",
+                        "label": "전통 산업/우량 대형주",
+                        "description": "안정적인 대형 기업이 좋다.",
+                        "icon": "🏢",
+                        "tags": ["sector_bluechip"],
+                    },
+                    {
+                        "id": "smallmid",
+                        "label": "중소형/숨은 진주형 종목",
+                        "description": "덜 알려졌지만 개선 여지가 큰 중소형주.",
+                        "icon": "💎",
+                        "tags": ["sector_smallmid"],
+                    },
+                    {
+                        "id": "any",
+                        "label": "특별히 상관없다",
+                        "description": "섹터는 상관없고 조건만 좋으면 된다.",
+                        "icon": "🎲",
+                        "tags": ["sector_any"],
+                    },
+                ],
+            },
+        ]
+
+        # 기본 전략 태그 매핑 (간단 매칭용)
+        self.strategy_tags_mapping = {
+            "cathy_wood": {
+                "strategy_id": "cathy_wood",
+                "strategy_name": "캐시 우드의 전략",
+                "summary": "혁신 기술 고성장주 중심의 장기 성장 전략",
+                "tags": ["long_term", "style_growth", "risk_high", "sector_innovation"],
+                "conditions": [
+                    {"condition": "0 < PEG < 2"},
+                    {"condition": "매출 성장률 > 20%"},
+                ],
+            },
+            "peter_lynch": {
+                "strategy_id": "peter_lynch",
+                "strategy_name": "피터 린치의 전략",
+                "summary": "PER·PEG로 저평가 성장주를 찾는 전략",
+                "tags": ["long_term", "style_growth", "risk_mid"],
+                "conditions": [
+                    {"condition": "PER < 30"},
+                    {"condition": "0 < PEG < 1.8"},
+                ],
+            },
+            "value_income": {
+                "strategy_id": "value_income",
+                "strategy_name": "저평가 배당주",
+                "summary": "저평가 + 배당 안정성 중심",
+                "tags": ["long_term", "style_dividend", "risk_low", "prefer_dividend", "sector_bluechip"],
+                "conditions": [
+                    {"condition": "PBR < 1.0"},
+                    {"condition": "배당수익률 > 3%"},
+                ],
+            },
+        }
 
     def _load_config(self):
         """Load configuration."""
@@ -334,41 +451,22 @@ class ChatHandler:
 
                 # 5. Claude 에이전트 생성
                 print("Step 5: Claude 에이전트와 Executor 생성 중...")
-                agent = None
-                self.agent_type = None
-
                 # Claude는 도구 호출(Tool Calling)을 기본 지원
-                if create_tool_calling_agent:
-                    try:
-                        agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
-                        self.agent_type = "simple_llm"
-                        print("  SimpleLLMAgent 기반 에이전트를 생성했습니다.")
-                    except Exception as e:
-                        print(f"  에이전트 생성 실패: {e}")
-                        agent = None
+                agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
+                self.agent_type = "tool_calling"
+                print(f"  Claude 에이전트 생성 완료, AgentExecutor 생성 중...")
+                self.agent_executor = AgentExecutor(
+                    agent=agent,
+                    tools=tools,
+                    verbose=True,
+                    return_intermediate_steps=True,
+                    handle_parsing_errors=True
+                )
+                print("Step 5 OK: AgentExecutor 생성 완료")
 
-                # 에이전트가 성공적으로 생성되었으면 SimpleAgentExecutor로 래핑
-                if agent:
-                    try:
-                        self.agent_executor = SimpleAgentExecutor(
-                            agent=agent,
-                            tools=tools,
-                            verbose=True,
-                            return_intermediate_steps=True,
-                            handle_parsing_errors=True
-                        )
-                        print("Step 5 OK: SimpleAgentExecutor 생성 완료")
-                    except Exception as e:
-                        print(f"  SimpleAgentExecutor 생성 실패: {e}")
-                        self.agent_executor = None
-
-                if not self.agent_executor:
-                    print("경고: 사용 가능한 LangChain 에이전트를 생성하지 못했습니다.")
-                    return
-
-                print("[OK] LangChain 에이전트 생성 성공")
+                print("✅ LangChain AgentExecutor 생성 성공")
             except Exception as e:
-                print(f"[ERROR] LangChain 에이전트 초기화 오류: {e}")
+                print(f"❌ LangChain 에이전트 초기화 오류: {e}")
                 import traceback
                 traceback.print_exc()
         else:
@@ -380,33 +478,37 @@ class ChatHandler:
         Args:
             message: 사용자 입력
             session_id: 선택사항 세션 ID
-            answer: 선택사항 질문 응답 데이터 {question_id, option_id}
+            answer: 설문 응답 (선택사항)
 
         Returns:
-            응답 딕셔너리 (ui_language 포함)
+            응답 딕셔너리
         """
-        # 세션 ID가 없으면 생성
         if session_id is None:
             session_id = str(uuid.uuid4())
+
+        # 설문/전략 추천 플로우 (ui_language)
+        if answer or self._is_strategy_request(message):
+            return await self._handle_questionnaire_flow(session_id, answer, message)
+
+        # 0-0. 도메인(금융/투자) 외 질문 차단
+        domain_violation = self._check_domain_restriction(message)
+        if domain_violation:
+            return {
+                "answer": domain_violation,
+                "intent": "policy_violation",
+                "session_id": session_id,
+                "sources": []
+            }
 
         # 0. 정책 검사 (투자 조언 금지 정책)
         policy_violation = self._check_investment_advisory_policy(message)
         if policy_violation:
-            print(f"DEBUG: Policy violation detected")
             return {
                 "answer": policy_violation,
                 "intent": "policy_violation",
                 "session_id": session_id,
                 "sources": []
             }
-
-        # 전략 추천 플로우 감지
-        print(f"DEBUG: Checking _is_strategy_recommendation_request...")
-        # 이미 설문조사 진행 중이거나 새로운 전략 추천 요청인 경우
-        in_questionnaire = session_id in self.session_state
-        if in_questionnaire or self._is_strategy_recommendation_request(message):
-            print(f"DEBUG: Strategy recommendation flow triggered! (in_questionnaire={in_questionnaire})")
-            return await self._handle_strategy_recommendation_flow(message, session_id, answer)
 
         # 1. Classify intent
         intent = await self._classify_intent(message)
@@ -421,6 +523,149 @@ class ChatHandler:
 
         response["session_id"] = session_id
         return response
+
+    def _is_strategy_request(self, message: str) -> bool:
+        """전략 추천 설문을 시작할지 여부 판단."""
+        msg = (message or "").lower()
+        triggers = ["전략 추천", "추천받고 싶어요", "추천 해줘", "설문", "투자 성향"]
+        return any(t in msg for t in triggers) or msg.strip() == ""
+
+    async def _handle_questionnaire_flow(self, session_id: str, answer: Optional[dict], message: str) -> dict:
+        """5문항 설문 → 전략 추천 UI Language 생성."""
+        # 세션 초기화
+        state = self.session_state.setdefault(session_id, {
+            "current": 1,
+            "answers": {},
+            "completed": False,
+        })
+
+        # 응답 처리
+        if answer and "question_id" in answer and "option_id" in answer:
+            state["answers"][answer["question_id"]] = answer["option_id"]
+            state["current"] += 1
+
+        total = len(self.questions)
+
+        # 모든 질문 완료 → 추천 생성
+        if state["current"] > total:
+            recs = self._build_recommendations(state["answers"])
+            state["completed"] = True
+            return {
+                "answer": "고객님의 투자 성향을 분석한 결과, 다음 전략을 추천드려요!",
+                "intent": "strategy_recommendation_complete",
+                "session_id": session_id,
+                "ui_language": {
+                    "type": "strategy_recommendation",
+                    "recommendations": recs,
+                    "user_profile_summary": self._build_profile_summary(state["answers"]),
+                },
+            }
+
+        # 다음 질문 렌더링
+        question = sorted(self.questions, key=lambda q: q["order"])[state["current"] - 1]
+        progress = int(((state["current"] - 1) / total) * 100)
+
+        return {
+            "answer": f"질문 {state['current']}/{total}: {question['text']}",
+            "intent": "questionnaire_progress" if state["current"] > 1 else "questionnaire_start",
+            "session_id": session_id,
+            "ui_language": {
+                "type": "questionnaire_progress" if state["current"] > 1 else "questionnaire_start",
+                "total_questions": total,
+                "current_question": state["current"],
+                "progress_percentage": progress,
+                "question": question,
+            },
+        }
+
+    def _collect_user_tags(self, answers: Dict[str, str]) -> List[str]:
+        """선택된 옵션에서 태그 수집."""
+        tags: List[str] = []
+        for q in self.questions:
+            qid = q["question_id"]
+            if qid not in answers:
+                continue
+            opt = next((o for o in q["options"] if o["id"] == answers[qid]), None)
+            if opt:
+                tags.extend(opt.get("tags", []))
+        return tags
+
+    def _build_recommendations(self, answers: Dict[str, str]) -> List[dict]:
+        """태그 겹침 기반 추천 상위 3개."""
+        user_tags = set(self._collect_user_tags(answers))
+        scored = []
+        for sid, meta in self.strategy_tags_mapping.items():
+            stags = set(meta.get("tags", []))
+            score = len(user_tags & stags) / (len(stags) or 1)
+            scored.append((score, meta))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top = scored[:3]
+        recs = []
+        for rank, (score, meta) in enumerate(top, start=1):
+            recs.append({
+                "rank": rank,
+                "strategy_id": meta["strategy_id"],
+                "strategy_name": meta["strategy_name"],
+                "summary": meta.get("summary", ""),
+                "match_score": round(score, 2),
+                "match_percentage": int(score * 100),
+                "match_reasons": list(user_tags & set(meta.get("tags", []))),
+                "tags": meta.get("tags", []),
+                "conditions_preview": meta.get("conditions", []),
+                "icon": meta.get("icon", "⭐"),
+                "badge": meta.get("badge"),
+            })
+        return recs
+
+    def _build_profile_summary(self, answers: Dict[str, str]) -> dict:
+        """선택지 라벨을 요약으로 변환."""
+        summary = {
+            "investment_period": self._get_label("investment_period", answers.get("investment_period")),
+            "investment_style": self._get_label("investment_style", answers.get("investment_style")),
+            "risk_tolerance": self._get_label("risk_tolerance", answers.get("risk_tolerance")),
+            "dividend_preference": self._get_label("dividend_preference", answers.get("dividend_preference")),
+            "sector_preference": self._get_label("sector_preference", answers.get("sector_preference")),
+        }
+        return summary
+
+    def _get_label(self, question_id: str, option_id: Optional[str]) -> str:
+        if not option_id:
+            return ""
+        q = next((q for q in self.questions if q["question_id"] == question_id), None)
+        if not q:
+            return ""
+        opt = next((o for o in q["options"] if o["id"] == option_id), None)
+        return opt["label"] if opt else ""
+
+    def _check_domain_restriction(self, message: str) -> Optional[str]:
+        """금융/투자 관련 키워드가 없으면 차단 응답을 반환."""
+        msg = message.lower()
+        finance_keywords = [
+            "주식", "종목", "투자", "전략", "시장", "증시", "etf", "펀드",
+            "코스피", "코스닥", "나스닥", "s&p", "금리", "환율", "경제",
+            "금융", "기업", "주가", "백테스트", "팩터", "리스크", "수익률",
+            "재무", "배당", "차트", "매수", "매도", "포트폴리오", "퀀트",
+            "per", "pbr", "roe", "eps", "valuation", "밸류에이션", "뉴스",
+            "테마", "채권", "선물", "옵션", "원자재"
+        ]
+
+        # 전략 인물 이름(문서 내 등장) 허용
+        strategy_people = [
+            "워렌버핏", "워런 버핏", "버핏", "워렌 버핏",
+            "벤저민 그레이엄", "그레이엄",
+            "피터 린치", "린치",
+            "레이 달리오", "달리오",
+            "찰리 멍거", "멍거",
+            "조엘 그린블라트", "그린블라트",
+        ]
+
+        if any(k.lower() in msg for k in finance_keywords + strategy_people):
+            return None
+
+        return (
+            "이 서비스는 투자·금융 관련 질문에만 답변합니다. "
+            "주식, 시장, 전략, 뉴스 등 금융 주제로 질문해주세요."
+        )
 
     async def _classify_intent(self, message: str) -> str:
         """사용자 의도 분류. 테마 분석, 전략 설명 등을 감지합니다."""
@@ -514,11 +759,9 @@ class ChatHandler:
 
         # Get or create conversation memory for the session
         if session_id not in self.conversation_history:
-            with warnings.catch_warnings():
-                warnings.simplefilter('ignore')
-                self.conversation_history[session_id] = ConversationBufferWindowMemory(
-                    k=5, memory_key="chat_history", return_messages=True
-                )
+            self.conversation_history[session_id] = ConversationBufferWindowMemory(
+                k=5, memory_key="chat_history", return_messages=True
+            )
         memory = self.conversation_history[session_id]
 
         try:
@@ -540,10 +783,14 @@ class ChatHandler:
             }
 
 
-            response = await asyncio.to_thread(
-                self.agent_executor.invoke,
-                invoke_input
-            )
+            # LangChain 0.2+에서는 ainvoke 지원, 없으면 sync invoke를 쓰되 스레드로 오프로드
+            if hasattr(self.agent_executor, "ainvoke"):
+                response = await self.agent_executor.ainvoke(invoke_input)
+            else:
+                response = await asyncio.to_thread(
+                    self.agent_executor.invoke,
+                    invoke_input
+                )
 
             answer = response.get("output", "No response generated.")
             if isinstance(answer, list):
@@ -599,16 +846,6 @@ class ChatHandler:
 
         # 연속된 빈 줄 제거
         response = re.sub(r'\n\n+', '\n\n', response)
-
-        # CP949에서 인코딩 불가능한 문자 제거 (이모지, 특수 기호 등)
-        try:
-            response.encode('cp949')
-        except UnicodeEncodeError:
-            # 한글과 ASCII만 남기고 나머지는 제거
-            response = ''.join(
-                c if ord(c) < 128 or '\uac00' <= c <= '\ud7a3' or c in '\n\t '
-                else '' for c in response
-            )
 
         return response.strip()
 
@@ -715,351 +952,3 @@ class ChatHandler:
             )
 
         return base_response
-
-    # =============== UI Language 메서드 ===============
-
-    async def _handle_strategy_recommendation_flow(self, message: str, session_id: str, answer: Optional[dict]) -> dict:
-        """전략 추천 플로우 핸들러"""
-        # 세션 초기화
-        if session_id not in self.session_state:
-            self.session_state[session_id] = {
-                "in_questionnaire": True,
-                "current_question": 1,
-                "answers": {}
-            }
-
-        state = self.session_state[session_id]
-
-        # 질문 진행 중
-        if state["in_questionnaire"]:
-            # 유저 응답 저장
-            if answer:
-                state["answers"][answer["question_id"]] = answer["option_id"]
-                state["current_question"] += 1
-
-            # 5개 질문 모두 완료
-            if state["current_question"] > 5:
-                # 전략 추천 생성
-                user_tags = self._collect_user_tags(state["answers"])
-                ui_language = self._generate_strategy_recommendations(user_tags)
-
-                # 투자 프로필 저장
-                state["user_tags"] = user_tags
-                state["in_questionnaire"] = False
-
-                return {
-                    "answer": "분석 완료! 당신의 투자 성향에 맞는 3가지 전략을 추천합니다.",
-                    "intent": "strategy_recommendation_complete",
-                    "session_id": session_id,
-                    "ui_language": ui_language
-                }
-            else:
-                # 다음 질문 렌더링
-                ui_language = self._generate_questionnaire_response(session_id, state["current_question"])
-
-                question_message = f"질문 {state['current_question']}/5: {ui_language['question']['text']}"
-
-                return {
-                    "answer": question_message,
-                    "intent": "questionnaire_progress",
-                    "session_id": session_id,
-                    "ui_language": ui_language
-                }
-        else:
-            # 전략 선택 처리
-            if answer and "strategy_id" in answer:
-                strategy_id = answer["strategy_id"]
-                state["selected_strategy"] = strategy_id
-
-                # 백테스트 설정 UI 생성
-                ui_language = self._generate_backtest_configuration_response(strategy_id)
-
-                if ui_language:
-                    return {
-                        "answer": f"선택하신 전략으로 백테스트 설정을 진행하겠습니다.",
-                        "intent": "backtest_configuration",
-                        "session_id": session_id,
-                        "ui_language": ui_language
-                    }
-
-        return {
-            "answer": "요청을 처리할 수 없습니다.",
-            "intent": "error",
-            "session_id": session_id
-        }
-
-    def _collect_user_tags(self, answers: dict) -> List[str]:
-        """답변으로부터 유저 태그 수집"""
-        user_tags = []
-
-        if not QUESTIONS_DATA:
-            return user_tags
-
-        for question_id, option_id in answers.items():
-            if question_id in QUESTIONS_DATA:
-                question_data = QUESTIONS_DATA[question_id]
-                for option in question_data["options"]:
-                    if option["id"] == option_id:
-                        user_tags.extend(option["tags"])
-                        break
-
-        return user_tags
-
-    def _is_strategy_recommendation_request(self, message: str) -> bool:
-        """전략 추천 요청인지 판단 - 명시적인 추천 요청만 감지"""
-        if not QUESTIONS_DATA:
-            # UI Language 데이터 미로드 시 전략 추천 비활성화
-            print(f"DEBUG: QUESTIONS_DATA not loaded")
-            return False
-
-        msg_lower = message.lower().strip()
-
-        # 명시적인 추천 요청 패턴만 감지
-        explicit_patterns = [
-            "전략 추천",
-            "추천해",
-            "추천 받",
-            "추천 해",
-            "strategy recommend",
-            "recommend strategy"
-        ]
-
-        result = any(pattern in msg_lower for pattern in explicit_patterns)
-        print(f"DEBUG: _is_strategy_recommendation_request('{message}') = {result}")
-        return result
-
-    def _generate_questionnaire_response(self, session_id: str, question_num: int) -> dict:
-        """질문 UI Language 응답 생성"""
-        if not QUESTIONS_DATA:
-            return {}
-
-        # 질문 순서대로 가져오기
-        questions_list = sorted(QUESTIONS_DATA.values(), key=lambda x: x["order"])
-        if question_num > len(questions_list):
-            return {}
-
-        question_data = questions_list[question_num - 1]
-
-        # OptionCard 객체 생성
-        options = [
-            OptionCard(
-                id=opt["id"],
-                label=opt["label"],
-                description=opt["description"],
-                icon=opt["icon"],
-                tags=opt["tags"]
-            )
-            for opt in question_data["options"]
-        ]
-
-        # Question 객체 생성
-        question = Question(
-            question_id=question_data["question_id"],
-            text=question_data["text"],
-            options=options
-        )
-
-        # UILanguageQuestionnaire 생성
-        ui_language_type = UILanguageType.QUESTIONNAIRE_START if question_num == 1 else UILanguageType.QUESTIONNAIRE_PROGRESS
-        progress_percentage = (question_num / 5) * 100
-
-        ui_lang = UILanguageQuestionnaire(
-            type=ui_language_type,
-            total_questions=5,
-            current_question=question_num,
-            progress_percentage=int(progress_percentage) if question_num > 1 else None,
-            question=question
-        )
-
-        return ui_lang.to_dict()
-
-    def _calculate_strategy_match_score(self, user_tags: List[str], strategy_tags: List[str]) -> tuple:
-        """전략 매칭 점수 계산 (점수, 퍼센티지)"""
-        if not strategy_tags:
-            return 0.0, 0
-
-        matching_tags = set(user_tags) & set(strategy_tags)
-        match_score = len(matching_tags) / len(strategy_tags)
-        match_percentage = int(match_score * 100)
-
-        return match_score, match_percentage
-
-    def _generate_matching_reasons(self, user_tags: List[str], strategy_tags: List[str]) -> List[str]:
-        """매칭 이유 생성"""
-        reasons = []
-
-        if "long_term" in user_tags and "long_term" in strategy_tags:
-            reasons.append("장기 투자 성향 일치")
-        if "short_term" in user_tags and "short_term" in strategy_tags:
-            reasons.append("단기 매매 성향 일치")
-
-        for style in ["style_value", "style_growth", "style_momentum", "style_dividend"]:
-            if style in user_tags and style in strategy_tags:
-                style_name = {
-                    "style_value": "저평가주 선호",
-                    "style_growth": "성장주 선호",
-                    "style_momentum": "모멘텀 선호",
-                    "style_dividend": "배당주 선호"
-                }
-                reasons.append(style_name.get(style, ""))
-
-        for risk in ["risk_high", "risk_mid", "risk_low"]:
-            if risk in user_tags and risk in strategy_tags:
-                risk_name = {
-                    "risk_high": "높은 위험 감수 의향",
-                    "risk_mid": "중간 정도의 위험 감수",
-                    "risk_low": "저위험 선호"
-                }
-                reasons.append(risk_name.get(risk, ""))
-
-        return [r for r in reasons if r]
-
-    def _generate_strategy_recommendations(self, user_tags: List[str]) -> dict:
-        """전략 추천 응답 생성"""
-        if not STRATEGY_TAGS_MAPPING:
-            return {}
-
-        # 모든 전략의 점수 계산
-        strategy_scores = []
-
-        for strategy_id, strategy_data in STRATEGY_TAGS_MAPPING.items():
-            match_score, match_percentage = self._calculate_strategy_match_score(
-                user_tags, strategy_data["tags"]
-            )
-            matching_reasons = self._generate_matching_reasons(user_tags, strategy_data["tags"])
-
-            # ConditionPreview 생성
-            conditions_preview = [
-                ConditionPreview(
-                    condition=cond["condition"],
-                    condition_info=cond["condition_info"]
-                )
-                for cond in strategy_data.get("conditions", [])
-            ]
-
-            recommendation = StrategyRecommendation(
-                rank=0,  # 임시, 정렬 후 설정
-                strategy_id=strategy_id,
-                strategy_name=strategy_data["strategy_name"],
-                summary=strategy_data["summary"],
-                match_score=round(match_score, 2),
-                match_percentage=match_percentage,
-                match_reasons=matching_reasons,
-                tags=strategy_data["tags"],
-                conditions_preview=conditions_preview,
-                icon="",  # 전략에 맞게 설정
-                badge=None
-            )
-
-            strategy_scores.append((match_score, recommendation))
-
-        # 점수로 정렬 및 상위 3개 선택
-        strategy_scores.sort(key=lambda x: x[0], reverse=True)
-        top_3_strategies = strategy_scores[:3]
-
-        # rank 설정 및 badge 추가
-        recommendations = []
-        for rank, (_, recommendation) in enumerate(top_3_strategies, 1):
-            recommendation.rank = rank
-            if rank == 1:
-                recommendation.badge = "최고 추천"
-            recommendations.append(recommendation)
-
-        # UserProfileSummary 생성 (태그로부터)
-        profile = UserProfileSummary(
-            investment_period=self._get_tag_display_name("investment_period", user_tags),
-            investment_style=self._get_tag_display_name("investment_style", user_tags),
-            risk_tolerance=self._get_tag_display_name("risk_tolerance", user_tags),
-            dividend_preference=self._get_tag_display_name("dividend_preference", user_tags),
-            sector_preference=self._get_tag_display_name("sector_preference", user_tags)
-        )
-
-        ui_lang = UILanguageRecommendation(
-            type=UILanguageType.STRATEGY_RECOMMENDATION,
-            recommendations=recommendations,
-            user_profile_summary=profile
-        )
-
-        return ui_lang.to_dict()
-
-    def _get_tag_display_name(self, category: str, user_tags: List[str]) -> str:
-        """태그로부터 표시 이름 추출"""
-        if not QUESTIONS_DATA or category not in QUESTIONS_DATA:
-            return ""
-
-        question_data = QUESTIONS_DATA[category]
-        for option in question_data["options"]:
-            if option["id"] in user_tags:
-                return option["label"]
-        return ""
-
-    def _generate_backtest_configuration_response(self, strategy_id: str) -> dict:
-        """백테스트 설정 UI Language 응답 생성"""
-        if not STRATEGY_TAGS_MAPPING or strategy_id not in STRATEGY_TAGS_MAPPING:
-            return {}
-
-        strategy_data = STRATEGY_TAGS_MAPPING[strategy_id]
-
-        configuration_fields = [
-            ConfigurationField(
-                field_id="initial_capital",
-                label="초기 투자 금액",
-                type="number",
-                unit="원",
-                default_value=100000000,
-                min_value=10000000,
-                max_value=1000000000,
-                step=10000000,
-                required=True,
-                description="백테스트에 사용할 초기 투자 금액을 설정하세요."
-            ),
-            ConfigurationField(
-                field_id="start_date",
-                label="백테스트 시작일",
-                type="date",
-                default_value="2024-01-01",
-                min_value="2020-01-01",
-                max_value="2024-12-31",
-                required=True
-            ),
-            ConfigurationField(
-                field_id="end_date",
-                label="백테스트 종료일",
-                type="date",
-                default_value="2024-12-31",
-                min_value="2020-01-01",
-                max_value="2024-12-31",
-                required=True
-            ),
-            ConfigurationField(
-                field_id="rebalance_frequency",
-                label="리밸런싱 주기",
-                type="select",
-                default_value="MONTHLY",
-                options=[
-                    {"value": "DAILY", "label": "매일"},
-                    {"value": "WEEKLY", "label": "매주"},
-                    {"value": "MONTHLY", "label": "매월"}
-                ],
-                required=True
-            ),
-            ConfigurationField(
-                field_id="max_positions",
-                label="최대 보유 종목 수",
-                type="number",
-                unit="개",
-                default_value=20,
-                min_value=5,
-                max_value=50,
-                step=5,
-                required=True
-            )
-        ]
-
-        ui_lang = UILanguageBacktestConfiguration(
-            type=UILanguageType.BACKTEST_CONFIGURATION,
-            strategy={"strategy_id": strategy_id, "strategy_name": strategy_data["strategy_name"]},
-            configuration_fields=configuration_fields
-        )
-
-        return ui_lang.to_dict()

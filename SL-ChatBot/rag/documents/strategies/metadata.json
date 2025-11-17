@@ -88,8 +88,60 @@
       "difficulty": "advanced",
       "last_updated": "2025-11-14",
       "version": "1.0"
+    },
+
+    {
+      "id": "strategy_peter_lynch",
+      "name": "피터 린치 전략",
+      "type": "strategy",
+      "file": "peter_lynch_strategy.md",
+      "priority": "⭐⭐⭐⭐",
+      "keywords": ["GARP", "저평가성장", "PEG", "린치"],
+      "summary": "저평가된 성장기업(GARP)을 PEG 기반으로 선별하는 전략입니다.",
+      "primary_factors": ["PEG", "순이익 증가율", "ROE"],
+      "secondary_factors": ["부채비율", "재무건전성"],
+      "investment_horizon": "medium_term",
+      "risk_level": "medium",
+      "expected_return": "12~20% 연간",
+      "difficulty": "intermediate",
+      "last_updated": "2025-11-17",
+      "version": "1.0"
+    },
+    {
+      "id": "strategy_cathie_wood",
+      "name": "캐시 우드 혁신 전략",
+      "type": "strategy",
+      "file": "cathie_wood_strategy.md",
+      "priority": "⭐⭐⭐⭐",
+      "keywords": ["혁신성장", "AI", "전기차", "바이오", "고성장"],
+      "summary": "파괴적 혁신 테마 기업에 집중 투자하는 초고성장 전략입니다.",
+      "primary_factors": ["매출성장률", "R&D비중", "산업혁신성"],
+      "secondary_factors": ["변동성", "자금유입"],
+      "investment_horizon": "long_term",
+      "risk_level": "high",
+      "expected_return": "30~100% 연간",
+      "difficulty": "advanced",
+      "last_updated": "2025-11-17",
+      "version": "1.0"
+    },
+    {
+      "id": "strategy_william_oneil",
+      "name": "윌리엄 오닐 CAN SLIM 전략",
+      "type": "strategy",
+      "file": "william_oneil_strategy.md",
+      "priority": "⭐⭐⭐⭐",
+      "keywords": ["CANSLIM", "성장모멘텀", "신제품", "신고가"],
+      "summary": "성장, 모멘텀, 기관수급을 결합한 대표적인 성장모멘텀 전략입니다.",
+      "primary_factors": ["EPS성장률", "신고가", "업종리더십"],
+      "secondary_factors": ["거래량", "발행주식수"],
+      "investment_horizon": "medium_term",
+      "risk_level": "medium",
+      "expected_return": "15~30% 연간",
+      "difficulty": "advanced",
+      "last_updated": "2025-11-17",
+      "version": "1.0"
     }
   ],
-  "last_updated": "2025-11-14",
-  "version": "1.0"
+  "last_updated": "2025-11-17",
+  "version": "1.1"
 }

@@ -82,6 +82,11 @@ async def chat_message(request: ChatRequest):
             answer=request.answer
         )
 
+        print(f"DEBUG CHAT: User message: {request.message}")
+        print(f"DEBUG CHAT: Bot answer: {result.get('answer', 'N/A')[:200]}")
+        print(f"DEBUG CHAT: Intent: {result.get('intent', 'N/A')}")
+        print(f"DEBUG CHAT: Sources count: {len(result.get('sources', []))}")
+
         return ChatResponse(
             answer=result["answer"],
             intent=result.get("intent"),

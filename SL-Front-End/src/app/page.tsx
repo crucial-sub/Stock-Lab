@@ -15,17 +15,17 @@ export default async function HomePage() {
 
   // 로그인된 경우 사용자 정보 가져오기 (향후 구현)
   // TODO: 토큰으로 사용자 정보 API 호출
-  let nickname = "게스트";
+  let userName = "게스트";
 
   if (isLoggedIn) {
     try {
       // 임시: 쿠키에서 사용자 닉네임 가져오기
       const nicknameCookie = cookieStore.get("nickname")?.value;
-      nickname = nicknameCookie || "사용자";
+      userName = nicknameCookie || "사용자";
     } catch (error) {
       console.error("Failed to fetch user info:", error);
     }
   }
 
-  return <HomePageClient nickname={nickname} isLoggedIn={isLoggedIn} />;
+  return <HomePageClient userName={userName} isLoggedIn={isLoggedIn} />;
 }

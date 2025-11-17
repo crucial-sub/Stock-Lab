@@ -30,6 +30,7 @@ from app.schemas.strategy import (
     StrategyStatisticsSummary,
     BacktestDeleteRequest
 )
+from app.schemas.community import CloneStrategyData
 
 logger = logging.getLogger(__name__)
 
@@ -346,4 +347,84 @@ async def delete_backtest_sessions(
     except Exception as e:
         logger.error(f"백테스트 세션 삭제 실패: {e}", exc_info=True)
         await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/strategies/sessions/{session_id}/clone-data", response_model=CloneStrategyData)
+async def get_session_clone_data(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    백테스트 세션 복제 데이터 조회 (백테스트 창으로 전달)
+    - 본인이 소유한 세션만 조회 가능
+    - 매수/매도 조건, 기간, 종목 등 모든 설정을 포함
+    """
+    try:
+        user_id = current_user.user_id
+
+        # 세션, 전략, 트레이딩 룰 조회
+        query = (
+            select(SimulationSession, PortfolioStrategy, TradingRule)
+            .join(
+                PortfolioStrategy,
+                PortfolioStrategy.strategy_id == SimulationSession.strategy_id
+            )
+            .join(
+                TradingRule,
+                TradingRule.strategy_id == PortfolioStrategy.strategy_id
+            )
+            .where(
+                and_(
+                    SimulationSession.session_id == session_id,
+                    SimulationSession.user_id == user_id  # 본인 세션만
+                )
+            )
+        )
+
+        result = await db.execute(query)
+        row = result.one_or_none()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="백테스트 세션을 찾을 수 없거나 접근 권한이 없습니다")
+
+        session, strategy, trading_rule = row
+
+        # buy_condition과 sell_condition 파싱
+        buy_condition = trading_rule.buy_condition or {}
+        sell_condition = trading_rule.sell_condition or {}
+
+        return CloneStrategyData(
+            strategy_name=f"{strategy.strategy_name} (복제)",
+            is_day_or_month="daily",  # 기본값
+            initial_investment=int(session.initial_capital / 10000),  # 원 -> 만원
+            start_date=session.start_date.strftime("%Y%m%d"),
+            end_date=session.end_date.strftime("%Y%m%d"),
+            commission_rate=float(trading_rule.commission_rate * 100) if trading_rule.commission_rate else 0.015,
+            slippage=0.1,  # 기본값
+            buy_conditions=buy_condition.get('conditions', []),
+            buy_logic=buy_condition.get('logic', 'AND'),
+            priority_factor=buy_condition.get('priority_factor'),
+            priority_order=buy_condition.get('priority_order', 'desc'),
+            per_stock_ratio=buy_condition.get('per_stock_ratio', 5.0),
+            max_holdings=trading_rule.max_positions or 20,
+            max_buy_value=buy_condition.get('max_buy_value'),
+            max_daily_stock=buy_condition.get('max_daily_stock'),
+            buy_price_basis=buy_condition.get('buy_price_basis', 'CLOSE'),
+            buy_price_offset=buy_condition.get('buy_price_offset', 0.0),
+            target_and_loss=sell_condition.get('target_and_loss'),
+            hold_days=sell_condition.get('hold_days'),
+            condition_sell=sell_condition.get('condition_sell'),
+            trade_targets=buy_condition.get('trade_targets', {
+                "use_all_stocks": True,
+                "selected_themes": [],
+                "selected_stocks": []
+            })
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"백테스트 세션 복제 데이터 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

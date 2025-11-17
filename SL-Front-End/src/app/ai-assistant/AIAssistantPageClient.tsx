@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SecondarySidebar } from "@/components/ai-assistant/SecondarySidebar";
 import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { AISearchInput } from "@/components/home/ui";
@@ -11,6 +11,13 @@ import { ChatHistory } from "@/components/ai-assistant/ChatHistory";
 interface Message {
   role: "user" | "assistant";
   content: string;
+}
+
+interface ChatSession {
+  id: string;
+  title: string;
+  lastMessage: string;
+  timestamp: number;
 }
 
 /**
@@ -49,6 +56,33 @@ export function AIAssistantPageClient({
     selectedOptionId: string;
     question: any;
   }>>([]);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [currentMode, setCurrentMode] = useState<"initial" | "chat" | "questionnaire">("initial");
+
+  // 채팅 세션 저장 함수
+  const saveChatSession = (sessionId: string, firstMessage: string) => {
+    const newSession: ChatSession = {
+      id: sessionId,
+      title: firstMessage.length > 20 ? firstMessage.substring(0, 20) + "..." : firstMessage,
+      lastMessage: firstMessage,
+      timestamp: Date.now(),
+    };
+
+    setChatSessions((prev) => {
+      // 이미 존재하는 세션이면 업데이트하지 않음
+      if (prev.find(s => s.id === sessionId)) {
+        return prev;
+      }
+      // 최신 세션을 앞에 추가
+      return [newSession, ...prev];
+    });
+  };
+
+  // 채팅 세션 클릭 핸들러
+  const handleChatSessionClick = (chatId: string) => {
+    console.log("Chat session clicked:", chatId);
+    // TODO: 해당 세션 로드 로직 구현
+  };
 
   const handleLargeCardClick = async () => {
     // 전략 추천 플로우 시작
@@ -57,6 +91,7 @@ export function AIAssistantPageClient({
     // 사용자 메시지 추가
     const userMessage = "전략 추천받고 싶어요";
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setCurrentMode("questionnaire");
 
     setIsLoading(true);
     try {
@@ -75,6 +110,9 @@ export function AIAssistantPageClient({
         ]);
       }
 
+      // 채팅 세션 저장
+      saveChatSession(response.session_id, userMessage);
+
       console.log("Response:", response);
       console.log("UI Language:", response.ui_language);
     } catch (error) {
@@ -85,7 +123,7 @@ export function AIAssistantPageClient({
   };
 
   const handleStrategyClick = async (strategyId: string) => {
-    // 전략 카드 클릭 시 해당 전략에 대해 질문
+    // 전략 카드 클릭 시 해당 전략에 대해 질문 - 채팅 모드로 전환
     const strategyTitles: { [key: string]: string } = {
       "1": "윌리엄 오닐의 전략",
       "2": "워렌 버핏의 전략",
@@ -98,8 +136,9 @@ export function AIAssistantPageClient({
 
     console.log(`Strategy ${strategyId} clicked:`, userMessage);
 
-    // 사용자 메시지 추가
+    // 사용자 메시지 추가 및 채팅 모드로 전환
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setCurrentMode("chat");
 
     setIsLoading(true);
     try {
@@ -109,14 +148,15 @@ export function AIAssistantPageClient({
       });
 
       setSessionId(response.session_id);
-      // 전략 카드 클릭 시에도 설문/추천 UI를 그대로 노출한다.
-      setChatResponse(response);
 
       // AI 응답 메시지 추가
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: response.answer },
       ]);
+
+      // 채팅 세션 저장
+      saveChatSession(response.session_id, userMessage);
 
       console.log("Response:", response);
     } catch (error) {
@@ -126,12 +166,15 @@ export function AIAssistantPageClient({
     }
   };
 
-  const handleAISubmit = async (value: string) => {
+  const handleAISubmit = useCallback(async (value: string) => {
     // AI 요청 처리
     console.log("AI request:", value);
 
     // 사용자 메시지 추가
     setMessages((prev) => [...prev, { role: "user", content: value }]);
+
+    // 첫 입력이면 채팅 모드로 전환
+    setCurrentMode((prev) => prev === "initial" ? "chat" : prev);
 
     setIsLoading(true);
     try {
@@ -141,13 +184,23 @@ export function AIAssistantPageClient({
       });
 
       setSessionId(response.session_id);
-      setChatResponse(response);
+
+      // ui_language가 있으면 questionnaire 모드로
+      if (response.ui_language) {
+        setChatResponse(response);
+        setCurrentMode("questionnaire");
+      }
 
       // AI 응답 메시지 추가
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: response.answer },
       ]);
+
+      // 채팅 세션 저장
+      if (!sessionId) {
+        saveChatSession(response.session_id, value);
+      }
 
       console.log("Response:", response);
       console.log("UI Language:", response.ui_language);
@@ -156,7 +209,37 @@ export function AIAssistantPageClient({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [sessionId]);
+
+  // localStorage에서 채팅 세션 불러오기
+  useEffect(() => {
+    const savedSessions = localStorage.getItem("ai-chat-sessions");
+    if (savedSessions) {
+      try {
+        setChatSessions(JSON.parse(savedSessions));
+      } catch (error) {
+        console.error("Failed to load chat sessions:", error);
+      }
+    }
+  }, []);
+
+  // 홈 페이지에서 전달된 초기 메시지 확인
+  useEffect(() => {
+    const initialMessage = sessionStorage.getItem("ai-initial-message");
+    if (initialMessage) {
+      // 메시지를 읽은 후 삭제
+      sessionStorage.removeItem("ai-initial-message");
+      // 자동으로 메시지 전송
+      handleAISubmit(initialMessage);
+    }
+  }, [handleAISubmit]);
+
+  // chatSessions 변경 시 localStorage에 저장
+  useEffect(() => {
+    if (chatSessions.length > 0) {
+      localStorage.setItem("ai-chat-sessions", JSON.stringify(chatSessions));
+    }
+  }, [chatSessions]);
 
   const handleAnswerSelect = async (questionId: string, optionId: string, answerText: string) => {
     // 설문조사 답변 전송
@@ -200,12 +283,18 @@ export function AIAssistantPageClient({
   return (
     <div className="flex h-full">
       {/* 2차 사이드바 */}
-      <SecondarySidebar />
+      <SecondarySidebar
+        chatHistory={chatSessions.map(session => ({
+          id: session.id,
+          title: session.title,
+        }))}
+        onChatClick={handleChatSessionClick}
+      />
 
       {/* 메인 콘텐츠 */}
       <main className="flex-1 flex flex-col px-10 pt-[120px] pb-20 overflow-auto">
-        {/* 설문조사 또는 전략 추천 UI */}
-        {chatResponse?.ui_language ? (
+        {/* 설문조사 모드 */}
+        {currentMode === "questionnaire" && chatResponse?.ui_language ? (
           <ChatInterface
             chatResponse={chatResponse}
             isLoading={isLoading}
@@ -213,16 +302,16 @@ export function AIAssistantPageClient({
             messages={messages}
             questionHistory={questionHistory}
           />
-        ) : messages.length > 0 ? (
-          /* 채팅 히스토리 표시 */
-          <div className="flex-1 flex flex-col items-center">
-            <h1 className="text-[32px] font-bold text-black text-center mb-[40px]">
-              사용자님, 오늘도 수익을 내볼까요?
-            </h1>
+        ) : currentMode === "chat" ? (
+          /* 채팅 모드 */
+          <div className="flex-1 flex flex-col w-full max-w-[1000px] mx-auto">
+            {/* 스크롤 가능한 메시지 영역 */}
+            <div className="flex-1 overflow-y-auto mb-4">
+              <ChatHistory messages={messages} />
+            </div>
 
-            <ChatHistory messages={messages} />
-
-            <div className="sticky bottom-0 w-full max-w-[1000px] mt-8 bg-white pt-4">
+            {/* 하단 고정 입력창 */}
+            <div className="sticky bottom-0 w-full bg-white pt-4 border-t">
               <AISearchInput
                 placeholder="만들고 싶은 전략을 AI에게 요청하세요!"
                 onSubmit={handleAISubmit}

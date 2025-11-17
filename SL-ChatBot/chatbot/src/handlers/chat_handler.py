@@ -458,7 +458,7 @@ class ChatHandler:
                 self.agent_executor = AgentExecutor(
                     agent=agent,
                     tools=tools,
-                    verbose=True,
+                    verbose=False,  # Throttling 방지를 위해 verbose 비활성화
                     return_intermediate_steps=True,
                     handle_parsing_errors=True
                 )

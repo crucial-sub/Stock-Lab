@@ -81,7 +81,7 @@ def get_tools(news_retriever=None, factor_sync=None) -> List:
         if not factor_sync:
             return {"error": "Factor sync not available", "success": False}
         try:
-            factor_info = await factor_sync.get_factor_info(factor_name)
+            factor_info = await factor_sync.get_factor_by_id(factor_name)
             if factor_info:
                 return {"success": True, "factor": factor_name, "info": factor_info}
             else:

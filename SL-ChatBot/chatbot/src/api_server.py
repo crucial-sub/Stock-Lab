@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import uvicorn
 
-from handler import ChatHandler
+from handlers.chat_handler import ChatHandler
 
 # Pydantic 모델
 class ChatRequest(BaseModel):

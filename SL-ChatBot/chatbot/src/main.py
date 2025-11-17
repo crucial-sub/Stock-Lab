@@ -1,7 +1,7 @@
 """Chatbot Main Entry Point."""
 import asyncio
 from typing import Optional
-from handler import ChatHandler
+from handlers.chat_handler import ChatHandler
 
 
 class QuantAdvisorBot:
@@ -10,17 +10,18 @@ class QuantAdvisorBot:
     def __init__(self, config_path: str = "config.yaml"):
         self.handler = ChatHandler(config_path)
 
-    async def chat(self, message: str, session_id: Optional[str] = None) -> dict:
+    async def chat(self, message: str, session_id: Optional[str] = None, answer: Optional[dict] = None) -> dict:
         """Process user message and return response.
 
         Args:
             message: User input message
             session_id: Optional session ID for conversation history
+            answer: Optional questionnaire answer
 
         Returns:
             Response dictionary with answer and metadata
         """
-        return await self.handler.handle(message, session_id)
+        return await self.handler.handle(message, session_id, answer)
 
     async def recommend_strategy(self, user_profile: dict) -> dict:
         """Recommend investment strategy based on user profile.

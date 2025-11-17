@@ -270,7 +270,7 @@ export function MarketPriceContent() {
               <div className="relative w-full max-w-[260px]">
                 <input
                   type="search"
-                  placeholder="전략 이름으로 검색하기"
+                  placeholder="종목명/종목코드로 검색하기"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full h-9 rounded-lg bg-surface border-[0.5px] border-surface py-[0.5rem] px-[0.813rem] text-[0.75rem] text-gray-600 placeholder:text-gray-600 focus:border-brand-purple focus:outline-none"

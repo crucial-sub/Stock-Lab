@@ -1,0 +1,108 @@
+{
+  "doc_id": "backtest_metrics",
+  "title": "백테스트 지표 해석 가이드",
+  "doc_type": "metrics",
+  "category": "backtest_metrics",
+  "difficulty": "all_levels",
+  "version": "1.0.0",
+  "updated_at": "2025-11-17",
+  "tags": [
+    "백테스트",
+    "성과지표",
+    "리스크지표",
+    "퀀트",
+    "투자지표",
+    "전략분석"
+  ],
+
+  "sections": {
+    "CAGR": {
+      "aliases": ["연평균 복리 수익률", "Compound Annual Growth Rate"],
+      "category": "performance",
+      "level": "beginner",
+      "importance": "⭐⭐⭐⭐⭐"
+    },
+    "Total Return": {
+      "aliases": ["총수익률", "누적수익률"],
+      "category": "performance",
+      "level": "beginner",
+      "importance": "⭐⭐⭐⭐"
+    },
+
+    "MDD": {
+      "aliases": ["최대 낙폭", "Maximum Drawdown"],
+      "category": "risk",
+      "level": "beginner",
+      "importance": "⭐⭐⭐⭐⭐"
+    },
+    "Volatility": {
+      "aliases": ["변동성", "표준편차"],
+      "category": "risk",
+      "level": "beginner",
+      "importance": "⭐⭐⭐⭐"
+    },
+    "Sharpe Ratio": {
+      "aliases": ["샤프 지수"],
+      "category": "risk_adjusted",
+      "level": "intermediate",
+      "importance": "⭐⭐⭐⭐⭐"
+    },
+    "Sortino Ratio": {
+      "aliases": ["소티노 비율"],
+      "category": "risk_adjusted",
+      "level": "intermediate",
+      "importance": "⭐⭐⭐⭐"
+    },
+    "Calmar Ratio": {
+      "aliases": ["칼마 비율"],
+      "category": "risk_adjusted",
+      "level": "advanced",
+      "importance": "⭐⭐⭐⭐"
+    },
+
+    "Beta": {
+      "aliases": ["베타"],
+      "category": "market",
+      "level": "intermediate",
+      "importance": "⭐⭐⭐"
+    },
+    "Alpha": {
+      "aliases": ["알파"],
+      "category": "market",
+      "level": "intermediate",
+      "importance": "⭐⭐⭐⭐"
+    },
+    "Tracking Error": {
+      "aliases": ["추적오차"],
+      "category": "market",
+      "level": "intermediate",
+      "importance": "⭐⭐⭐"
+    },
+
+    "Win Rate": {
+      "aliases": ["승률"],
+      "category": "trading",
+      "level": "beginner",
+      "importance": "⭐⭐⭐"
+    },
+    "Profit Factor": {
+      "aliases": ["손익비율", "PF"],
+      "category": "trading",
+      "level": "intermediate",
+      "importance": "⭐⭐⭐⭐"
+    },
+    "Expectancy": {
+      "aliases": ["기대값"],
+      "category": "trading",
+      "level": "advanced",
+      "importance": "⭐⭐⭐⭐"
+    },
+
+    "Drawdown Duration": {
+      "aliases": ["낙폭 지속 기간"],
+      "category": "risk",
+      "level": "advanced",
+      "importance": "⭐⭐⭐⭐"
+    }
+  }
+}

@@ -669,7 +669,7 @@ class ChatHandler:
             "금융", "기업", "주가", "백테스트", "팩터", "리스크", "수익률",
             "재무", "배당", "차트", "매수", "매도", "포트폴리오", "퀀트",
             "per", "pbr", "roe", "eps", "valuation", "밸류에이션", "뉴스",
-            "테마", "채권", "선물", "옵션", "원자재"
+            "테마", "채권", "선물", "옵션", "원자재", "mdd", "max drawdown"
         ]
 
         # 전략 인물 이름(문서 내 등장) 허용
@@ -742,8 +742,8 @@ class ChatHandler:
             except Exception as e:
                 print(f"Backend context retrieval error: {e}")
 
-        # 2. RAG 지식 베이스 검색 (설명 의도일 때만)
-        if self.rag_retriever and intent == "explain":
+        # 2. RAG 지식 베이스 검색 (항상 활성화 - MDD, CAGR 등 용어 질문 처리)
+        if self.rag_retriever:
             try:
                 rag_context = await self.rag_retriever.get_context(
                     message,
@@ -751,6 +751,7 @@ class ChatHandler:
                 )
                 if rag_context:
                     context_parts.append(f"\n[지식 베이스]\n{rag_context}")
+                    print(f"DEBUG: RAG context retrieved ({len(rag_context)} chars)")
             except Exception as e:
                 print(f"RAG retrieval error: {e}")
 
@@ -798,6 +799,9 @@ class ChatHandler:
             # Prepare invoke input
             # Note: agent_scratchpad is required for both tool-calling and ReAct agents
             # Pass as empty string for initial invocation
+            print(f"DEBUG INVOKE: Message='{message}', Context length={len(context)} chars")
+            if context:
+                print(f"DEBUG CONTEXT: {context[:500]}...")
             invoke_input = {
                 "input": message,
                 "context": context,
@@ -840,14 +844,26 @@ class ChatHandler:
             # Extract backtest conditions from intermediate steps if build_backtest_conditions was called
             backtest_conditions = None
             intermediate_steps = response.get("intermediate_steps", [])
-            for step in intermediate_steps:
+            print(f"DEBUG: intermediate_steps count: {len(intermediate_steps)}")
+
+            for i, step in enumerate(intermediate_steps):
+                print(f"DEBUG: Step {i}: type={type(step)}, len={len(step) if hasattr(step, '__len__') else 'N/A'}")
                 if len(step) >= 2:
                     action, result = step[0], step[1]
+                    print(f"DEBUG: Action type: {type(action)}, has tool attr: {hasattr(action, 'tool')}")
+                    if hasattr(action, 'tool'):
+                        print(f"DEBUG: Action.tool = '{action.tool}'")
+                    print(f"DEBUG: Result type: {type(result)}, content: {result}")
+
                     # Check if this was a build_backtest_conditions tool call
                     if hasattr(action, 'tool') and action.tool == 'build_backtest_conditions':
+                        print(f"DEBUG: Found build_backtest_conditions tool!")
                         if isinstance(result, dict) and result.get("success"):
                             backtest_conditions = result.get("conditions", [])
+                            print(f"DEBUG: Extracted conditions: {backtest_conditions}")
                             break
+                        else:
+                            print(f"DEBUG: Result not successful or not dict: {result}")
 
             result_dict = {
                 "answer": answer,
@@ -860,9 +876,17 @@ class ChatHandler:
 
             return result_dict
         except Exception as e:
+            error_str = str(e)
             print(f"LangChain Agent execution error: {e}")
+
+            # Throttling 에러인 경우 친절한 메시지
+            if "ThrottlingException" in error_str or "Too many requests" in error_str:
+                user_message = "🚦 요청이 많아 일시적으로 응답이 지연되고 있습니다.\n\n잠시 후(2-3분) 다시 시도해주세요."
+            else:
+                user_message = "응답 생성 중 오류가 발생했습니다.\n\n다시 시도해주세요."
+
             return {
-                "answer": f"An error occurred while processing your request: {e}",
+                "answer": user_message,
                 "intent": intent
             }
 

@@ -114,6 +114,7 @@ services:
     container_name: sl_chatbot_dev
     env_file:
       - .env
+      - ./SL-ChatBot/.env
     environment:
       PYTHONUNBUFFERED: 1
       DEBUG: "true"
@@ -122,6 +123,8 @@ services:
     volumes:
       # Mount source code for hot-reload
       - ./SL-ChatBot/chatbot/src:/app/src
+      - ./SL-ChatBot/api:/app/api
+      - ./SL-ChatBot/chatbot/prompts:/app/prompts
       - ./SL-ChatBot/chatbot/requirements.txt:/app/requirements.txt
       - ./SL-ChatBot/chatbot/config.yaml:/app/config.yaml
     networks:

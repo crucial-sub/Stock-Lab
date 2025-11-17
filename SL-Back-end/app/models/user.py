@@ -15,6 +15,7 @@ class User(Base):
 
     user_id = Column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False)
+    nickname = Column(String(50), unique=True, index=True, nullable=True, comment="사용자 닉네임 (커뮤니티용)")
     email = Column(String(255), unique=True, index=True, nullable=False)
     phone_number = Column(String(20), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
@@ -32,6 +33,9 @@ class User(Base):
 
     # Relationships
     simulation_sessions = relationship("SimulationSession", back_populates="user", lazy="selectin")
+    community_posts = relationship("CommunityPost", back_populates="user")
+    community_comments = relationship("CommunityComment", back_populates="user")
+    community_likes = relationship("CommunityLike", back_populates="user")
     auto_trading_strategies = relationship("AutoTradingStrategy", back_populates="user", lazy="selectin")
 
     def __repr__(self):

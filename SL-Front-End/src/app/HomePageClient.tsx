@@ -1,9 +1,20 @@
 "use client";
 
 import {
+  GuestCommunityPreviewSection,
+  GuestMarketInsightSection,
+  GuestPortfolioSection,
+} from "@/components/home/guest";
+import {
   RecommendedQuestionsSection,
   WelcomeSection,
 } from "@/components/home/sections";
+import type {
+  GuestMarketIndex,
+  GuestMarketNews,
+  GuestMarketStock,
+  GuestPortfolioCardData,
+} from "@/types";
 
 /**
  * 홈 페이지 클라이언트 컴포넌트
@@ -13,13 +24,90 @@ import {
  */
 
 interface HomePageClientProps {
-  /** 사용자 이름 (서버에서 전달) */
   userName: string;
-  /** 로그인 여부 (서버에서 전달) */
   isLoggedIn: boolean;
 }
 
-export function HomePageClient({ userName }: HomePageClientProps) {
+const guestPortfolioMock: GuestPortfolioCardData[] = [
+  {
+    rank: 1,
+    name: "Portfolio Name",
+    organization: "FMJS",
+    returnRate: 1323,
+    highlight: "gold",
+  },
+  {
+    rank: 2,
+    name: "Portfolio Name",
+    organization: "FMJS",
+    returnRate: 1323,
+    highlight: "silver",
+  },
+  {
+    rank: 3,
+    name: "Portfolio Name",
+    organization: "FMJS",
+    returnRate: 1323,
+    highlight: "bronze",
+  },
+  {
+    rank: 4,
+    name: "Portfolio Name",
+    organization: "FMJS",
+    returnRate: 1323,
+  },
+  {
+    rank: 5,
+    name: "Portfolio Name",
+    organization: "FMJS",
+    returnRate: 1323,
+  },
+];
+
+const guestMarketIndexes: GuestMarketIndex[] = [
+  { label: "KOSPI", value: "4,089.25", change: "+22.4%" },
+  { label: "KOSDAQ", value: "906.24", change: "+22.4%" },
+];
+
+const guestMarketStocks: GuestMarketStock[] = Array.from({ length: 3 }).map(
+  (_, index) => ({
+    id: `stock-${index}`,
+    name: "크래프톤",
+    tag: "IT",
+    change: "+22.4%",
+    price: "226,000원",
+    volume: "113억",
+  }),
+);
+
+const guestMarketNews: GuestMarketNews[] = Array.from({ length: 5 }).map(
+  (_, index) => ({
+    id: `news-${index}`,
+    title: "크래프톤 정글의 SW-AI랩 신규 런칭, 차세대 AI 교육...",
+    badge: "크래프톤",
+  }),
+);
+
+export function HomePageClient({
+  userName,
+  isLoggedIn,
+}: HomePageClientProps) {
+  if (!isLoggedIn) {
+    return (
+      <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
+        <div className="flex w-full max-w-[1000px] flex-col gap-10">
+          <GuestPortfolioSection portfolios={guestPortfolioMock} />
+          <GuestMarketInsightSection
+            indexes={guestMarketIndexes}
+            stocks={guestMarketStocks}
+            news={guestMarketNews}
+          />
+          <GuestCommunityPreviewSection />
+        </div>
+      </div>
+    );
+  }
+
   const handleAISubmit = (value: string) => {
     // TODO: AI 전략 요청 처리 로직 구현
     console.log("AI request:", value);
@@ -32,11 +120,10 @@ export function HomePageClient({ userName }: HomePageClientProps) {
 
   return (
     <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
-      {/* 환영 섹션 */}
-      <WelcomeSection userName={userName} onSubmit={handleAISubmit} />
-
-      {/* 추천 질문 섹션 */}
-      <RecommendedQuestionsSection onQuestionClick={handleQuestionClick} />
+      <div className="flex w-full max-w-[1000px] flex-col items-center">
+        <WelcomeSection userName={userName} onSubmit={handleAISubmit} />
+        <RecommendedQuestionsSection onQuestionClick={handleQuestionClick} />
+      </div>
     </div>
   );
 }

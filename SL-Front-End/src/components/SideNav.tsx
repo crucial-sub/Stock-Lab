@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authApi } from "@/lib/api/auth";
+import { Icon } from "@/components/common";
 
 /**
  * 전역 사이드바 네비게이션
@@ -84,6 +85,10 @@ interface SideNavProps {
   serverHasToken: boolean;
 }
 
+const SIDEBAR_ICON_COLORS = {
+  active: "#FFFFFF",
+  inactive: "#C8C8C8",
+};
 export function SideNav({ serverHasToken }: SideNavProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(serverHasToken);
@@ -197,21 +202,25 @@ export function SideNav({ serverHasToken }: SideNavProps) {
                   aria-current={active ? "page" : undefined}
                 >
                   <div className="relative w-5 h-5 shrink-0">
-                    <Image
+                    <Icon
                       src={item.icon}
-                      alt=""
-                      fill
-                      className="object-contain"
-                      aria-hidden="true"
+                      color={
+                        active
+                          ? SIDEBAR_ICON_COLORS.active
+                          : SIDEBAR_ICON_COLORS.inactive
+                      }
+                      size={20}
                     />
                   </div>
                   <span
                     className={[
-                      "text-xl font-semibold whitespace-nowrap",
-                      "transition-all duration-300 ease-in-out",
+                      "text-xl whitespace-nowrap transition-all duration-300 ease-in-out",
                       isOpen
                         ? "opacity-100 w-auto"
                         : "opacity-0 w-0 overflow-hidden",
+                      active
+                        ? "font-semibold text-sidebar-item-active"
+                        : "font-normal text-sidebar-item",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -271,21 +280,25 @@ export function SideNav({ serverHasToken }: SideNavProps) {
                   aria-current={active ? "page" : undefined}
                 >
                   <div className="relative w-5 h-5 shrink-0">
-                    <Image
+                    <Icon
                       src={item.icon}
-                      alt=""
-                      fill
-                      className="object-contain"
-                      aria-hidden="true"
+                      color={
+                        active
+                          ? SIDEBAR_ICON_COLORS.active
+                          : SIDEBAR_ICON_COLORS.inactive
+                      }
+                      size={20}
                     />
                   </div>
                   <span
                     className={[
-                      "text-xl font-semibold whitespace-nowrap",
-                      "transition-all duration-300 ease-in-out",
+                      "text-xl whitespace-nowrap transition-all duration-300 ease-in-out",
                       isOpen
                         ? "opacity-100 w-auto"
                         : "opacity-0 w-0 overflow-hidden",
+                      active
+                        ? "font-semibold text-sidebar-item-active"
+                        : "font-normal text-sidebar-item",
                     ]
                       .filter(Boolean)
                       .join(" ")}

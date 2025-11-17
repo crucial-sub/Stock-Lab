@@ -39,6 +39,7 @@ async def get_market_quotes(
     page: int = Query(1, ge=1, description="페이지 번호"),
     page_size: int = Query(50, ge=1, le=100, description="페이지 크기"),
     user_id: Optional[UUID] = Query(None, description="사용자 ID (관심종목 판단용)"),
+    search: Optional[str] = Query(None, description="검색어 (종목명 또는 종목코드)"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -50,6 +51,7 @@ async def get_market_quotes(
         page: 페이지 번호 (1부터 시작)
         page_size: 페이지 크기 (1-100)
         user_id: 사용자 ID (선택, 관심종목 판단용)
+        search: 검색어 (종목명 또는 종목코드, 부분 일치)
         db: 데이터베이스 세션
 
     Returns:
@@ -57,6 +59,8 @@ async def get_market_quotes(
 
     Example:
         GET /api/v1/market/quotes?sort_by=volume&sort_order=desc&page=1&page_size=50&user_id=...
+        GET /api/v1/market/quotes?search=삼성전자
+        GET /api/v1/market/quotes?search=005930
     """
     try:
         service = MarketQuoteService(db)
@@ -65,7 +69,8 @@ async def get_market_quotes(
             sort_order=sort_order,
             page=page,
             page_size=page_size,
-            user_id=user_id
+            user_id=user_id,
+            search=search
         )
 
         return MarketQuoteListResponse(

@@ -77,7 +77,21 @@ class AutoTradingService:
             if active_strategy:
                 raise ValueError("이미 활성화된 자동매매 전략이 있습니다. 먼저 비활성화 해주세요.")
 
-            # 3. 새로운 자동매매 전략 생성
+            # 3. 백테스트 전략의 매매 조건 조회
+            trading_rule_query = select(TradingRule).where(
+                TradingRule.strategy_id == session.strategy_id
+            )
+            trading_rule_result = await db.execute(trading_rule_query)
+            trading_rule = trading_rule_result.scalar_one_or_none()
+
+            if not trading_rule:
+                raise ValueError("백테스트 전략의 매매 조건을 찾을 수 없습니다.")
+
+            # 백테스트 조건에서 데이터 추출
+            buy_condition = trading_rule.buy_condition or {}
+            sell_condition = trading_rule.sell_condition or {}
+
+            # 4. 새로운 자동매매 전략 생성 (백테스트 조건 전부 복사)
             strategy = AutoTradingStrategy(
                 user_id=user_id,
                 simulation_session_id=session_id,
@@ -85,7 +99,38 @@ class AutoTradingService:
                 initial_capital=initial_capital,
                 current_capital=initial_capital,
                 cash_balance=initial_capital,
-                activated_at=datetime.now()
+                activated_at=datetime.now(),
+                # 기본 설정
+                per_stock_ratio=Decimal(str(buy_condition.get('per_stock_ratio', 5.0))),
+                max_positions=buy_condition.get('max_holdings', 20),
+                rebalance_frequency=buy_condition.get('rebalance_frequency', 'DAILY').upper(),
+                # 매수 조건
+                buy_conditions=buy_condition.get('conditions'),
+                buy_logic=buy_condition.get('logic'),
+                priority_factor=buy_condition.get('priority_factor'),
+                priority_order=buy_condition.get('priority_order', 'desc'),
+                max_buy_value=Decimal(str(buy_condition['max_buy_value'])) if buy_condition.get('max_buy_value') else None,
+                max_daily_stock=buy_condition.get('max_daily_stock'),
+                buy_price_basis=buy_condition.get('buy_price_basis', '전일 종가'),
+                buy_price_offset=Decimal(str(buy_condition.get('buy_price_offset', 0))),
+                # 매도 조건 - 목표가/손절가
+                target_gain=Decimal(str(sell_condition['target_and_loss']['target_gain'])) if sell_condition.get('target_and_loss') and sell_condition['target_and_loss'].get('target_gain') else None,
+                stop_loss=Decimal(str(sell_condition['target_and_loss']['stop_loss'])) if sell_condition.get('target_and_loss') and sell_condition['target_and_loss'].get('stop_loss') else None,
+                # 매도 조건 - 보유 기간
+                min_hold_days=sell_condition['hold_days']['min_hold_days'] if sell_condition.get('hold_days') else None,
+                max_hold_days=sell_condition['hold_days']['max_hold_days'] if sell_condition.get('hold_days') else None,
+                hold_days_sell_price_basis=sell_condition['hold_days'].get('sell_price_basis') if sell_condition.get('hold_days') else None,
+                hold_days_sell_price_offset=Decimal(str(sell_condition['hold_days']['sell_price_offset'])) if sell_condition.get('hold_days') and sell_condition['hold_days'].get('sell_price_offset') is not None else None,
+                # 매도 조건 - 조건 매도
+                sell_conditions=sell_condition['condition_sell'].get('sell_conditions') if sell_condition.get('condition_sell') else None,
+                sell_logic=sell_condition['condition_sell'].get('sell_logic') if sell_condition.get('condition_sell') else None,
+                condition_sell_price_basis=sell_condition['condition_sell'].get('sell_price_basis') if sell_condition.get('condition_sell') else None,
+                condition_sell_price_offset=Decimal(str(sell_condition['condition_sell']['sell_price_offset'])) if sell_condition.get('condition_sell') and sell_condition['condition_sell'].get('sell_price_offset') is not None else None,
+                # 수수료/슬리피지
+                commission_rate=Decimal(str(trading_rule.commission_rate)) if trading_rule.commission_rate else Decimal("0.00015"),
+                slippage=Decimal("0.001"),
+                # 매매 대상
+                trade_targets=buy_condition.get('trade_targets')
             )
 
             db.add(strategy)

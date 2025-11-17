@@ -92,6 +92,198 @@ src/
 
 ---
 
+## 🔀 서버/클라이언트 컴포넌트 선택 가이드
+
+### 기본 원칙
+
+**Next.js 16 App Router에서는 기본적으로 모든 컴포넌트가 서버 컴포넌트입니다.**
+`"use client"` 지시어는 **반드시 필요한 경우에만** 사용하세요.
+
+### 서버 컴포넌트 (기본값, "use client" 없음)
+
+**언제 사용하는가**:
+- ✅ 데이터 fetching이 필요한 경우
+- ✅ 백엔드 리소스에 직접 접근 (데이터베이스, 파일 시스템)
+- ✅ 민감한 정보 보관 (API keys, access tokens)
+- ✅ 큰 의존성을 서버에만 유지하여 클라이언트 번들 크기 감소
+- ✅ SEO가 중요한 콘텐츠
+- ✅ 초기 페이지 로드 성능이 중요한 경우
+
+**예시**:
+```typescript
+// app/page.tsx (서버 컴포넌트)
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+
+export default async function HomePage() {
+  // 서버에서 세션 확인
+  const session = await getServerSession();
+
+  // 로그인 안 되어 있으면 리다이렉트
+  if (!session) {
+    redirect('/login');
+  }
+
+  // 서버에서 데이터 fetch
+  const userData = await fetch('api/user').then(r => r.json());
+
+  // 클라이언트 컴포넌트에 props로 전달
+  return <HomePageClient userName={session.user.name} data={userData} />;
+}
+```
+
+**장점**:
+- 서버에서 데이터를 미리 가져와 HTML에 포함 → 빠른 FCP (First Contentful Paint)
+- 클라이언트 JavaScript 번들 크기 감소
+- 보안에 민감한 로직을 서버에만 유지
+
+### 클라이언트 컴포넌트 ("use client" 필요)
+
+**언제 사용하는가**:
+- ✅ 이벤트 리스너 사용 (`onClick`, `onChange`, `onSubmit` 등)
+- ✅ React Hooks 사용 (`useState`, `useEffect`, `useReducer` 등)
+- ✅ 브라우저 전용 API 사용 (`window`, `localStorage`, `navigator` 등)
+- ✅ 클래스형 컴포넌트 사용
+- ✅ 인터랙티브한 UI 구현
+
+**예시**:
+```typescript
+// components/home/HomePageClient.tsx (클라이언트 컴포넌트)
+"use client";
+
+import { useState } from "react";
+import { WelcomeSection, RecommendedQuestionsSection } from "./sections";
+
+interface HomePageClientProps {
+  userName: string;
+  data: UserData;
+}
+
+export function HomePageClient({ userName, data }: HomePageClientProps) {
+  // useState 사용 → 클라이언트 컴포넌트 필요
+  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
+
+  // 이벤트 핸들러 → 클라이언트 컴포넌트 필요
+  const handleAISubmit = (value: string) => {
+    // API 호출 등
+  };
+
+  return (
+    <div>
+      <WelcomeSection userName={userName} onSubmit={handleAISubmit} />
+      <RecommendedQuestionsSection onQuestionClick={setSelectedQuestion} />
+    </div>
+  );
+}
+```
+
+### 혼합 패턴 (권장)
+
+**서버 컴포넌트를 최상위에, 클라이언트 컴포넌트를 말단에 배치**:
+
+```typescript
+// app/page.tsx (서버 컴포넌트)
+export default async function Page() {
+  const data = await fetchData(); // 서버에서 데이터 fetch
+
+  return (
+    <div>
+      <StaticHeader /> {/* 서버 컴포넌트 */}
+      <InteractiveContent data={data} /> {/* 클라이언트 컴포넌트 */}
+      <StaticFooter /> {/* 서버 컴포넌트 */}
+    </div>
+  );
+}
+
+// components/InteractiveContent.tsx (클라이언트 컴포넌트)
+"use client";
+
+export function InteractiveContent({ data }: Props) {
+  const [state, setState] = useState(data);
+  // ...
+}
+```
+
+### 실전 의사결정 트리
+
+```
+컴포넌트를 만들어야 함
+    ↓
+[Q1] 이벤트 핸들러나 React Hooks가 필요한가?
+    ├─ YES → 클라이언트 컴포넌트 ("use client")
+    └─ NO → [Q2]로
+
+[Q2] 데이터 fetching이나 서버 리소스 접근이 필요한가?
+    ├─ YES → 서버 컴포넌트 (기본값)
+    └─ NO → [Q3]로
+
+[Q3] 순수하게 정적인 UI인가?
+    ├─ YES → 서버 컴포넌트 (기본값, 더 빠름)
+    └─ NO → 클라이언트 컴포넌트
+```
+
+### 일반적인 실수
+
+❌ **모든 페이지에 "use client" 붙이기**:
+```typescript
+// ❌ 나쁜 예
+"use client";
+
+export default function Page() {
+  // 이벤트 핸들러도 없고, hooks도 안 쓰는데 "use client"
+  return <StaticContent />;
+}
+```
+
+✅ **서버 컴포넌트를 기본으로, 필요한 부분만 클라이언트 컴포넌트**:
+```typescript
+// ✅ 좋은 예
+export default async function Page() {
+  const data = await fetchData();
+
+  return (
+    <div>
+      <StaticHeader /> {/* 서버 */}
+      <DynamicSection data={data} /> {/* 클라이언트 */}
+    </div>
+  );
+}
+```
+
+### app/ 폴더의 page.tsx 작성 가이드
+
+**기본 원칙**: `app/` 폴더의 `page.tsx`는 가능하면 **서버 컴포넌트**로 작성
+
+**이유**:
+1. 초기 렌더링 성능 향상 (서버에서 HTML 생성)
+2. SEO 최적화
+3. 인증/권한 체크를 서버에서 처리
+4. 민감한 로직을 클라이언트에 노출하지 않음
+
+**패턴**:
+```typescript
+// app/home/page.tsx (서버 컴포넌트)
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+import { HomePageClient } from './HomePageClient';
+import { LoginPrompt } from '@/components/LoginPrompt';
+
+export default async function HomePage() {
+  // 서버에서 인증 확인
+  const session = await getServerSession();
+
+  // 로그인 안 되어 있으면 다른 화면 렌더링
+  if (!session) {
+    return <LoginPrompt />;
+  }
+
+  // 로그인 되어 있으면 클라이언트 컴포넌트로 전달
+  return <HomePageClient userName={session.user.name} />;
+}
+```
+
+---
+
 ## 🧩 컴포넌트 작성 규칙
 
 ### 기본 구조
@@ -472,43 +664,165 @@ export function useBacktestStatusQuery(backtestId: string) {
 
 ## 🎨 스타일링 규칙
 
-### Tailwind CSS 사용
+### Tailwind CSS + 디자인 토큰 시스템
+
+우리 프로젝트는 **CSS 변수 기반 디자인 토큰**을 사용하여 일관된 UI를 유지합니다.
+`globals.css`에 정의된 토큰을 Tailwind에서 바로 사용할 수 있습니다.
+
+### 디자인 토큰 계층 구조
+
+#### 1. Palette Tokens (원색 정의)
+
+직접 사용 가능하지만, **의미(semantic) 토큰을 우선 사용**하세요.
 
 ```typescript
-// ✅ 좋은 예
-<button
-  className="px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-hover"
->
-  클릭
+// 팔레트 색상 (필요시에만 사용)
+className="bg-navy-900 text-base-0"
+className="text-brand-purple border-gray-400"
+```
+
+**주요 팔레트**:
+- **Base**: `base-0` (#FFFFFF), `base-soft-blue` (#EFF4FF)
+- **Gray**: `navy-900` (#182234), `gray-400/600/700`
+- **Brand**: `brand-purple` (#AC64FF)
+- **State**: `red-500`, `blue-500`, `orange-400`, `green-600`, `black`
+
+#### 2. Semantic Tokens (역할 기반) ✅ 우선 사용
+
+```typescript
+// ✅ 좋은 예: 역할 기반 토큰 사용
+<div className="bg-sidebar text-sidebar-item-active">
+  사이드바 메뉴
+</div>
+
+<div className="bg-surface border border-surface text-muted">
+  입력 필드
+</div>
+
+<button className="bg-button-primary-soft text-brand">
+  전송
 </button>
 
-// ✅ 조건부 클래스 (tailwind-merge 사용)
-import { cn } from "@/lib/utils";
+// ❌ 나쁜 예: 직접 색상값 사용
+<div className="bg-[#182234] text-[#FFFFFF]">
+  사이드바 메뉴
+</div>
+```
 
+**주요 Semantic 토큰**:
+
+**배경 (Background)**:
+- `bg-sidebar` - 사이드바 배경
+- `bg-sidebar-item-active` - 사이드바 선택된 메뉴 (1차 Nav)
+- `bg-sidebar-item-sub-active` - 사이드바 선택된 메뉴 (2차 Nav)
+- `bg-surface` - 카드/입력 필드 배경
+- `bg-button-primary-soft` - 브랜드 버튼 배경
+- `bg-brand-soft` - 옅은 브랜드 배경
+- `bg-price-up` / `bg-price-down` - 주식 상승/하락 배경
+- `bg-tag-portfolio-active` - 활성 포트폴리오 태그
+- `bg-overlay` - 모달 오버레이
+
+**텍스트 (Text)**:
+- `text-body` - 기본 본문 텍스트 (#000000)
+- `text-sidebar-item` - 사이드바 메뉴 텍스트
+- `text-sidebar-item-active` - 사이드바 활성 메뉴 텍스트
+- `text-muted` - 흐린 텍스트 (#646464)
+- `text-brand` - 브랜드 보라색 텍스트
+- `text-price-up` / `text-price-down` - 주식 상승/하락 색
+- `text-positive` - 긍정적 수치 (#1A8F00)
+
+**보더 (Border)**:
+- `border-sidebar` - 사이드바 구분선
+- `border-sidebar-item-active` - 사이드바 활성 메뉴 보더
+- `border-surface` - 카드/입력 필드 보더
+- `border-brand-soft` - 브랜드 보더
+
+**그림자 (Shadow)**:
+- `shadow-elev-sm` - 작은 기본 그림자
+- `shadow-elev-brand` - 브랜드 글로우 (호버/포커스)
+- `shadow-elev-card` - 메인 카드 그림자
+- `shadow-elev-card-soft` - 서브 카드 그림자
+- `shadow-elev-strong` - 강조 그림자 (모달)
+
+**Border Radius**:
+- `rounded-xs` (2px) - 작은 pill
+- `rounded-sm` (4px) - 태그/버튼
+- `rounded-md` (8px) - 카드 경계 ✅ **기본값**
+- `rounded-lg` (12px) - 패널/섹션
+- `rounded-xl` (16px) - 큰 카드/모달
+
+### 조건부 클래스 패턴
+
+```typescript
+// ✅ 조건부 클래스 (템플릿 리터럴 사용)
 <button
-  className={cn(
-    "px-4 py-2 rounded-md",
-    variant === "primary" && "bg-brand-primary text-white",
-    variant === "secondary" && "bg-bg-surface text-text-strong",
-    disabled && "opacity-50 cursor-not-allowed"
-  )}
+  className={`
+    px-4 py-2 rounded-md
+    ${variant === "primary" ? "bg-button-primary-soft text-brand" : ""}
+    ${variant === "secondary" ? "bg-surface text-muted" : ""}
+    ${disabled ? "opacity-50 cursor-not-allowed" : ""}
+  `}
+>
+  버튼
+</button>
+
+// 또는 배열 join 사용
+<div
+  className={[
+    "px-4 py-2 rounded-lg",
+    isActive && "bg-sidebar-item-active text-sidebar-item-active",
+    !isActive && "text-sidebar-item",
+  ]
+    .filter(Boolean)
+    .join(" ")}
 >
 ```
 
-### 디자인 토큰 (CSS Variables)
+### 실전 예시
 
+#### 사이드바 메뉴 아이템
 ```typescript
-// ✅ 토큰 사용
-className="bg-brand-primary text-text-strong border-border-default"
-
-// ❌ 직접 색상값 사용
-className="bg-blue-600 text-gray-900 border-gray-300"
+<div
+  className={`
+    flex items-center gap-3 px-4 py-3 rounded-lg
+    ${isActive
+      ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
+      : "text-sidebar-item hover:bg-sidebar-item-sub-active"
+    }
+  `}
+>
+  <Icon className="w-5 h-5" />
+  <span className="text-lg font-semibold">메뉴</span>
+</div>
 ```
 
-**주요 토큰**:
-- **Colors**: `brand-primary`, `accent-primary`, `text-strong`, `bg-surface`
-- **Spacing**: `4`, `8`, `12`, `16`, `24`, `32` (4px 단위)
-- **Radius**: `rounded-md` (8px),
+#### 입력 필드
+```typescript
+<input
+  className="
+    w-full px-5 py-4
+    bg-surface border border-surface
+    text-body placeholder:text-muted
+    rounded-lg shadow-elev-card-soft
+    focus:border-brand-soft focus:shadow-elev-brand
+    transition-all
+  "
+  placeholder="만들고 싶은 전략을 AI에게 요청하세요!"
+/>
+```
+
+#### 주식 가격 표시
+```typescript
+<div className={`
+  px-3 py-1 rounded-sm font-semibold
+  ${priceChange > 0
+    ? "bg-price-up text-price-up"
+    : "bg-price-down text-price-down"
+  }
+`}>
+  {priceChange > 0 ? "+" : ""}{priceChange}%
+</div>
+```
 
 ### 반응형 디자인
 
@@ -517,6 +831,261 @@ className="bg-blue-600 text-gray-900 border-gray-300"
 <div className="w-full md:w-1/2 lg:w-1/3">
   <h1 className="text-lg md:text-xl lg:text-2xl">제목</h1>
 </div>
+
+// 사이드바 반응형
+<aside className="
+  w-full md:w-[260px]
+  bg-sidebar
+  fixed md:sticky top-0
+  h-screen
+">
+```
+
+### 주의사항
+
+**❌ 피해야 할 패턴**:
+```typescript
+// 1. 직접 색상 코드 사용
+className="bg-[#182234] text-[#AC64FF]" // ❌
+
+// 2. 임의의 Tailwind 색상 사용
+className="bg-blue-600 text-gray-900" // ❌
+
+// 3. 인라인 스타일로 색상 지정
+style={{ backgroundColor: '#AC64FF' }} // ❌
+```
+
+**✅ 권장 패턴**:
+```typescript
+// 1. Semantic 토큰 우선 사용
+className="bg-sidebar text-sidebar-item-active" // ✅
+
+// 2. Palette 토큰은 필요시에만
+className="bg-brand-purple text-base-0" // ✅
+
+// 3. 동적 값은 CSS 변수 활용
+style={{ opacity: isLoading ? 0.5 : 1 }} // ✅
+```
+
+---
+
+## 🖼️ 이미지 및 아이콘 처리
+
+### SVG 아이콘 사용 규칙
+
+**모든 SVG 아이콘은 `public/icons/` 폴더에 저장**하고 Next.js Image 컴포넌트로 사용합니다.
+
+#### 아이콘 저장 위치
+
+```
+SL-Front-End/
+└── public/
+    └── icons/
+        ├── home.svg
+        ├── search.svg
+        ├── account-circle.svg
+        └── ...
+```
+
+#### 아이콘 사용 방법
+
+```typescript
+import Image from "next/image";
+
+// ✅ 올바른 사용법
+<Image
+  src="/icons/search.svg"
+  alt="검색"
+  width={20}
+  height={20}
+/>
+
+// ✅ 동적 사이즈 (부모 크기에 맞춤)
+<div className="relative w-5 h-5">
+  <Image
+    src="/icons/home.svg"
+    alt="홈"
+    fill
+    className="object-contain"
+  />
+</div>
+
+// ❌ 잘못된 사용법: img 태그 사용
+<img src="/icons/search.svg" alt="검색" /> // ❌
+
+// ❌ 잘못된 사용법: 아이콘 라이브러리 사용
+import { SearchIcon } from "react-icons/fi"; // ❌
+```
+
+### 이미지 최적화
+
+#### 정적 이미지 (public/ 폴더)
+
+```typescript
+import Image from "next/image";
+
+// ✅ 로고, 배너 등 정적 이미지
+<Image
+  src="/images/logo.png"
+  alt="Stock Lab 로고"
+  width={200}
+  height={60}
+  priority // LCP(Largest Contentful Paint) 이미지인 경우
+/>
+```
+
+#### 동적 이미지 (외부 URL)
+
+```typescript
+// next.config.js에 도메인 추가 필요
+{
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'example.com',
+      },
+    ],
+  },
+}
+
+// 컴포넌트에서 사용
+<Image
+  src="https://example.com/stock-chart.png"
+  alt="주식 차트"
+  width={800}
+  height={400}
+  loading="lazy" // 지연 로딩
+/>
+```
+
+### 아이콘 명명 규칙
+
+```
+✅ kebab-case 사용
+✅ 의미를 명확하게 표현
+✅ 일관된 접미사 사용 (필요시)
+
+예시:
+- home.svg
+- account-circle.svg
+- arrow-up.svg
+- menu-hamburger.svg
+- close.svg
+- check-circle.svg
+
+❌ 피해야 할 명명:
+- icon1.svg         // 의미 불명확
+- HomeIcon.svg      // PascalCase 사용
+- home_icon.svg     // snake_case 사용
+```
+
+### 반응형 이미지
+
+```typescript
+// ✅ 반응형 사이즈
+<div className="w-4 h-4 md:w-6 md:h-6">
+  <Image
+    src="/icons/notification.svg"
+    alt="알림"
+    fill
+    className="object-contain"
+  />
+</div>
+
+// ✅ 조건부 렌더링
+{isMobile ? (
+  <Image src="/icons/menu-hamburger.svg" alt="메뉴" width={24} height={24} />
+) : (
+  <Image src="/icons/menu-full.svg" alt="메뉴" width={32} height={32} />
+)}
+```
+
+### 접근성 (Accessibility)
+
+```typescript
+// ✅ 의미 있는 아이콘: alt 텍스트 제공
+<Image
+  src="/icons/search.svg"
+  alt="검색"
+  width={20}
+  height={20}
+/>
+
+// ✅ 장식용 아이콘: 빈 alt 또는 aria-hidden
+<Image
+  src="/icons/decorative-star.svg"
+  alt=""
+  width={16}
+  height={16}
+  aria-hidden="true"
+/>
+
+// ✅ 버튼 내 아이콘: 버튼에 aria-label
+<button aria-label="검색">
+  <Image
+    src="/icons/search.svg"
+    alt=""
+    width={20}
+    height={20}
+  />
+</button>
+```
+
+### 성능 최적화 팁
+
+```typescript
+// ✅ LCP 이미지는 priority 설정
+<Image
+  src="/images/hero-banner.png"
+  alt="메인 배너"
+  width={1200}
+  height={600}
+  priority // 즉시 로드
+/>
+
+// ✅ 화면 밖 이미지는 lazy loading (기본값)
+<Image
+  src="/images/footer-logo.png"
+  alt="푸터 로고"
+  width={100}
+  height={40}
+  loading="lazy"
+/>
+
+// ✅ 고정 크기 명시 (CLS 방지)
+<Image
+  src="/icons/user.svg"
+  alt="사용자"
+  width={24}  // 항상 명시
+  height={24} // 항상 명시
+/>
+```
+
+### Figma에서 추출한 아이콘 처리
+
+Figma에서 디자인을 받았을 때:
+
+1. **SVG 파일 다운로드** (Figma에서 Export → SVG)
+2. **`public/icons/` 폴더에 저장**
+3. **kebab-case로 이름 변경**
+4. **Image 컴포넌트로 사용**
+
+```typescript
+// Figma MCP가 제공하는 로컬호스트 소스 대신
+// public/icons/에 저장 후 사용
+
+// ❌ Figma MCP localhost 소스 (사용 안함)
+const icon = "http://localhost:3845/assets/abc123.svg";
+<img src={icon} alt="아이콘" />
+
+// ✅ public/icons/ 저장 후 사용
+<Image
+  src="/icons/home.svg"
+  alt="홈"
+  width={20}
+  height={20}
+/>
 ```
 
 ---

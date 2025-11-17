@@ -14,9 +14,8 @@ import os
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, chat_history
-from app.api.v1 import industries
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history
+from app.api.v1 import industries, realtime
 
 settings = get_settings()
 
@@ -205,6 +204,18 @@ app.include_router(
     chat_history.router,
     prefix=f"{settings.API_V1_PREFIX}/chat",
     tags=["Chat History"]
+)
+
+app.include_router(
+    realtime.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Realtime"]
+)
+
+app.include_router(
+    community.router,
+    prefix=f"{settings.API_V1_PREFIX}/community",
+    tags=["Community"]
 )
 
 # Root 엔드포인트

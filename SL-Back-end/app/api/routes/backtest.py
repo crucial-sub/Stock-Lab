@@ -888,21 +888,31 @@ async def get_backtest_result(
     db: AsyncSession = Depends(get_db)
 ):
     """백테스트 결과 조회"""
-    # BacktestSession (새로운 백테스트)에서 먼저 확인
-    from app.models.backtest import BacktestStatistics as NewBacktestStatistics, BacktestDailySnapshot, BacktestTrade as NewBacktestTrade
-
-    backtest_query = select(BacktestSession).where(BacktestSession.backtest_id == backtest_id)
-    backtest_result = await db.execute(backtest_query)
-    backtest_session = backtest_result.scalar_one_or_none()
-
-    if backtest_session:
-        # 새로운 백테스트 결과 처리
-        return await _get_new_backtest_result(db, backtest_id, backtest_session)
-
-    # 1. 기존 SimulationSession 확인
+    # SimulationSession을 먼저 확인 (trade_targets 정보가 있음)
     session_query = select(SimulationSession).where(SimulationSession.session_id == backtest_id)
     session_result = await db.execute(session_query)
     session = session_result.scalar_one_or_none()
+
+    # SimulationSession이 있으면 이쪽 로직 사용 (trade_targets 활용)
+    if session:
+        # SimulationSession 로직으로 처리
+        pass  # 아래 기존 로직 계속 진행
+    else:
+        # SimulationSession이 없으면 BacktestSession 확인
+        from app.models.backtest import BacktestStatistics as NewBacktestStatistics, BacktestDailySnapshot, BacktestTrade as NewBacktestTrade
+
+        backtest_query = select(BacktestSession).where(BacktestSession.backtest_id == backtest_id)
+        backtest_result = await db.execute(backtest_query)
+        backtest_session = backtest_result.scalar_one_or_none()
+
+        if backtest_session:
+            # BacktestSession 결과 처리 (구 방식)
+            return await _get_new_backtest_result(db, backtest_id, backtest_session)
+
+        # 둘 다 없으면 404
+        raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
+
+    # === 아래부터 SimulationSession 로직 ===
 
     if not session:
         raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
@@ -1059,29 +1069,11 @@ async def get_backtest_result(
                 all_stock_codes = [row.stock_code for row in all_companies_result.all()]
                 universe_stock_codes.update(all_stock_codes)
 
-        # Fallback: trade_targets가 없거나 비어있는 경우 (기존 백테스트)
-        # 거래된 종목들의 industry를 조회해서 해당 industry의 모든 종목을 유니버스로 사용
-        if not universe_stock_codes and trade_list:
-            print(f"⚠️  trade_targets 없음 - 거래 종목에서 산업 추론 중...")
-            traded_stock_codes = list(set([trade["stock_code"] for trade in trade_list]))
-
-            # 거래된 종목들의 industry 조회
-            traded_industries_query = select(Company.industry).where(
-                Company.stock_code.in_(traded_stock_codes)
-            ).distinct()
-            traded_industries_result = await db.execute(traded_industries_query)
-            traded_industries = [row.industry for row in traded_industries_result.all() if row.industry]
-
-            if traded_industries:
-                print(f"📊 추론된 산업: {traded_industries}")
-                # 해당 산업의 모든 종목 조회
-                industry_companies_query = select(Company.stock_code).where(
-                    Company.industry.in_(traded_industries)
-                )
-                industry_companies_result = await db.execute(industry_companies_query)
-                industry_stock_codes = [row.stock_code for row in industry_companies_result.all()]
-                print(f"✅ 산업별 종목 {len(industry_stock_codes)}개 발견")
-                universe_stock_codes.update(industry_stock_codes)
+        # Fallback: trade_targets가 없는 경우 (기존 백테스트)
+        # ⚠️ 주의: 거래가 없으면 유니버스를 표시할 수 없음
+        if not universe_stock_codes:
+            print(f"⚠️  trade_targets 없음 - 유니버스를 표시할 수 없습니다")
+            # 거래 내역에서 역추론하지 않음 - 실제 유니버스와 다를 수 있기 때문
 
         # 종목 코드 리스트가 있으면 Company 테이블에서 종목명 조회
         if universe_stock_codes:

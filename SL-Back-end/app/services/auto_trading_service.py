@@ -10,8 +10,10 @@ from decimal import Decimal
 from typing import List, Optional, Dict, Any, Tuple
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, delete, update, func
+from sqlalchemy import select, and_, or_, delete, update, func, desc
 import pandas as pd
+import time
+import requests
 
 from app.models.auto_trading import (
     AutoTradingStrategy,
@@ -20,7 +22,13 @@ from app.models.auto_trading import (
     LiveDailyPerformance,
     AutoTradingLog
 )
-from app.models.simulation import SimulationSession, PortfolioStrategy, TradingRule, StrategyFactor
+from app.models.simulation import (
+    SimulationSession,
+    PortfolioStrategy,
+    TradingRule,
+    StrategyFactor,
+    SimulationDailyValue
+)
 from app.models.user import User
 from app.services.kiwoom_service import KiwoomService
 
@@ -35,7 +43,7 @@ class AutoTradingService:
         db: AsyncSession,
         user_id: UUID,
         session_id: str,
-        initial_capital: Decimal = Decimal("50000000")
+        initial_capital: Decimal = None
     ) -> AutoTradingStrategy:
         """
         자동매매 전략 활성화
@@ -91,7 +99,72 @@ class AutoTradingService:
             buy_condition = trading_rule.buy_condition or {}
             sell_condition = trading_rule.sell_condition or {}
 
-            # 4. 새로운 자동매매 전략 생성 (백테스트 조건 전부 복사)
+            # 4. 사용자 조회 (키움 토큰 필요)
+            user_query = select(User).where(User.user_id == user_id)
+            user_result = await db.execute(user_query)
+            user = user_result.scalar_one_or_none()
+
+            # 디버깅 로그
+            logger.info(f"🔍 activate_strategy - initial_capital: {initial_capital}")
+            logger.info(f"🔍 activate_strategy - user found: {user is not None}")
+            if user:
+                logger.info(f"🔍 activate_strategy - has kiwoom_access_token: {user.kiwoom_access_token is not None}")
+                if user.kiwoom_access_token:
+                    logger.info(f"🔍 activate_strategy - token length: {len(user.kiwoom_access_token)}")
+
+            # 5. initial_capital이 없으면 키움 계좌에서 실제 잔고 조회
+            if initial_capital is None and user and user.kiwoom_access_token:
+                try:
+                    logger.info("🔍 키움 API 호출 시작...")
+                    from app.services.kiwoom_service import KiwoomService
+
+                    # 토큰 유효성 자동 검증 및 갱신
+                    valid_token = await KiwoomService.ensure_valid_token(db, user)
+
+                    deposit_info = KiwoomService.get_deposit_info(
+                        access_token=valid_token,
+                        qry_tp="3"  # 추정조회
+                    )
+
+                    logger.info(f"🔍 키움 API 응답: {deposit_info}")
+
+                    # API 에러 체크
+                    if deposit_info.get("return_code") != 0:
+                        error_msg = deposit_info.get("return_msg", "알 수 없는 오류")
+                        logger.warning(f"⚠️ 키움 API 에러: {error_msg}")
+                        raise ValueError(f"키움 계좌 조회 실패: {error_msg}")
+
+                    # API 응답에서 실제 주문가능금액 추출
+                    # 키움 모의투자 API는 output1이 아니라 최상위 레벨에 데이터가 있음
+                    actual_cash_str = (
+                        deposit_info.get("ord_alow_amt") or        # 주문가능금액
+                        deposit_info.get("ord_psbl_cash") or       # 주문가능현금
+                        deposit_info.get("pymn_alow_amt") or       # 지불가능금액
+                        deposit_info.get("dnca_tot_amt") or        # 예수금총액
+                        deposit_info.get("d2_pymn_alow_amt") or    # D+2 지불가능금액
+                        "0"
+                    )
+
+                    logger.info(f"🔍 actual_cash_str: {actual_cash_str}")
+                    initial_capital = Decimal(str(actual_cash_str))
+
+                    # 0원이면 에러로 처리
+                    if initial_capital == 0:
+                        raise ValueError("키움 계좌 잔고가 0원입니다. 계좌를 확인해주세요.")
+
+                    logger.info(f"💰 키움 계좌 잔고 조회 성공: {initial_capital:,}원")
+
+                except Exception as e:
+                    logger.error(f"❌ 키움 계좌 잔고 조회 실패: {e}", exc_info=True)
+                    # 실패 시 기본값 사용
+                    initial_capital = Decimal("50000000")
+                    logger.info(f"⚠️ 기본값 사용: {initial_capital:,}원")
+
+            # initial_capital이 여전히 None이면 기본값 사용
+            if initial_capital is None:
+                initial_capital = Decimal("50000000")
+
+            # 6. 새로운 자동매매 전략 생성 (백테스트 조건 전부 복사)
             strategy = AutoTradingStrategy(
                 user_id=user_id,
                 simulation_session_id=session_id,
@@ -234,6 +307,274 @@ class AutoTradingService:
             raise
 
     @staticmethod
+    async def get_strategy_logs(
+        db: AsyncSession,
+        strategy_id: UUID,
+        user_id: UUID,
+        event_type: Optional[str] = None,
+        limit: int = 100
+    ) -> List[AutoTradingLog]:
+        """전략 이벤트 로그 조회"""
+        strategy = await AutoTradingService._get_strategy(db, strategy_id, user_id)
+
+        query = select(AutoTradingLog).where(
+            AutoTradingLog.strategy_id == strategy.strategy_id
+        ).order_by(desc(AutoTradingLog.created_at)).limit(limit)
+
+        if event_type:
+            query = query.where(AutoTradingLog.event_type == event_type)
+
+        result = await db.execute(query)
+        return result.scalars().all()
+
+    @staticmethod
+    async def get_latest_rebalance_preview(
+        db: AsyncSession,
+        strategy_id: UUID,
+        user_id: UUID
+    ) -> Optional[AutoTradingLog]:
+        """가장 최근 리밸런싱 프리뷰 로그"""
+        logs = await AutoTradingService.get_strategy_logs(
+            db=db,
+            strategy_id=strategy_id,
+            user_id=user_id,
+            event_type="REBALANCE_PREVIEW",
+            limit=1
+        )
+        return logs[0] if logs else None
+
+    @staticmethod
+    async def generate_rebalance_preview(
+        db: AsyncSession,
+        strategy_id: UUID,
+        user_id: UUID
+    ) -> List[Dict[str, Any]]:
+        """즉시 리밸런싱 프리뷰 생성"""
+        from app.services.auto_trading_executor import AutoTradingExecutor
+
+        strategy = await AutoTradingService._get_strategy(db, strategy_id, user_id)
+        if not strategy.is_active:
+            raise ValueError("비활성화된 전략입니다.")
+
+        stocks = await AutoTradingExecutor.select_stocks_for_strategy(db, strategy)
+        return stocks
+
+    @staticmethod
+    async def get_risk_snapshot(
+        db: AsyncSession,
+        strategy_id: UUID,
+        user_id: UUID
+    ) -> Dict[str, Any]:
+        """현재 포지션 기반 위험 스냅샷"""
+        strategy = await AutoTradingService._get_strategy(db, strategy_id, user_id)
+
+        positions_query = select(LivePosition).where(
+            LivePosition.strategy_id == strategy.strategy_id
+        )
+        positions_result = await db.execute(positions_query)
+        positions = positions_result.scalars().all()
+
+        cash_balance = strategy.cash_balance or Decimal("0")
+        invested_value = Decimal("0")
+        positions_payload = []
+        alerts: List[Dict[str, Any]] = []
+
+        for position in positions:
+            current_price = position.current_price or position.avg_buy_price
+            market_value = current_price * position.quantity
+            invested_value += market_value
+
+            cost_basis = position.avg_buy_price * position.quantity
+            unrealized = market_value - cost_basis
+            pct = (unrealized / cost_basis * Decimal("100")) if cost_basis > 0 else Decimal("0")
+            hold_days = position.hold_days if position.hold_days is not None else max(
+                0, (date.today() - position.buy_date).days
+            )
+
+            positions_payload.append({
+                "stock_code": position.stock_code,
+                "stock_name": position.stock_name,
+                "quantity": position.quantity,
+                "market_value": market_value,
+                "avg_buy_price": position.avg_buy_price,
+                "current_price": current_price,
+                "unrealized_profit": unrealized,
+                "unrealized_profit_pct": pct,
+                "hold_days": hold_days
+            })
+
+            if strategy.max_hold_days and hold_days >= strategy.max_hold_days:
+                alerts.append({
+                    "type": "MAX_HOLD",
+                    "severity": "warning",
+                    "message": f"{position.stock_code} 보유일 {hold_days}일 - 최대 보유일 초과",
+                    "metadata": {"stock_code": position.stock_code}
+                })
+
+            if strategy.stop_loss is not None:
+                stop_loss = Decimal(str(strategy.stop_loss))
+                if pct <= -stop_loss:
+                    alerts.append({
+                        "type": "STOP_LOSS",
+                        "severity": "critical",
+                        "message": f"{position.stock_code} 손실률 {pct:.2f}%",
+                        "metadata": {"stock_code": position.stock_code}
+                    })
+
+        total_value = cash_balance + invested_value
+        exposure_ratio = float(invested_value / total_value) if total_value > 0 else 0.0
+
+        return {
+            "as_of": datetime.utcnow(),
+            "cash_balance": cash_balance,
+            "invested_value": invested_value,
+            "total_value": total_value,
+            "exposure_ratio": exposure_ratio,
+            "alerts": alerts,
+            "positions": positions_payload
+        }
+
+    @staticmethod
+    async def enforce_risk_controls(
+        db: AsyncSession,
+        strategy_id: UUID,
+        user_id: UUID
+    ) -> List[Dict[str, Any]]:
+        """위험 통제 자동 실행"""
+        strategy = await AutoTradingService._get_strategy(db, strategy_id, user_id)
+
+        positions_query = select(LivePosition).where(
+            LivePosition.strategy_id == strategy.strategy_id
+        )
+        positions_result = await db.execute(positions_query)
+        positions = positions_result.scalars().all()
+
+        actions: List[Dict[str, Any]] = []
+
+        for position in positions:
+            current_price = position.current_price or position.avg_buy_price
+            hold_days = position.hold_days if position.hold_days is not None else max(
+                0, (date.today() - position.buy_date).days
+            )
+            cost_basis = position.avg_buy_price * position.quantity
+            pnl_pct = (
+                ((current_price * position.quantity) - cost_basis) / cost_basis * Decimal("100")
+            ) if cost_basis > 0 else Decimal("0")
+
+            triggered = False
+            reason = None
+
+            if strategy.max_hold_days and hold_days >= strategy.max_hold_days:
+                triggered = True
+                reason = "최대 보유기간 초과"
+
+            if strategy.stop_loss is not None:
+                stop_loss = Decimal(str(strategy.stop_loss))
+                if pnl_pct <= -stop_loss:
+                    triggered = True
+                    reason = f"손절 조건 충족 ({pnl_pct:.2f}%)"
+
+            if triggered:
+                success = await AutoTradingService._execute_sell_order(
+                    db, strategy, position, reason=reason or "위험 통제"
+                )
+                actions.append({
+                    "stock_code": position.stock_code,
+                    "quantity": position.quantity,
+                    "reason": reason,
+                    "executed": success
+                })
+
+        if actions:
+            log = AutoTradingLog(
+                strategy_id=strategy.strategy_id,
+                event_type="RISK_CONTROL",
+                event_level="INFO",
+                message=f"위험 통제 실행 - {len(actions)}건",
+                details={"actions": actions}
+            )
+            db.add(log)
+            await db.commit()
+
+        return actions
+
+    @staticmethod
+    async def get_execution_report(
+        db: AsyncSession,
+        strategy_id: UUID,
+        user_id: UUID,
+        days: int = 30
+    ) -> Dict[str, Any]:
+        """실거래 vs 백테스트 비교"""
+        strategy = await AutoTradingService._get_strategy(db, strategy_id, user_id)
+
+        live_query = select(LiveDailyPerformance).where(
+            LiveDailyPerformance.strategy_id == strategy.strategy_id
+        ).order_by(desc(LiveDailyPerformance.date)).limit(days)
+        live_result = await db.execute(live_query)
+        live_rows = list(reversed(live_result.scalars().all()))
+
+        if not live_rows:
+            return {"rows": [], "summary": {"days": 0}, "session_id": strategy.simulation_session_id}
+
+        dates = [row.date for row in live_rows]
+        backtest_query = select(SimulationDailyValue).where(
+            and_(
+                SimulationDailyValue.session_id == strategy.simulation_session_id,
+                SimulationDailyValue.date.in_(dates)
+            )
+        )
+        backtest_result = await db.execute(backtest_query)
+        backtest_map = {row.date: row for row in backtest_result.scalars().all()}
+
+        rows = []
+        tracking_errors: List[Decimal] = []
+
+        for live in live_rows:
+            backtest = backtest_map.get(live.date)
+            te = None
+            if live.daily_return is not None and backtest and backtest.daily_return is not None:
+                te = live.daily_return - backtest.daily_return
+                tracking_errors.append(te)
+
+            rows.append({
+                "date": live.date,
+                "live_total_value": live.total_value,
+                "live_daily_return": live.daily_return,
+                "backtest_total_value": backtest.portfolio_value if backtest else None,
+                "backtest_daily_return": backtest.daily_return if backtest else None,
+                "tracking_error": te
+            })
+
+        cumulative_live = live_rows[-1].cumulative_return if live_rows[-1].cumulative_return is not None else None
+        cumulative_backtest = None
+        if backtest_map:
+            latest_date = max(backtest_map.keys())
+            cumulative_backtest = backtest_map[latest_date].cumulative_return
+
+        realized_vs_expected = None
+        if rows and rows[-1]["live_total_value"] and rows[-1]["backtest_total_value"]:
+            realized_vs_expected = rows[-1]["live_total_value"] - rows[-1]["backtest_total_value"]
+
+        avg_te = None
+        if tracking_errors:
+            avg_te = sum(tracking_errors) / len(tracking_errors)
+
+        summary = {
+            "days": len(rows),
+            "average_tracking_error": avg_te,
+            "cumulative_live_return": cumulative_live,
+            "cumulative_backtest_return": cumulative_backtest,
+            "realized_vs_expected": realized_vs_expected
+        }
+
+        return {
+            "rows": rows,
+            "summary": summary,
+            "session_id": strategy.simulation_session_id
+        }
+
+    @staticmethod
     async def _sell_all_positions(db: AsyncSession, strategy: AutoTradingStrategy) -> int:
         """
         보유 종목 전량 매도
@@ -299,15 +640,30 @@ class AutoTradingService:
                 logger.error("키움 토큰이 없습니다.")
                 return False
 
-            # 키움 API 매도 주문
-            order_result = KiwoomService.sell_stock(
-                access_token=user.kiwoom_access_token,
-                stock_code=position.stock_code,
-                quantity=position.quantity,
-                price=0,  # 시장가
-                trade_type="03",  # 시장가 매도
-                dmst_stex_tp="1"  # 국내주식
-            )
+            # 키움 API 매도 주문 (429 대응 재시도)
+            order_result = None
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    order_result = KiwoomService.sell_stock(
+                        access_token=user.kiwoom_access_token,
+                        stock_code=position.stock_code,
+                        quantity=str(position.quantity),
+                        price="",
+                        trade_type="03",  # 시장가
+                        dmst_stex_tp="1"  # 국내주식
+                    )
+                    break
+                except requests.RequestException as req_err:
+                    status_code = getattr(getattr(req_err, "response", None), "status_code", None)
+                    if status_code == 429 and attempt < max_retries - 1:
+                        wait_sec = 1 + attempt
+                        logger.warning(
+                            f"⚠️  매도 Rate limit 감지 (429) - {position.stock_code} 재시도 {attempt+1}/{max_retries}, {wait_sec}s 대기"
+                        )
+                        time.sleep(wait_sec)
+                        continue
+                    raise
 
             # 현재가 조회 (손익 계산용)
             current_price = position.current_price or position.avg_buy_price
@@ -346,7 +702,7 @@ class AutoTradingService:
 
             db.add(trade)
 
-            # 현금 잔액 업데이트
+            # 현금 잔액 업데이트 (내부 추적용)
             strategy.cash_balance += (sell_amount - commission - tax)
 
             # 포지션 삭제
@@ -356,11 +712,120 @@ class AutoTradingService:
 
             logger.info(f"✅ 매도 완료: {position.stock_code}, 수량={position.quantity}, 손익={net_profit:,.0f}원")
 
+            # 🔄 매도 후 실제 계좌 잔고 동기화
+            try:
+                deposit_info = KiwoomService.get_deposit_info(
+                    access_token=user.kiwoom_access_token,
+                    qry_tp="3"  # 추정조회
+                )
+
+                # 키움 모의투자 API는 최상위 레벨에 데이터가 있음
+                actual_cash_str = (
+                    deposit_info.get("ord_alow_amt") or        # 주문가능금액
+                    deposit_info.get("ord_psbl_cash") or       # 주문가능현금
+                    deposit_info.get("pymn_alow_amt") or       # 지불가능금액
+                    deposit_info.get("dnca_tot_amt") or        # 예수금총액
+                    deposit_info.get("d2_pymn_alow_amt") or    # D+2 지불가능금액
+                    "0"
+                )
+                actual_cash = Decimal(str(actual_cash_str))
+
+                if actual_cash > 0:
+                    strategy.cash_balance = actual_cash
+                    await db.commit()
+                    logger.info(f"💰 매도 후 계좌 잔고 동기화: {actual_cash:,.0f}원")
+
+            except Exception as sync_err:
+                logger.warning(f"⚠️  매도 후 잔고 동기화 실패 (무시): {sync_err}")
+
             return True
 
         except Exception as e:
             logger.error(f"매도 주문 실행 실패: {e}", exc_info=True)
             return False
+
+    @staticmethod
+    async def check_and_execute_sell_signals(
+        db: AsyncSession,
+        strategy: AutoTradingStrategy
+    ) -> int:
+        """
+        보유 포지션 중 매도 조건에 해당하는 종목 매도
+
+        Args:
+            db: 데이터베이스 세션
+            strategy: 자동매매 전략
+
+        Returns:
+            매도한 종목 수
+        """
+        # 보유 포지션 조회
+        positions_query = select(LivePosition).where(
+            LivePosition.strategy_id == strategy.strategy_id
+        )
+        positions_result = await db.execute(positions_query)
+        positions = positions_result.scalars().all()
+
+        if not positions:
+            logger.info(f"전략 {strategy.strategy_id}: 보유 포지션 없음")
+            return 0
+
+        sold_count = 0
+
+        for position in positions:
+            try:
+                # 현재가 업데이트 필요 (실제로는 키움 API로 조회)
+                # 여기서는 position.current_price 사용
+                current_price = position.current_price or position.avg_buy_price
+                profit_rate = (
+                    (current_price - position.avg_buy_price) / position.avg_buy_price * 100
+                )
+
+                should_sell = False
+                sell_reason = None
+
+                # 1. 손절가 체크
+                if strategy.stop_loss and profit_rate <= -float(strategy.stop_loss):
+                    should_sell = True
+                    sell_reason = f"손절 ({profit_rate:.2f}%)"
+
+                # 2. 목표가 체크
+                elif strategy.target_gain and profit_rate >= float(strategy.target_gain):
+                    should_sell = True
+                    sell_reason = f"익절 ({profit_rate:.2f}%)"
+
+                # 3. 최소 보유일 미달이면 매도 안함
+                if should_sell and strategy.min_hold_days:
+                    if position.hold_days < strategy.min_hold_days:
+                        logger.info(
+                            f"   {position.stock_code}: 매도 조건 충족하나 "
+                            f"최소 보유일({strategy.min_hold_days}일) 미달 (보유: {position.hold_days}일)"
+                        )
+                        continue
+
+                # 4. 최대 보유일 체크
+                if not should_sell and strategy.max_hold_days:
+                    if position.hold_days >= strategy.max_hold_days:
+                        should_sell = True
+                        sell_reason = f"최대 보유일 도달 ({position.hold_days}일)"
+
+                # 5. 매도 조건 충족 시 매도 실행
+                if should_sell:
+                    logger.info(f"   매도 신호: {position.stock_code} - {sell_reason}")
+                    success = await AutoTradingService._execute_sell_order(
+                        db=db,
+                        strategy=strategy,
+                        position=position,
+                        reason=sell_reason
+                    )
+                    if success:
+                        sold_count += 1
+
+            except Exception as e:
+                logger.error(f"   매도 체크 실패: {position.stock_code}, {e}")
+
+        logger.info(f"전략 {strategy.strategy_id}: {sold_count}개 종목 매도")
+        return sold_count
 
     @staticmethod
     async def get_strategy_status(
@@ -423,4 +888,111 @@ class AutoTradingService:
             "latest_performance": latest_performance,
             "total_positions": len(positions),
             "total_trades": len(today_trades)
+        }
+
+    @staticmethod
+    async def _get_strategy(
+        db: AsyncSession,
+        strategy_id: UUID,
+        user_id: UUID
+    ) -> AutoTradingStrategy:
+        """전략 조회 + 권한 확인"""
+        query = select(AutoTradingStrategy).where(
+            and_(
+                AutoTradingStrategy.strategy_id == strategy_id,
+                AutoTradingStrategy.user_id == user_id
+            )
+        )
+        result = await db.execute(query)
+        strategy = result.scalar_one_or_none()
+        if not strategy:
+            raise ValueError("자동매매 전략을 찾을 수 없습니다.")
+        return strategy
+
+    @staticmethod
+    async def get_portfolio_dashboard(
+        db: AsyncSession,
+        user_id: UUID
+    ) -> Dict[str, Any]:
+        """
+        포트폴리오 대시보드 데이터 조회
+
+        Args:
+            db: 데이터베이스 세션
+            user_id: 사용자 ID
+
+        Returns:
+            대시보드 통계 데이터
+        """
+        from sqlalchemy import func
+        from decimal import Decimal
+
+        # 1. 활성화된 전략 목록 조회
+        strategies_query = select(AutoTradingStrategy).where(
+            and_(
+                AutoTradingStrategy.user_id == user_id,
+                AutoTradingStrategy.is_active == True
+            )
+        )
+        strategies_result = await db.execute(strategies_query)
+        active_strategies = strategies_result.scalars().all()
+
+        if not active_strategies:
+            return {
+                "total_assets": Decimal("0"),
+                "total_return": Decimal("0"),
+                "total_profit": Decimal("0"),
+                "active_strategy_count": 0,
+                "total_positions": 0,
+                "total_trades_today": 0
+            }
+
+        # 2. 전체 통계 계산
+        total_initial_capital = Decimal("0")
+        total_current_value = Decimal("0")
+        total_positions_count = 0
+
+        for strategy in active_strategies:
+            total_initial_capital += strategy.initial_capital
+
+            # 현재 가치 계산 (현금 + 보유 주식 평가액)
+            positions_query = select(LivePosition).where(
+                LivePosition.strategy_id == strategy.strategy_id
+            )
+            positions_result = await db.execute(positions_query)
+            positions = positions_result.scalars().all()
+
+            stock_value = sum(
+                (pos.current_price or pos.avg_buy_price) * pos.quantity
+                for pos in positions
+            )
+
+            total_current_value += (strategy.cash_balance + stock_value)
+            total_positions_count += len(positions)
+
+        # 3. 오늘 매매 건수
+        today_trades_query = select(func.count(LiveTrade.trade_id)).where(
+            and_(
+                LiveTrade.strategy_id.in_([s.strategy_id for s in active_strategies]),
+                LiveTrade.trade_date == date.today()
+            )
+        )
+        today_trades_result = await db.execute(today_trades_query)
+        total_trades_today = today_trades_result.scalar() or 0
+
+        # 4. 수익률 계산
+        total_profit = total_current_value - total_initial_capital
+        total_return = (
+            (total_profit / total_initial_capital * 100)
+            if total_initial_capital > 0
+            else Decimal("0")
+        )
+
+        return {
+            "total_assets": total_current_value,
+            "total_return": total_return,
+            "total_profit": total_profit,
+            "active_strategy_count": len(active_strategies),
+            "total_positions": total_positions_count,
+            "total_trades_today": total_trades_today
         }

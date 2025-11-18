@@ -113,6 +113,90 @@ export interface AutoTradingExecuteResponse {
   }>;
 }
 
+export interface TradeSignalItem {
+  stock_code: string;
+  stock_name?: string;
+  quantity?: number;
+  target_weight?: number;
+  current_price?: number;
+  per?: number;
+  pbr?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RebalancePreviewResponse {
+  generated_at: string;
+  candidates: TradeSignalItem[];
+  note?: string;
+}
+
+export interface AutoTradingLog {
+  log_id: string;
+  event_type: string;
+  event_level: string;
+  message?: string;
+  details?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AutoTradingLogListResponse {
+  logs: AutoTradingLog[];
+}
+
+export interface AutoTradingRiskAlert {
+  type: string;
+  severity: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AutoTradingPositionRisk {
+  stock_code: string;
+  stock_name?: string;
+  quantity: number;
+  market_value: number;
+  avg_buy_price: number;
+  current_price: number;
+  unrealized_profit: number;
+  unrealized_profit_pct: number;
+  hold_days: number;
+}
+
+export interface AutoTradingRiskSnapshotResponse {
+  as_of: string;
+  cash_balance: number;
+  invested_value: number;
+  total_value: number;
+  exposure_ratio: number;
+  alerts: AutoTradingRiskAlert[];
+  positions: AutoTradingPositionRisk[];
+}
+
+export interface ExecutionReportRow {
+  date: string;
+  live_total_value?: number;
+  live_daily_return?: number;
+  backtest_total_value?: number;
+  backtest_daily_return?: number;
+  tracking_error?: number;
+}
+
+export interface ExecutionReportSummary {
+  days: number;
+  average_tracking_error?: number;
+  cumulative_live_return?: number;
+  cumulative_backtest_return?: number;
+  realized_vs_expected?: number;
+}
+
+export interface AutoTradingExecutionReportResponse {
+  strategy_id: string;
+  session_id?: string;
+  generated_at: string;
+  rows: ExecutionReportRow[];
+  summary: ExecutionReportSummary;
+}
+
 export const autoTradingApi = {
   /**
    * 자동매매 활성화
@@ -166,6 +250,26 @@ export const autoTradingApi = {
   },
 
   /**
+   * 내 자동매매 전략 목록 조회 (서버 사이드)
+   */
+  getMyAutoTradingStrategiesServer: async (
+    token: string,
+  ): Promise<AutoTradingStrategyResponse[]> => {
+    const axios = (await import("axios")).default;
+    // Docker 환경에서는 컨테이너 이름 사용
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const response = await axios.get<AutoTradingStrategyResponse[]>(
+      `${baseURL}/api/v1/auto-trading/my-strategies`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return response.data;
+  },
+
+  /**
    * 자동매매 수동 실행 (테스트용)
    */
   executeAutoTrading: async (
@@ -173,6 +277,100 @@ export const autoTradingApi = {
   ): Promise<AutoTradingExecuteResponse> => {
     const response = await axiosInstance.post<AutoTradingExecuteResponse>(
       `/auto-trading/strategies/${strategyId}/execute`,
+    );
+    return response.data;
+  },
+
+  /**
+   * 리밸런싱 프리뷰 조회
+   */
+  getRebalancePreview: async (
+    strategyId: string,
+  ): Promise<RebalancePreviewResponse> => {
+    const response =
+      await axiosInstance.get<RebalancePreviewResponse>(
+        `/auto-trading/strategies/${strategyId}/rebalance-preview`,
+      );
+    return response.data;
+  },
+
+  /**
+   * 전략 이벤트 로그 조회
+   */
+  getStrategyLogs: async (
+    strategyId: string,
+    params?: { event_type?: string; limit?: number },
+  ): Promise<AutoTradingLogListResponse> => {
+    const response = await axiosInstance.get<AutoTradingLogListResponse>(
+      `/auto-trading/strategies/${strategyId}/logs`,
+      { params },
+    );
+    return response.data;
+  },
+
+  /**
+   * 위험 스냅샷 조회
+   */
+  getRiskSnapshot: async (
+    strategyId: string,
+  ): Promise<AutoTradingRiskSnapshotResponse> => {
+    const response =
+      await axiosInstance.get<AutoTradingRiskSnapshotResponse>(
+        `/auto-trading/strategies/${strategyId}/risk`,
+      );
+    return response.data;
+  },
+
+  /**
+   * 실거래 리포트 조회
+   */
+  getExecutionReport: async (
+    strategyId: string,
+    days = 30,
+  ): Promise<AutoTradingExecutionReportResponse> => {
+    const response =
+      await axiosInstance.get<AutoTradingExecutionReportResponse>(
+        `/auto-trading/strategies/${strategyId}/execution-report`,
+        { params: { days } },
+      );
+    return response.data;
+  },
+
+  /**
+   * 포트폴리오 대시보드 조회
+   */
+  getPortfolioDashboard: async (): Promise<{
+    total_assets: number;
+    total_return: number;
+    total_profit: number;
+    active_strategy_count: number;
+    total_positions: number;
+    total_trades_today: number;
+  }> => {
+    const response = await axiosInstance.get(`/auto-trading/dashboard`);
+    return response.data;
+  },
+
+  /**
+   * 포트폴리오 대시보드 조회 (서버 사이드)
+   */
+  getPortfolioDashboardServer: async (token: string): Promise<{
+    total_assets: number;
+    total_return: number;
+    total_profit: number;
+    active_strategy_count: number;
+    total_positions: number;
+    total_trades_today: number;
+  }> => {
+    const axios = (await import("axios")).default;
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const response = await axios.get(
+      `${baseURL}/api/v1/auto-trading/dashboard`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
     );
     return response.data;
   },

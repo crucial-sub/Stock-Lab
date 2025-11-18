@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
+import json
 
 _pydantic_v1_module = None
 try:
@@ -144,8 +145,10 @@ class ChatHandler:
         self.agent_type = None  # Track which agent type is being used
         # 설문/추천 상태
         self.session_state: Dict[str, Dict[str, Any]] = {}
+        self.forbidden_patterns: Dict[str, List[str]] = {}
 
         self._load_config()
+        self._load_forbidden_patterns()
         self._init_components()
 
         # 설문 질문 세트 (프론트 UI 사양 반영)
@@ -306,39 +309,8 @@ class ChatHandler:
             },
         ]
 
-        # 기본 전략 태그 매핑 (간단 매칭용)
-        self.strategy_tags_mapping = {
-            "cathy_wood": {
-                "strategy_id": "cathy_wood",
-                "strategy_name": "캐시 우드의 전략",
-                "summary": "혁신 기술 고성장주 중심의 장기 성장 전략",
-                "tags": ["long_term", "style_growth", "risk_high", "sector_innovation"],
-                "conditions": [
-                    {"condition": "0 < PEG < 2"},
-                    {"condition": "매출 성장률 > 20%"},
-                ],
-            },
-            "peter_lynch": {
-                "strategy_id": "peter_lynch",
-                "strategy_name": "피터 린치의 전략",
-                "summary": "PER·PEG로 저평가 성장주를 찾는 전략",
-                "tags": ["long_term", "style_growth", "risk_mid"],
-                "conditions": [
-                    {"condition": "PER < 30"},
-                    {"condition": "0 < PEG < 1.8"},
-                ],
-            },
-            "value_income": {
-                "strategy_id": "value_income",
-                "strategy_name": "저평가 배당주",
-                "summary": "저평가 + 배당 안정성 중심",
-                "tags": ["long_term", "style_dividend", "risk_low", "prefer_dividend", "sector_bluechip"],
-                "conditions": [
-                    {"condition": "PBR < 1.0"},
-                    {"condition": "배당수익률 > 3%"},
-                ],
-            },
-        }
+        # 전략 메타/백테스트 템플릿 로드
+        self._load_strategies()
 
     def _load_config(self):
         """Load configuration."""
@@ -360,6 +332,96 @@ class ChatHandler:
                     "top_k": 3
                 }
             }
+
+    def _load_strategies(self):
+        """Load strategies from prompts/strategies.json and build mappings."""
+        path = Path("/app/prompts/strategies.json")
+        if not path.exists():
+            path = Path(__file__).parent.parent.parent / "prompts" / "strategies.json"
+
+        strategies = []
+        try:
+            if path.exists():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                strategies = data.get("strategies", [])
+                print(f"Loaded {len(strategies)} strategies from strategies.json")
+            else:
+                print("strategies.json not found; using defaults")
+        except Exception as e:
+            print(f"Failed to load strategies.json: {e}")
+
+        # Build mappings
+        self.strategies = {s["id"]: s for s in strategies if "id" in s}
+        # For recommendation scoring
+        self.strategy_tags_mapping = {}
+        for s in strategies:
+            sid = s.get("id")
+            if not sid:
+                continue
+            self.strategy_tags_mapping[sid] = {
+                "strategy_id": sid,
+                "strategy_name": s.get("name", sid),
+                "summary": s.get("summary", ""),
+                "tags": s.get("tags", []),
+                "conditions": s.get("conditions_preview") or s.get("conditions") or [],
+            }
+        # For backtest templates
+        self.strategy_backtest_templates = {}
+        for s in strategies:
+            sid = s.get("id")
+            if not sid:
+                continue
+            self.strategy_backtest_templates[sid] = {
+                "strategy_name": s.get("name", sid),
+                "buy_conditions": self._filter_valid_conditions(s.get("buy_conditions", [])),
+                "sell_conditions": self._filter_valid_conditions(s.get("sell_conditions", [])),
+            }
+
+    def _load_forbidden_patterns(self):
+        """금지 패턴을 외부 설정에서 로드 (없으면 기본값 사용)."""
+        default_patterns = {
+            "종목_추천": [
+                r"(.*?)(삼성|SK|현대|LG|카카오|네이버|넥슨|엔씨소프트|셀트리온|"
+                r"NVIDIA|애플|테슬라|마이크로소프트|구글|알파벳)\s*(추천|사세요|매수|매도|사달라|팔아야)",
+                r"(이 종목|이 주식).*?(상승|하락|사세요|팔아야|매수)",
+                r"(꼭|반드시|꼭꼭|적극)\s*(추천|추천함|포함)",
+            ],
+            "매매_시점": [
+                r"(지금|현재|요즘|해야|해야 할)\s*(매수|매도|사세요|팔아야|타이밍|사나|파나)",
+                r"(매수|매도|사야|파야)\s*(하나|할까|할지|해야|합니다)",
+                r"(매수가|적정가|목표가|손절|익절)\s*(설정|하세요|해야)",
+                r"(\d+원).*?(적정|맞는|타이밍)",
+                r"(언제|어디서|어떻게)\s+(매수|매도|사야|파야)",
+            ],
+            "수익률_보장": [
+                r"(보장|확실|확정|100%|무조건)\s*(수익|이익|수익률)",
+                r"(수익|이익).*?(손실|위험).*?(없|없음)",
+                r"(항상|반드시)\s*(수익)",
+            ],
+            "개인화_조언": [
+                r"(당신|너|니|저는|우리는|우리)\s*(경우|상황|환경).*?(전략|투자|추천|사는|사세요)",
+                r"(월|분기|년)\s*(\d+)\s*(만원|천원|원).*?(투자|사세요|해야)",
+                r"(특별히|맞춤|특화|개인|따라).*?(투자|전략|추천)",
+            ],
+        }
+
+        path = Path("/app/config/forbidden_patterns.yaml")
+        if not path.exists():
+            path = Path(__file__).parent.parent.parent / "config" / "forbidden_patterns.yaml"
+
+        if path.exists():
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                if isinstance(data, dict) and data:
+                    self.forbidden_patterns = data
+                    print(f"Loaded forbidden patterns from {path}")
+                    return
+            except Exception as e:
+                print(f"Failed to load forbidden_patterns.yaml: {e}")
+
+        # fallback
+        self.forbidden_patterns = default_patterns
+        print("Using default forbidden patterns")
 
     def _init_components(self):
         """Initialize RAG, MCP, and LLM clients."""
@@ -451,10 +513,10 @@ class ChatHandler:
 
                 # 3. 시스템 프롬프트 로드
                 print("Step 3: 시스템 프롬프트 로드 중...")
-                # Docker: /app/prompts/system.txt, Local: 상대경로
+                # Docker: /app/prompts/system.txt, Local: ./prompts/system.txt
                 prompt_path = Path("/app/prompts/system.txt")
                 if not prompt_path.exists():
-                    prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "system.txt"
+                    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "system.txt"
                 system_prompt = prompt_path.read_text(encoding='utf-8') if prompt_path.exists() else "당신은 정량 투자 자문가입니다."
                 print(f"Step 3 OK: 시스템 프롬프트 로드 완료 ({len(system_prompt)} 자)")
 
@@ -545,9 +607,12 @@ class ChatHandler:
         else:
             # 기존 통합 플로우 (recommend, general 등)
             context = await self._retrieve_context(message, intent)
-            response = await self._generate_response_langchain(
-                message, intent, context, session_id
-            )
+            if intent == 'backtest_configuration':
+                response = self._handle_backtest_configuration(message, session_id)
+            else:
+                response = await self._generate_response_langchain(
+                    message, intent, context, session_id
+                )
 
         response["session_id"] = session_id
         return response
@@ -735,10 +800,13 @@ class ChatHandler:
 
         # 전략 추천 키워드
         recommend_keywords = ['전략 추천', 'recommend', '추천']
+        backtest_keywords = ['백테스트 설정', '전략으로 진행', '전략으로 백테스트', '이 전략으로', '자동 설정']
 
-        # 우선순위: 검증 > 전략 추천 > DSL 생성 > Explain > General
+        # 우선순위: 검증 > 백테스트 설정 > 전략 추천 > DSL 생성 > Explain > General
         if has_current_conditions or any(word in message_lower for word in verification_keywords):
             return 'explain'  # 검증은 explain 모드로 처리 (LLM이 자연어로 답변)
+        elif any(word in message_lower for word in backtest_keywords):
+            return 'backtest_configuration'
         elif any(word in message_lower for word in recommend_keywords):
             return 'recommend'
         elif any(word in message_lower for word in dsl_keywords):
@@ -747,6 +815,92 @@ class ChatHandler:
             return 'explain'
         else:
             return 'general'
+
+    def _handle_backtest_configuration(self, message: str, session_id: str) -> dict:
+        """전략 선택 후 백테스트 설정 UI Language를 반환하고 기본 DSL을 저장."""
+        # 전략 식별 (간단히 이름 매칭)
+        message_lower = message.lower()
+        matched_id = None
+        for sid, meta in self.strategy_backtest_templates.items():
+            if sid in message_lower or meta["strategy_name"].replace(" ", "").lower() in message_lower:
+                matched_id = sid
+                break
+        # 기본값: 워렌버핏
+        if not matched_id:
+            matched_id = "warren_buffett"
+        tpl = self.strategy_backtest_templates[matched_id]
+
+        # 세션 상태에 DSL 저장 (백테스트 실행 시 사용)
+        state = self.session_state.setdefault(session_id, {})
+        state["backtest_conditions"] = {
+            "buy": self._filter_valid_conditions(tpl["buy_conditions"]),
+            "sell": self._filter_valid_conditions(tpl["sell_conditions"]),
+        }
+        state["selected_strategy"] = matched_id
+
+        answer = (
+            f"{tpl['strategy_name']}으로 진행할게요.\n"
+            "해당 전략의 매수 기준과 매도 기준을 자동으로 설정했습니다.\n\n"
+            "설정이 완료되면 바로 결과를 확인하실 수 있어요."
+        )
+
+        ui_language = {
+            "type": "backtest_configuration",
+            "strategy": {
+                "strategy_id": matched_id,
+                "strategy_name": tpl["strategy_name"],
+            },
+            "configuration_fields": [
+                {
+                    "field_id": "initial_capital",
+                    "label": "초기 투자 금액",
+                    "type": "number",
+                    "unit": "원",
+                    "default_value": 10000000,
+                    "min_value": 1000000,
+                    "max_value": 1000000000,
+                    "step": 1000000,
+                    "required": True,
+                },
+                {
+                    "field_id": "start_date",
+                    "label": "백테스트 시작일",
+                    "type": "date",
+                    "default_value": "2021-01-01",
+                    "min_value": "2005-01-01",
+                    "max_value": "2025-01-01",
+                    "required": True,
+                },
+                {
+                    "field_id": "end_date",
+                    "label": "백테스트 종료일",
+                    "type": "date",
+                    "default_value": "2024-12-31",
+                    "min_value": "2005-01-01",
+                    "max_value": "2025-01-01",
+                    "required": True,
+                },
+                {
+                    "field_id": "rebalance_frequency",
+                    "label": "리밸런싱 주기",
+                    "type": "select",
+                    "default_value": "MONTHLY",
+                    "options": [
+                        {"value": "DAILY", "label": "매일"},
+                        {"value": "WEEKLY", "label": "매주"},
+                        {"value": "MONTHLY", "label": "매월"},
+                    ],
+                    "required": True,
+                },
+            ],
+        }
+
+        return {
+            "answer": answer,
+            "intent": "backtest_configuration",
+            "ui_language": ui_language,
+            "backtest_conditions": state["backtest_conditions"],
+        }
 
     async def _retrieve_context(self, message: str, intent: str) -> str:
         """Retrieve relevant context from RAG and Backend."""
@@ -805,11 +959,26 @@ class ChatHandler:
 
         return "\n".join(context_parts) if context_parts else ""
 
+    def _filter_valid_conditions(self, conditions: List[dict]) -> List[dict]:
+        """factor/operator 없는 조건은 백테스트 오류를 방지하기 위해 제거."""
+        valid = [
+            c for c in conditions
+            if c.get("factor") and c.get("operator") is not None
+        ]
+        dropped = len(conditions) - len(valid)
+        if dropped:
+            print(f"DSL 조건 필터링: {dropped}개 필수 필드 누락으로 제거")
+        return valid
+
+    def _normalize_text(self, text: str) -> str:
+        """소문자 + 공백 제거로 간단히 정규화."""
+        return re.sub(r"\s+", "", text.lower())
+
     def _load_dsl_system_prompt(self) -> Optional[str]:
         """Load DSL-specific portion from system.txt if present."""
         prompt_path = Path("/app/prompts/system.txt")
         if not prompt_path.exists():
-            prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "system.txt"
+            prompt_path = Path(__file__).parent.parent.parent / "prompts" / "system.txt"
 
         try:
             content = prompt_path.read_text(encoding="utf-8")
@@ -1023,6 +1192,8 @@ class ChatHandler:
 
             # Condition 객체를 딕셔너리로 변환 (Pydantic v1 호환)
             conditions = [condition.dict() for condition in result.conditions]
+            # 필수 필드 누락 조건은 제거
+            conditions = self._filter_valid_conditions(conditions)
 
             if not conditions:
                 return {
@@ -1082,7 +1253,7 @@ class ChatHandler:
         # Explain 전용 프롬프트 로드
         prompt_path = Path("/app/prompts/explain.txt")
         if not prompt_path.exists():
-            prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "explain.txt"
+            prompt_path = Path(__file__).parent.parent.parent / "prompts" / "explain.txt"
 
         if prompt_path.exists():
             explain_system_prompt = prompt_path.read_text(encoding='utf-8')
@@ -1112,40 +1283,9 @@ class ChatHandler:
         # 한글은 대소문자가 없으므로 그대로 사용
         message_check = message.strip()
 
-        # 금지된 패턴들 (투자 조언 금지 정책에서 정의)
-        forbidden_patterns = {
-            # 1. 종목 추천 패턴
-            "종목_추천": [
-                r"(.*?)(삼성|SK|현대|LG|카카오|네이버|넥슨|엔씨소프트|셀트리온|"
-                r"NVIDIA|애플|테슬라|마이크로소프트|구글|알파벳)\s*(추천|사세요|매수|매도|사달라|팔아야)",
-                r"(이 종목|이 주식).*?(상승|하락|사세요|팔아야|매수)",
-                r"(꼭|반드시|꼭꼭|적극)\s*(추천|추천함|포함)",
-            ],
-            # 2. 매매 시점 조언 패턴
-            "매매_시점": [
-                r"(지금|현재|요즘|해야|해야 할)\s*(매수|매도|사세요|팔아야|타이밍|사나|파나)",
-                r"(매수|매도|사야|파야)\s*(하나|할까|할지|해야|합니다)",
-                r"(매수가|적정가|목표가|손절|익절)\s*(설정|하세요|해야)",
-                r"(\d+원).*?(적정|맞는|타이밍)",
-                r"(언제|어디서|어떻게)\s+(매수|매도|사야|파야)",
-            ],
-            # 3. 수익률 보장 패턴
-            "수익률_보장": [
-                r"(보장|확실|확정|100%|무조건)\s*(수익|이익|수익률)",
-                r"(수익|이익).*?(손실|위험).*?(없|없음)",
-                r"(항상|반드시)\s*(수익)",
-            ],
-            # 4. 개인화 조언 패턴
-            "개인화_조언": [
-                r"(당신|너|니|저는|우리는|우리)\s*(경우|상황|환경).*?(전략|투자|추천|사는|사세요)",
-                r"(월|분기|년)\s*(\d+)\s*(만원|천원|원).*?(투자|사세요|해야)",
-                r"(특별히|맞춤|특화|개인|따라).*?(투자|전략|추천)",
-            ],
-        }
-
         # 패턴 매칭
         violations_found = []
-        for violation_type, patterns in forbidden_patterns.items():
+        for violation_type, patterns in self.forbidden_patterns.items():
             for pattern in patterns:
                 if __import__('re').search(pattern, message_check):
                     violations_found.append(violation_type)

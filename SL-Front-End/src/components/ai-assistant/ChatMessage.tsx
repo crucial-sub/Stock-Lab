@@ -21,7 +21,8 @@ export function ChatMessage({ role, content, backtestConditions }: ChatMessagePr
     const queryParams = new URLSearchParams({
       conditions: JSON.stringify(backtestConditions),
     });
-    router.push(`/quant?${queryParams.toString()}`);
+    // 백테스트 신규 페이지로 이동하며 조건을 전달
+    router.push(`/quant/new?${queryParams.toString()}`);
   };
 
   return (

@@ -6,6 +6,7 @@
 import json
 import logging
 import os
+import time
 from typing import Any, List, Optional
 
 import boto3
@@ -120,6 +121,7 @@ def sanitize_json(text: str) -> str:
 # Claude 호출
 # ======================================
 def call_claude_and_get_json(text: str) -> dict:
+    """Bedrock 호출 + 간단한 재시도(Throttling 대비)."""
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 800,
@@ -133,26 +135,37 @@ def call_claude_and_get_json(text: str) -> dict:
         ],
     }
 
-    try:
-        client = get_bedrock_client()
-        response = client.invoke_model(
-            modelId=BEDROCK_MODEL_ID,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(payload),
-        )
+    client = get_bedrock_client()
+    attempts = [1, 2, 4]  # seconds backoff
+    for idx, wait in enumerate([0] + attempts):
+        if wait:
+            time.sleep(wait)
+        try:
+            response = client.invoke_model(
+                modelId=BEDROCK_MODEL_ID,
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps(payload),
+            )
 
-        body = json.loads(response["body"].read())
-        completion = body["content"][0]["text"]
+            body = json.loads(response["body"].read())
+            completion = body["content"][0]["text"]
 
-        cleaned = sanitize_json(completion)
-        parsed = json.loads(cleaned)
+            cleaned = sanitize_json(completion)
+            parsed = json.loads(cleaned)
 
-        return parsed
-
-    except Exception as exc:
-        logger.warning("Claude DSL 변환 실패 → fallback 사용. 사유: %s", exc)
-        return {"conditions": []}
+            return parsed
+        except Exception as exc:
+            logger.warning(
+                "Claude DSL 변환 실패(시도 %s/%s) → %s",
+                idx + 1,
+                len(attempts) + 1,
+                exc,
+            )
+            last_exc = exc
+            # 다음 루프에서 재시도
+    logger.warning("Claude DSL 변환 재시도 모두 실패 → fallback 사용. 사유: %s", last_exc)
+    return {"conditions": []}
 
 # ======================================
 # 최종 파싱 인터페이스

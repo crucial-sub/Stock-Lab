@@ -7,7 +7,10 @@ import { sendChatMessage } from "@/lib/api/chatbot";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  backtestConditions?: any[];
+  backtestConditionsBuy?: any[];
+  backtestConditionsSell?: any[];
+  appliedBuy?: boolean;
+  appliedSell?: boolean;
 }
 
 interface BuyConditionUI {
@@ -35,17 +38,6 @@ interface AIHelperSidebarProps {
   currentSellConditions?: SellConditionUI[];
 }
 
-// 간단한 의도 감지: 매수/매도/전략 키워드 파악
-const detectTradeIntent = (text: string) => {
-  const lowered = text.toLowerCase();
-  const hasBuy =
-    /매수|사고싶어|사고 싶어|매입|buy/.test(lowered);
-  const hasSell =
-    /매도|팔고싶어|팔고 싶어|청산|sell/.test(lowered);
-  const hasStrategy = /전략/.test(lowered);
-  return { hasBuy, hasSell, hasStrategy };
-};
-
 /**
  * AI 헬퍼 전용 메시지 컴포넌트
  */
@@ -53,22 +45,28 @@ function AIHelperMessage({
   message,
   onBuyConditionsAdd,
   onSellConditionsAdd,
+  onBuyApplied,
+  onSellApplied,
 }: {
   message: Message;
   onBuyConditionsAdd?: (conditions: any[]) => void;
   onSellConditionsAdd?: (conditions: any[]) => void;
+  onBuyApplied?: () => void;
+  onSellApplied?: () => void;
 }) {
   const isUser = message.role === "user";
 
   const handleAddBuyConditions = () => {
-    if (message.backtestConditions && onBuyConditionsAdd) {
-      onBuyConditionsAdd(message.backtestConditions);
+    if (message.backtestConditionsBuy && message.backtestConditionsBuy.length > 0 && onBuyConditionsAdd) {
+      onBuyConditionsAdd(message.backtestConditionsBuy);
+      onBuyApplied?.();
     }
   };
 
   const handleAddSellConditions = () => {
-    if (message.backtestConditions && onSellConditionsAdd) {
-      onSellConditionsAdd(message.backtestConditions);
+    if (message.backtestConditionsSell && message.backtestConditionsSell.length > 0 && onSellConditionsAdd) {
+      onSellConditionsAdd(message.backtestConditionsSell);
+      onSellApplied?.();
     }
   };
 
@@ -109,22 +107,32 @@ function AIHelperMessage({
         </div>
 
         {/* 조건 추가 버튼 - 매수/매도 분리 */}
-        {!isUser && message.backtestConditions && message.backtestConditions.length > 0 && (
+        {!isUser && (message.backtestConditionsBuy?.length || message.backtestConditionsSell?.length) ? (
           <div className="mt-3 flex gap-2">
             <button
               onClick={handleAddBuyConditions}
-              className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors"
+              disabled={message.appliedBuy || !message.backtestConditionsBuy?.length}
+              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                message.appliedBuy
+                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                  : "bg-red-500 hover:bg-red-600 text-white"
+              }`}
             >
-              매수 조건에 추가
+              {message.appliedBuy ? "매수 적용됨" : "매수 조건에 추가"}
             </button>
             <button
               onClick={handleAddSellConditions}
-              className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+              disabled={message.appliedSell || !message.backtestConditionsSell?.length}
+              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                message.appliedSell
+                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 text-white"
+              }`}
             >
-              매도 조건에 추가
+              {message.appliedSell ? "매도 적용됨" : "매도 조건에 추가"}
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -207,18 +215,17 @@ export function AIHelperSidebar({
         setSessionId(response.session_id);
 
         // AI 응답 메시지 추가
-        const { hasBuy, hasSell, hasStrategy } = detectTradeIntent(value);
-        const dslConditions = response.backtest_conditions || [];
+        const backtestConditions = response.backtest_conditions || {};
+        const buyConditions = backtestConditions.buy || backtestConditions || [];
+        const sellConditions = backtestConditions.sell || [];
 
-        // 전략/매수/매도 키워드를 기반으로 자동 추가
-        if (dslConditions.length > 0) {
-          const shouldAddToBuy = hasBuy || !hasSell || hasStrategy;
-          if (shouldAddToBuy) {
-            onBuyConditionsAdd?.(dslConditions);
-          }
-          if (hasSell) {
-            onSellConditionsAdd?.(dslConditions);
-          }
+        // intent가 backtest_configuration이면 기본 조건 자동 적용
+        const isAutoApply = response.intent === "backtest_configuration";
+        if (isAutoApply && buyConditions.length > 0) {
+            onBuyConditionsAdd?.(buyConditions);
+        }
+        if (isAutoApply && sellConditions.length > 0) {
+            onSellConditionsAdd?.(sellConditions);
         }
 
         setMessages((prev) => [
@@ -226,7 +233,10 @@ export function AIHelperSidebar({
           {
             role: "assistant",
             content: response.answer,
-            backtestConditions: response.backtest_conditions,
+            backtestConditionsBuy: buyConditions,
+            backtestConditionsSell: sellConditions,
+            appliedBuy: isAutoApply && buyConditions.length > 0,
+            appliedSell: isAutoApply && sellConditions.length > 0,
           },
         ]);
       } catch (error) {
@@ -272,6 +282,20 @@ export function AIHelperSidebar({
                 message={message}
                 onBuyConditionsAdd={onBuyConditionsAdd}
                 onSellConditionsAdd={onSellConditionsAdd}
+                onBuyApplied={() =>
+                  setMessages((prev) =>
+                    prev.map((m, i) =>
+                      i === index ? { ...m, appliedBuy: true } : m
+                    )
+                  )
+                }
+                onSellApplied={() =>
+                  setMessages((prev) =>
+                    prev.map((m, i) =>
+                      i === index ? { ...m, appliedSell: true } : m
+                    )
+                  )
+                }
               />
             ))}
           </div>

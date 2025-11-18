@@ -9,7 +9,6 @@ export interface PostSummary {
   title: string;
   contentPreview: string;
   authorNickname: string | null;
-  authorId: string | null;
   isAnonymous: boolean;
   tags: string[] | null;
   postType: string;
@@ -178,19 +177,13 @@ export const communityApi = {
     postType?: string;
     tags?: string;
     search?: string;
-    userId?: string;
     page?: number;
     limit?: number;
     orderBy?: string;
   }): Promise<PostListResponse> => {
     const response = await axiosInstance.get<PostListResponse>(
       "/community/posts",
-      {
-        params: {
-          ...params,
-          user_id: params?.userId, // camelCase를 snake_case로 변환
-        }
-      }
+      { params }
     );
     return response.data;
   },

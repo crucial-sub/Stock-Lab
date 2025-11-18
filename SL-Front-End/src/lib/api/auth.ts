@@ -122,22 +122,4 @@ export const authApi = {
     );
     return response.data;
   },
-
-  /**
-   * 비밀번호 변경
-   */
-  updatePassword: async (data: { current_password: string; new_password: string }): Promise<{ message: string; email: string }> => {
-    const response = await axiosInstance.patch("/auth/update-password", data);
-    return response.data;
-  },
-
-  /**
-   * 회원탈퇴
-   */
-  deleteAccount: async (data: { email: string; password: string; phone_number: string }): Promise<{ message: string; email: string }> => {
-    const response = await axiosInstance.delete("/auth/delete-account", {
-      data
-    });
-    return response.data;
-  },
 };

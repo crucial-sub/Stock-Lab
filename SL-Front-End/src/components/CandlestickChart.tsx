@@ -200,8 +200,6 @@ export default function CandlestickChart({ candles, onChartReady, baselinePrice 
                 top: 0.05,
                 bottom: 0.05,
               },
-              fontSize: 11,
-              textColor: '#71717A',
               mode: 0,
               autoScale: true,
               minimumWidth: 60,
@@ -286,7 +284,7 @@ export default function CandlestickChart({ candles, onChartReady, baselinePrice 
       const normalized = [...candles]
         .sort((a, b) => a.time - b.time)
         .map((c) => ({
-          time: c.time,
+          time: c.time as any,
           open: toPositive(c.open),
           high: toPositive(c.high),
           low: toPositive(c.low),

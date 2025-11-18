@@ -46,9 +46,11 @@ def get_tools(news_retriever=None, factor_sync=None) -> List:
                 formatted_news = [
                     {
                         "title": news.get("title", ""),
-                        "summary": news.get("summary", "")[:200],  # 첫 200자
-                        "sentiment": news.get("sentiment", "neutral"),
-                        "publishedAt": news.get("publishedAt", ""),
+                        "summary": (news.get("summary") or news.get("content") or "")[:200],
+                        "sentiment_score": news.get("sentiment_score"),
+                        "sentiment_label": news.get("sentiment_label") or news.get("sentiment"),
+                        "risk_tags": news.get("risk_tags"),
+                        "date": news.get("date") or news.get("publishedAt"),
                         "source": news.get("source", "")
                     }
                     for news in news_list[:max_results]

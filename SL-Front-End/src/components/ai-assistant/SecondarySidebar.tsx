@@ -29,6 +29,8 @@ interface SecondarySidebarProps {
   onChatClick?: (chatId: string) => void;
   /** 채팅 삭제 핸들러 */
   onChatDelete?: (chatId: string) => void;
+  /** 새 채팅 생성 핸들러 */
+  onNewChat?: () => void;
 }
 
 const DEFAULT_CHAT_HISTORY: ChatHistory[] = [
@@ -45,6 +47,7 @@ export function SecondarySidebar({
   chatHistory = DEFAULT_CHAT_HISTORY,
   onChatClick,
   onChatDelete,
+  onNewChat,
 }: SecondarySidebarProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
@@ -95,6 +98,15 @@ export function SecondarySidebar({
           .filter(Boolean)
           .join(" ")}
       >
+        {onNewChat && (
+          <button
+            type="button"
+            onClick={onNewChat}
+            className="mb-3 w-full h-[38px] rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand-dark transition-colors"
+          >
+            새 채팅
+          </button>
+        )}
         <ul className="flex flex-col gap-1">
           {chatHistory.map((chat) => (
             <li

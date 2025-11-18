@@ -18,6 +18,7 @@ import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useQuantTabStore } from "@/stores";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
+import { useRef } from "react";
 
 /**
  * 탭 컴포넌트들을 동적으로 로드 (코드 스플리팅)
@@ -48,6 +49,7 @@ export function QuantNewPageClient() {
 
   // 요약 패널 열림/닫힘 상태
   const [isSummaryPanelOpen, setIsSummaryPanelOpen] = useState(true);
+  const conditionsAppliedRef = useRef(false);
 
   // React Query로 데이터 fetch (클라이언트 사이드)
   // 데이터는 하위 컴포넌트에서 사용하므로 여기서는 캐싱 목적으로만 fetch
@@ -60,11 +62,13 @@ export function QuantNewPageClient() {
   const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
 
   useEffect(() => {
+    if (conditionsAppliedRef.current) return;
     const conditionsParam = searchParams.get("conditions");
     if (!conditionsParam) return;
 
     try {
       const conditions = JSON.parse(conditionsParam);
+      conditionsAppliedRef.current = true;
 
       // 조건을 데이터와 함께 한 번에 추가
       conditions.forEach((dslCondition: any) => {

@@ -29,6 +29,8 @@ interface SecondarySidebarProps {
   onChatClick?: (chatId: string) => void;
   /** 채팅 삭제 핸들러 */
   onChatDelete?: (chatId: string) => void;
+  /** 전체 채팅 삭제 핸들러 */
+  onDeleteAll?: () => void;
   /** 새 채팅 생성 핸들러 */
   onNewChat?: () => void;
 }
@@ -47,6 +49,7 @@ export function SecondarySidebar({
   chatHistory = DEFAULT_CHAT_HISTORY,
   onChatClick,
   onChatDelete,
+  onDeleteAll,
   onNewChat,
 }: SecondarySidebarProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -88,26 +91,49 @@ export function SecondarySidebar({
         </div>
       </button>
 
-      {/* 채팅 내역 목록 */}
+      {/* 채팅 내역 목록 - 독립 스크롤 추가 */}
       <nav
         className={[
           "absolute left-[18px] top-[110px] w-[204px]",
+          "h-[calc(100vh-130px)]", // 화면 높이에서 상단 여백 제외
+          "flex flex-col",
           "transition-opacity duration-300",
           isOpen ? "opacity-100" : "opacity-0 pointer-events-none",
         ]
           .filter(Boolean)
           .join(" ")}
       >
-        {onNewChat && (
-          <button
-            type="button"
-            onClick={onNewChat}
-            className="mb-3 w-full h-[38px] rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand-dark transition-colors"
-          >
-            새 채팅
-          </button>
-        )}
-        <ul className="flex flex-col gap-1">
+        {/* 버튼 그룹 */}
+        <div className="flex gap-2 mb-3 flex-shrink-0">
+          {onNewChat && (
+            <button
+              type="button"
+              onClick={onNewChat}
+              className="flex-1 h-[38px] rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand-dark transition-colors"
+            >
+              새 채팅
+            </button>
+          )}
+          {onDeleteAll && chatHistory.length > 0 && (
+            <button
+              type="button"
+              onClick={onDeleteAll}
+              className="w-[38px] h-[38px] rounded-lg bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors flex items-center justify-center"
+              title="전체 삭제"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-5 h-5"
+              >
+                <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        <ul className="flex flex-col gap-1 overflow-y-auto flex-1 pr-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {chatHistory.map((chat) => (
             <li
               key={chat.id}

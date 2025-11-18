@@ -148,7 +148,18 @@ module.exports = {
         lg: "var(--radius-lg) /* 12px */",
         xl: "var(--radius-xl) /* 16px */",
       },
+
+      /* 7) 커서 깜빡임 애니메이션 (StreamingMarkdownRenderer용) */
+      animation: {
+        blink: "blink 1s step-end infinite",
+      },
+      keyframes: {
+        blink: {
+          "0%, 50%": { opacity: "1" },
+          "50.01%, 100%": { opacity: "0" },
+        },
+      },
     },
   },
-  plugins: [],
+  plugins: [require("@tailwindcss/typography")],
 };

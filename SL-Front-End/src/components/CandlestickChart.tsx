@@ -118,8 +118,8 @@ export default function CandlestickChart({ candles, onChartReady, baselinePrice 
         timeScale.fitContent()
       } else {
         timeScale.setVisibleRange({
-          from: firstVisible.time,
-          to: lastVisible.time + padding,
+          from: firstVisible.time as any,
+          to: (lastVisible.time + padding) as any,
         })
       }
       timeScale.scrollToRealTime()

@@ -5,8 +5,8 @@ import { QuestionnaireView } from "./QuestionnaireView";
 import { RecommendationView } from "./RecommendationView";
 
 interface Message {
-  role: "user" | "assistant";
-  content: string;
+  role: "user" | "assistant" | "system";
+  content?: string;
 }
 
 interface ChatInterfaceProps {

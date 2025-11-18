@@ -104,13 +104,18 @@ export function AIAssistantPageClient({
     retry: retryStream,
   } = useChatStream(sessionId || "temp_session");
 
-  const dedupeSessions = useCallback((list: ChatSession[]) => {
-    const map = new Map<string, ChatSession>();
-    list.forEach((s) => map.set(s.id, s));
-    return Array.from(map.values());
+  // 세션 중복 제거 유틸리티 함수
+  const dedupeSessions = useCallback((sessions: ChatSession[]) => {
+    const seen = new Set<string>();
+    return sessions.filter((session) => {
+      if (seen.has(session.id)) return false;
+      seen.add(session.id);
+      return true;
+    });
   }, []);
 
   // 채팅 세션 저장 함수 (로컬 상태)
+  // 중복 체크 로직 인라인으로 최적화
   const saveChatSession = (sessionId: string, firstMessage: string) => {
     const newSession: ChatSession = {
       id: sessionId,
@@ -124,10 +129,9 @@ export function AIAssistantPageClient({
     };
 
     setChatSessions((prev) => {
-      const next = prev.find((s) => s.id === sessionId)
-        ? prev
-        : [newSession, ...prev];
-      return dedupeSessions(next);
+      // 중복 체크: 이미 존재하는 세션이면 추가하지 않음
+      const exists = prev.some((s) => s.id === sessionId);
+      return exists ? prev : [newSession, ...prev];
     });
   };
 
@@ -141,12 +145,13 @@ export function AIAssistantPageClient({
 
     try {
       // user와 assistant 메시지만 필터링 (system 제외)
-      // 백엔드 스키마에 message_order 필드가 없으므로 제거 (배열 순서로 자동 처리됨)
+      // message_order 추가 (배열 인덱스 기반)
       const validMessages = msgs
         .filter(msg => msg.role === "user" || msg.role === "assistant")
-        .map((msg) => ({
+        .map((msg, index) => ({
           role: msg.role as "user" | "assistant",
           content: "content" in msg ? msg.content : "",
+          message_order: index,
         }));
 
       if (validMessages.length === 0) {
@@ -537,12 +542,15 @@ export function AIAssistantPageClient({
     console.log("Answer selected:", questionId, optionId, answerText);
 
     // 현재 질문을 히스토리에 저장 (다음 질문으로 넘어가기 전에)
-    if (chatResponse?.ui_language?.question) {
-      setQuestionHistory((prev) => [...prev, {
-        questionId: questionId,
-        selectedOptionId: optionId,
-        question: chatResponse.ui_language.question
-      }]);
+    if (chatResponse?.ui_language?.type?.startsWith("questionnaire") && "question" in chatResponse.ui_language) {
+      const question = chatResponse.ui_language.question;
+      if (question && question.question_id === questionId) {
+        setQuestionHistory((prev) => [...prev, {
+          questionId: questionId,
+          selectedOptionId: optionId,
+          question: question.text
+        }]);
+      }
     }
 
     // 사용자 답변을 메시지에 추가
@@ -614,7 +622,13 @@ export function AIAssistantPageClient({
               className="flex-1 overflow-y-auto mb-4 px-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             >
               <div className="w-full max-w-[1000px] mx-auto">
-                <ChatHistory messages={messages} />
+                <ChatHistory
+                  messages={messages}
+                  isWaitingForAI={
+                    connectionState === "connecting" ||
+                    connectionState === "connected"
+                  }
+                />
 
                 {/* SSE 스트리밍 중인 메시지 */}
                 {isStreaming && streamContent && (

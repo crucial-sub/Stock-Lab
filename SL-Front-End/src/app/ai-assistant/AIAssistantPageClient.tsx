@@ -5,6 +5,7 @@ import { ChatInterface } from "@/components/ai-assistant/ChatInterface";
 import { SecondarySidebar } from "@/components/ai-assistant/SecondarySidebar";
 import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { StreamingMarkdownRenderer } from "@/components/ai-assistant/StreamingMarkdownRenderer";
+import { QuestionnaireFlow } from "@/components/ai-assistant/QuestionnaireFlow";
 import { AISearchInput } from "@/components/home/ui";
 import { useChatStream } from "@/hooks/useChatStream";
 import { chatHistoryApi } from "@/lib/api/chat-history";
@@ -12,6 +13,8 @@ import { sendChatMessage, type ChatResponse } from "@/lib/api/chatbot";
 import { getAuthTokenFromCookie } from "@/lib/auth/token";
 import { useCallback, useEffect, useState, useRef } from "react";
 import type { Message, TextMessage, MarkdownMessage } from "@/types/message";
+import type { QuestionnaireAnswer } from "@/data/assistantQuestionnaire";
+import { QUESTIONNAIRE_CTA, QUESTIONNAIRE_START_BUTTON, createAnswer } from "@/data/assistantQuestionnaire";
 
 // 메시지 생성 헬퍼 함수
 function createTextMessage(role: "user" | "assistant", content: string): TextMessage {
@@ -47,6 +50,9 @@ interface ChatSession {
     selectedOptionId: string;
     question: any;
   }>;
+  // 새로운 설문 시스템용
+  questionnaireAnswers?: QuestionnaireAnswer[];
+  currentQuestionStep?: number;
 }
 
 /**
@@ -86,6 +92,10 @@ export function AIAssistantPageClient({
   const [currentMode, setCurrentMode] = useState<"initial" | "chat" | "questionnaire">("initial");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const MIN_REQUEST_INTERVAL = 2000; // 최소 2초 간격
+
+  // 새로운 설문 시스템 상태
+  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<QuestionnaireAnswer[]>([]);
+  const [currentQuestionStep, setCurrentQuestionStep] = useState<number>(1);
 
   // SSE 스트리밍 상태
   const [streamingMessage, setStreamingMessage] = useState<string>("");
@@ -273,42 +283,32 @@ export function AIAssistantPageClient({
     setQuestionHistory(session.questionHistory || []);
   };
 
-  const handleLargeCardClick = async () => {
-    // 전략 추천 플로우 시작
+  const handleLargeCardClick = () => {
+    // 전략 추천 플로우 시작 (새로운 설문 시스템)
     console.log("Starting strategy recommendation flow");
 
+    // 세션 ID 생성
+    const newSessionId = crypto.randomUUID();
+    setSessionId(newSessionId);
+
     // 사용자 메시지 추가
-    const userMessage = "전략 추천받고 싶어요";
+    const userMessage = "투자 성향 설문을 시작하고 싶어요";
     setMessages((prev) => [...prev, createTextMessage("user", userMessage)]);
+
+    // 설문 모드로 전환
     setCurrentMode("questionnaire");
+    setCurrentQuestionStep(1);
+    setQuestionnaireAnswers([]);
 
-    setIsLoading(true);
-    try {
-      const response = await sendChatMessage({
-        message: userMessage,
-      });
+    // AI 환영 메시지 추가
+    const welcomeMessage = "투자 성향을 파악하여 맞춤 전략을 추천해드리겠습니다. 5개의 질문에 답변해주세요.";
+    setMessages((prev) => [
+      ...prev,
+      createMarkdownMessage("assistant", welcomeMessage),
+    ]);
 
-      setSessionId(response.session_id);
-      setChatResponse(response);
-
-      // AI 응답 메시지 추가 (설문조사 시작이라는 응답)
-      if (response.answer) {
-        setMessages((prev) => [
-          ...prev,
-          createMarkdownMessage("assistant", response.answer),
-        ]);
-      }
-
-      // 채팅 세션 저장
-      saveChatSession(response.session_id, userMessage);
-
-      console.log("Response:", response);
-      console.log("UI Language:", response.ui_language);
-    } catch (error) {
-      console.error("Failed to start recommendation:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    // 채팅 세션 저장
+    saveChatSession(newSessionId, userMessage);
   };
 
   const handleSampleClick = async (strategyId: string) => {
@@ -579,6 +579,57 @@ export function AIAssistantPageClient({
     }
   };
 
+  // 새로운 설문 시스템용 핸들러
+  const handleQuestionnaireAnswerSelect = (questionId: string, optionId: string, answerText: string) => {
+    console.log("Questionnaire answer selected:", questionId, optionId, answerText);
+
+    // 답변을 상태에 저장
+    const answer = createAnswer(questionId, optionId);
+    if (answer) {
+      setQuestionnaireAnswers((prev) => {
+        // 기존 답변 제거 (수정 케이스)
+        const filtered = prev.filter(a => a.questionId !== questionId);
+        return [...filtered, answer];
+      });
+    }
+
+    // 사용자 답변을 메시지에 추가
+    setMessages((prev) => [...prev, createTextMessage("user", answerText)]);
+
+    // 다음 질문으로 이동
+    setCurrentQuestionStep((prev) => prev + 1);
+  };
+
+  const handleQuestionnaireNavigate = (order: number) => {
+    console.log("Navigating to question:", order);
+    setCurrentQuestionStep(order);
+  };
+
+  const handleQuestionnaireComplete = async (tags: string[]) => {
+    console.log("Questionnaire completed with tags:", tags);
+
+    // 전략 추천 요청 메시지 추가
+    const requestMessage = "이 태그들로 전략을 추천받고 싶어요";
+    setMessages((prev) => [...prev, createTextMessage("user", requestMessage)]);
+
+    // TODO: 백엔드 API 호출하여 전략 추천 받기
+    // 임시로 로딩 메시지 표시
+    setIsLoading(true);
+    setMessages((prev) => [
+      ...prev,
+      createMarkdownMessage("assistant", "태그를 분석하여 맞춤 전략을 추천하고 있습니다..."),
+    ]);
+
+    // 임시: 3초 후 완료 (실제로는 API 응답 처리)
+    setTimeout(() => {
+      setIsLoading(false);
+      setMessages((prev) => [
+        ...prev,
+        createMarkdownMessage("assistant", "전략 추천이 완료되었습니다! (백엔드 연동 필요)"),
+      ]);
+    }, 3000);
+  };
+
   // 새 채팅 시작: 상태 초기화
   const handleNewChat = () => {
     setSessionId("");
@@ -586,6 +637,8 @@ export function AIAssistantPageClient({
     setCurrentMode("initial");
     setChatResponse(null);
     setQuestionHistory([]);
+    setQuestionnaireAnswers([]);
+    setCurrentQuestionStep(1);
   };
 
   return (
@@ -604,15 +657,31 @@ export function AIAssistantPageClient({
 
       {/* 메인 콘텐츠 - 넘침 방지, 높이 고정 */}
       <main className="flex-1 flex flex-col px-10 pt-[120px] pb-20 overflow-hidden">
-        {/* 설문조사 모드 */}
-        {currentMode === "questionnaire" && chatResponse?.ui_language ? (
-          <ChatInterface
-            chatResponse={chatResponse}
-            isLoading={isLoading}
-            onAnswerSelect={handleAnswerSelect}
-            messages={messages}
-            questionHistory={questionHistory}
-          />
+        {/* 설문조사 모드 (새로운 설문 시스템) */}
+        {currentMode === "questionnaire" ? (
+          <div className="flex-1 flex flex-col w-full max-w-[1000px] mx-auto min-h-0">
+            {/* 채팅 히스토리 표시 (스크롤 가능) */}
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 overflow-y-auto mb-4 px-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+            >
+              <div className="w-full max-w-[1000px] mx-auto mb-6">
+                <ChatHistory
+                  messages={messages}
+                  isWaitingForAI={false}
+                />
+              </div>
+
+              {/* QuestionnaireFlow 컴포넌트 */}
+              <QuestionnaireFlow
+                currentStep={currentQuestionStep}
+                answers={questionnaireAnswers}
+                onAnswerSelect={handleQuestionnaireAnswerSelect}
+                onComplete={handleQuestionnaireComplete}
+                onNavigateToQuestion={handleQuestionnaireNavigate}
+              />
+            </div>
+          </div>
         ) : currentMode === "chat" ? (
           /* 채팅 모드 */
           <div className="flex-1 flex flex-col w-full max-w-[1000px] mx-auto min-h-0">

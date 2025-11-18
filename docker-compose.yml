@@ -50,17 +50,17 @@ services:
     env_file:
       - ./SL-Back-end/.env.local
     environment:
-      # 로컬 개발 환경용 데이터베이스 연결 (Docker 네트워크 내부)
-      DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
-      DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
+      # 데이터베이스 연결 설정
+      # 로컬: postgres:5432 (Docker 컨테이너)
+      # EC2: sl-postgres-db.cl0gcamkufcq.ap-northeast-2.rds.amazonaws.com:5432 (AWS RDS)
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db}
+      DATABASE_SYNC_URL: ${DATABASE_SYNC_URL:-postgresql://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db}
       # Redis 설정은 .env.local에서 관리
       # 로컬: redis:6379 (Docker 컨테이너)
       # 프로덕션(EC2): clustercfg.sl-redis-cl.lvbc9o.apn2.cache.amazonaws.com:6379
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:

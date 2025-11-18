@@ -108,9 +108,11 @@ async def get_posts(
                 title=post.title,
                 content_preview=content_preview,
                 author_nickname=user.nickname if not post.is_anonymous else None,
+                author_id=str(post.user_id),
                 is_anonymous=post.is_anonymous,
                 tags=post.tags,
                 post_type=post.post_type,
+                session_snapshot=SessionSnapshot(**post.session_snapshot) if post.session_snapshot else None,
                 view_count=post.view_count,
                 like_count=post.like_count,
                 comment_count=post.comment_count,
@@ -798,41 +800,40 @@ async def toggle_comment_like(
 async def get_top_rankings(
     db: AsyncSession = Depends(get_db)
 ):
-    """상위 3개 수익률 랭킹 조회 (캐시 사용)"""
+    """상위 3개 수익률 랭킹 조회 (Redis Sorted Set 사용, Redis 없으면 DB 폴백)"""
     try:
-        # Redis 캐시 확인
-        try:
-            from app.core.cache import get_redis
-            redis_client = get_redis()
-            if redis_client:
-                cached = await redis_client.get("community:rankings:top3")
-                if cached:
-                    logger.info("캐시에서 랭킹 조회")
-                    data = json.loads(cached)
-                    return TopRankingsResponse(**data)
-        except Exception as e:
-            logger.warning(f"Redis 캐시 조회 실패: {e}")
+        from app.services.ranking_service import get_ranking_service
 
-        # DB 조회
+        # 🚀 Redis Sorted Set에서 TOP 3 조회 (O(1))
+        ranking_service = await get_ranking_service()
+
+        if ranking_service.enabled:
+            # Redis에서 세션 ID 가져오기
+            top_session_ids = await ranking_service.get_top_rankings(limit=3)
+
+            if top_session_ids:
+                # DB에서 상세 정보만 조회 (필요한 것만 SELECT)
+                rankings = await _get_rankings_by_session_ids(db, top_session_ids)
+
+                response = TopRankingsResponse(
+                    rankings=rankings,
+                    updated_at=datetime.now()
+                )
+
+                logger.info(f"✅ Redis Sorted Set에서 TOP 3 조회 완료")
+                return response
+            else:
+                logger.warning("Redis Sorted Set이 비어있음, DB로 폴백")
+        else:
+            logger.info("Redis 비활성화 상태, DB에서 직접 조회")
+
+        # ⚠️ Fallback: Redis 비활성화 또는 데이터 없을 때 DB 직접 조회
         rankings = await _get_rankings_from_db(db, limit=3)
 
         response = TopRankingsResponse(
             rankings=rankings,
             updated_at=datetime.now()
         )
-
-        # 캐시 저장 (1시간)
-        try:
-            from app.core.cache import get_redis
-            redis_client = get_redis()
-            if redis_client:
-                await redis_client.setex(
-                    "community:rankings:top3",
-                    3600,  # 1 hour
-                    response.model_dump_json()
-                )
-        except Exception as e:
-            logger.warning(f"Redis 캐시 저장 실패: {e}")
 
         return response
 
@@ -881,12 +882,74 @@ async def get_rankings(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def _get_rankings_by_session_ids(
+    db: AsyncSession,
+    session_ids: List[str]
+) -> List[RankingItem]:
+    """
+    세션 ID 리스트로 랭킹 데이터 조회 (Redis Sorted Set용)
+
+    Args:
+        db: DB 세션
+        session_ids: 세션 ID 리스트 (이미 정렬됨)
+
+    Returns:
+        RankingItem 리스트
+    """
+    from sqlalchemy import cast
+    from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
+
+    if not session_ids:
+        return []
+
+    # session_id IN (...) 쿼리 (순서 유지를 위해 CASE 사용)
+    query = (
+        select(
+            PortfolioStrategy,
+            SimulationSession,
+            SimulationStatistics,
+            User
+        )
+        .join(SimulationSession, SimulationSession.strategy_id == PortfolioStrategy.strategy_id)
+        .join(SimulationStatistics, SimulationStatistics.session_id == SimulationSession.session_id)
+        .outerjoin(User, User.user_id == cast(PortfolioStrategy.user_id, PostgreSQL_UUID))
+        .where(SimulationSession.session_id.in_(session_ids))
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    # session_id -> 데이터 매핑
+    session_map = {}
+    for strategy, session, stats, user in rows:
+        session_map[session.session_id] = (strategy, session, stats, user)
+
+    # Redis에서 받은 순서대로 정렬
+    rankings = []
+    for rank, session_id in enumerate(session_ids, start=1):
+        if session_id in session_map:
+            strategy, session, stats, user = session_map[session_id]
+            rankings.append(RankingItem(
+                rank=rank,
+                strategy_id=strategy.strategy_id,
+                session_id=session.session_id,
+                strategy_name=strategy.strategy_name,
+                author_nickname=user.nickname if user and not strategy.is_anonymous else None,
+                total_return=stats.total_return,
+                annualized_return=stats.annualized_return,
+                max_drawdown=stats.max_drawdown,
+                sharpe_ratio=stats.sharpe_ratio
+            ))
+
+    return rankings
+
+
 async def _get_rankings_from_db(
     db: AsyncSession,
     offset: int = 0,
     limit: int = 3
 ) -> List[RankingItem]:
-    """DB에서 랭킹 데이터 조회"""
+    """DB에서 랭킹 데이터 조회 (Fallback용)"""
     from sqlalchemy import cast
     from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
 
@@ -929,6 +992,64 @@ async def _get_rankings_from_db(
         ))
 
     return rankings
+
+
+# ============================================================
+# 랭킹 관리 API (관리자용)
+# ============================================================
+
+@router.post("/rankings/rebuild")
+async def rebuild_rankings(
+    limit: int = Query(100, ge=1, le=500, description="재구축할 개수"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Redis 랭킹 재구축 (관리자 전용)
+    - 기존 백테스트 데이터를 Redis에 로드
+    - DB에서 TOP N개를 조회하여 Redis Sorted Set에 추가
+    """
+    try:
+        from app.services.ranking_service import get_ranking_service
+
+        # 관리자 권한 체크 (선택사항)
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+        logger.info(f"🔄 랭킹 재구축 시작 (요청: {current_user.email}, limit={limit})")
+
+        ranking_service = await get_ranking_service()
+
+        if not ranking_service.enabled:
+            raise HTTPException(
+                status_code=503,
+                detail="Redis가 비활성화되어 있습니다"
+            )
+
+        # 기존 랭킹 삭제
+        from app.core.cache import get_redis
+        redis_client = get_redis()
+        old_count = await redis_client.zcard("rankings:all")
+        await redis_client.delete("rankings:all")
+        logger.info(f"🗑️ 기존 랭킹 삭제: {old_count}개")
+
+        # DB에서 재구축
+        rebuilt_count = await ranking_service.rebuild_from_db(db, limit=limit)
+
+        logger.info(f"✅ 랭킹 재구축 완료: {rebuilt_count}개 항목")
+
+        return {
+            "message": "랭킹 재구축 완료",
+            "old_count": old_count,
+            "new_count": rebuilt_count,
+            "limit": limit
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"랭킹 재구축 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================

@@ -4,12 +4,14 @@ import { redirect } from "next/navigation";
 
 // 2. Internal imports (프로젝트 내부)
 import { strategyApi } from "@/lib/api/strategy";
+import { autoTradingApi } from "@/lib/api/auto-trading";
 import { formatDateToCard } from "@/lib/date-utils";
 import { PortfolioPageClient } from "./PortfolioPageClient";
 
 // 포트폴리오 타입 정의 (PortfolioPageClient의 Portfolio 타입과 동일)
 interface Portfolio {
   id: string;
+  strategyId: string;
   title: string;
   profitRate: number;
   isActive: boolean;
@@ -37,12 +39,21 @@ export default async function PortfolioPage() {
 
   // 서버에서 전략 목록 데이터 가져오기
   try {
-    // API 호출 - 서버 사이드 axios 인스턴스 사용 (토큰 수동 전달)
+    // 1. 백테스트 전략 목록 가져오기
     const data = await strategyApi.getMyStrategiesServer(token);
 
-    // API 응답을 PortfolioPageClient가 필요로 하는 형태로 변환
-    const portfolios: Portfolio[] = data.strategies.map((strategy) => ({
+    // 2. 자동매매 활성화된 전략 목록 가져오기
+    let autoTradingStrategies: any[] = [];
+    try {
+      autoTradingStrategies = await autoTradingApi.getMyAutoTradingStrategiesServer(token);
+    } catch (error) {
+      console.warn("자동매매 전략 조회 실패:", error);
+    }
+
+    // 백테스트 전략을 Portfolio 형태로 변환
+    const backtestPortfolios: Portfolio[] = data.strategies.map((strategy) => ({
       id: strategy.sessionId,
+      strategyId: strategy.strategyId,
       title: strategy.strategyName,
       profitRate: strategy.totalReturn ?? 0,
       isActive: strategy.isActive,
@@ -50,24 +61,43 @@ export default async function PortfolioPage() {
       createdAt: formatDateToCard(strategy.createdAt),
     }));
 
-    // 대시보드 통계 계산
-    // TODO: 실제로는 서버에서 별도 API로 받아와야 하지만,
-    // 현재는 전략 목록 데이터로부터 계산
-    const activeCount = portfolios.filter((p) => p.isActive).length;
+    // 자동매매 전략을 Portfolio 형태로 변환
+    const autoTradingPortfolios: Portfolio[] = autoTradingStrategies
+      .filter((s) => s.is_active) // 활성화된 것만
+      .map((strategy) => ({
+        id: `auto-${strategy.strategy_id}`, // 고유한 ID 생성
+        strategyId: strategy.strategy_id,
+        title: `🤖 자동매매 활성화됨`,
+        profitRate: 0, // TODO: 실제 수익률 계산 필요
+        isActive: true,
+        lastModified: formatDateToCard(strategy.activated_at || strategy.created_at),
+        createdAt: formatDateToCard(strategy.created_at),
+      }));
 
-    // 총 수익률 계산 (활성 포트폴리오들의 평균)
-    const activePortfolios = portfolios.filter((p) => p.isActive);
-    const avgReturn =
-      activePortfolios.length > 0
-        ? activePortfolios.reduce((sum, p) => sum + p.profitRate, 0) /
-          activePortfolios.length
-        : 0;
+    // 두 리스트 합치기
+    const portfolios: Portfolio[] = [...backtestPortfolios, ...autoTradingPortfolios];
 
-    // 임시 대시보드 데이터 (향후 별도 API로 교체 필요)
-    const totalAssets = 10000000; // 초기 자산
-    const totalAssetsChange = avgReturn;
-    const weeklyProfit = totalAssets * (avgReturn / 100);
-    const weeklyProfitChange = avgReturn;
+    // 3. 실제 자동매매 대시보드 데이터 가져오기
+    let dashboardData = {
+      total_assets: 0,
+      total_return: 0,
+      total_profit: 0,
+      active_strategy_count: 0,
+      total_positions: 0,
+      total_trades_today: 0,
+    };
+
+    try {
+      dashboardData = await autoTradingApi.getPortfolioDashboardServer(token);
+    } catch (error) {
+      console.warn("대시보드 데이터 조회 실패:", error);
+    }
+
+    const totalAssets = Number(dashboardData.total_assets) || 0;
+    const totalAssetsChange = Number(dashboardData.total_return) || 0;
+    const weeklyProfit = Number(dashboardData.total_profit) || 0;
+    const weeklyProfitChange = Number(dashboardData.total_return) || 0;
+    const activeCount = Number(dashboardData.active_strategy_count) || 0;
 
     return (
       <PortfolioPageClient

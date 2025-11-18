@@ -12,7 +12,7 @@ from uuid import UUID
 class AutoTradingActivateRequest(BaseModel):
     """자동매매 활성화 요청"""
     session_id: str = Field(..., description="백테스트 세션 ID")
-    initial_capital: Optional[Decimal] = Field(50000000, description="초기 자본금 (기본: 5천만원)")
+    initial_capital: Optional[Decimal] = Field(None, description="초기 자본금 (None이면 키움 계좌 잔고 자동 조회)")
 
 
 class AutoTradingDeactivateRequest(BaseModel):
@@ -139,3 +139,103 @@ class AutoTradingLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TradeSignalItem(BaseModel):
+    """리밸런싱/시그널 항목"""
+    stock_code: str
+    stock_name: Optional[str]
+    quantity: Optional[int]
+    target_weight: Optional[float]
+    current_price: Optional[float]
+    per: Optional[float]
+    pbr: Optional[float]
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class RebalancePreviewResponse(BaseModel):
+    """리밸런싱 미리보기 응답"""
+    generated_at: datetime
+    candidates: List[TradeSignalItem]
+    note: Optional[str] = None
+
+
+class AutoTradingLogListResponse(BaseModel):
+    """로그 리스트 응답"""
+    logs: List[AutoTradingLogResponse]
+
+
+class AutoTradingRiskAlert(BaseModel):
+    """위험 경보"""
+    type: str
+    severity: str
+    message: str
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class AutoTradingPositionRisk(BaseModel):
+    """포지션별 위험 정보"""
+    stock_code: str
+    stock_name: Optional[str]
+    quantity: int
+    market_value: Decimal
+    avg_buy_price: Decimal
+    current_price: Decimal
+    unrealized_profit: Decimal
+    unrealized_profit_pct: Decimal
+    hold_days: int
+
+
+class AutoTradingRiskSnapshotResponse(BaseModel):
+    """위험 스냅샷 응답"""
+    as_of: datetime
+    cash_balance: Decimal
+    invested_value: Decimal
+    total_value: Decimal
+    exposure_ratio: float
+    alerts: List[AutoTradingRiskAlert]
+    positions: List[AutoTradingPositionRisk]
+
+
+class ExecutionReportRow(BaseModel):
+    """실거래 vs 백테스트 비교 행"""
+    date: date
+    live_total_value: Optional[Decimal]
+    live_daily_return: Optional[Decimal]
+    backtest_total_value: Optional[Decimal]
+    backtest_daily_return: Optional[Decimal]
+    tracking_error: Optional[Decimal]
+
+
+class ExecutionReportSummary(BaseModel):
+    """실행 보고서 요약"""
+    days: int
+    average_tracking_error: Optional[Decimal]
+    cumulative_live_return: Optional[Decimal]
+    cumulative_backtest_return: Optional[Decimal]
+    realized_vs_expected: Optional[Decimal]
+
+
+class AutoTradingExecutionReportResponse(BaseModel):
+    """실거래 검증 리포트"""
+    strategy_id: UUID
+    session_id: str
+    generated_at: datetime
+    rows: List[ExecutionReportRow]
+    summary: ExecutionReportSummary
+
+
+class AutoTradingRiskEnforceResponse(BaseModel):
+    """위험 통제 실행 결과"""
+    message: str
+    actions: List[Dict[str, Any]]
+
+
+class PortfolioDashboardResponse(BaseModel):
+    """포트폴리오 대시보드 응답"""
+    total_assets: Decimal  # 총 자산 (자동매매 계좌 전체)
+    total_return: Decimal  # 총 수익률 (%)
+    total_profit: Decimal  # 총 수익금
+    active_strategy_count: int  # 활성 전략 수
+    total_positions: int  # 전체 보유 종목 수
+    total_trades_today: int  # 오늘 총 매매 건수

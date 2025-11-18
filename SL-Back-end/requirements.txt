@@ -54,6 +54,7 @@ prometheus-fastapi-instrumentator==6.1.0  # Prometheus 메트릭
 httpx==0.26.0  # 비동기 HTTP 클라이언트
 orjson==3.9.12  # 빠른 JSON 직렬화 (Python json보다 2-3배 빠름)
 ujson==5.9.0  # 빠른 JSON 파싱
+APScheduler==3.10.4  # 작업 스케줄링 (자동매매용)
 
 # 테스팅
 pytest==7.4.4

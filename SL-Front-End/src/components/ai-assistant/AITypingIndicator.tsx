@@ -15,25 +15,41 @@
 export function AITypingIndicator() {
   return (
     <div className="flex justify-start mb-6">
-      <div className="flex items-center space-x-2 px-4 py-3">
-        {/* 점 애니메이션 */}
-        <div className="flex space-x-1">
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes bigBounce {
+            0%, 100% {
+              transform: translateY(0) scale(1);
+            }
+            50% {
+              transform: translateY(-20px) scale(1.1);
+            }
+          }
+          .big-bounce {
+            animation: bigBounce 1s ease-in-out infinite;
+          }
+        `
+      }} />
+
+      <div className="flex items-center space-x-3 px-5 py-4">
+        {/* 점 애니메이션 - 더 큰 폭으로 튀기기 */}
+        <div className="flex items-center space-x-1.5" style={{ minHeight: "12px" }}>
           <div
-            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-            style={{ animationDelay: "0ms", animationDuration: "1.4s" }}
+            className="w-3 h-3 bg-gray-500 rounded-full big-bounce"
+            style={{ animationDelay: "0ms" }}
           />
           <div
-            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-            style={{ animationDelay: "200ms", animationDuration: "1.4s" }}
+            className="w-3 h-3 bg-gray-500 rounded-full big-bounce"
+            style={{ animationDelay: "200ms" }}
           />
           <div
-            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-            style={{ animationDelay: "400ms", animationDuration: "1.4s" }}
+            className="w-3 h-3 bg-gray-500 rounded-full big-bounce"
+            style={{ animationDelay: "400ms" }}
           />
         </div>
 
         {/* 텍스트 */}
-        <span className="text-sm text-gray-500 ml-2">
+        <span className="text-base text-gray-600 font-medium ml-2 flex items-center">
           AI가 답변을 생성하고 있습니다...
         </span>
       </div>

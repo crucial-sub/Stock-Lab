@@ -626,7 +626,8 @@ export function AIAssistantPageClient({
                   messages={messages}
                   isWaitingForAI={
                     connectionState === "connecting" ||
-                    connectionState === "connected"
+                    connectionState === "connected" ||
+                    (isStreaming && !streamContent)
                   }
                 />
 

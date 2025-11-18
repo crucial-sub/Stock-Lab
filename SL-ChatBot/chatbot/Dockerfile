@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 주 코드와 설정, 프롬프트 복사 (컨택스트: SL-ChatBot 루트)
 COPY chatbot/src ./src
 COPY chatbot/config.yaml .
+COPY config ./config
 COPY prompts ./prompts
 
 # Expose port

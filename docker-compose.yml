@@ -63,8 +63,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./SL-Back-end/logs:/app/logs
     networks:
       - quant_network
     restart: unless-stopped

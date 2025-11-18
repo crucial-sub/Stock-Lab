@@ -38,9 +38,13 @@ class PostSummary(BaseModel):
     title: str
     content_preview: str = Field(..., serialization_alias="contentPreview", description="내용 미리보기 (한 줄)")
     author_nickname: Optional[str] = Field(None, serialization_alias="authorNickname")
+    author_id: Optional[str] = Field(None, serialization_alias="authorId", description="작성자 ID")
     is_anonymous: bool = Field(..., serialization_alias="isAnonymous")
     tags: Optional[List[str]] = None
     post_type: str = Field(..., serialization_alias="postType")
+    session_snapshot: Optional['SessionSnapshot'] = Field(
+        None, serialization_alias="sessionSnapshot"
+    )
 
     # 통계
     view_count: int = Field(..., serialization_alias="viewCount")
@@ -218,6 +222,9 @@ class TopRankingsResponse(BaseModel):
 
     class Config:
         populate_by_name = True
+
+# ForwardRef 해제
+PostSummary.model_rebuild()
 
 
 class RankingListResponse(BaseModel):

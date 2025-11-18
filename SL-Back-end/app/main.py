@@ -50,6 +50,32 @@ async def lifespan(app: FastAPI):
     try:
         await cache.initialize()
         logger.info("Redis cache initialized successfully")
+
+        # 🎯 Redis 랭킹 재구축 (서버 시작 시)
+        try:
+            from app.services.ranking_service import get_ranking_service
+            from app.core.database import AsyncSessionLocal
+            from app.core.cache import get_redis
+
+            ranking_service = await get_ranking_service()
+
+            if ranking_service.enabled:
+                # Redis가 비어있는지 확인
+                redis_client = get_redis()
+                ranking_count = await redis_client.zcard("rankings:all")
+
+                if ranking_count == 0:
+                    logger.info("🔄 Redis 랭킹이 비어있음. DB에서 재구축 시작...")
+
+                    # DB에서 랭킹 재구축
+                    async with AsyncSessionLocal() as db:
+                        rebuilt_count = await ranking_service.rebuild_from_db(db, limit=100)
+                        logger.info(f"✅ Redis 랭킹 재구축 완료: {rebuilt_count}개 항목")
+                else:
+                    logger.info(f"✅ Redis 랭킹 이미 존재: {ranking_count}개 항목")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis 랭킹 재구축 실패 (무시): {e}")
+
     except Exception as e:
         logger.warning(f"Redis initialization failed: {e}")
         logger.warning("Running without cache")

@@ -4,16 +4,34 @@ import { ChatHistory } from "@/components/ai-assistant/ChatHistory";
 import { ChatInterface } from "@/components/ai-assistant/ChatInterface";
 import { SecondarySidebar } from "@/components/ai-assistant/SecondarySidebar";
 import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
+import { StreamingMarkdownRenderer } from "@/components/ai-assistant/StreamingMarkdownRenderer";
 import { AISearchInput } from "@/components/home/ui";
+import { useChatStream } from "@/hooks/useChatStream";
 import { chatHistoryApi } from "@/lib/api/chat-history";
 import { sendChatMessage, type ChatResponse } from "@/lib/api/chatbot";
 import { getAuthTokenFromCookie } from "@/lib/auth/token";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import type { Message, TextMessage, MarkdownMessage } from "@/types/message";
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  backtestConditions?: any[];  // DSL 조건이 있을 경우
+// 메시지 생성 헬퍼 함수
+function createTextMessage(role: "user" | "assistant", content: string): TextMessage {
+  return {
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    type: "text",
+    role,
+    content,
+    createdAt: Date.now(),
+  };
+}
+
+function createMarkdownMessage(role: "assistant", content: string): MarkdownMessage {
+  return {
+    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    type: "markdown",
+    role,
+    content,
+    createdAt: Date.now(),
+  };
 }
 
 interface ChatSession {
@@ -68,6 +86,24 @@ export function AIAssistantPageClient({
   const [currentMode, setCurrentMode] = useState<"initial" | "chat" | "questionnaire">("initial");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const MIN_REQUEST_INTERVAL = 2000; // 최소 2초 간격
+
+  // SSE 스트리밍 상태
+  const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [shouldStartStream, setShouldStartStream] = useState(false);
+
+  // 스크롤 컨테이너 ref (직접 제어용)
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // useChatStream 훅 (세션 ID가 있을 때만 활성화)
+  const {
+    content: streamContent,
+    isStreaming,
+    connectionState,
+    error: streamError,
+    sendMessage: sendStreamMessage,
+    retry: retryStream,
+  } = useChatStream(sessionId || "temp_session");
+
   const dedupeSessions = useCallback((list: ChatSession[]) => {
     const map = new Map<string, ChatSession>();
     list.forEach((s) => map.set(s.id, s));
@@ -196,7 +232,7 @@ export function AIAssistantPageClient({
 
     // 사용자 메시지 추가
     const userMessage = "전략 추천받고 싶어요";
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setMessages((prev) => [...prev, createTextMessage("user", userMessage)]);
     setCurrentMode("questionnaire");
 
     setIsLoading(true);
@@ -212,7 +248,7 @@ export function AIAssistantPageClient({
       if (response.answer) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: response.answer },
+          createMarkdownMessage("assistant", response.answer),
         ]);
       }
 
@@ -236,7 +272,7 @@ export function AIAssistantPageClient({
     console.log(`Strategy ${strategyId} clicked:`, userMessage);
 
     // 사용자 메시지 추가 및 채팅 모드로 전환
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setMessages((prev) => [...prev, createTextMessage("user", userMessage)]);
     setCurrentMode("chat");
 
     setIsLoading(true);
@@ -251,11 +287,7 @@ export function AIAssistantPageClient({
       // AI 응답 메시지 추가
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: response.answer,
-          backtestConditions: response.backtest_conditions
-        },
+        createMarkdownMessage("assistant", response.answer),
       ]);
 
       // 채팅 세션 저장
@@ -273,9 +305,9 @@ export function AIAssistantPageClient({
     // AI 요청 처리
     console.log("AI request:", value);
 
-    // 이미 로딩 중이면 요청 무시 (연속 요청 방지)
-    if (isLoading) {
-      console.log("Already loading, ignoring request");
+    // 이미 스트리밍 중이면 요청 무시
+    if (isStreaming) {
+      console.log("Already streaming, ignoring request");
       return;
     }
 
@@ -284,12 +316,9 @@ export function AIAssistantPageClient({
     const timeSinceLastRequest = now - lastRequestTime;
     if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
       const waitTime = Math.ceil((MIN_REQUEST_INTERVAL - timeSinceLastRequest) / 1000);
-      setMessages((prev: Message[]) => [
+      setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: `요청이 너무 빠릅니다. ${waitTime}초 후에 다시 시도해주세요.`,
-        },
+        createTextMessage("assistant", `요청이 너무 빠릅니다. ${waitTime}초 후에 다시 시도해주세요.`),
       ]);
       return;
     }
@@ -300,61 +329,20 @@ export function AIAssistantPageClient({
     const nextMode = currentMode === "initial" ? "chat" : currentMode;
     setCurrentMode(nextMode);
 
-    // 사용자 메시지 추가
-    setMessages((prev) => [...prev, { role: "user", content: value }]);
-
-    setIsLoading(true);
-    try {
-      const response = await sendChatMessage({
-        message: value,
-        session_id: sessionId || undefined,
-      });
-
-      setSessionId(response.session_id);
-
-      // ui_language가 있더라도 사용자가 채팅을 원하면 chat 모드를 유지
-      // (추천 카드 등에서 진입 시에는 nextMode를 미리 questionnaire로 설정해 사용)
-      if (response.ui_language && nextMode !== "chat") {
-        setChatResponse(response);
-        setCurrentMode("questionnaire");
-      }
-
-      // AI 응답 메시지 추가
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: response.answer,
-          backtestConditions: response.backtest_conditions
-        },
-      ]);
-
-      // 채팅 세션 저장
-      if (!sessionId) {
-        saveChatSession(response.session_id, value);
-      }
-
-      console.log("Response:", response);
-      console.log("UI Language:", response.ui_language);
-    } catch (error) {
-      console.error("Failed to send message:", error);
-
-      // 사용자 친화적인 에러 메시지 표시
-      const errorMessage = error instanceof Error && error.message.includes("ThrottlingException")
-        ? "요청이 많아 일시적으로 응답이 지연되고 있습니다.\n잠시 후(30초~1분) 다시 시도해주세요."
-        : "메시지 전송에 실패했습니다. 잠시 후 다시 시도해주세요.";
-
-      setMessages((prev: Message[]) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: errorMessage,
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
+    // 세션 ID 생성 (없는 경우)
+    if (!sessionId) {
+      const newSessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      setSessionId(newSessionId);
+      saveChatSession(newSessionId, value);
     }
-  }, [sessionId, isLoading, lastRequestTime, currentMode]);
+
+    // 사용자 메시지 추가
+    setMessages((prev) => [...prev, createTextMessage("user", value)]);
+
+    // SSE 스트리밍 시작
+    setStreamingMessage(value);
+    sendStreamMessage(value);
+  }, [sessionId, isStreaming, lastRequestTime, currentMode, sendStreamMessage]);
 
   // DB 또는 localStorage에서 채팅 세션 불러오기
   useEffect(() => {
@@ -419,6 +407,39 @@ export function AIAssistantPageClient({
     }
   }, [chatSessions]);
 
+  // SSE 스트리밍 완료 시 메시지 추가
+  useEffect(() => {
+    if (connectionState === "complete" && streamContent) {
+      console.log("Streaming complete, adding message:", streamContent);
+      setMessages((prev) => [
+        ...prev,
+        createMarkdownMessage("assistant", streamContent),
+      ]);
+      setStreamingMessage(""); // 스트리밍 메시지 초기화
+    }
+  }, [connectionState, streamContent]);
+
+  // SSE 스트리밍 에러 처리
+  useEffect(() => {
+    if (streamError) {
+      console.error("Streaming error:", streamError);
+      setMessages((prev) => [
+        ...prev,
+        createTextMessage("assistant", streamError.message || "메시지 전송에 실패했습니다. 잠시 후 다시 시도해주세요."),
+      ]);
+      setStreamingMessage(""); // 스트리밍 메시지 초기화
+    }
+  }, [streamError]);
+
+  // 자동 스크롤 (메시지 변경 또는 스트리밍 콘텐츠 변경 시)
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      // scrollTop을 최대값으로 설정하여 항상 최하단으로 스크롤
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages, streamContent]);
+
   // 메시지 변경 시 현재 세션 업데이트 (과도한 실행 방지용 디바운스)
   useEffect(() => {
     if (messages.length === 0) return;
@@ -469,7 +490,7 @@ export function AIAssistantPageClient({
     }
 
     // 사용자 답변을 메시지에 추가
-    setMessages((prev) => [...prev, { role: "user", content: answerText }]);
+    setMessages((prev) => [...prev, createTextMessage("user", answerText)]);
 
     setIsLoading(true);
     try {
@@ -531,8 +552,19 @@ export function AIAssistantPageClient({
           /* 채팅 모드 */
           <div className="flex-1 flex flex-col w-full max-w-[1000px] mx-auto">
             {/* 스크롤 가능한 메시지 영역 */}
-            <div className="flex-1 overflow-y-auto mb-4">
-              <ChatHistory messages={messages} />
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto mb-4 px-4">
+              <div className="w-full max-w-[1000px] mx-auto">
+                <ChatHistory messages={messages} />
+
+                {/* SSE 스트리밍 중인 메시지 */}
+                {isStreaming && streamContent && (
+                  <StreamingMarkdownRenderer
+                    content={streamContent}
+                    isStreaming={isStreaming}
+                    role="assistant"
+                  />
+                )}
+              </div>
             </div>
 
             {/* 하단 고정 입력창 */}
@@ -540,6 +572,7 @@ export function AIAssistantPageClient({
               <AISearchInput
                 placeholder="만들고 싶은 전략을 AI에게 요청하세요!"
                 onSubmit={handleAISubmit}
+                disabled={isStreaming}
               />
             </div>
           </div>

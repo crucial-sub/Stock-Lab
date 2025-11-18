@@ -4,6 +4,7 @@ import asyncio
 import types
 import sys
 import uuid
+import json
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
@@ -536,13 +537,17 @@ class ChatHandler:
         # 1. Classify intent
         intent = await self._classify_intent(message)
 
-        # 2. Retrieve relevant knowledge (RAG)
-        context = await self._retrieve_context(message, intent)
-
-        # 3. Generate response with LangChain Agent
-        response = await self._generate_response_langchain(
-            message, intent, context, session_id
-        )
+        # 2. Intent에 따라 다른 핸들러 호출
+        if intent == 'dsl_generation':
+            response = await self._handle_dsl_mode(message, session_id)
+        elif intent == 'explain':
+            response = await self._handle_explain_mode(message, session_id)
+        else:
+            # 기존 통합 플로우 (recommend, general 등)
+            context = await self._retrieve_context(message, intent)
+            response = await self._generate_response_langchain(
+                message, intent, context, session_id
+            )
 
         response["session_id"] = session_id
         return response
@@ -712,15 +717,34 @@ class ChatHandler:
         )
 
     async def _classify_intent(self, message: str) -> str:
-        """사용자 의도 분류. 테마 분석, 전략 설명 등을 감지합니다."""
+        """사용자 의도 분류. DSL 생성과 설명 모드를 명확히 구분합니다."""
         message_lower = message.strip().lower()
 
-        if any(word in message_lower for word in ['전략 추천', 'recommend', '전략']):
+        # 검증 관련 키워드 (최우선 - DSL 생성보다 먼저 체크)
+        verification_keywords = ['맞아', '맞나', '맞는지', '맞니', '확인', '검증', '체크', '이게 맞', '맞는 거']
+        # 현재 설정된 조건이 포함되어 있으면 검증 요청
+        has_current_conditions = '[현재 설정된 조건]' in message
+
+        # DSL 생성 키워드 (조건, 전략 생성 관련)
+        dsl_keywords = ['만들', '생성', 'per', 'pbr', 'roe', 'roa',
+                        'rsi', 'macd', 'sma', 'ema', '이하', '이상', '초과', '미만']
+
+        # Explain 키워드 (설명, 해석 관련)
+        explain_keywords = ['설명', 'explain', '뭐', '무엇', '어떻게', 'how', '왜', 'why',
+                           '알려줘', '가르쳐', 'cagr', 'mdd', '샤프', 'sharpe', '의미']
+
+        # 전략 추천 키워드
+        recommend_keywords = ['전략 추천', 'recommend', '추천']
+
+        # 우선순위: 검증 > 전략 추천 > DSL 생성 > Explain > General
+        if has_current_conditions or any(word in message_lower for word in verification_keywords):
+            return 'explain'  # 검증은 explain 모드로 처리 (LLM이 자연어로 답변)
+        elif any(word in message_lower for word in recommend_keywords):
             return 'recommend'
-        elif any(word in message_lower for word in ['설명', 'explain', '뭐', '무엇']):
+        elif any(word in message_lower for word in dsl_keywords):
+            return 'dsl_generation'
+        elif any(word in message_lower for word in explain_keywords):
             return 'explain'
-        elif any(word in message_lower for word in ['조건', 'condition', '만들']):
-            return 'build'
         else:
             return 'general'
 
@@ -780,6 +804,30 @@ class ChatHandler:
         # Claude가 필요시 search_stock_news 도구를 직접 호출합니다
 
         return "\n".join(context_parts) if context_parts else ""
+
+    def _load_dsl_system_prompt(self) -> Optional[str]:
+        """Load DSL-specific portion from system.txt if present."""
+        prompt_path = Path("/app/prompts/system.txt")
+        if not prompt_path.exists():
+            prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "system.txt"
+
+        try:
+            content = prompt_path.read_text(encoding="utf-8")
+        except Exception as e:
+            print(f"DSL 시스템 프롬프트 로드 실패: {e}")
+            return None
+
+        marker = "📌 DSL 생성 템플릿"
+        if marker not in content:
+            return content
+
+        # Grab DSL 섹션부터 다음 섹션 시작 전까지 추출
+        import re
+        match = re.search(r"📌 DSL 생성 템플릿.*?(?=\n=+\n📌 |\Z)", content, flags=re.DOTALL)
+        if match:
+            return match.group(0).strip()
+
+        return content
 
     async def _generate_response_langchain(
         self,
@@ -933,6 +981,127 @@ class ChatHandler:
         response = re.sub(r'\n\n+', '\n\n', response)
 
         return response.strip()
+
+    async def _handle_dsl_mode(self, message: str, _session_id: str) -> dict:
+        """DSL 생성 모드 처리.
+
+        - RAG 검색 금지 (context 없음)
+        - DSL 전용 system prompt 사용
+        - build_backtest_conditions 도구 호출하여 JSON 생성
+        - backtest_conditions 필드로 분리하여 반환
+        """
+        # system.txt에서 DSL 템플릿 영역을 추출해 dsl_generator에 적용
+        dsl_system_prompt = self._load_dsl_system_prompt()
+
+        # LLM 클라이언트 확인
+        if not self.llm_client:
+            return {
+                "answer": "LLM 클라이언트가 초기화되지 않았습니다.",
+                "intent": "dsl_generation"
+        }
+
+        try:
+            # build_backtest_conditions 도구 직접 호출
+            from schemas import dsl_generator
+            original_prompt = getattr(dsl_generator, "CLAUDE_SYSTEM_PROMPT", "")
+
+            if dsl_system_prompt:
+                try:
+                    # system.txt DSL 템플릿 + 기존 스키마 안내를 함께 전달해 포맷 유지
+                    combined_prompt = (
+                        f"{dsl_system_prompt}\n\n{original_prompt}" if original_prompt else dsl_system_prompt
+                    )
+                    dsl_generator.CLAUDE_SYSTEM_PROMPT = combined_prompt
+                    print(f"DSL 시스템 프롬프트 적용 완료 ({len(combined_prompt)} 자)")
+                except Exception as e:
+                    print(f"DSL 시스템 프롬프트 적용 실패: {e}")
+
+            parse_strategy_text = dsl_generator.parse_strategy_text
+
+            # 자연어 → DSL 변환
+            result = parse_strategy_text(message)
+
+            # Condition 객체를 딕셔너리로 변환 (Pydantic v1 호환)
+            conditions = [condition.dict() for condition in result.conditions]
+
+            if not conditions:
+                return {
+                    "answer": "조건을 파싱할 수 없습니다. 더 구체적인 조건을 입력해주세요.\n\n예시:\n- PER 10 이하\n- ROE 15% 이상\n- RSI 30 이하면 매수",
+                    "intent": "dsl_generation",
+                    "backtest_conditions": []
+                }
+
+            # 조건들을 자연어로 포맷팅
+            condition_lines = []
+            for cond in conditions:
+                factor = cond['factor']
+                operator = cond['operator']
+                value = cond.get('value')
+                params = cond.get('params', [])
+
+                # params가 있으면 함수 형태로 표시 (예: SMA(20))
+                if params:
+                    factor_str = f"{factor}({', '.join(map(str, params))})"
+                else:
+                    factor_str = factor
+
+                # value가 있으면 비교 조건
+                if value is not None:
+                    condition_lines.append(f"• {factor_str} {operator} {value}")
+                else:
+                    condition_lines.append(f"• {factor_str}")
+
+            conditions_text = "\n".join(condition_lines)
+            answer_text = f"다음 조건이 생성되었습니다:\n{conditions_text}"
+
+            return {
+                "answer": answer_text,
+                "intent": "dsl_generation",
+                "backtest_conditions": conditions
+            }
+        except Exception as e:
+            print(f"DSL 생성 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "answer": f"DSL 생성 중 오류가 발생했습니다: {str(e)}",
+                "intent": "dsl_generation",
+                "backtest_conditions": []
+            }
+
+    async def _handle_explain_mode(self, message: str, session_id: str) -> dict:
+        """설명 모드 처리.
+
+        - RAG 검색 활성화 (지식 베이스 활용)
+        - Explain 전용 system prompt 사용
+        - Markdown 형식으로 구조화된 답변 반환
+        """
+        # Explain 모드에서는 RAG 검색 활성화
+        context = await self._retrieve_context(message, 'explain')
+
+        # Explain 전용 프롬프트 로드
+        prompt_path = Path("/app/prompts/explain.txt")
+        if not prompt_path.exists():
+            prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "explain.txt"
+
+        if prompt_path.exists():
+            explain_system_prompt = prompt_path.read_text(encoding='utf-8')
+        else:
+            explain_system_prompt = """
+당신은 퀀트 투자 전문 AI 어드바이저입니다.
+
+답변 규칙:
+- 항상 한국어로 답변
+- Markdown 형식으로 구조화된 답변 제공
+- 섹션 제목 사용 (## 📌 제목)
+- 초보자도 이해할 수 있게 친절하게 설명
+- 전문성 유지
+"""
+
+        # LangChain Agent로 응답 생성 (RAG 컨텍스트 포함)
+        return await self._generate_response_langchain(
+            message, 'explain', context, session_id
+        )
 
     def _check_investment_advisory_policy(self, message: str) -> Optional[str]:
         """투자 조언 정책 위반 확인.

@@ -306,11 +306,12 @@ export function AIAssistantPageClient({
 
     setLastRequestTime(now);
 
+    // 이번 요청 이후의 모드 결정 (initial이면 chat으로 전환)
+    const nextMode = currentMode === "initial" ? "chat" : currentMode;
+    setCurrentMode(nextMode);
+
     // 사용자 메시지 추가
     setMessages((prev) => [...prev, { role: "user", content: value }]);
-
-    // 첫 입력이면 채팅 모드로 전환
-    setCurrentMode((prev) => prev === "initial" ? "chat" : prev);
 
     setIsLoading(true);
     try {
@@ -321,8 +322,9 @@ export function AIAssistantPageClient({
 
       setSessionId(response.session_id);
 
-      // ui_language가 있으면 questionnaire 모드로
-      if (response.ui_language) {
+      // ui_language가 있더라도 사용자가 채팅을 원하면 chat 모드를 유지
+      // (추천 카드 등에서 진입 시에는 nextMode를 미리 questionnaire로 설정해 사용)
+      if (response.ui_language && nextMode !== "chat") {
         setChatResponse(response);
         setCurrentMode("questionnaire");
       }
@@ -362,7 +364,7 @@ export function AIAssistantPageClient({
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId, isLoading, lastRequestTime]);
+  }, [sessionId, isLoading, lastRequestTime, currentMode]);
 
   // DB 또는 localStorage에서 채팅 세션 불러오기
   useEffect(() => {
@@ -502,6 +504,15 @@ export function AIAssistantPageClient({
     }
   };
 
+  // 새 채팅 시작: 상태 초기화
+  const handleNewChat = () => {
+    setSessionId("");
+    setMessages([]);
+    setCurrentMode("initial");
+    setChatResponse(null);
+    setQuestionHistory([]);
+  };
+
   return (
     <div className="flex h-full">
       {/* 2차 사이드바 */}
@@ -512,6 +523,7 @@ export function AIAssistantPageClient({
         }))}
         onChatClick={handleChatSessionClick}
         onChatDelete={handleChatDelete}
+        onNewChat={handleNewChat}
       />
 
       {/* 메인 콘텐츠 */}

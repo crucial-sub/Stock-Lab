@@ -10,12 +10,14 @@
  * - Zustand를 통한 전역 상태 관리 (탭 상태, 전략 설정값)
  */
 
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import QuantStrategySummaryPanel from "@/components/quant/layout/QuantStrategySummaryPanel";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useQuantTabStore } from "@/stores";
+import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 
 /**
  * 탭 컴포넌트들을 동적으로 로드 (코드 스플리팅)
@@ -52,6 +54,50 @@ export function QuantNewPageClient() {
   const { isLoading: isLoadingFactors } = useFactorsQuery();
   const { isLoading: isLoadingSubFactors } = useSubFactorsQuery();
   const { isLoading: isLoadingThemes } = useThemesQuery();
+
+  // Query parameter로 전달된 조건 처리 (추천 전략에서 백테스트 실행 시)
+  const searchParams = useSearchParams();
+  const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
+
+  useEffect(() => {
+    const conditionsParam = searchParams.get("conditions");
+    if (!conditionsParam) return;
+
+    try {
+      const conditions = JSON.parse(conditionsParam);
+
+      // 조건을 데이터와 함께 한 번에 추가
+      conditions.forEach((dslCondition: any) => {
+        const { factor, params, operator, value } = dslCondition;
+
+        if (params && params.length > 0) {
+          addBuyConditionUIWithData({
+            factorName: factor,
+            subFactorName: null,
+            operator: operator,
+            value: value !== null ? String(value) : "",
+            argument: String(params[0]),
+          });
+        } else {
+          addBuyConditionUIWithData({
+            factorName: factor,
+            subFactorName: null,
+            operator: operator,
+            value: value !== null ? String(value) : "",
+          });
+        }
+      });
+
+      // URL에서 조건 파라미터 제거 (한 번만 적용)
+      const url = new URL(window.location.href);
+      url.searchParams.delete("conditions");
+      url.searchParams.delete("strategy_id");
+      window.history.replaceState({}, "", url.toString());
+    } catch (error) {
+      console.error("조건 파싱 실패:", error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 마운트 시 한 번만 실행
 
   // 로딩 상태 표시
   if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes) {

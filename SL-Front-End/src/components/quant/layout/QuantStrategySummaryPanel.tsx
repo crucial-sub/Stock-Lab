@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
+import { AIHelperSidebar } from "./AIHelperSidebar";
 
 interface QuantStrategySummaryPanelProps {
   activeTab: "buy" | "sell" | "target";
@@ -35,6 +36,9 @@ export default function QuantStrategySummaryPanel({
   const [selectedSummaryTab, setSelectedSummaryTab] = useState<
     "buy" | "sell" | "target"
   >(activeTab);
+
+  // 요약보기 / AI 헬퍼 패널 모드
+  const [panelMode, setPanelMode] = useState<"summary" | "ai_helper">("summary");
 
   // 클라이언트 전용 마운트 상태
   const [isMounted, setIsMounted] = useState(false);
@@ -92,6 +96,8 @@ export default function QuantStrategySummaryPanel({
   // setter 함수들은 별도로 선택 (안정적인 참조)
   const setStartDate = useBacktestConfigStore((state) => state.setStartDate);
   const setEndDate = useBacktestConfigStore((state) => state.setEndDate);
+  const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
+  const addSellConditionUIWithData = useBacktestConfigStore((state) => state.addSellConditionUIWithData);
 
   // 날짜 초기화 (클라이언트 사이드에서만 실행)
   // setter 함수는 안정적이므로 dependency에서 제외 (React Compiler가 자동 처리)
@@ -113,9 +119,57 @@ export default function QuantStrategySummaryPanel({
     setSelectedSummaryTab(activeTab);
   }, [activeTab]);
 
+  // AI 헬퍼에서 생성된 조건을 매수 조건에 추가
+  const handleBuyConditionsAdd = (conditions: any[]) => {
+    conditions.forEach((dslCondition) => {
+      const { factor, params, operator, value } = dslCondition;
+
+      if (params && params.length > 0) {
+        addBuyConditionUIWithData({
+          factorName: factor,
+          subFactorName: null,
+          operator: operator,
+          value: value !== null ? String(value) : "",
+          argument: String(params[0]),
+        });
+      } else {
+        addBuyConditionUIWithData({
+          factorName: factor,
+          subFactorName: null,
+          operator: operator,
+          value: value !== null ? String(value) : "",
+        });
+      }
+    });
+  };
+
+  // AI 헬퍼에서 생성된 조건을 매도 조건에 추가
+  const handleSellConditionsAdd = (conditions: any[]) => {
+    conditions.forEach((dslCondition) => {
+      const { factor, params, operator, value } = dslCondition;
+
+      if (params && params.length > 0) {
+        addSellConditionUIWithData({
+          factorName: factor,
+          subFactorName: null,
+          operator: operator,
+          value: value !== null ? String(value) : "",
+          argument: String(params[0]),
+        });
+      } else {
+        addSellConditionUIWithData({
+          factorName: factor,
+          subFactorName: null,
+          operator: operator,
+          value: value !== null ? String(value) : "",
+        });
+      }
+    });
+  };
+
   return (
     <div
-      className={`relative bg-[#FFFFFF66]
+      className={`relative bg-[#FFFFFF66] h-full
         transition-all duration-300 ease-in-out
         ${isOpen ? "w-[26.25rem]" : "w-10"}
       `}
@@ -138,21 +192,50 @@ export default function QuantStrategySummaryPanel({
 
       {/* 요약 패널 컨텐츠 - 열린 상태에서만 표시 */}
       {isOpen && (
-        <div className="mb-10">
+        <div className="mb-10 h-[calc(100vh-5rem)] max-h-[calc(100vh-5rem)] flex flex-col overflow-hidden">
           {/* 요약보기 / AI 헬퍼 탭 */}
           <div className="h-16 border-b border-surface mb-5">
             <div className="flex pl-16">
-              <div className="flex w-[44.5rem] border-b-2 border-brand-purple h-16 justify-center items-center">
-                <h2 className="text-xl font-semibold text-brand">요약보기</h2>
-              </div>
-              <div className="flex w-[44.5rem] h-16 justify-center items-center">
-                <h2 className="text-xl font-normal text-muted">AI 헬퍼</h2>
-              </div>
+              <button
+                onClick={() => setPanelMode("summary")}
+                className={`flex w-[44.5rem] h-16 justify-center items-center ${
+                  panelMode === "summary" ? "border-b-2 border-brand-purple" : ""
+                }`}
+              >
+                <h2
+                  className={`text-xl ${
+                    panelMode === "summary"
+                      ? "font-semibold text-brand"
+                      : "font-normal text-muted"
+                  }`}
+                >
+                  요약보기
+                </h2>
+              </button>
+              <button
+                onClick={() => setPanelMode("ai_helper")}
+                className={`flex w-[44.5rem] h-16 justify-center items-center ${
+                  panelMode === "ai_helper" ? "border-b-2 border-brand-purple" : ""
+                }`}
+              >
+                <h2
+                  className={`text-xl ${
+                    panelMode === "ai_helper"
+                      ? "font-semibold text-brand"
+                      : "font-normal text-muted"
+                  }`}
+                >
+                  AI 헬퍼
+                </h2>
+              </button>
             </div>
           </div>
 
-          {/* 탭 버튼 */}
-          <div className="flex gap-3 px-4 mb-6 w-full justify-center">
+          {/* 요약보기 모드 */}
+          {panelMode === "summary" && (
+            <>
+              {/* 탭 버튼 */}
+              <div className="flex gap-3 px-4 mb-6 w-full justify-center">
             <button
               onClick={() => setSelectedSummaryTab("buy")}
               className={`
@@ -195,7 +278,7 @@ export default function QuantStrategySummaryPanel({
           </div>
 
           {/* 요약 내용 */}
-          <div className="px-10 space-y-8">
+          <div className="px-10 space-y-8 flex-1 min-h-0 overflow-y-auto">
             {selectedSummaryTab === "buy" && (
               <>
                 {/* 일반 조건 */}
@@ -595,6 +678,20 @@ export default function QuantStrategySummaryPanel({
               </>
             )}
           </div>
+            </>
+          )}
+
+          {/* AI 헬퍼 모드 */}
+          {panelMode === "ai_helper" && (
+            <div className="flex-1 min-h-0">
+              <AIHelperSidebar
+                onBuyConditionsAdd={handleBuyConditionsAdd}
+                onSellConditionsAdd={handleSellConditionsAdd}
+                currentBuyConditions={buyConditionsUI}
+                currentSellConditions={sellConditionsUI}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

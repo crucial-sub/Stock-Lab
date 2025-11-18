@@ -39,7 +39,7 @@ export function RecommendationView({ uiLanguage }: RecommendationViewProps) {
         conditions: JSON.stringify(dslResponse.conditions),
       });
 
-      router.push(`/quant?${queryParams.toString()}`);
+      router.push(`/quant/new?${queryParams.toString()}`);
     } catch (error) {
       console.error("DSL 변환 실패:", error);
       alert("전략 조건을 변환하는 중 오류가 발생했습니다. 다시 시도해주세요.");

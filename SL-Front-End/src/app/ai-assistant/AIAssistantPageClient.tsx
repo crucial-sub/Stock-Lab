@@ -628,7 +628,7 @@ export function AIAssistantPageClient({
             </div>
 
             {/* 하단 고정 입력창 */}
-            <div className="sticky bottom-0 w-full bg-white pt-4 border-t">
+            <div className="sticky bottom-0 w-full pt-4">
               <AISearchInput
                 placeholder="만들고 싶은 전략을 AI에게 요청하세요!"
                 onSubmit={handleAISubmit}

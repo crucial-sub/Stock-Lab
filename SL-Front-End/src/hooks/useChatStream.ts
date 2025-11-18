@@ -160,6 +160,7 @@ export function useChatStream(
 
           case "stream_chunk":
             // 즉시 렌더링 (인위적 딜레이 없음)
+            console.log("[useChatStream] stream_chunk:", JSON.stringify(data.content));
             setContent((prev) => prev + data.content);
             break;
 

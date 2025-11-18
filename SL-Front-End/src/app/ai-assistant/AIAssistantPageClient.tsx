@@ -396,16 +396,30 @@ export function AIAssistantPageClient({
       if (token) {
         try {
           const dbSessions = await chatHistoryApi.getSessions(50, 0);
-          const formattedSessions: ChatSession[] = dbSessions.map(session => ({
-            id: session.session_id,
-            title: session.title,
-            lastMessage: session.last_message_preview || "",
-            timestamp: new Date(session.created_at).getTime(),
-            messages: [], // 세션 클릭 시 따로 불러옴
-            mode: session.mode as "initial" | "chat" | "questionnaire",
-          }));
+
+          // localStorage에서 questionnaire 데이터 가져오기 (DB에는 저장 안 됨)
+          const localSessions = getLocalSessions();
+          const localSessionsMap = new Map(localSessions.map(s => [s.id, s]));
+
+          const formattedSessions: ChatSession[] = dbSessions.map(session => {
+            const localSession = localSessionsMap.get(session.session_id);
+
+            return {
+              id: session.session_id,
+              title: session.title,
+              lastMessage: session.last_message_preview || "",
+              timestamp: new Date(session.created_at).getTime(),
+              messages: [], // 세션 클릭 시 따로 불러옴
+              mode: session.mode as "initial" | "chat" | "questionnaire",
+              // localStorage의 questionnaire 데이터 병합
+              questionnaireAnswers: localSession?.questionnaireAnswers || [],
+              strategyRecommendations: localSession?.strategyRecommendations || [],
+            };
+          });
+
           setChatSessions(dedupeSessions(formattedSessions));
           console.log("Loaded chat sessions from DB:", formattedSessions.length);
+          console.log("Merged questionnaire data from localStorage");
         } catch (error) {
           console.error("Failed to load chat sessions from DB:", error);
           // DB 실패 시 localStorage에서 불러오기
@@ -417,15 +431,24 @@ export function AIAssistantPageClient({
       }
     };
 
-    const loadFromLocalStorage = () => {
+    const getLocalSessions = (): ChatSession[] => {
       const savedSessions = localStorage.getItem("ai-chat-sessions");
       if (savedSessions) {
         try {
-          setChatSessions(dedupeSessions(JSON.parse(savedSessions)));
-          console.log("Loaded chat sessions from localStorage");
+          return JSON.parse(savedSessions);
         } catch (error) {
-          console.error("Failed to load chat sessions from localStorage:", error);
+          console.error("Failed to parse localStorage sessions:", error);
+          return [];
         }
+      }
+      return [];
+    };
+
+    const loadFromLocalStorage = () => {
+      const sessions = getLocalSessions();
+      if (sessions.length > 0) {
+        setChatSessions(dedupeSessions(sessions));
+        console.log("Loaded chat sessions from localStorage");
       }
     };
 
@@ -635,6 +658,7 @@ export function AIAssistantPageClient({
 
   // 새 채팅 시작: 상태 초기화
   const handleNewChat = () => {
+    console.log("🔄 Starting new chat - clearing all state");
     setSessionId("");
     setMessages([]);
     setCurrentMode("initial");
@@ -642,6 +666,7 @@ export function AIAssistantPageClient({
     setQuestionHistory([]);
     setQuestionnaireAnswers([]);
     setStrategyRecommendations([]);
+    console.log("✅ New chat ready - main page");
   };
 
   return (

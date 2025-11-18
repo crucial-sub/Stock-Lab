@@ -18,21 +18,21 @@ import { AISearchInput } from "../ui";
  */
 
 interface WelcomeSectionProps {
-  /** 사용자 이름 (닉네임) */
-  userName?: string;
+  /** 사용자 닉네임 */
+  nickname?: string;
   /** AI 입력 전송 시 호출되는 콜백 함수 */
   onSubmit?: (value: string) => void;
 }
 
 export function WelcomeSection({
-  userName = "은따거",
+  nickname = "은따거",
   onSubmit,
 }: WelcomeSectionProps) {
   return (
     <section className="flex flex-col items-center w-full">
       {/* 환영 메시지 */}
       <h1 className="text-[32px] font-bold text-center mb-20">
-        <span className="text-body">{userName}님, 오늘도 </span>
+        <span className="text-body">{nickname}님, 오늘도 </span>
         <span className="text-brand">수익</span>
         <span className="text-body">을 내볼까요?</span>
       </h1>

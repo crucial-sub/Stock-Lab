@@ -19,9 +19,9 @@ export default async function HomePage() {
 
   if (isLoggedIn) {
     try {
-      // 임시: 쿠키에서 사용자 이름 가져오기
-      const userNameCookie = cookieStore.get("user_name")?.value;
-      userName = userNameCookie || "사용자";
+      // 임시: 쿠키에서 사용자 닉네임 가져오기
+      const nicknameCookie = cookieStore.get("nickname")?.value;
+      userName = nicknameCookie || "사용자";
     } catch (error) {
       console.error("Failed to fetch user info:", error);
     }

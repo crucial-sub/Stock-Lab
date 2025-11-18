@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { Icon } from "@/components/common";
 
 /**
  * 사이드바 네비게이션 아이템 컴포넌트
@@ -34,6 +34,8 @@ export function NavItem({
   isActive = false,
   onClick,
 }: NavItemProps) {
+  const iconColor = isActive ? "#FFFFFF" : "#C8C8C8";
+
   return (
     <button
       type="button"
@@ -51,15 +53,20 @@ export function NavItem({
       aria-current={isActive ? "page" : undefined}
     >
       <div className="relative w-5 h-5">
-        <Image
-          src={icon}
-          alt=""
-          fill
-          className="object-contain"
-          aria-hidden="true"
-        />
+        <Icon src={icon} color={iconColor} size={20} />
       </div>
-      <span className="text-xl font-semibold">{label}</span>
+      <span
+        className={[
+          "text-xl whitespace-nowrap transition-all duration-200",
+          isActive
+            ? "font-semibold text-sidebar-item-active"
+            : "font-normal text-sidebar-item",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {label}
+      </span>
     </button>
   );
 }

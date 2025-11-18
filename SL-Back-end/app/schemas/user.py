@@ -10,6 +10,7 @@ from uuid import UUID
 class UserBase(BaseModel):
     """User 기본 스키마"""
     name: str = Field(..., min_length=1, max_length=100)
+    nickname: str = Field(..., min_length=2, max_length=8, description="사용자 닉네임 (2~8자)")
     email: EmailStr
     phone_number: str = Field(..., min_length=10, max_length=20, pattern=r'^\d+$')
 
@@ -22,6 +23,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     """유저 정보 수정 스키마"""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
+    nickname: Optional[str] = Field(None, min_length=2, max_length=8)
     email: Optional[EmailStr] = None
     phone_number: Optional[str] = Field(None, min_length=10, max_length=20, pattern=r'^\d+$')
     password: Optional[str] = Field(None, min_length=8, max_length=100)

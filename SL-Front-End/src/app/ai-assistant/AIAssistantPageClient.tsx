@@ -71,6 +71,11 @@ export function AIAssistantPageClient({
   const [currentMode, setCurrentMode] = useState<"initial" | "chat" | "questionnaire">("initial");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const MIN_REQUEST_INTERVAL = 2000; // 최소 2초 간격
+  const dedupeSessions = useCallback((list: ChatSession[]) => {
+    const map = new Map<string, ChatSession>();
+    list.forEach((s) => map.set(s.id, s));
+    return Array.from(map.values());
+  }, []);
 
   // 채팅 세션 저장 함수 (로컬 상태)
   const saveChatSession = (sessionId: string, firstMessage: string) => {
@@ -86,12 +91,10 @@ export function AIAssistantPageClient({
     };
 
     setChatSessions((prev) => {
-      // 이미 존재하는 세션이면 업데이트하지 않음
-      if (prev.find(s => s.id === sessionId)) {
-        return prev;
-      }
-      // 최신 세션을 앞에 추가
-      return [newSession, ...prev];
+      const next = prev.find((s) => s.id === sessionId)
+        ? prev
+        : [newSession, ...prev];
+      return dedupeSessions(next);
     });
   };
 
@@ -303,11 +306,12 @@ export function AIAssistantPageClient({
 
     setLastRequestTime(now);
 
+    // 이번 요청 이후의 모드 결정 (initial이면 chat으로 전환)
+    const nextMode = currentMode === "initial" ? "chat" : currentMode;
+    setCurrentMode(nextMode);
+
     // 사용자 메시지 추가
     setMessages((prev) => [...prev, { role: "user", content: value }]);
-
-    // 첫 입력이면 채팅 모드로 전환
-    setCurrentMode((prev) => prev === "initial" ? "chat" : prev);
 
     setIsLoading(true);
     try {
@@ -318,8 +322,9 @@ export function AIAssistantPageClient({
 
       setSessionId(response.session_id);
 
-      // ui_language가 있으면 questionnaire 모드로
-      if (response.ui_language) {
+      // ui_language가 있더라도 사용자가 채팅을 원하면 chat 모드를 유지
+      // (추천 카드 등에서 진입 시에는 nextMode를 미리 questionnaire로 설정해 사용)
+      if (response.ui_language && nextMode !== "chat") {
         setChatResponse(response);
         setCurrentMode("questionnaire");
       }
@@ -359,7 +364,7 @@ export function AIAssistantPageClient({
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId, isLoading, lastRequestTime]);
+  }, [sessionId, isLoading, lastRequestTime, currentMode]);
 
   // DB 또는 localStorage에서 채팅 세션 불러오기
   useEffect(() => {
@@ -378,7 +383,7 @@ export function AIAssistantPageClient({
             messages: [], // 세션 클릭 시 따로 불러옴
             mode: session.mode as "initial" | "chat" | "questionnaire",
           }));
-          setChatSessions(formattedSessions);
+          setChatSessions(dedupeSessions(formattedSessions));
           console.log("Loaded chat sessions from DB:", formattedSessions.length);
         } catch (error) {
           console.error("Failed to load chat sessions from DB:", error);
@@ -395,7 +400,7 @@ export function AIAssistantPageClient({
       const savedSessions = localStorage.getItem("ai-chat-sessions");
       if (savedSessions) {
         try {
-          setChatSessions(JSON.parse(savedSessions));
+          setChatSessions(dedupeSessions(JSON.parse(savedSessions)));
           console.log("Loaded chat sessions from localStorage");
         } catch (error) {
           console.error("Failed to load chat sessions from localStorage:", error);
@@ -404,7 +409,7 @@ export function AIAssistantPageClient({
     };
 
     loadChatSessions();
-  }, []);
+  }, [dedupeSessions]);
 
   // 홈 페이지에서 전달된 초기 메시지 확인
   useEffect(() => {
@@ -424,11 +429,13 @@ export function AIAssistantPageClient({
     }
   }, [chatSessions]);
 
-  // 메시지 변경 시 현재 세션 업데이트
+  // 메시지 변경 시 현재 세션 업데이트 (과도한 실행 방지용 디바운스)
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length === 0) return;
+    const debounce = setTimeout(() => {
       updateCurrentSession();
-    }
+    }, 300);
+    return () => clearTimeout(debounce);
   }, [messages, updateCurrentSession]);
 
   // 채팅 삭제 핸들러
@@ -497,6 +504,15 @@ export function AIAssistantPageClient({
     }
   };
 
+  // 새 채팅 시작: 상태 초기화
+  const handleNewChat = () => {
+    setSessionId("");
+    setMessages([]);
+    setCurrentMode("initial");
+    setChatResponse(null);
+    setQuestionHistory([]);
+  };
+
   return (
     <div className="flex h-full">
       {/* 2차 사이드바 */}
@@ -507,6 +523,7 @@ export function AIAssistantPageClient({
         }))}
         onChatClick={handleChatSessionClick}
         onChatDelete={handleChatDelete}
+        onNewChat={handleNewChat}
       />
 
       {/* 메인 콘텐츠 */}

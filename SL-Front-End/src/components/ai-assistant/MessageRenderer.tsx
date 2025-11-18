@@ -17,31 +17,39 @@ import { UserSelectionRenderer } from "./renderers/UserSelectionRenderer";
 import { StrategyRecommendationRenderer } from "./renderers/StrategyRecommendationRenderer";
 import { BacktestResultRenderer } from "./renderers/BacktestResultRenderer";
 
-// 메시지 타입별 렌더러 맵
-const MESSAGE_RENDERERS = {
-  text: TextRenderer,
-  markdown: MarkdownRenderer,
-  question: QuestionRenderer,
-  user_selection: UserSelectionRenderer,
-  strategy_recommendation: StrategyRecommendationRenderer,
-  backtest_result: BacktestResultRenderer,
-} as const;
-
 interface MessageRendererProps {
   message: Message;
 }
 
 /**
  * 메시지 타입에 따라 적절한 렌더러를 선택하여 렌더링하는 컴포넌트
+ * switch-case로 타입 가드를 적용하여 타입 안전성 보장
  */
 export function MessageRenderer({ message }: MessageRendererProps) {
-  const Renderer = MESSAGE_RENDERERS[message.type];
+  // switch-case로 타입 가드 적용
+  switch (message.type) {
+    case "text":
+      return <TextRenderer message={message} />;
 
-  if (!Renderer) {
-    console.error(`Unknown message type: ${message.type}`);
-    return null;
+    case "markdown":
+      return <MarkdownRenderer message={message} />;
+
+    case "question":
+      return <QuestionRenderer message={message} />;
+
+    case "user_selection":
+      return <UserSelectionRenderer message={message} />;
+
+    case "strategy_recommendation":
+      return <StrategyRecommendationRenderer message={message} />;
+
+    case "backtest_result":
+      return <BacktestResultRenderer message={message} />;
+
+    default:
+      // 타입스크립트의 exhaustive check로 모든 케이스를 처리했는지 검증
+      const _exhaustiveCheck: never = message;
+      console.error(`Unknown message type:`, _exhaustiveCheck);
+      return null;
   }
-
-  // 타입별로 적절한 props 전달
-  return <Renderer message={message as any} />;
 }

@@ -22,41 +22,84 @@ export function normalizeMarkdown(content: string): string {
   // 2. 리스트(- ) 앞에 줄바꿈 추가 (단, 이미 줄바꿈이 있으면 제외)
   normalized = normalized.replace(/([^\n])([-*]\s+)/g, "$1\n$2");
 
-  // 3. 빈 헤딩(### 뒤에 텍스트 없음) 제거 - 리스트 분리 방지
-  // 먼저 ###만 있는 줄을 제거
-  normalized = normalized.replace(/^#{1,6}\s*$/gm, "");
-  // 그리고 연속된 줄바꿈 정리
-  normalized = normalized.replace(/\n{3,}/g, "\n\n");
-
-  // 4. 번호 리스트(1. ) 앞에 줄바꿈 추가
+  // 3. 번호 리스트(1. ) 앞에 줄바꿈 추가
   normalized = normalized.replace(/([^\n])(\d+\.\s+)/g, "$1\n$2");
 
-  // 5. 번호 리스트 재정렬: 헤딩을 기준으로 각 섹션의 번호를 1, 2, 3, 4로 수정
-  console.log("=== 번호 재정렬 전 ===");
-  console.log(normalized.substring(0, 500));
+  // 4. 빈 헤딩 제거 (###만 있고 뒤에 텍스트 없음)
+  normalized = normalized.replace(/\n#{1,6}\s*\n/g, "\n");
 
-  // 헤딩으로 섹션 분할
-  const sections = normalized.split(/(#{1,6}\s+[^\n]+)/);
-  console.log("섹션 개수:", sections.length);
+  // 5. 줄 단위로 분석하여 번호 리스트 정리
+  const lines = normalized.split('\n');
+  const processedLines: string[] = [];
+  let inOrderedList = false;
+  let listCounter = 0;
+  let listItemContent: string[] = []; // 현재 리스트 항목의 내용 (여러 줄일 수 있음)
 
-  const processedSections = sections.map((section, idx) => {
-    console.log(`섹션 ${idx}:`, section.substring(0, 100));
-    // 헤딩이 아닌 섹션에서만 리스트 번호 재정렬
-    if (!section.match(/^#{1,6}\s+/)) {
-      let counter = 0;
-      const processed = section.replace(/^\d+\.\s+/gm, (match) => {
-        counter++;
-        console.log(`번호 교체: ${match} → ${counter}. `);
-        return `${counter}. `;
-      });
-      return processed;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+
+    // 의미 있는 헤딩 (텍스트가 있는 헤딩)
+    if (/^#{1,6}\s+.+/.test(trimmedLine)) {
+      // 이전 리스트 항목이 있으면 추가
+      if (listItemContent.length > 0) {
+        processedLines.push(...listItemContent);
+        listItemContent = [];
+      }
+      // 헤딩을 만나면 리스트 종료
+      inOrderedList = false;
+      listCounter = 0;
+      processedLines.push(line);
+      continue;
     }
-    return section;
-  });
 
-  normalized = processedSections.join('');
-  console.log("=== 번호 재정렬 후 ===");
-  console.log(normalized.substring(0, 500));
+    // 번호 리스트 항목인지 확인
+    const orderedListMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
+
+    if (orderedListMatch) {
+      // 이전 리스트 항목이 있으면 추가 (빈 줄 없이)
+      if (listItemContent.length > 0) {
+        processedLines.push(...listItemContent);
+        listItemContent = [];
+      }
+
+      // 새로운 번호 리스트 항목 시작
+      if (!inOrderedList) {
+        inOrderedList = true;
+        listCounter = 0;
+      }
+      listCounter++;
+
+      // 올바른 번호로 재정렬
+      const indent = line.match(/^\s*/)?.[0] || '';
+      listItemContent.push(`${indent}${listCounter}. ${orderedListMatch[2]}`);
+    } else if (inOrderedList && /^[-*]\s+/.test(trimmedLine)) {
+      // 번호 리스트 중 불릿 리스트 - 들여쓰기 추가 (하위 항목으로 만듦)
+      listItemContent.push(`   ${trimmedLine}`); // 3칸 들여쓰기
+    } else if (inOrderedList && trimmedLine !== '') {
+      // 번호 리스트 중이고 빈 줄이 아니면 현재 리스트 항목의 연속된 내용
+      listItemContent.push(line);
+    } else if (inOrderedList && trimmedLine === '') {
+      // 번호 리스트 중간의 빈 줄 - 무시 (리스트가 끊기지 않도록)
+      continue;
+    } else {
+      // 번호 리스트가 아닌 일반 내용
+      if (listItemContent.length > 0) {
+        processedLines.push(...listItemContent);
+        listItemContent = [];
+      }
+      inOrderedList = false;
+      listCounter = 0;
+      processedLines.push(line);
+    }
+  }
+
+  // 마지막 리스트 항목 추가
+  if (listItemContent.length > 0) {
+    processedLines.push(...listItemContent);
+  }
+
+  normalized = processedLines.join('\n');
 
   // 6. 연속된 줄바꿈 정리 (3개 이상의 줄바꿈은 2개로)
   normalized = normalized.replace(/\n{3,}/g, "\n\n");

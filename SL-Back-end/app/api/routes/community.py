@@ -108,9 +108,11 @@ async def get_posts(
                 title=post.title,
                 content_preview=content_preview,
                 author_nickname=user.nickname if not post.is_anonymous else None,
+                author_id=str(post.user_id),
                 is_anonymous=post.is_anonymous,
                 tags=post.tags,
                 post_type=post.post_type,
+                session_snapshot=SessionSnapshot(**post.session_snapshot) if post.session_snapshot else None,
                 view_count=post.view_count,
                 like_count=post.like_count,
                 comment_count=post.comment_count,
@@ -1011,8 +1013,8 @@ async def rebuild_rankings(
         from app.services.ranking_service import get_ranking_service
 
         # 관리자 권한 체크 (선택사항)
-        # if not current_user.is_admin:
-        #     raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
 
         logger.info(f"🔄 랭킹 재구축 시작 (요청: {current_user.email}, limit={limit})")
 

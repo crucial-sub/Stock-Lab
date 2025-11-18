@@ -4,11 +4,13 @@ Strategy API 라우터
 - 공개 투자전략 랭킹 조회
 - 투자전략 공개 설정 변경
 """
+from datetime import datetime
+import logging
+from typing import Optional, Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, desc, func
-from typing import Optional, Literal
-import logging
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -28,7 +30,8 @@ from app.schemas.strategy import (
     StrategyRankingResponse,
     StrategySharingUpdate,
     StrategyStatisticsSummary,
-    BacktestDeleteRequest
+    BacktestDeleteRequest,
+    StrategyUpdate,
 )
 from app.schemas.community import CloneStrategyData
 
@@ -77,6 +80,7 @@ async def get_my_strategies(
                 strategy_id=strategy.strategy_id,
                 strategy_name=strategy.strategy_name,
                 is_active=session.is_active if hasattr(session, 'is_active') else False,
+                is_public=strategy.is_public if hasattr(strategy, 'is_public') else False,
                 status=session.status,
                 total_return=float(stats.total_return) if stats and stats.total_return else None,
                 created_at=session.created_at,
@@ -227,6 +231,51 @@ async def get_public_Strategies_ranking(
 
     except Exception as e:
         logger.error(f"공개 투자전략 랭킹 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/strategies/{strategy_id}")
+async def update_strategy(
+    strategy_id: str,
+    payload: StrategyUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """투자전략 이름/설명 수정"""
+    try:
+        strategy_query = select(PortfolioStrategy).where(
+            PortfolioStrategy.strategy_id == strategy_id
+        )
+        result = await db.execute(strategy_query)
+        strategy = result.scalar_one_or_none()
+
+        if not strategy:
+            raise HTTPException(status_code=404, detail="투자전략을 찾을 수 없습니다")
+
+        if strategy.user_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="수정 권한이 없습니다")
+
+        update_data = payload.model_dump(exclude_unset=True)
+        if not update_data:
+            return {"message": "수정할 내용이 없습니다."}
+
+        for field, value in update_data.items():
+            setattr(strategy, field, value)
+
+        strategy.updated_at = datetime.now()
+
+        await db.commit()
+        await db.refresh(strategy)
+
+        return {
+            "message": "투자전략이 수정되었습니다.",
+            "strategyName": strategy.strategy_name,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"투자전략 수정 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

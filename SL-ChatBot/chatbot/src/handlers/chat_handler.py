@@ -142,7 +142,6 @@ class ChatHandler:
         self.news_retriever = None
         self.agent_executor = None
         self.conversation_history = {}
-        self.agent_type = None  # Track which agent type is being used
         # 설문/추천 상태
         self.session_state: Dict[str, Dict[str, Any]] = {}
         self.forbidden_patterns: Dict[str, List[str]] = {}
@@ -153,6 +152,21 @@ class ChatHandler:
         self.questions = self._load_questions()
         self._load_strategies()
         self._init_components()
+
+    def _needs_news_keyword(self, message: str) -> Optional[str]:
+        """뉴스 의도지만 키워드가 없는 경우 간단 안내 반환."""
+        msg = (message or "").strip()
+        msg_lower = msg.lower()
+        news_terms = ["뉴스", "기사", "동향", "헤드라인", "최근"]
+        if any(t in msg for t in news_terms):
+            cleaned = msg
+            for t in news_terms:
+                cleaned = cleaned.replace(t, "")
+            cleaned = cleaned.strip()
+            # 키워드 길이가 너무 짧으면 부족한 것으로 판단
+            if len(cleaned) < 2:
+                return "어떤 종목/테마 뉴스가 궁금한지 알려주세요. 예) '삼성전자 뉴스 알려줘', '반도체 테마 뉴스 요약해줘'"
+        return None
 
     def _load_questions(self):
         """설문 질문을 외부 파일에서 로드하고, 실패하면 기본값 사용."""
@@ -168,7 +182,7 @@ class ChatHandler:
             except Exception as e:
                 print(f"Failed to load questionnaire.json: {e}")
 
-        # fallback 기본 설문
+        # fallback 기본 설문 (5문항)
         return [
             {
                 "question_id": "investment_period",
@@ -180,167 +194,49 @@ class ChatHandler:
                     {"id": "long_term", "label": "장기 투자 (1년 이상)", "description": "좋은 기업을 골라 오래 들고 가고 싶어요.", "icon": "🏆", "tags": ["long_term", "style_value"]},
                 ],
             },
-        ]
-        # 설문 질문 세트 (프론트 UI 사양 반영)
-        self.questions = [
-            {
-                "question_id": "investment_period",
-                "text": "보통 얼마 동안 보유할 생각으로 투자하시나요?",
-                "order": 1,
-                "options": [
-                    {
-                        "id": "short_term",
-                        "label": "단기 투자 (며칠 ~ 몇 주)",
-                        "description": "짧게 사고 팔면서 단기 수익을 노려요.",
-                        "icon": "⚡",
-                        "tags": ["short_term", "style_momentum"],
-                    },
-                    {
-                        "id": "mid_term",
-                        "label": "중기 투자 (몇 개월)",
-                        "description": "몇 달 정도 흐름을 보면서 가져가는 편이에요.",
-                        "icon": "📊",
-                        "tags": ["mid_term"],
-                    },
-                    {
-                        "id": "long_term",
-                        "label": "장기 투자 (1년 이상)",
-                        "description": "좋은 기업을 골라 오래 들고 가고 싶어요.",
-                        "icon": "🏆",
-                        "tags": ["long_term", "style_value"],
-                    },
-                ],
-            },
             {
                 "question_id": "investment_style",
                 "text": "아래 중에서 가장 본인 스타일에 가까운 걸 골라주세요.",
                 "order": 2,
                 "options": [
-                    {
-                        "id": "value",
-                        "label": "가치 / 저평가 위주",
-                        "description": "싸게 사서 안전마진을 확보하는 것이 좋아요.",
-                        "icon": "💎",
-                        "tags": ["style_value"],
-                    },
-                    {
-                        "id": "growth",
-                        "label": "성장 / 실적 위주",
-                        "description": "매출·이익이 빠르게 커지는 기업이 좋아요.",
-                        "icon": "📈",
-                        "tags": ["style_growth"],
-                    },
-                    {
-                        "id": "momentum",
-                        "label": "모멘텀 / 추세 위주",
-                        "description": "최근에 많이 오르고 있는 강한 종목이 좋아요.",
-                        "icon": "🚀",
-                        "tags": ["style_momentum"],
-                    },
-                    {
-                        "id": "dividend",
-                        "label": "배당 수익 위주",
-                        "description": "배당을 꾸준히 받으면서 안정적으로 가고 싶어요.",
-                        "icon": "💰",
-                        "tags": ["style_dividend"],
-                    },
+                    {"id": "value", "label": "가치 / 저평가 위주", "description": "싸게 사서 안전마진을 확보하는 것이 좋아요.", "icon": "💎", "tags": ["style_value"]},
+                    {"id": "growth", "label": "성장 / 실적 위주", "description": "매출·이익이 빠르게 커지는 기업이 좋아요.", "icon": "📈", "tags": ["style_growth"]},
+                    {"id": "quality", "label": "우량 / 안정성", "description": "재무가 튼튼하고 변동성이 낮은 기업을 선호해요.", "icon": "🛡️", "tags": ["style_quality"]},
+                    {"id": "momentum", "label": "모멘텀 / 추세", "description": "추세를 타는 종목, 빠르게 움직이는 종목을 좋아해요.", "icon": "🚀", "tags": ["style_momentum"]},
+                    {"id": "dividend", "label": "배당 / 현금흐름", "description": "배당금으로 안정적인 수익을 얻고 싶어요.", "icon": "💰", "tags": ["style_dividend"]},
                 ],
             },
             {
                 "question_id": "risk_tolerance",
-                "text": "투자 중에 일시적으로 -20% 같은 큰 손실이 나도 버틸 수 있나요?",
+                "text": "가격이 내려가도 어느 정도까지 버틸 수 있나요?",
                 "order": 3,
                 "options": [
-                    {
-                        "id": "risk_high",
-                        "label": "크게 흔들려도 괜찮아요",
-                        "description": "-30% 변동도 상관없어요.",
-                        "icon": "🎢",
-                        "tags": ["risk_high"],
-                    },
-                    {
-                        "id": "risk_mid",
-                        "label": "어느 정도는 괜찮아요",
-                        "description": "-10% ~ -20% 정도는 감수할 수 있어요.",
-                        "icon": "⚖️",
-                        "tags": ["risk_mid"],
-                    },
-                    {
-                        "id": "risk_low",
-                        "label": "손실은 최소화하고 싶어요",
-                        "description": "-10%만 넘어가도 스트레스를 많이 받아요.",
-                        "icon": "🛡️",
-                        "tags": ["risk_low"],
-                    },
+                    {"id": "low", "label": "10% 이하 하락까지만 허용", "description": "손실은 최소화하고 싶어요.", "icon": "🧊", "tags": ["risk_low"]},
+                    {"id": "medium", "label": "20% 내외 하락까지 허용", "description": "중간 정도 리스크는 감내할 수 있어요.", "icon": "🌊", "tags": ["risk_medium"]},
+                    {"id": "high", "label": "30% 이상도 감내 가능", "description": "수익을 위해 변동성을 감수할 수 있어요.", "icon": "🔥", "tags": ["risk_high"]},
                 ],
             },
             {
                 "question_id": "dividend_preference",
-                "text": "아래 둘 중, 더 끌리는 쪽은 어디인가요?",
+                "text": "배당을 선호하시나요?",
                 "order": 4,
                 "options": [
-                    {
-                        "id": "prefer_dividend",
-                        "label": "배당이 중요하다",
-                        "description": "꾸준한 현금 배당이 중요해요.",
-                        "icon": "💵",
-                        "tags": ["prefer_dividend"],
-                    },
-                    {
-                        "id": "prefer_capital_gain",
-                        "label": "배당보다 시세차익이 중요하다",
-                        "description": "주가 상승이 더 중요해요.",
-                        "icon": "📈",
-                        "tags": ["prefer_capital_gain"],
-                    },
-                    {
-                        "id": "prefer_both",
-                        "label": "둘 다 적당히 있으면 좋다",
-                        "description": "배당도 받고 주가도 오르면 베스트죠.",
-                        "icon": "🎯",
-                        "tags": ["prefer_both"],
-                    },
+                    {"id": "prefer_dividend", "label": "배당 중요", "description": "배당을 주는 종목이 좋아요.", "icon": "💵", "tags": ["prefer_dividend"]},
+                    {"id": "no_dividend", "label": "배당 상관없음", "description": "배당보다는 성장/가격 상승에 관심 있어요.", "icon": "🌱", "tags": ["no_dividend"]},
                 ],
             },
             {
                 "question_id": "sector_preference",
-                "text": "어떤 종류의 기업에 더 끌리나요?",
+                "text": "선호하는 섹터가 있나요?",
                 "order": 5,
                 "options": [
-                    {
-                        "id": "innovation",
-                        "label": "혁신 기술/성장 섹터",
-                        "description": "AI, 로봇, 바이오, 핀테크 같은 미래 기술 기업이 좋다.",
-                        "icon": "🚀",
-                        "tags": ["sector_innovation"],
-                    },
-                    {
-                        "id": "bluechip",
-                        "label": "전통 산업/우량 대형주",
-                        "description": "안정적인 대형 기업이 좋다.",
-                        "icon": "🏢",
-                        "tags": ["sector_bluechip"],
-                    },
-                    {
-                        "id": "smallmid",
-                        "label": "중소형/숨은 진주형 종목",
-                        "description": "덜 알려졌지만 개선 여지가 큰 중소형주.",
-                        "icon": "💎",
-                        "tags": ["sector_smallmid"],
-                    },
-                    {
-                        "id": "any",
-                        "label": "특별히 상관없다",
-                        "description": "섹터는 상관없고 조건만 좋으면 된다.",
-                        "icon": "🎲",
-                        "tags": ["sector_any"],
-                    },
+                    {"id": "tech", "label": "기술/성장 섹터", "description": "AI, 반도체, 클라우드 등", "icon": "🤖", "tags": ["sector_innovation", "sector_tech"]},
+                    {"id": "bluechip", "label": "전통 우량 섹터", "description": "은행, 통신, 필수소비재 등", "icon": "🏛️", "tags": ["sector_bluechip"]},
+                    {"id": "healthcare", "label": "헬스케어/바이오", "description": "제약, 바이오, 의료기기 등", "icon": "🧬", "tags": ["sector_healthcare"]},
+                    {"id": "sector_any", "label": "특별히 상관없다", "description": "섹터는 상관없고 조건만 좋으면 된다.", "icon": "🎲", "tags": ["sector_any"]},
                 ],
             },
         ]
-
-        # 전략 메타/백테스트 템플릿 로드
-        self._load_strategies()
 
     def _load_config(self):
         """Load configuration."""
@@ -569,7 +465,6 @@ class ChatHandler:
                 print("Step 5: Claude 에이전트와 Executor 생성 중...")
                 # Claude는 도구 호출(Tool Calling)을 기본 지원
                 agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
-                self.agent_type = "tool_calling"
                 print(f"  Claude 에이전트 생성 완료, AgentExecutor 생성 중...")
                 self.agent_executor = AgentExecutor(
                     agent=agent,
@@ -612,6 +507,16 @@ class ChatHandler:
             return {
                 "answer": domain_violation,
                 "intent": "policy_violation",
+                "session_id": session_id,
+                "sources": []
+            }
+
+        # 뉴스 요청인데 키워드가 부족한 경우 사전 안내
+        news_hint = self._needs_news_keyword(message)
+        if news_hint:
+            return {
+                "answer": news_hint,
+                "intent": "news_keyword_required",
                 "session_id": session_id,
                 "sources": []
             }

@@ -34,6 +34,7 @@ export const communityQueryKey = {
     search?: string;
     page?: number;
     limit?: number;
+    orderBy?: string;
   }) => [...communityQueryKey.posts(), params] as const,
   postDetail: (postId: string) =>
     [...communityQueryKey.posts(), "detail", postId] as const,
@@ -66,6 +67,7 @@ export function usePostsQuery(params?: {
   search?: string;
   page?: number;
   limit?: number;
+  orderBy?: string;
 }) {
   return useQuery<PostListResponse, Error>({
     queryKey: communityQueryKey.postList(params),

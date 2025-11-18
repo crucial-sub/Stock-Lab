@@ -18,24 +18,44 @@ export function ChatMessage({ role, content, backtestConditions }: ChatMessagePr
   // 간단한 마크다운 렌더링 (제목/리스트 위주)
   const renderContent = (text: string) =>
     text.split("\n").map((line, index) => {
+      // inline bold(**text**) 처리
+      const renderInline = (input: string) => {
+        const parts = input.split(/(\*\*[^*]+\*\*)/g);
+        return parts.map((part, idx) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={idx}>{part.replace(/\*\*/g, "")}</strong>
+            );
+          }
+          return <span key={idx}>{part}</span>;
+        });
+      };
+
       if (line.startsWith("### ")) {
         return (
           <h3 key={index} className="font-semibold text-base mt-3 mb-1">
-            {line.replace("### ", "")}
+            {renderInline(line.replace("### ", ""))}
           </h3>
         );
       }
       if (line.startsWith("## ")) {
         return (
           <h2 key={index} className="font-bold text-lg mt-4 mb-2">
-            {line.replace("## ", "")}
+            {renderInline(line.replace("## ", ""))}
           </h2>
         );
       }
-      if (line.startsWith("- ")) {
+      if (line.startsWith("📌")) {
+        return (
+          <h3 key={index} className="font-semibold text-base mt-3 mb-1">
+            {renderInline(line.replace("📌", "").trim())}
+          </h3>
+        );
+      }
+      if (line.startsWith("- ") || line.startsWith("• ")) {
         return (
           <li key={index} className="ml-4 list-disc">
-            {line.replace("- ", "")}
+            {renderInline(line.replace(/^[-•]\s?/, ""))}
           </li>
         );
       }
@@ -43,8 +63,8 @@ export function ChatMessage({ role, content, backtestConditions }: ChatMessagePr
         return <br key={index} />;
       }
       return (
-        <p key={index} className="leading-relaxed">
-          {line}
+        <p key={index} className="leading-relaxed whitespace-pre-line">
+          {renderInline(line)}
         </p>
       );
     });

@@ -157,7 +157,7 @@ const NewsPage: NextPage = () => {
                 summary={item.summary || ""}
                 tickerLabel={item.tickerLabel || item.stockCode || "종목"}
                 themeName={item.themeName}
-                pressName={item.pressName}
+                pressName={item.pressName || item.source || undefined}
                 sentiment={
                   (item.sentiment as "positive" | "negative" | "neutral") ||
                   "neutral"

@@ -67,44 +67,46 @@ const NewsPage: NextPage = () => {
   };
 
   return (
-    <section className="flex flex-col gap-[1.875rem] px-[18.75rem] py-[3.75rem]">
-      <h1 className="text-[1.75rem] font-semibold text-black ml-[1.875rem]">
-        테마별 요약 뉴스
-      </h1>
+    <section className="px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 py-[60px]">
+      <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-[40px]">
+        <span className="text-[1.5rem] font-semibold text-black ml-[0rem]">
+          테마별 요약 뉴스
+        </span>
 
-      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
         {/* 검색 및 정렬 영역 */}
-        <div className="flex items-center gap-3 justify-between">
+        <div className="flex items-center">
           {/* 검색 입력과 버튼 */}
           <div className="flex items-center gap-3 flex-1">
-            <div className="relative flex-1 max-w-[500px]">
+            <div className="relative flex-1">
               <input
                 type="search"
                 placeholder="뉴스 검색"
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
-                className="w-full h-9 rounded-lg bg-surface border-[0.5px] border-surface py-[0.5rem] px-[0.813rem] text-[0.75rem] text-gray-600 placeholder:text-gray-600 focus:border-brand-purple focus:outline-none"
+                className="w-full rounded-[12px] bg-surface border-[0.5px] border-surface py-[0.7rem] px-[1rem] text-[1rem] text-gray-600 placeholder:text-gray-600 focus:border-brand-purple focus:outline-none"
               />
             </div>
             <button
               type="button"
-              className="flex size-9 items-center justify-center rounded-lg bg-brand-purple hover:bg-brand-purple/90 transition"
-              aria-label="검색"
+              className="flex items-center gap-1 rounded-[12px] bg-brand-purple px-3 py-3 text-white hover:bg-brand-purple/90 transition"
             >
               <Icon
                 src="/icons/search.svg"
                 alt="검색"
-                size={20}
+                size={24}
                 color="white"
               />
+              <span className="text-[16px] font-semibold">검색</span>
             </button>
           </div>
+          <div className="pr-[12px]"></div>
 
           {/* 정렬 드롭다운 */}
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            className="h-9 rounded-lg bg-white border-[0.5px] border-surface px-3 text-[0.75rem] text-gray-600 focus:border-brand-purple focus:outline-none"
+            className="rounded-lg bg-[#1822340D] border-[0.5px] border-surface px-3 py-3.5 text-[14px] text-muted focus:border-brand-purple focus:outline-none"
           >
             <option value="all">날짜 순 정렬</option>
             <option value="latest">최신순</option>
@@ -113,7 +115,7 @@ const NewsPage: NextPage = () => {
         </div>
 
         {/* 필터 버튼 영역 */}
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-2">
           {displayThemes.map((theme: string) => {
             const isActive = selectedThemes.includes(theme);
             return (
@@ -121,10 +123,10 @@ const NewsPage: NextPage = () => {
                 key={theme}
                 type="button"
                 onClick={() => handleToggleTheme(theme)}
-                className={`rounded-full px-3 py-2 text-[1rem] tracking-[-0.02em] transition ${
+                className={`rounded-full px-5 py-1.5 text-[1rem] transition ${
                   isActive
                     ? "bg-brand-purple text-white font-semibold"
-                    : "text-black font-normal"
+                    : "border-[1px] border-[#18223414] text-muted font-normal"
                 }`}
               >
                 {theme}
@@ -132,54 +134,55 @@ const NewsPage: NextPage = () => {
             );
           })}
         </div>
-      </div>
-
-      {isLoading && (
-        <p className="text-center text-text-body">
-          뉴스를 불러오는 중입니다...
-        </p>
-      )}
-      {isError && (
-        <p className="text-center text-accent-primary">
-          뉴스 데이터를 불러오지 못했습니다.
-        </p>
-      )}
-
-      {!isLoading && !isError && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {newsList.map((item, index: number) => (
-            <NewsCard
-              key={`${item.id}-${index}`}
-              id={item.id}
-              title={item.title}
-              summary={item.summary || ""}
-              tickerLabel={item.tickerLabel || item.stockCode || "종목"}
-              themeName={item.themeName}
-              pressName={item.pressName}
-              sentiment={
-                (item.sentiment as "positive" | "negative" | "neutral") ||
-                "neutral"
-              }
-              publishedAt={item.publishedAt || ""}
-              source={item.source || ""}
-              link={item.link || ""}
-              onClick={() => setSelectedNewsId(item.id)}
-            />
-          ))}
-          {!newsList.length && (
-            <p className="col-span-full text-center text-text-body">
-              조건에 해당하는 뉴스가 없습니다.
-            </p>
-          )}
         </div>
-      )}
 
-      {selectedNewsId && selectedNews && (
-        <NewsDetailModal
-          news={selectedNews}
-          onClose={() => setSelectedNewsId(null)}
-        />
-      )}
+        {isLoading && (
+          <p className="text-center text-text-body">
+            뉴스를 불러오는 중입니다...
+          </p>
+        )}
+        {isError && (
+          <p className="text-center text-accent-primary">
+            뉴스 데이터를 불러오지 못했습니다.
+          </p>
+        )}
+
+        {!isLoading && !isError && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {newsList.map((item, index: number) => (
+              <NewsCard
+                key={`${item.id}-${index}`}
+                id={item.id}
+                title={item.title}
+                summary={item.summary || ""}
+                tickerLabel={item.tickerLabel || item.stockCode || "종목"}
+                themeName={item.themeName}
+                pressName={item.pressName}
+                sentiment={
+                  (item.sentiment as "positive" | "negative" | "neutral") ||
+                  "neutral"
+                }
+                publishedAt={item.publishedAt || ""}
+                source={item.source || ""}
+                link={item.link || ""}
+                onClick={() => setSelectedNewsId(item.id)}
+              />
+            ))}
+            {!newsList.length && (
+              <p className="col-span-full text-center text-text-body">
+                조건에 해당하는 뉴스가 없습니다.
+              </p>
+            )}
+          </div>
+        )}
+
+        {selectedNewsId && selectedNews && (
+          <NewsDetailModal
+            news={selectedNews}
+            onClose={() => setSelectedNewsId(null)}
+          />
+        )}
+      </div>
     </section>
   );
 };

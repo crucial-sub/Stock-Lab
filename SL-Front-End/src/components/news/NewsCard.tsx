@@ -39,22 +39,22 @@ export function NewsCard({
 
   return (
     <article
-      className={`rounded-lg border-[0.5px] border-[rgba(24,34,52,0.2)] bg-[rgba(24,34,52,0.05)] p-5 transition ${
+      className={`group rounded-[12px] border-[0.5px] border-[#18223414] bg-[#1822340D] p-5 transition shadow-elev-card-soft ${
         onClick
-          ? "cursor-pointer hover:shadow-[0px_0px_9px_0px_rgba(0,0,0,0.1)]"
+          ? "cursor-pointer hover:bg-[#FFFFFF14]"
           : ""
       }`}
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      <h2 className="text-[1.5rem] font-semibold text-black">{title}</h2>
+      <span className="text-[1.25rem] font-semibold text-black">{title}</span>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className="rounded-[4px] bg-[#E1E1E1] px-2 py-1 text-[0.8rem] font-normal text-black">
+        <span className="rounded-[4px] bg-[#969696] px-3 pt-1 pb-0.5 text-[0.75rem] font-normal text-white">
           {tickerLabel}
         </span>
         <span
-          className={`rounded-[4px] px-2 py-1 text-[0.8rem] font-normal ${tone.bg} ${tone.text}`}
+          className={`rounded-[4px] px-3 pt-1 pb-0.5 text-[0.75rem] font-normal ${tone.bg} ${tone.text}`}
         >
           {sentiment === "positive"
             ? "긍정"
@@ -62,12 +62,12 @@ export function NewsCard({
               ? "중립"
               : "부정"}
         </span>
-        <span className="text-[0.8rem] font-normal text-gray-600">
+        <span className="text-[0.75rem] font-normal text-muted">
           {publishedAt}
         </span>
         {link && (
           <a
-            className="flex max-w-[200px] items-center gap-1 text-[0.8rem] font-normal text-gray-600 hover:text-black"
+            className="flex max-w-[180px] items-center text-[0.75rem] font-normal text-muted hover:text-brand"
             href={link}
             target="_blank"
             rel="noreferrer"
@@ -78,7 +78,7 @@ export function NewsCard({
         )}
       </div>
       <p
-        className="mt-2 text-[1.125rem] font-light text-black leading-relaxed"
+        className="mt-2 text-[1rem] font-normal text-muted transition-colors group-hover:text-black"
         style={{
           display: "-webkit-box",
           WebkitLineClamp: 3,

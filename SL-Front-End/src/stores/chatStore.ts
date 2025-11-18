@@ -118,7 +118,7 @@ export const useChatStore = create<ChatStore>()(
 
         // 메시지 업데이트 (불변성 유지)
         const updatedMessages = messages.map((msg) =>
-          msg.id === id ? { ...msg, ...updates } : msg
+          msg.id === id ? { ...msg, ...updates } as Message : msg
         );
 
         // 세션 업데이트

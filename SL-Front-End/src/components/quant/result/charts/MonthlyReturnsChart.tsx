@@ -143,7 +143,7 @@ export function MonthlyReturnsChart({ yieldPoints }: MonthlyReturnsChartProps) {
     portfolioSeries.columns.template.adapters.add("fill", (fill, target) => {
       const dataItem = target.dataItem;
       if (dataItem) {
-        const value = dataItem.get("valueY") as number;
+        const value = (dataItem as any).get("valueY") as number;
         if (value >= 0) {
           return am5.color(0xf97316); // 주황색
         }

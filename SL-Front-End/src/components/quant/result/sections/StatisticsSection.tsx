@@ -9,6 +9,7 @@ interface StatisticsSectionProps {
     totalReturn: number;
     annualizedReturn: number;
     maxDrawdown: number;
+    finalCapital?: number;
   };
   initialCapital: number;
   periodReturns: Array<{ label: string; value: number }>;

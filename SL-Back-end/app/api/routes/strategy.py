@@ -258,7 +258,10 @@ async def update_strategy_sharing_settings(
         if strategy.user_id != user_id:
             raise HTTPException(status_code=403, detail="이 전략을 수정할 권한이 없습니다")
 
-        # 2. 설정 업데이트
+        # 2. is_public 변경 여부 확인 (Redis 동기화용)
+        old_is_public = strategy.is_public
+
+        # 3. 설정 업데이트
         update_data = settings.dict(exclude_unset=True)
         for field, value in update_data.items():
             setattr(strategy, field, value)
@@ -269,6 +272,50 @@ async def update_strategy_sharing_settings(
 
         await db.commit()
         await db.refresh(strategy)
+
+        # 🎯 4. Redis 랭킹 동기화
+        if "is_public" in update_data and old_is_public != strategy.is_public:
+            try:
+                from app.services.ranking_service import get_ranking_service
+
+                ranking_service = await get_ranking_service()
+
+                if ranking_service.enabled:
+                    # 해당 전략의 모든 완료된 세션 조회
+                    sessions_query = select(
+                        SimulationSession.session_id,
+                        SimulationStatistics.total_return
+                    ).join(
+                        SimulationStatistics,
+                        SimulationStatistics.session_id == SimulationSession.session_id
+                    ).where(
+                        and_(
+                            SimulationSession.strategy_id == strategy_id,
+                            SimulationSession.status == "COMPLETED",
+                            SimulationStatistics.total_return.isnot(None)
+                        )
+                    )
+                    sessions_result = await db.execute(sessions_query)
+                    sessions = sessions_result.all()
+
+                    if strategy.is_public:
+                        # 공개로 변경 → Redis에 추가
+                        for session_id, total_return in sessions:
+                            await ranking_service.add_to_ranking(
+                                session_id=session_id,
+                                total_return=float(total_return),
+                                strategy_id=strategy_id,
+                                is_public=True
+                            )
+                        logger.info(f"✅ Redis 랭킹 추가: {len(sessions)}개 세션")
+                    else:
+                        # 비공개로 변경 → Redis에서 제거
+                        for session_id, _ in sessions:
+                            await ranking_service.remove_from_ranking(session_id)
+                        logger.info(f"🗑️ Redis 랭킹 제거: {len(sessions)}개 세션")
+
+            except Exception as e:
+                logger.warning(f"⚠️ Redis 랭킹 동기화 실패 (무시): {e}")
 
         return {
             "message": "공개 설정이 업데이트되었습니다",
@@ -335,6 +382,18 @@ async def delete_backtest_sessions(
             deleted_count += 1
 
         await db.commit()
+
+        # 🎯 4. Redis 랭킹에서 삭제된 세션 제거
+        try:
+            from app.services.ranking_service import get_ranking_service
+            ranking_service = await get_ranking_service()
+
+            if ranking_service.enabled:
+                for session_id in session_ids:
+                    await ranking_service.remove_from_ranking(session_id)
+                logger.info(f"🗑️ Redis 랭킹에서 제거 완료: {len(session_ids)}개 세션")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis 랭킹 제거 실패 (무시): {e}")
 
         return {
             "message": f"{deleted_count}개의 백테스트가 삭제되었습니다",

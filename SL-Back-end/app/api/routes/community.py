@@ -993,6 +993,64 @@ async def _get_rankings_from_db(
 
 
 # ============================================================
+# 랭킹 관리 API (관리자용)
+# ============================================================
+
+@router.post("/rankings/rebuild")
+async def rebuild_rankings(
+    limit: int = Query(100, ge=1, le=500, description="재구축할 개수"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Redis 랭킹 재구축 (관리자 전용)
+    - 기존 백테스트 데이터를 Redis에 로드
+    - DB에서 TOP N개를 조회하여 Redis Sorted Set에 추가
+    """
+    try:
+        from app.services.ranking_service import get_ranking_service
+
+        # 관리자 권한 체크 (선택사항)
+        # if not current_user.is_admin:
+        #     raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+
+        logger.info(f"🔄 랭킹 재구축 시작 (요청: {current_user.email}, limit={limit})")
+
+        ranking_service = await get_ranking_service()
+
+        if not ranking_service.enabled:
+            raise HTTPException(
+                status_code=503,
+                detail="Redis가 비활성화되어 있습니다"
+            )
+
+        # 기존 랭킹 삭제
+        from app.core.cache import get_redis
+        redis_client = get_redis()
+        old_count = await redis_client.zcard("rankings:all")
+        await redis_client.delete("rankings:all")
+        logger.info(f"🗑️ 기존 랭킹 삭제: {old_count}개")
+
+        # DB에서 재구축
+        rebuilt_count = await ranking_service.rebuild_from_db(db, limit=limit)
+
+        logger.info(f"✅ 랭킹 재구축 완료: {rebuilt_count}개 항목")
+
+        return {
+            "message": "랭킹 재구축 완료",
+            "old_count": old_count,
+            "new_count": rebuilt_count,
+            "limit": limit
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"랭킹 재구축 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
 # 전략 복제 API
 # ============================================================
 

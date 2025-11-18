@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { ChatHistory } from "@/components/ai-assistant/ChatHistory";
+import { ChatInterface } from "@/components/ai-assistant/ChatInterface";
 import { SecondarySidebar } from "@/components/ai-assistant/SecondarySidebar";
 import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { AISearchInput } from "@/components/home/ui";
-import { sendChatMessage, type ChatResponse } from "@/lib/api/chatbot";
-import { ChatInterface } from "@/components/ai-assistant/ChatInterface";
-import { ChatHistory } from "@/components/ai-assistant/ChatHistory";
 import { chatHistoryApi } from "@/lib/api/chat-history";
+import { sendChatMessage, type ChatResponse } from "@/lib/api/chatbot";
 import { getAuthTokenFromCookie } from "@/lib/auth/token";
+import { useCallback, useEffect, useState } from "react";
 
 interface Message {
   role: "user" | "assistant";
@@ -38,25 +38,22 @@ interface ChatSession {
  * 이벤트 핸들러와 상태 관리가 필요한 부분만 클라이언트 컴포넌트로 분리.
  */
 
-interface Strategy {
-  id: string;
-  title: string;
-  description: string;
-}
-
 interface AIAssistantPageClientProps {
   /** 큰 카드 정보 */
-  largeStrategy: {
-    title: string;
+  largeSample: {
+    question: string;
     description: string;
   };
   /** 작은 카드 목록 */
-  smallStrategies: Strategy[];
+  smallSample: {
+    id: string;
+    question: string;
+  }[];
 }
 
 export function AIAssistantPageClient({
-  largeStrategy,
-  smallStrategies,
+  largeSample,
+  smallSample,
 }: AIAssistantPageClientProps) {
   const [sessionId, setSessionId] = useState<string>("");
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
@@ -231,17 +228,10 @@ export function AIAssistantPageClient({
     }
   };
 
-  const handleStrategyClick = async (strategyId: string) => {
-    // 전략 카드 클릭 시 해당 전략에 대해 질문 - 채팅 모드로 전환
-    const strategyTitles: { [key: string]: string } = {
-      "1": "윌리엄 오닐의 전략",
-      "2": "워렌 버핏의 전략",
-      "3": "피터 린치의 전략",
-      "4": "캐시 우드의 전략",
-    };
+  const handleSampleClick = async (strategyId: string) => {
+    // small sample 카드 클릭 시 해당 전략에 대해 질문 - 채팅 모드로 전환
 
-    const strategyTitle = strategyTitles[strategyId];
-    const userMessage = `${strategyTitle}에 대해 알려줘`;
+    const userMessage = smallSample.find((sample) => (sample.id === strategyId))?.question || "";
 
     console.log(`Strategy ${strategyId} clicked:`, userMessage);
 
@@ -564,8 +554,8 @@ export function AIAssistantPageClient({
             {/* 큰 카드 */}
             <div className="w-full max-w-[1000px] mb-[112px]">
               <StrategyCard
-                title={largeStrategy.title}
-                description={largeStrategy.description}
+                question={largeSample.question}
+                description={largeSample.description}
                 size="large"
                 onClick={handleLargeCardClick}
               />
@@ -573,12 +563,11 @@ export function AIAssistantPageClient({
 
             {/* 작은 카드 그리드 (2x2) */}
             <div className="grid grid-cols-2 gap-x-[40px] gap-y-[32px] mb-[114px]">
-              {smallStrategies.map((strategy) => (
+              {smallSample.map((strategy) => (
                 <StrategyCard
                   key={strategy.id}
-                  title={strategy.title}
-                  description={strategy.description}
-                  onClick={() => handleStrategyClick(strategy.id)}
+                  question={strategy.question}
+                  onClick={() => handleSampleClick(strategy.id)}
                 />
               ))}
             </div>

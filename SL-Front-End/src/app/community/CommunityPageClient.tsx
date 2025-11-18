@@ -92,7 +92,7 @@ export default function CommunityPageClient() {
   }
 
   return (
-    <div className="flex flex-col max-w-[1040px] mx-auto px-5 py-10">
+    <div className="flex flex-col max-w-[1000px] mx-auto px-5 py-10">
       {/* 수익률 랭킹 섹션 */}
       <section className="mb-16">
         <div className="flex items-center justify-between mb-6">
@@ -189,9 +189,7 @@ export default function CommunityPageClient() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-3xl font-bold text-body">자유게시판</h2>
           <button
-            onClick={() =>
-              router.push("/community/posts?postType=DISCUSSION")
-            }
+            onClick={() => router.push("/community/discussion")}
             className="text-base text-gray-700 underline hover:text-gray-600"
           >
             더보기

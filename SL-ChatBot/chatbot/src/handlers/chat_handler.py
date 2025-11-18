@@ -146,11 +146,41 @@ class ChatHandler:
         # 설문/추천 상태
         self.session_state: Dict[str, Dict[str, Any]] = {}
         self.forbidden_patterns: Dict[str, List[str]] = {}
+        self.questions: List[Dict[str, Any]] = []
 
         self._load_config()
         self._load_forbidden_patterns()
+        self.questions = self._load_questions()
+        self._load_strategies()
         self._init_components()
 
+    def _load_questions(self):
+        """설문 질문을 외부 파일에서 로드하고, 실패하면 기본값 사용."""
+        path = Path("/app/config/questionnaire.json")
+        if not path.exists():
+            path = Path(__file__).parent.parent.parent / "config" / "questionnaire.json"
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, list) and data:
+                    print(f"Loaded questionnaire ({len(data)} questions)")
+                    return data
+            except Exception as e:
+                print(f"Failed to load questionnaire.json: {e}")
+
+        # fallback 기본 설문
+        return [
+            {
+                "question_id": "investment_period",
+                "text": "보통 얼마 동안 보유할 생각으로 투자하시나요?",
+                "order": 1,
+                "options": [
+                    {"id": "short_term", "label": "단기 투자 (며칠 ~ 몇 주)", "description": "짧게 사고 팔면서 단기 수익을 노려요.", "icon": "⚡", "tags": ["short_term", "style_momentum"]},
+                    {"id": "mid_term", "label": "중기 투자 (몇 개월)", "description": "몇 달 정도 흐름을 보면서 가져가는 편이에요.", "icon": "📊", "tags": ["mid_term"]},
+                    {"id": "long_term", "label": "장기 투자 (1년 이상)", "description": "좋은 기업을 골라 오래 들고 가고 싶어요.", "icon": "🏆", "tags": ["long_term", "style_value"]},
+                ],
+            },
+        ]
         # 설문 질문 세트 (프론트 UI 사양 반영)
         self.questions = [
             {
@@ -784,9 +814,11 @@ class ChatHandler:
     async def _classify_intent(self, message: str) -> str:
         """사용자 의도 분류. DSL 생성과 설명 모드를 명확히 구분합니다."""
         message_lower = message.strip().lower()
+        message_norm = self._normalize_text(message)
 
         # 검증 관련 키워드 (최우선 - DSL 생성보다 먼저 체크)
         verification_keywords = ['맞아', '맞나', '맞는지', '맞니', '확인', '검증', '체크', '이게 맞', '맞는 거']
+        
         # 현재 설정된 조건이 포함되어 있으면 검증 요청
         has_current_conditions = '[현재 설정된 조건]' in message
 
@@ -800,7 +832,22 @@ class ChatHandler:
 
         # 전략 추천 키워드
         recommend_keywords = ['전략 추천', 'recommend', '추천']
-        backtest_keywords = ['백테스트 설정', '전략으로 진행', '전략으로 백테스트', '이 전략으로', '자동 설정']
+        backtest_keywords = [
+            '백테스트 설정', '전략으로 진행', '전략으로 백테스트', '이 전략으로', '자동 설정',
+            '백테스트 진행', '설정해줘', '전략 실행', '전략 설정', '실행해줘'
+        ]
+
+        # 단일 지표/팩터 + 질문형(뭐/의미/설명)은 explain으로 우선 처리
+        factor_keywords = ['per', 'pbr', 'roe', 'roa', 'rsi', 'sma', 'ema', 'macd', 'mdd', '샤프', 'sharpe']
+        if any(f in message_lower for f in factor_keywords) and any(k in message_lower for k in explain_keywords):
+            return 'explain'
+
+        # 전략명이 포함되어 있고 '백테스트' 키워드가 있으면 강제 backtest_configuration
+        if "백테스트" in message_lower and self.strategy_backtest_templates:
+            for sid, meta in self.strategy_backtest_templates.items():
+                name_norm = self._normalize_text(meta["strategy_name"])
+                if sid in message_norm or name_norm in message_norm:
+                    return 'backtest_configuration'
 
         # 우선순위: 검증 > 백테스트 설정 > 전략 추천 > DSL 생성 > Explain > General
         if has_current_conditions or any(word in message_lower for word in verification_keywords):
@@ -820,9 +867,11 @@ class ChatHandler:
         """전략 선택 후 백테스트 설정 UI Language를 반환하고 기본 DSL을 저장."""
         # 전략 식별 (간단히 이름 매칭)
         message_lower = message.lower()
+        message_norm = self._normalize_text(message)
         matched_id = None
         for sid, meta in self.strategy_backtest_templates.items():
-            if sid in message_lower or meta["strategy_name"].replace(" ", "").lower() in message_lower:
+            name_norm = self._normalize_text(meta["strategy_name"])
+            if sid in message_norm or name_norm in message_norm:
                 matched_id = sid
                 break
         # 기본값: 워렌버핏

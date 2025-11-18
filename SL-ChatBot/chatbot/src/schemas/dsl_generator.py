@@ -7,7 +7,8 @@ import json
 import logging
 import os
 import time
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
+from pathlib import Path
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
@@ -85,12 +86,39 @@ PRICE_CHANGE_1D, PRICE_CHANGE_5D
 # Bedrock 클라이언트 지연 생성
 # ======================================
 _bedrock_client = None
+_factor_alias_map: Dict[str, str] = {}
+_operator_map: Dict[str, str] = {}
 
 def get_bedrock_client():
     global _bedrock_client
     if _bedrock_client is None:
         _bedrock_client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
     return _bedrock_client
+
+
+def _load_alias_and_operator_maps():
+    """Load factor alias and operator map from config files (with safe fallback)."""
+    global _factor_alias_map, _operator_map
+    # factor alias
+    factor_path = Path("/app/config/factor_alias.json")
+    if not factor_path.exists():
+        factor_path = Path(__file__).parent.parent.parent / "config" / "factor_alias.json"
+    try:
+        if factor_path.exists():
+            _factor_alias_map = json.loads(factor_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("factor_alias.json 로드 실패: %s", exc)
+    # operator map
+    op_path = Path("/app/config/operator_rules.yaml")
+    if not op_path.exists():
+        op_path = Path(__file__).parent.parent.parent / "config" / "operator_rules.yaml"
+    try:
+        if op_path.exists():
+            import yaml  # local import to avoid hard dependency elsewhere
+            data = yaml.safe_load(op_path.read_text(encoding="utf-8")) or {}
+            _operator_map = data.get("operator_map", {})
+    except Exception as exc:
+        logger.warning("operator_rules.yaml 로드 실패: %s", exc)
 
 # ======================================
 # DSL 스키마 모델
@@ -116,6 +144,31 @@ def sanitize_json(text: str) -> str:
     if match:
         return match.group(0)
     return "{}"
+
+
+def _normalize_condition(cond: Dict[str, Any]) -> Dict[str, Any]:
+    """factor/operator 정규화."""
+    if not _factor_alias_map and not _operator_map:
+        _load_alias_and_operator_maps()
+
+    factor = cond.get("factor")
+    if isinstance(factor, str):
+        key = factor.lower().strip()
+        cond["factor"] = _factor_alias_map.get(key, factor)
+
+    op = cond.get("operator")
+    if isinstance(op, str):
+        key = op.lower().strip()
+        cond["operator"] = _operator_map.get(op) or _operator_map.get(key) or op
+
+    # between 처리: Claude가 value를 리스트로 주는 경우 대비
+    if cond.get("operator") == "between" and isinstance(cond.get("value"), list) and len(cond["value"]) == 2:
+        low, high = cond["value"]
+        return [
+            {**{k: v for k, v in cond.items() if k != "value"}, "operator": ">", "value": low},
+            {**{k: v for k, v in cond.items() if k != "value"}, "operator": "<", "value": high},
+        ]
+    return cond
 
 # ======================================
 # Claude 호출
@@ -173,5 +226,15 @@ def call_claude_and_get_json(text: str) -> dict:
 def parse_strategy_text(text: str) -> StrategyResponse:
     claude_payload = call_claude_and_get_json(text)
     conditions = claude_payload.get("conditions", [])
-    typed_conditions = [Condition(**c) for c in conditions]
+    normalized: List[Condition] = []
+    for raw in conditions:
+        norm = _normalize_condition(raw)
+        if isinstance(norm, list):
+            # between 같은 경우 두 조건으로 확장
+            for n in norm:
+                normalized.append(Condition(**n))
+        else:
+            normalized.append(Condition(**norm))
+
+    typed_conditions = normalized
     return StrategyResponse(conditions=typed_conditions)

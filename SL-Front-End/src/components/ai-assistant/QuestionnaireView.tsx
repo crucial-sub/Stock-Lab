@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import { QuestionnaireUILanguage } from "@/lib/api/chatbot";
 
 interface Message {
@@ -33,6 +34,20 @@ export function QuestionnaireView({
 }: QuestionnaireViewProps) {
   const { question, current_question, total_questions, progress_percentage } =
     uiLanguage;
+
+  const currentQuestionRef = useRef<HTMLDivElement>(null);
+
+  // 새 질문이 로드되면 자동 스크롤
+  useEffect(() => {
+    if (currentQuestionRef.current && !isLoading) {
+      setTimeout(() => {
+        currentQuestionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 100);
+    }
+  }, [current_question, isLoading]);
 
   if (!question) return null;
 
@@ -94,7 +109,7 @@ export function QuestionnaireView({
       )}
 
       {/* 현재 질문 */}
-      <div className="space-y-4">
+      <div ref={currentQuestionRef} className="space-y-4">
         <div className="flex justify-start">
           <div className="max-w-[95%] rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
             <div className="mb-2 flex items-center justify-between text-xs font-semibold text-gray-500">

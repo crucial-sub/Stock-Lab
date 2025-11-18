@@ -3,7 +3,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func, delete
+from sqlalchemy import select, desc, func, delete, asc
 from sqlalchemy.orm import selectinload
 from uuid import UUID
 from typing import List
@@ -87,12 +87,14 @@ async def get_user_chat_sessions(
     # 응답 데이터 구성
     session_list = []
     for session in sessions:
+        # 메시지를 message_order로 오름차순 정렬
+        if session.messages:
+            session.messages.sort(key=lambda m: m.message_order)
+
         last_message = None
         if session.messages:
-            # 메시지를 정렬하여 마지막 메시지 가져오기
-            sorted_messages = sorted(session.messages, key=lambda m: m.message_order)
-            if sorted_messages:
-                last_message = sorted_messages[-1].content
+            # 정렬된 메시지에서 마지막 메시지 가져오기
+            last_message = session.messages[-1].content
 
         session_list.append(
             ChatSessionListResponse(
@@ -142,6 +144,10 @@ async def get_chat_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="채팅 세션을 찾을 수 없습니다",
         )
+
+    # 메시지를 message_order로 오름차순 정렬
+    if session.messages:
+        session.messages.sort(key=lambda m: m.message_order)
 
     return session
 
@@ -212,7 +218,9 @@ async def save_chat(
 
     # 세션이 없으면 새로 생성
     if not session:
+        # 클라이언트가 전달한 session_id를 그대로 사용해 upsert 보장
         session = ChatSession(
+            session_id=save_request.session_id or None,
             user_id=current_user.user_id,
             title=save_request.title,
             mode=save_request.mode,

@@ -3,7 +3,7 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import uvicorn
 
 from handlers.chat_handler import ChatHandler
@@ -29,6 +29,24 @@ class ChatResponse(BaseModel):
 
 class DeleteSessionRequest(BaseModel):
     session_id: str
+
+
+# DSL 관련 모델
+class DSLRequest(BaseModel):
+    text: str
+
+
+class ConditionSchema(BaseModel):
+    factor: str
+    params: List = []
+    operator: str
+    right_factor: Optional[str] = None
+    right_params: List = []
+    value: Optional[float] = None
+
+
+class DSLResponse(BaseModel):
+    conditions: List[ConditionSchema]
 
 
 # FastAPI 앱 초기화
@@ -175,6 +193,49 @@ async def health_check():
         "handler_initialized": handler is not None,
         "version": "1.0.0"
     }
+
+
+@app.post("/api/v1/dsl/parse", response_model=DSLResponse)
+async def parse_dsl(request: DSLRequest):
+    """
+    자연어 전략 설명을 DSL JSON으로 변환
+
+    ### Request
+    ```json
+    {
+      "text": "PER 10 이하이고 ROE 15% 이상"
+    }
+    ```
+
+    ### Response
+    ```json
+    {
+      "conditions": [
+        {
+          "factor": "PER",
+          "params": [],
+          "operator": "<=",
+          "value": 10
+        }
+      ]
+    }
+    ```
+    """
+    try:
+        from schemas.dsl_generator import parse_strategy_text
+
+        result = parse_strategy_text(request.text)
+        # Pydantic v1 호환: dict() 사용
+        conditions = [ConditionSchema(**cond.dict()) for cond in result.conditions]
+        return DSLResponse(conditions=conditions)
+    except Exception as e:
+        print(f"DSL 파싱 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"DSL 변환에 실패했습니다: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

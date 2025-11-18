@@ -44,9 +44,8 @@ class Company(Base):
     est_dt = Column(String(8), nullable=True, comment="상장일 (YYYYMMDD)")
 
     # 모멘텀 점수(매일 업데이트), 펀더멘탈 점수(분기별 업데이트)
-    # TODO: DB에 컬럼 추가 후 주석 해제
-    # momentum_score = Column(Float, nullable=True, comment="0~100 모멘텀 점수")
-    # fundamental_score = Column(Float, nullable=True, comment="0~100 펀더멘털 점수")
+    momentum_score = Column(int, nullable=True, comment="0~100 모멘텀 점수")
+    fundamental_score = Column(int, nullable=True, comment="0~100 펀더멘털 점수")
 
     # Timestamps
     created_at = Column(TIMESTAMP, server_default=func.now(), nullable=False, comment="생성일시")

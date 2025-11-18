@@ -36,7 +36,7 @@ export interface SaveChatRequest {
   session_id?: string;
   title: string;
   mode: string;
-  messages: Omit<ChatMessage, "message_id" | "created_at">[];
+  messages: Omit<ChatMessage, "message_id" | "created_at" | "message_order">[];
 }
 
 export const chatHistoryApi = {

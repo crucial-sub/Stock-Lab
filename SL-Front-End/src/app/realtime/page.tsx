@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useLayoutEffect } from 'react'
 import Link from 'next/link'
 
 interface TickData {
@@ -26,7 +26,18 @@ interface StockData {
   price?: string
   change_rate?: string
   showFlash?: boolean
+  volume?: number
+  tradingValue?: number
 }
+
+type TabType = 'tradingValue' | 'volume' | 'rising' | 'falling'
+
+const TABS = [
+  { id: 'tradingValue' as TabType, label: '거래대금' },
+  { id: 'volume' as TabType, label: '거래량' },
+  { id: 'rising' as TabType, label: '급상승' },
+  { id: 'falling' as TabType, label: '급하락' },
+]
 
 export default function RealtimePage() {
   const [mode, setMode] = useState<'LIVE' | 'REPLAY' | 'UNKNOWN'>('UNKNOWN')
@@ -34,6 +45,13 @@ export default function RealtimePage() {
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [selectedTab, setSelectedTab] = useState<TabType>('tradingValue')
+  const [previousRanks, setPreviousRanks] = useState<Map<string, number>>(new Map())
+  const [rankChanges, setRankChanges] = useState<Map<string, 'up' | 'down' | 'same'>>(new Map())
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [visibleCount, setVisibleCount] = useState(50)
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map())
+  const positionsRef = useRef<Map<string, DOMRect>>(new Map())
 
   // 종목명 매핑
   const stockNames: Record<string, string> = {
@@ -125,12 +143,18 @@ export default function RealtimePage() {
               }, 1500)
             }
 
+            const price = parseFloat(tick.data.price) || 0
+            const volume = parseFloat(tick.data.volume) || 0
+            const tradingValue = price * volume
+
             return {
               ...stock,
               latest: tick,
               price: tick.data.price,
               change_rate: newRate,
-              showFlash: hasChanged
+              showFlash: hasChanged,
+              volume,
+              tradingValue
             }
           }
           return stock
@@ -169,15 +193,6 @@ export default function RealtimePage() {
     return parseInt(price).toLocaleString() + '원'
   }
 
-  // 등락률 포맷팅
-  const formatChangeRate = (rate?: string) => {
-    if (!rate) return '-'
-    const num = parseFloat(rate)
-    const color = num > 0 ? 'text-red-600' : num < 0 ? 'text-blue-600' : 'text-gray-600'
-    const sign = num > 0 ? '+' : ''
-    return <span className={color}>{sign}{num.toFixed(2)}%</span>
-  }
-
   // 상대 시간 표시 (토스 스타일 - 간결하게)
   const formatRelativeTime = (timestamp?: string) => {
     if (!timestamp) return '-'
@@ -199,6 +214,141 @@ export default function RealtimePage() {
     const now = new Date().getTime()
     const then = new Date(timestamp).getTime()
     return (now - then) < 3000  // 3초 이내
+  }
+
+  // 정렬된 종목 리스트
+  const getSortedStocks = (): StockData[] => {
+    const stockArray = [...stocks].filter(s => s.price)
+
+    switch (selectedTab) {
+      case 'tradingValue':
+        return stockArray.sort((a, b) => (b.tradingValue || 0) - (a.tradingValue || 0))
+      case 'volume':
+        return stockArray.sort((a, b) => (b.volume || 0) - (a.volume || 0))
+      case 'rising':
+        return stockArray.sort((a, b) => {
+          const rateA = parseFloat(a.change_rate || '0')
+          const rateB = parseFloat(b.change_rate || '0')
+          return rateB - rateA
+        })
+      case 'falling':
+        return stockArray.sort((a, b) => {
+          const rateA = parseFloat(a.change_rate || '0')
+          const rateB = parseFloat(b.change_rate || '0')
+          return rateA - rateB
+        })
+      default:
+        return stockArray
+    }
+  }
+
+  const sortedStocks = getSortedStocks()
+  const displayedStocks = sortedStocks.slice(0, visibleCount)
+  const hasMore = visibleCount < sortedStocks.length
+
+  // 탭 변경 시 visibleCount 초기화
+  useEffect(() => {
+    setVisibleCount(50)
+  }, [selectedTab])
+
+  // 초기 로딩 완료 감지
+  useEffect(() => {
+    if (stocks.length > 0 && isInitialLoad) {
+      // 3초 후 초기 로딩 완료로 간주
+      const timer = setTimeout(() => {
+        setIsInitialLoad(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [stocks.length, isInitialLoad])
+
+  // 순위 변동 추적 및 FLIP 애니메이션
+  useEffect(() => {
+    if (isInitialLoad) return
+
+    // First: 현재 위치 저장 (변경 전)
+    const beforePositions = new Map<string, DOMRect>()
+    rowRefs.current.forEach((element, code) => {
+      if (element) {
+        beforePositions.set(code, element.getBoundingClientRect())
+      }
+    })
+
+    // 순위 변경 추적
+    const newRanks = new Map<string, number>()
+    const changes = new Map<string, 'up' | 'down' | 'same'>()
+
+    displayedStocks.forEach((stock, index) => {
+      const currentRank = index + 1
+      const previousRank = previousRanks.get(stock.code)
+
+      newRanks.set(stock.code, currentRank)
+
+      if (previousRank !== undefined) {
+        if (currentRank < previousRank) {
+          changes.set(stock.code, 'up')
+        } else if (currentRank > previousRank) {
+          changes.set(stock.code, 'down')
+        } else {
+          changes.set(stock.code, 'same')
+        }
+      }
+    })
+
+    setPreviousRanks(newRanks)
+    setRankChanges(changes)
+
+    // Last & Invert & Play: DOM 업데이트 후 애니메이션
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        rowRefs.current.forEach((element, code) => {
+          if (!element) return
+
+          const beforePos = beforePositions.get(code)
+          if (!beforePos) return
+
+          const afterPos = element.getBoundingClientRect()
+          const deltaY = beforePos.top - afterPos.top
+
+          if (Math.abs(deltaY) > 1) {
+            console.log(`${code}: ${deltaY}px 이동`)
+
+            // Invert
+            element.style.transform = `translateY(${deltaY}px)`
+            element.style.transition = 'none'
+
+            // Play
+            requestAnimationFrame(() => {
+              element.style.transform = 'translateY(0)'
+              element.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'
+            })
+          }
+        })
+      })
+    })
+
+    // 1.5초 후 애니메이션 표시 초기화
+    const timer = setTimeout(() => {
+      setRankChanges(new Map())
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [displayedStocks.map(s => s.code + s.change_rate).join(','), isInitialLoad])
+
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000000000) {
+      // 1조 이상
+      const jo = Math.floor(num / 1000000000000)
+      const eok = Math.floor((num % 1000000000000) / 100000000)
+      return eok > 0 ? `${jo}조 ${eok}억` : `${jo}조`
+    } else if (num >= 100000000) {
+      // 1억 이상
+      return `${Math.floor(num / 100000000)}억`
+    } else if (num >= 10000) {
+      // 1만 이상
+      return `${Math.floor(num / 10000)}만`
+    }
+    return num.toLocaleString()
   }
 
   // 매수/매도 강도 바 렌더링 (토스 스타일)
@@ -286,9 +436,31 @@ export default function RealtimePage() {
 
         {/* 종목 리스트 */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {/* 탭 */}
+          <div className="border-b border-gray-200">
+            <div className="flex">
+              {TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedTab(tab.id)}
+                  className={`flex-1 px-6 py-4 text-sm font-medium transition ${
+                    selectedTab === tab.id
+                      ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <table className="min-w-full">
             <thead className="bg-white border-b border-gray-100">
               <tr>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
+                  순위
+                </th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
                   종목
                 </th>
@@ -301,35 +473,54 @@ export default function RealtimePage() {
                 <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
                   등락률
                 </th>
+                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+                  {selectedTab === 'tradingValue' ? '거래대금' : '거래량'}
+                </th>
                 <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 w-48">
                   체결강도
-                </th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
-                  거래량
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-50">
-              {stocks.length === 0 ? (
+              {displayedStocks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                     데이터 로딩 중...
                   </td>
                 </tr>
               ) : (
-                stocks.map((stock) => {
+                displayedStocks.map((stock, index) => {
                   const changeRate = stock.change_rate ? parseFloat(stock.change_rate) : 0
                   const isPositive = changeRate > 0
+                  const isNegative = changeRate < 0
+                  const rankChange = rankChanges.get(stock.code)
 
                   return (
                     <tr
                       key={stock.code}
-                      className="hover:bg-gray-50/50 transition-colors duration-200"
+                      ref={(el) => {
+                        if (el) {
+                          rowRefs.current.set(stock.code, el)
+                        }
+                      }}
+                      className="hover:bg-gray-50/50 cursor-pointer"
+                      onClick={() => window.location.href = `/realtime/${stock.code}`}
                     >
-                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono text-gray-500">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 w-20">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-6 text-center">{index + 1}</span>
+                          {rankChange === 'up' && (
+                            <span className="text-red-500 text-[10px]">▲</span>
+                          )}
+                          {rankChange === 'down' && (
+                            <span className="text-blue-500 text-[10px]">▼</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono text-gray-500 w-24">
                         {stock.code}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium w-32">
                         <Link
                           href={`/realtime/${stock.code}`}
                           className="text-gray-900 hover:text-blue-600 hover:underline transition-colors"
@@ -337,25 +528,32 @@ export default function RealtimePage() {
                           {stock.name}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900 w-28 tabular-nums">
                         {formatPrice(stock.price)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                        <span className={`inline-block px-2.5 py-1 rounded-md transition-colors duration-500 ${
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right w-24">
+                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-300 min-w-[60px] ${
                           stock.showFlash
                             ? isPositive
-                              ? 'bg-red-100'
-                              : 'bg-blue-100'
-                            : ''
+                              ? 'bg-red-200 text-red-700'
+                              : 'bg-blue-200 text-blue-700'
+                            : isPositive
+                              ? 'bg-red-50 text-red-600'
+                              : isNegative
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'bg-gray-50 text-gray-600'
                         }`}>
-                          {formatChangeRate(stock.change_rate)}
+                          {isPositive ? '+' : ''}{changeRate.toFixed(2)}%
                         </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 w-24 tabular-nums">
+                        {selectedTab === 'tradingValue'
+                          ? formatNumber(stock.tradingValue || 0)
+                          : formatNumber(stock.volume || 0)
+                        }
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {renderStrengthBar(stock.latest?.data.strength)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-xs text-right text-gray-600">
-                        {stock.latest?.data.volume ? parseInt(stock.latest.data.volume).toLocaleString() : '-'}
                       </td>
                     </tr>
                   )
@@ -363,6 +561,18 @@ export default function RealtimePage() {
               )}
             </tbody>
           </table>
+
+          {/* 더보기 버튼 */}
+          {hasMore && (
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => setVisibleCount(prev => prev + 50)}
+                className="w-full py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                더보기 ({visibleCount}/{sortedStocks.length})
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 설명 */}

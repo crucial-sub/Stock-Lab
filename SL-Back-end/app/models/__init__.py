@@ -11,6 +11,13 @@ from app.models.income_statement import IncomeStatement
 from app.models.cashflow_statement import CashflowStatement
 from app.models.news import NewsArticle, ThemeSentiment
 from app.models.user import User
+from app.models.auto_trading import (
+    AutoTradingStrategy,
+    LivePosition,
+    LiveTrade,
+    LiveDailyPerformance,
+    AutoTradingLog,
+)
 
 # 백테스팅 시뮬레이션 모델
 from app.models.simulation import (
@@ -37,12 +44,12 @@ from app.models.backtest import (
 )
 
 # 커뮤니티 모델
-# TODO: 커뮤니티 모델 추가 시 활성화
-# from app.models.community import (
-#     CommunityPost,
-#     CommunityComment,
-#     CommunityLike,
-# )
+from app.models.community import (
+    CommunityPost,
+    CommunityComment,
+    CommunityLike,
+    CommunityCommentLike,
+)
 
 __all__ = [
     # 기본 데이터 모델
@@ -58,6 +65,12 @@ __all__ = [
     "ThemeSentiment",
     # 사용자 모델
     "User",
+    # 자동매매 모델
+    "AutoTradingStrategy",
+    "LivePosition",
+    "LiveTrade",
+    "LiveDailyPerformance",
+    "AutoTradingLog",
     # 시뮬레이션 모델
     "FactorCategory",
     "Factor",
@@ -76,8 +89,9 @@ __all__ = [
     "BacktestDailySnapshot",
     "BacktestTrade",
     "BacktestHolding",
-    # 커뮤니티 모델 (TODO: 추가 시 활성화)
-    # "CommunityPost",
-    # "CommunityComment",
-    # "CommunityLike",
+    # 커뮤니티 모델
+    "CommunityPost",
+    "CommunityComment",
+    "CommunityLike",
+    "CommunityCommentLike",
 ]

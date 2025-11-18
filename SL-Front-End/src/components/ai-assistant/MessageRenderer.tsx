@@ -9,12 +9,13 @@
 
 import type { Message } from "@/types/message";
 
-// 개별 렌더러 컴포넌트 임포트 (스켈레톤)
+// 개별 렌더러 컴포넌트 임포트
 import { TextRenderer } from "./renderers/TextRenderer";
 import { MarkdownRenderer } from "./renderers/MarkdownRenderer";
 import { QuestionRenderer } from "./renderers/QuestionRenderer";
 import { UserSelectionRenderer } from "./renderers/UserSelectionRenderer";
 import { StrategyRecommendationRenderer } from "./renderers/StrategyRecommendationRenderer";
+import { BacktestConfigRenderer } from "./renderers/BacktestConfigRenderer";
 import { BacktestResultRenderer } from "./renderers/BacktestResultRenderer";
 
 interface MessageRendererProps {
@@ -42,6 +43,9 @@ export function MessageRenderer({ message }: MessageRendererProps) {
 
     case "strategy_recommendation":
       return <StrategyRecommendationRenderer message={message} />;
+
+    case "backtest_config":
+      return <BacktestConfigRenderer message={message} />;
 
     case "backtest_result":
       return <BacktestResultRenderer message={message} />;

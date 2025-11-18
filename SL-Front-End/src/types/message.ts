@@ -82,6 +82,19 @@ export interface Condition {
 }
 
 // 백테스트 결과 메시지
+// 백테스트 설정 메시지
+export interface BacktestConfigMessage extends BaseMessage {
+  type: "backtest_config";
+  strategyId: string;
+  strategyName: string;
+}
+
+export interface BacktestConfig {
+  investmentAmount: number;  // 투자 금액 (만원 단위)
+  startDate: string;         // YYYY-MM-DD
+  endDate: string;           // YYYY-MM-DD
+}
+
 export interface BacktestResultMessage extends BaseMessage {
   type: "backtest_result";
   backtestId: string;
@@ -122,4 +135,5 @@ export type Message =
   | QuestionMessage
   | UserSelectionMessage
   | StrategyRecommendationMessage
+  | BacktestConfigMessage
   | BacktestResultMessage;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
 import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
@@ -16,6 +16,7 @@ import { strategyApi } from "@/lib/api/strategy";
 
 interface Portfolio {
   id: string;
+  strategyId: string;
   title: string;
   profitRate: number;
   isActive: boolean;
@@ -72,6 +73,14 @@ export function PortfolioPageClient({
 
   // 포트폴리오 클릭 핸들러 - 백테스트 결과 상세 페이지로 이동
   const handlePortfolioClick = (id: string) => {
+    // 자동매매 전략 카드인 경우 자동매매 상태 페이지로 이동
+    if (id.startsWith("auto-")) {
+      const portfolio = portfolios.find((p) => p.id === id);
+      if (portfolio?.strategyId) {
+        router.push(`/quant/auto-trading/${portfolio.strategyId}`);
+        return;
+      }
+    }
     router.push(`/quant/result/${id}`);
   };
 
@@ -139,6 +148,7 @@ export function PortfolioPageClient({
     // 2. 같은 활성 상태면 최신순 (createdAt 기준)
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
+
 
   return (
     <main className="flex-1 px-[18.75rem] py-[3.75rem] overflow-auto">

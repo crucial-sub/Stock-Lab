@@ -22,6 +22,85 @@ security = HTTPBearer()
 logger = logging.getLogger(__name__)
 
 
+async def _refresh_kiwoom_token_if_needed(db: AsyncSession, user: User) -> None:
+    """
+    키움 토큰 유효성 확인 및 자동 갱신
+
+    Args:
+        db: 데이터베이스 세션
+        user: 유저 객체
+    """
+    # 키움 토큰이 없으면 스킵
+    if not user.kiwoom_access_token:
+        return
+
+    try:
+        from app.services.kiwoom_service import KiwoomService
+        from datetime import datetime, timezone, timedelta
+
+        # 토큰 유효성 확인 (간단한 API 호출로 테스트)
+        logger.info(f"🔍 키움 토큰 유효성 확인 중... (user: {user.email})")
+
+        deposit_info = KiwoomService.get_deposit_info(
+            access_token=user.kiwoom_access_token,
+            qry_tp="3"  # 추정조회
+        )
+
+        # return_code가 0이 아니면 토큰이 만료되었거나 유효하지 않음
+        if deposit_info.get("return_code") != 0:
+            error_msg = deposit_info.get("return_msg", "알 수 없는 오류")
+            logger.warning(f"⚠️ 키움 토큰 만료 감지: {error_msg}")
+
+            # 토큰 갱신 시도 (app_key와 app_secret이 있는 경우)
+            if user.kiwoom_app_key and user.kiwoom_app_secret:
+                logger.info(f"🔄 키움 토큰 갱신 시도 중...")
+
+                try:
+                    # app_key와 app_secret으로 새 Access Token 발급
+                    new_token_response = KiwoomService.get_access_token(
+                        app_key=user.kiwoom_app_key,
+                        app_secret=user.kiwoom_app_secret
+                    )
+
+                    # 새 토큰 정보 추출 (키움 API는 'token' 필드로 응답)
+                    new_access_token = new_token_response.get("token")
+                    expires_dt = new_token_response.get("expires_dt")
+
+                    if new_access_token:
+                        # 만료 시간 계산
+                        if expires_dt:
+                            try:
+                                expire_time = datetime.strptime(expires_dt, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                                user.kiwoom_token_expires_at = expire_time
+                            except:
+                                # 파싱 실패시 기본 24시간
+                                user.kiwoom_token_expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+                        else:
+                            user.kiwoom_token_expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+
+                        # DB에 새 토큰 저장
+                        user.kiwoom_access_token = new_access_token
+
+                        await db.commit()
+                        await db.refresh(user)
+
+                        logger.info(f"✅ 키움 토큰 갱신 성공 (user: {user.email})")
+                    else:
+                        logger.error(f"❌ 키움 토큰 갱신 실패: token이 응답에 없음")
+
+                except Exception as refresh_error:
+                    logger.error(f"❌ 키움 토큰 갱신 중 오류 발생: {refresh_error}")
+                    # 갱신 실패해도 로그인은 계속 진행 (키움 기능만 제한)
+            else:
+                logger.warning(f"⚠️ app_key/app_secret이 없어 토큰 갱신 불가 (user: {user.email})")
+        else:
+            logger.info(f"✅ 키움 토큰 유효함 (user: {user.email})")
+
+    except Exception as e:
+        logger.error(f"❌ 키움 토큰 검증 중 오류 발생: {e}")
+        # 에러 발생해도 로그인은 계속 진행
+
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_in: UserCreate,
@@ -133,6 +212,9 @@ async def login(
             detail="비활성화된 계정입니다"
         )
 
+    # 키움 토큰 유효성 확인 및 갱신
+    await _refresh_kiwoom_token_if_needed(db, user)
+
     # JWT 토큰 생성
     access_token = create_access_token(
         data={"user_id": str(user.user_id), "email": user.email}
@@ -205,7 +287,20 @@ async def get_current_user_info(
     Returns:
         UserResponse: 유저 정보
     """
-    return current_user
+    # 키움 계좌 연동 여부 확인
+    has_kiwoom = bool(current_user.kiwoom_access_token and current_user.kiwoom_app_key)
+
+    return UserResponse(
+        user_id=current_user.user_id,
+        name=current_user.name,
+        nickname=current_user.nickname,
+        email=current_user.email,
+        phone_number=current_user.phone_number,
+        is_active=current_user.is_active,
+        is_superuser=current_user.is_superuser,
+        created_at=current_user.created_at,
+        has_kiwoom_account=has_kiwoom
+    )
 
 
 @router.get("/users/{user_id}", response_model=UserResponse)

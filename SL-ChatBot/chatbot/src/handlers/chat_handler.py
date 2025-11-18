@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
+import json
 
 _pydantic_v1_module = None
 try:
@@ -141,41 +142,56 @@ class ChatHandler:
         self.news_retriever = None
         self.agent_executor = None
         self.conversation_history = {}
-        self.agent_type = None  # Track which agent type is being used
         # 설문/추천 상태
         self.session_state: Dict[str, Dict[str, Any]] = {}
+        self.forbidden_patterns: Dict[str, List[str]] = {}
+        self.questions: List[Dict[str, Any]] = []
 
         self._load_config()
+        self._load_forbidden_patterns()
+        self.questions = self._load_questions()
+        self._load_strategies()
         self._init_components()
 
-        # 설문 질문 세트 (프론트 UI 사양 반영)
-        self.questions = [
+    def _needs_news_keyword(self, message: str) -> Optional[str]:
+        """뉴스 의도지만 키워드가 없는 경우 간단 안내 반환."""
+        msg = (message or "").strip()
+        msg_lower = msg.lower()
+        news_terms = ["뉴스", "기사", "동향", "헤드라인", "최근"]
+        if any(t in msg for t in news_terms):
+            cleaned = msg
+            for t in news_terms:
+                cleaned = cleaned.replace(t, "")
+            cleaned = cleaned.strip()
+            # 키워드 길이가 너무 짧으면 부족한 것으로 판단
+            if len(cleaned) < 2:
+                return "어떤 종목/테마 뉴스가 궁금한지 알려주세요. 예) '삼성전자 뉴스 알려줘', '반도체 테마 뉴스 요약해줘'"
+        return None
+
+    def _load_questions(self):
+        """설문 질문을 외부 파일에서 로드하고, 실패하면 기본값 사용."""
+        path = Path("/app/config/questionnaire.json")
+        if not path.exists():
+            path = Path(__file__).parent.parent.parent / "config" / "questionnaire.json"
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, list) and data:
+                    print(f"Loaded questionnaire ({len(data)} questions)")
+                    return data
+            except Exception as e:
+                print(f"Failed to load questionnaire.json: {e}")
+
+        # fallback 기본 설문 (5문항)
+        return [
             {
                 "question_id": "investment_period",
                 "text": "보통 얼마 동안 보유할 생각으로 투자하시나요?",
                 "order": 1,
                 "options": [
-                    {
-                        "id": "short_term",
-                        "label": "단기 투자 (며칠 ~ 몇 주)",
-                        "description": "짧게 사고 팔면서 단기 수익을 노려요.",
-                        "icon": "⚡",
-                        "tags": ["short_term", "style_momentum"],
-                    },
-                    {
-                        "id": "mid_term",
-                        "label": "중기 투자 (몇 개월)",
-                        "description": "몇 달 정도 흐름을 보면서 가져가는 편이에요.",
-                        "icon": "📊",
-                        "tags": ["mid_term"],
-                    },
-                    {
-                        "id": "long_term",
-                        "label": "장기 투자 (1년 이상)",
-                        "description": "좋은 기업을 골라 오래 들고 가고 싶어요.",
-                        "icon": "🏆",
-                        "tags": ["long_term", "style_value"],
-                    },
+                    {"id": "short_term", "label": "단기 투자 (며칠 ~ 몇 주)", "description": "짧게 사고 팔면서 단기 수익을 노려요.", "icon": "⚡", "tags": ["short_term", "style_momentum"]},
+                    {"id": "mid_term", "label": "중기 투자 (몇 개월)", "description": "몇 달 정도 흐름을 보면서 가져가는 편이에요.", "icon": "📊", "tags": ["mid_term"]},
+                    {"id": "long_term", "label": "장기 투자 (1년 이상)", "description": "좋은 기업을 골라 오래 들고 가고 싶어요.", "icon": "🏆", "tags": ["long_term", "style_value"]},
                 ],
             },
             {
@@ -183,162 +199,44 @@ class ChatHandler:
                 "text": "아래 중에서 가장 본인 스타일에 가까운 걸 골라주세요.",
                 "order": 2,
                 "options": [
-                    {
-                        "id": "value",
-                        "label": "가치 / 저평가 위주",
-                        "description": "싸게 사서 안전마진을 확보하는 것이 좋아요.",
-                        "icon": "💎",
-                        "tags": ["style_value"],
-                    },
-                    {
-                        "id": "growth",
-                        "label": "성장 / 실적 위주",
-                        "description": "매출·이익이 빠르게 커지는 기업이 좋아요.",
-                        "icon": "📈",
-                        "tags": ["style_growth"],
-                    },
-                    {
-                        "id": "momentum",
-                        "label": "모멘텀 / 추세 위주",
-                        "description": "최근에 많이 오르고 있는 강한 종목이 좋아요.",
-                        "icon": "🚀",
-                        "tags": ["style_momentum"],
-                    },
-                    {
-                        "id": "dividend",
-                        "label": "배당 수익 위주",
-                        "description": "배당을 꾸준히 받으면서 안정적으로 가고 싶어요.",
-                        "icon": "💰",
-                        "tags": ["style_dividend"],
-                    },
+                    {"id": "value", "label": "가치 / 저평가 위주", "description": "싸게 사서 안전마진을 확보하는 것이 좋아요.", "icon": "💎", "tags": ["style_value"]},
+                    {"id": "growth", "label": "성장 / 실적 위주", "description": "매출·이익이 빠르게 커지는 기업이 좋아요.", "icon": "📈", "tags": ["style_growth"]},
+                    {"id": "quality", "label": "우량 / 안정성", "description": "재무가 튼튼하고 변동성이 낮은 기업을 선호해요.", "icon": "🛡️", "tags": ["style_quality"]},
+                    {"id": "momentum", "label": "모멘텀 / 추세", "description": "추세를 타는 종목, 빠르게 움직이는 종목을 좋아해요.", "icon": "🚀", "tags": ["style_momentum"]},
+                    {"id": "dividend", "label": "배당 / 현금흐름", "description": "배당금으로 안정적인 수익을 얻고 싶어요.", "icon": "💰", "tags": ["style_dividend"]},
                 ],
             },
             {
                 "question_id": "risk_tolerance",
-                "text": "투자 중에 일시적으로 -20% 같은 큰 손실이 나도 버틸 수 있나요?",
+                "text": "가격이 내려가도 어느 정도까지 버틸 수 있나요?",
                 "order": 3,
                 "options": [
-                    {
-                        "id": "risk_high",
-                        "label": "크게 흔들려도 괜찮아요",
-                        "description": "-30% 변동도 상관없어요.",
-                        "icon": "🎢",
-                        "tags": ["risk_high"],
-                    },
-                    {
-                        "id": "risk_mid",
-                        "label": "어느 정도는 괜찮아요",
-                        "description": "-10% ~ -20% 정도는 감수할 수 있어요.",
-                        "icon": "⚖️",
-                        "tags": ["risk_mid"],
-                    },
-                    {
-                        "id": "risk_low",
-                        "label": "손실은 최소화하고 싶어요",
-                        "description": "-10%만 넘어가도 스트레스를 많이 받아요.",
-                        "icon": "🛡️",
-                        "tags": ["risk_low"],
-                    },
+                    {"id": "low", "label": "10% 이하 하락까지만 허용", "description": "손실은 최소화하고 싶어요.", "icon": "🧊", "tags": ["risk_low"]},
+                    {"id": "medium", "label": "20% 내외 하락까지 허용", "description": "중간 정도 리스크는 감내할 수 있어요.", "icon": "🌊", "tags": ["risk_medium"]},
+                    {"id": "high", "label": "30% 이상도 감내 가능", "description": "수익을 위해 변동성을 감수할 수 있어요.", "icon": "🔥", "tags": ["risk_high"]},
                 ],
             },
             {
                 "question_id": "dividend_preference",
-                "text": "아래 둘 중, 더 끌리는 쪽은 어디인가요?",
+                "text": "배당을 선호하시나요?",
                 "order": 4,
                 "options": [
-                    {
-                        "id": "prefer_dividend",
-                        "label": "배당이 중요하다",
-                        "description": "꾸준한 현금 배당이 중요해요.",
-                        "icon": "💵",
-                        "tags": ["prefer_dividend"],
-                    },
-                    {
-                        "id": "prefer_capital_gain",
-                        "label": "배당보다 시세차익이 중요하다",
-                        "description": "주가 상승이 더 중요해요.",
-                        "icon": "📈",
-                        "tags": ["prefer_capital_gain"],
-                    },
-                    {
-                        "id": "prefer_both",
-                        "label": "둘 다 적당히 있으면 좋다",
-                        "description": "배당도 받고 주가도 오르면 베스트죠.",
-                        "icon": "🎯",
-                        "tags": ["prefer_both"],
-                    },
+                    {"id": "prefer_dividend", "label": "배당 중요", "description": "배당을 주는 종목이 좋아요.", "icon": "💵", "tags": ["prefer_dividend"]},
+                    {"id": "no_dividend", "label": "배당 상관없음", "description": "배당보다는 성장/가격 상승에 관심 있어요.", "icon": "🌱", "tags": ["no_dividend"]},
                 ],
             },
             {
                 "question_id": "sector_preference",
-                "text": "어떤 종류의 기업에 더 끌리나요?",
+                "text": "선호하는 섹터가 있나요?",
                 "order": 5,
                 "options": [
-                    {
-                        "id": "innovation",
-                        "label": "혁신 기술/성장 섹터",
-                        "description": "AI, 로봇, 바이오, 핀테크 같은 미래 기술 기업이 좋다.",
-                        "icon": "🚀",
-                        "tags": ["sector_innovation"],
-                    },
-                    {
-                        "id": "bluechip",
-                        "label": "전통 산업/우량 대형주",
-                        "description": "안정적인 대형 기업이 좋다.",
-                        "icon": "🏢",
-                        "tags": ["sector_bluechip"],
-                    },
-                    {
-                        "id": "smallmid",
-                        "label": "중소형/숨은 진주형 종목",
-                        "description": "덜 알려졌지만 개선 여지가 큰 중소형주.",
-                        "icon": "💎",
-                        "tags": ["sector_smallmid"],
-                    },
-                    {
-                        "id": "any",
-                        "label": "특별히 상관없다",
-                        "description": "섹터는 상관없고 조건만 좋으면 된다.",
-                        "icon": "🎲",
-                        "tags": ["sector_any"],
-                    },
+                    {"id": "tech", "label": "기술/성장 섹터", "description": "AI, 반도체, 클라우드 등", "icon": "🤖", "tags": ["sector_innovation", "sector_tech"]},
+                    {"id": "bluechip", "label": "전통 우량 섹터", "description": "은행, 통신, 필수소비재 등", "icon": "🏛️", "tags": ["sector_bluechip"]},
+                    {"id": "healthcare", "label": "헬스케어/바이오", "description": "제약, 바이오, 의료기기 등", "icon": "🧬", "tags": ["sector_healthcare"]},
+                    {"id": "sector_any", "label": "특별히 상관없다", "description": "섹터는 상관없고 조건만 좋으면 된다.", "icon": "🎲", "tags": ["sector_any"]},
                 ],
             },
         ]
-
-        # 기본 전략 태그 매핑 (간단 매칭용)
-        self.strategy_tags_mapping = {
-            "cathy_wood": {
-                "strategy_id": "cathy_wood",
-                "strategy_name": "캐시 우드의 전략",
-                "summary": "혁신 기술 고성장주 중심의 장기 성장 전략",
-                "tags": ["long_term", "style_growth", "risk_high", "sector_innovation"],
-                "conditions": [
-                    {"condition": "0 < PEG < 2"},
-                    {"condition": "매출 성장률 > 20%"},
-                ],
-            },
-            "peter_lynch": {
-                "strategy_id": "peter_lynch",
-                "strategy_name": "피터 린치의 전략",
-                "summary": "PER·PEG로 저평가 성장주를 찾는 전략",
-                "tags": ["long_term", "style_growth", "risk_mid"],
-                "conditions": [
-                    {"condition": "PER < 30"},
-                    {"condition": "0 < PEG < 1.8"},
-                ],
-            },
-            "value_income": {
-                "strategy_id": "value_income",
-                "strategy_name": "저평가 배당주",
-                "summary": "저평가 + 배당 안정성 중심",
-                "tags": ["long_term", "style_dividend", "risk_low", "prefer_dividend", "sector_bluechip"],
-                "conditions": [
-                    {"condition": "PBR < 1.0"},
-                    {"condition": "배당수익률 > 3%"},
-                ],
-            },
-        }
 
     def _load_config(self):
         """Load configuration."""
@@ -360,6 +258,96 @@ class ChatHandler:
                     "top_k": 3
                 }
             }
+
+    def _load_strategies(self):
+        """Load strategies from prompts/strategies.json and build mappings."""
+        path = Path("/app/prompts/strategies.json")
+        if not path.exists():
+            path = Path(__file__).parent.parent.parent / "prompts" / "strategies.json"
+
+        strategies = []
+        try:
+            if path.exists():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                strategies = data.get("strategies", [])
+                print(f"Loaded {len(strategies)} strategies from strategies.json")
+            else:
+                print("strategies.json not found; using defaults")
+        except Exception as e:
+            print(f"Failed to load strategies.json: {e}")
+
+        # Build mappings
+        self.strategies = {s["id"]: s for s in strategies if "id" in s}
+        # For recommendation scoring
+        self.strategy_tags_mapping = {}
+        for s in strategies:
+            sid = s.get("id")
+            if not sid:
+                continue
+            self.strategy_tags_mapping[sid] = {
+                "strategy_id": sid,
+                "strategy_name": s.get("name", sid),
+                "summary": s.get("summary", ""),
+                "tags": s.get("tags", []),
+                "conditions": s.get("conditions_preview") or s.get("conditions") or [],
+            }
+        # For backtest templates
+        self.strategy_backtest_templates = {}
+        for s in strategies:
+            sid = s.get("id")
+            if not sid:
+                continue
+            self.strategy_backtest_templates[sid] = {
+                "strategy_name": s.get("name", sid),
+                "buy_conditions": self._filter_valid_conditions(s.get("buy_conditions", [])),
+                "sell_conditions": self._filter_valid_conditions(s.get("sell_conditions", [])),
+            }
+
+    def _load_forbidden_patterns(self):
+        """금지 패턴을 외부 설정에서 로드 (없으면 기본값 사용)."""
+        default_patterns = {
+            "종목_추천": [
+                r"(.*?)(삼성|SK|현대|LG|카카오|네이버|넥슨|엔씨소프트|셀트리온|"
+                r"NVIDIA|애플|테슬라|마이크로소프트|구글|알파벳)\s*(추천|사세요|매수|매도|사달라|팔아야)",
+                r"(이 종목|이 주식).*?(상승|하락|사세요|팔아야|매수)",
+                r"(꼭|반드시|꼭꼭|적극)\s*(추천|추천함|포함)",
+            ],
+            "매매_시점": [
+                r"(지금|현재|요즘|해야|해야 할)\s*(매수|매도|사세요|팔아야|타이밍|사나|파나)",
+                r"(매수|매도|사야|파야)\s*(하나|할까|할지|해야|합니다)",
+                r"(매수가|적정가|목표가|손절|익절)\s*(설정|하세요|해야)",
+                r"(\d+원).*?(적정|맞는|타이밍)",
+                r"(언제|어디서|어떻게)\s+(매수|매도|사야|파야)",
+            ],
+            "수익률_보장": [
+                r"(보장|확실|확정|100%|무조건)\s*(수익|이익|수익률)",
+                r"(수익|이익).*?(손실|위험).*?(없|없음)",
+                r"(항상|반드시)\s*(수익)",
+            ],
+            "개인화_조언": [
+                r"(당신|너|니|저는|우리는|우리)\s*(경우|상황|환경).*?(전략|투자|추천|사는|사세요)",
+                r"(월|분기|년)\s*(\d+)\s*(만원|천원|원).*?(투자|사세요|해야)",
+                r"(특별히|맞춤|특화|개인|따라).*?(투자|전략|추천)",
+            ],
+        }
+
+        path = Path("/app/config/forbidden_patterns.yaml")
+        if not path.exists():
+            path = Path(__file__).parent.parent.parent / "config" / "forbidden_patterns.yaml"
+
+        if path.exists():
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                if isinstance(data, dict) and data:
+                    self.forbidden_patterns = data
+                    print(f"Loaded forbidden patterns from {path}")
+                    return
+            except Exception as e:
+                print(f"Failed to load forbidden_patterns.yaml: {e}")
+
+        # fallback
+        self.forbidden_patterns = default_patterns
+        print("Using default forbidden patterns")
 
     def _init_components(self):
         """Initialize RAG, MCP, and LLM clients."""
@@ -451,10 +439,10 @@ class ChatHandler:
 
                 # 3. 시스템 프롬프트 로드
                 print("Step 3: 시스템 프롬프트 로드 중...")
-                # Docker: /app/prompts/system.txt, Local: 상대경로
+                # Docker: /app/prompts/system.txt, Local: ./prompts/system.txt
                 prompt_path = Path("/app/prompts/system.txt")
                 if not prompt_path.exists():
-                    prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "system.txt"
+                    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "system.txt"
                 system_prompt = prompt_path.read_text(encoding='utf-8') if prompt_path.exists() else "당신은 정량 투자 자문가입니다."
                 print(f"Step 3 OK: 시스템 프롬프트 로드 완료 ({len(system_prompt)} 자)")
 
@@ -477,7 +465,6 @@ class ChatHandler:
                 print("Step 5: Claude 에이전트와 Executor 생성 중...")
                 # Claude는 도구 호출(Tool Calling)을 기본 지원
                 agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
-                self.agent_type = "tool_calling"
                 print(f"  Claude 에이전트 생성 완료, AgentExecutor 생성 중...")
                 self.agent_executor = AgentExecutor(
                     agent=agent,
@@ -524,6 +511,16 @@ class ChatHandler:
                 "sources": []
             }
 
+        # 뉴스 요청인데 키워드가 부족한 경우 사전 안내
+        news_hint = self._needs_news_keyword(message)
+        if news_hint:
+            return {
+                "answer": news_hint,
+                "intent": "news_keyword_required",
+                "session_id": session_id,
+                "sources": []
+            }
+
         # 0. 정책 검사 (투자 조언 금지 정책)
         policy_violation = self._check_investment_advisory_policy(message)
         if policy_violation:
@@ -545,9 +542,12 @@ class ChatHandler:
         else:
             # 기존 통합 플로우 (recommend, general 등)
             context = await self._retrieve_context(message, intent)
-            response = await self._generate_response_langchain(
-                message, intent, context, session_id
-            )
+            if intent == 'backtest_configuration':
+                response = self._handle_backtest_configuration(message, session_id)
+            else:
+                response = await self._generate_response_langchain(
+                    message, intent, context, session_id
+                )
 
         response["session_id"] = session_id
         return response
@@ -719,9 +719,11 @@ class ChatHandler:
     async def _classify_intent(self, message: str) -> str:
         """사용자 의도 분류. DSL 생성과 설명 모드를 명확히 구분합니다."""
         message_lower = message.strip().lower()
+        message_norm = self._normalize_text(message)
 
         # 검증 관련 키워드 (최우선 - DSL 생성보다 먼저 체크)
         verification_keywords = ['맞아', '맞나', '맞는지', '맞니', '확인', '검증', '체크', '이게 맞', '맞는 거']
+        
         # 현재 설정된 조건이 포함되어 있으면 검증 요청
         has_current_conditions = '[현재 설정된 조건]' in message
 
@@ -735,10 +737,28 @@ class ChatHandler:
 
         # 전략 추천 키워드
         recommend_keywords = ['전략 추천', 'recommend', '추천']
+        backtest_keywords = [
+            '백테스트 설정', '전략으로 진행', '전략으로 백테스트', '이 전략으로', '자동 설정',
+            '백테스트 진행', '설정해줘', '전략 실행', '전략 설정', '실행해줘'
+        ]
 
-        # 우선순위: 검증 > 전략 추천 > DSL 생성 > Explain > General
+        # 단일 지표/팩터 + 질문형(뭐/의미/설명)은 explain으로 우선 처리
+        factor_keywords = ['per', 'pbr', 'roe', 'roa', 'rsi', 'sma', 'ema', 'macd', 'mdd', '샤프', 'sharpe']
+        if any(f in message_lower for f in factor_keywords) and any(k in message_lower for k in explain_keywords):
+            return 'explain'
+
+        # 전략명이 포함되어 있고 '백테스트' 키워드가 있으면 강제 backtest_configuration
+        if "백테스트" in message_lower and self.strategy_backtest_templates:
+            for sid, meta in self.strategy_backtest_templates.items():
+                name_norm = self._normalize_text(meta["strategy_name"])
+                if sid in message_norm or name_norm in message_norm:
+                    return 'backtest_configuration'
+
+        # 우선순위: 검증 > 백테스트 설정 > 전략 추천 > DSL 생성 > Explain > General
         if has_current_conditions or any(word in message_lower for word in verification_keywords):
             return 'explain'  # 검증은 explain 모드로 처리 (LLM이 자연어로 답변)
+        elif any(word in message_lower for word in backtest_keywords):
+            return 'backtest_configuration'
         elif any(word in message_lower for word in recommend_keywords):
             return 'recommend'
         elif any(word in message_lower for word in dsl_keywords):
@@ -747,6 +767,94 @@ class ChatHandler:
             return 'explain'
         else:
             return 'general'
+
+    def _handle_backtest_configuration(self, message: str, session_id: str) -> dict:
+        """전략 선택 후 백테스트 설정 UI Language를 반환하고 기본 DSL을 저장."""
+        # 전략 식별 (간단히 이름 매칭)
+        message_lower = message.lower()
+        message_norm = self._normalize_text(message)
+        matched_id = None
+        for sid, meta in self.strategy_backtest_templates.items():
+            name_norm = self._normalize_text(meta["strategy_name"])
+            if sid in message_norm or name_norm in message_norm:
+                matched_id = sid
+                break
+        # 기본값: 워렌버핏
+        if not matched_id:
+            matched_id = "warren_buffett"
+        tpl = self.strategy_backtest_templates[matched_id]
+
+        # 세션 상태에 DSL 저장 (백테스트 실행 시 사용)
+        state = self.session_state.setdefault(session_id, {})
+        state["backtest_conditions"] = {
+            "buy": self._filter_valid_conditions(tpl["buy_conditions"]),
+            "sell": self._filter_valid_conditions(tpl["sell_conditions"]),
+        }
+        state["selected_strategy"] = matched_id
+
+        answer = (
+            f"{tpl['strategy_name']}으로 진행할게요.\n"
+            "해당 전략의 매수 기준과 매도 기준을 자동으로 설정했습니다.\n\n"
+            "설정이 완료되면 바로 결과를 확인하실 수 있어요."
+        )
+
+        ui_language = {
+            "type": "backtest_configuration",
+            "strategy": {
+                "strategy_id": matched_id,
+                "strategy_name": tpl["strategy_name"],
+            },
+            "configuration_fields": [
+                {
+                    "field_id": "initial_capital",
+                    "label": "초기 투자 금액",
+                    "type": "number",
+                    "unit": "원",
+                    "default_value": 10000000,
+                    "min_value": 1000000,
+                    "max_value": 1000000000,
+                    "step": 1000000,
+                    "required": True,
+                },
+                {
+                    "field_id": "start_date",
+                    "label": "백테스트 시작일",
+                    "type": "date",
+                    "default_value": "2021-01-01",
+                    "min_value": "2005-01-01",
+                    "max_value": "2025-01-01",
+                    "required": True,
+                },
+                {
+                    "field_id": "end_date",
+                    "label": "백테스트 종료일",
+                    "type": "date",
+                    "default_value": "2024-12-31",
+                    "min_value": "2005-01-01",
+                    "max_value": "2025-01-01",
+                    "required": True,
+                },
+                {
+                    "field_id": "rebalance_frequency",
+                    "label": "리밸런싱 주기",
+                    "type": "select",
+                    "default_value": "MONTHLY",
+                    "options": [
+                        {"value": "DAILY", "label": "매일"},
+                        {"value": "WEEKLY", "label": "매주"},
+                        {"value": "MONTHLY", "label": "매월"},
+                    ],
+                    "required": True,
+                },
+            ],
+        }
+
+        return {
+            "answer": answer,
+            "intent": "backtest_configuration",
+            "ui_language": ui_language,
+            "backtest_conditions": state["backtest_conditions"],
+        }
 
     async def _retrieve_context(self, message: str, intent: str) -> str:
         """Retrieve relevant context from RAG and Backend."""
@@ -805,11 +913,26 @@ class ChatHandler:
 
         return "\n".join(context_parts) if context_parts else ""
 
+    def _filter_valid_conditions(self, conditions: List[dict]) -> List[dict]:
+        """factor/operator 없는 조건은 백테스트 오류를 방지하기 위해 제거."""
+        valid = [
+            c for c in conditions
+            if c.get("factor") and c.get("operator") is not None
+        ]
+        dropped = len(conditions) - len(valid)
+        if dropped:
+            print(f"DSL 조건 필터링: {dropped}개 필수 필드 누락으로 제거")
+        return valid
+
+    def _normalize_text(self, text: str) -> str:
+        """소문자 + 공백 제거로 간단히 정규화."""
+        return re.sub(r"\s+", "", text.lower())
+
     def _load_dsl_system_prompt(self) -> Optional[str]:
         """Load DSL-specific portion from system.txt if present."""
         prompt_path = Path("/app/prompts/system.txt")
         if not prompt_path.exists():
-            prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "system.txt"
+            prompt_path = Path(__file__).parent.parent.parent / "prompts" / "system.txt"
 
         try:
             content = prompt_path.read_text(encoding="utf-8")
@@ -1023,6 +1146,8 @@ class ChatHandler:
 
             # Condition 객체를 딕셔너리로 변환 (Pydantic v1 호환)
             conditions = [condition.dict() for condition in result.conditions]
+            # 필수 필드 누락 조건은 제거
+            conditions = self._filter_valid_conditions(conditions)
 
             if not conditions:
                 return {
@@ -1082,7 +1207,7 @@ class ChatHandler:
         # Explain 전용 프롬프트 로드
         prompt_path = Path("/app/prompts/explain.txt")
         if not prompt_path.exists():
-            prompt_path = Path(__file__).parent.parent.parent / "chatbot" / "prompts" / "explain.txt"
+            prompt_path = Path(__file__).parent.parent.parent / "prompts" / "explain.txt"
 
         if prompt_path.exists():
             explain_system_prompt = prompt_path.read_text(encoding='utf-8')
@@ -1112,40 +1237,9 @@ class ChatHandler:
         # 한글은 대소문자가 없으므로 그대로 사용
         message_check = message.strip()
 
-        # 금지된 패턴들 (투자 조언 금지 정책에서 정의)
-        forbidden_patterns = {
-            # 1. 종목 추천 패턴
-            "종목_추천": [
-                r"(.*?)(삼성|SK|현대|LG|카카오|네이버|넥슨|엔씨소프트|셀트리온|"
-                r"NVIDIA|애플|테슬라|마이크로소프트|구글|알파벳)\s*(추천|사세요|매수|매도|사달라|팔아야)",
-                r"(이 종목|이 주식).*?(상승|하락|사세요|팔아야|매수)",
-                r"(꼭|반드시|꼭꼭|적극)\s*(추천|추천함|포함)",
-            ],
-            # 2. 매매 시점 조언 패턴
-            "매매_시점": [
-                r"(지금|현재|요즘|해야|해야 할)\s*(매수|매도|사세요|팔아야|타이밍|사나|파나)",
-                r"(매수|매도|사야|파야)\s*(하나|할까|할지|해야|합니다)",
-                r"(매수가|적정가|목표가|손절|익절)\s*(설정|하세요|해야)",
-                r"(\d+원).*?(적정|맞는|타이밍)",
-                r"(언제|어디서|어떻게)\s+(매수|매도|사야|파야)",
-            ],
-            # 3. 수익률 보장 패턴
-            "수익률_보장": [
-                r"(보장|확실|확정|100%|무조건)\s*(수익|이익|수익률)",
-                r"(수익|이익).*?(손실|위험).*?(없|없음)",
-                r"(항상|반드시)\s*(수익)",
-            ],
-            # 4. 개인화 조언 패턴
-            "개인화_조언": [
-                r"(당신|너|니|저는|우리는|우리)\s*(경우|상황|환경).*?(전략|투자|추천|사는|사세요)",
-                r"(월|분기|년)\s*(\d+)\s*(만원|천원|원).*?(투자|사세요|해야)",
-                r"(특별히|맞춤|특화|개인|따라).*?(투자|전략|추천)",
-            ],
-        }
-
         # 패턴 매칭
         violations_found = []
-        for violation_type, patterns in forbidden_patterns.items():
+        for violation_type, patterns in self.forbidden_patterns.items():
             for pattern in patterns:
                 if __import__('re').search(pattern, message_check):
                     violations_found.append(violation_type)

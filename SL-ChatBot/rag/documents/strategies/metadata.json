@@ -89,9 +89,26 @@
       "last_updated": "2025-11-14",
       "version": "1.0"
     },
+    {
+      "id": "value_income",
+      "name": "저평가 배당주",
+      "type": "strategy",
+      "file": "value_income_strategy.md",
+      "priority": "⭐⭐⭐⭐",
+      "keywords": ["배당", "저평가", "배당수익률", "배당성향"],
+      "summary": "저평가된 동시에 안정적 배당 흐름을 제공하는 기업에 투자하는 전략입니다.",
+      "primary_factors": ["PBR", "DividendYield"],
+      "secondary_factors": ["PayoutRatio", "DebtRatio"],
+      "investment_horizon": "long_term",
+      "risk_level": "low",
+      "expected_return": "6~10% 연간",
+      "difficulty": "beginner",
+      "last_updated": "2025-11-18",
+      "version": "1.0"
+    },
 
     {
-      "id": "strategy_peter_lynch",
+      "id": "peter_lynch",
       "name": "피터 린치 전략",
       "type": "strategy",
       "file": "peter_lynch_strategy.md",
@@ -108,7 +125,7 @@
       "version": "1.0"
     },
     {
-      "id": "strategy_cathie_wood",
+      "id": "cathy_wood",
       "name": "캐시 우드 혁신 전략",
       "type": "strategy",
       "file": "cathie_wood_strategy.md",
@@ -122,6 +139,23 @@
       "expected_return": "30~100% 연간",
       "difficulty": "advanced",
       "last_updated": "2025-11-17",
+      "version": "1.0"
+    },
+    {
+      "id": "warren_buffett",
+      "name": "워렌버핏 가치투자 전략",
+      "type": "strategy",
+      "file": "warren_buffett_strategy.md",
+      "priority": "⭐⭐⭐⭐⭐",
+      "keywords": ["가치", "버핏", "저평가", "PBR", "ROE"],
+      "summary": "저평가된 우량 기업에 장기 투자하는 가치 전략.",
+      "primary_factors": ["PBR", "ROE"],
+      "secondary_factors": ["부채비율", "배당수익률"],
+      "investment_horizon": "long_term",
+      "risk_level": "low",
+      "expected_return": "8~15% 연간",
+      "difficulty": "beginner",
+      "last_updated": "2025-11-18",
       "version": "1.0"
     },
     {

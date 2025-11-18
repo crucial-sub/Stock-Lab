@@ -16,6 +16,7 @@ from app.core.database import init_db, close_db
 from app.core.cache import cache
 from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history
 from app.api.v1 import industries, realtime
+from app.services.auto_trading_scheduler import start_scheduler, stop_scheduler
 
 settings = get_settings()
 
@@ -84,10 +85,25 @@ async def lifespan(app: FastAPI):
         # await init_db()  # 주의: 테이블 재생성
         logger.info("Database initialized (dev mode)")
 
+    # 자동매매 스케줄러 시작
+    try:
+        start_scheduler()
+        logger.info("✅ Auto trading scheduler started")
+    except Exception as e:
+        logger.error(f"❌ Failed to start scheduler: {e}")
+
     yield
 
     # Shutdown
     logger.info("=== Quant Investment API 종료 ===")
+
+    # 스케줄러 종료
+    try:
+        stop_scheduler()
+        logger.info("✅ Auto trading scheduler stopped")
+    except Exception as e:
+        logger.error(f"❌ Failed to stop scheduler: {e}")
+
     await cache.close()
     await close_db()
 

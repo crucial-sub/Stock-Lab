@@ -798,7 +798,7 @@ async def toggle_comment_like(
 async def get_top_rankings(
     db: AsyncSession = Depends(get_db)
 ):
-    """상위 3개 수익률 랭킹 조회 (Redis Sorted Set 사용)"""
+    """상위 3개 수익률 랭킹 조회 (Redis Sorted Set 사용, Redis 없으면 DB 폴백)"""
     try:
         from app.services.ranking_service import get_ranking_service
 
@@ -820,9 +820,12 @@ async def get_top_rankings(
 
                 logger.info(f"✅ Redis Sorted Set에서 TOP 3 조회 완료")
                 return response
+            else:
+                logger.warning("Redis Sorted Set이 비어있음, DB로 폴백")
+        else:
+            logger.info("Redis 비활성화 상태, DB에서 직접 조회")
 
-        # ⚠️ Fallback: Redis 실패 시 DB 직접 조회
-        logger.warning("Redis Sorted Set 조회 실패, DB로 폴백")
+        # ⚠️ Fallback: Redis 비활성화 또는 데이터 없을 때 DB 직접 조회
         rankings = await _get_rankings_from_db(db, limit=3)
 
         response = TopRankingsResponse(

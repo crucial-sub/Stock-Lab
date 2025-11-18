@@ -6,6 +6,7 @@ import { SecondarySidebar } from "@/components/ai-assistant/SecondarySidebar";
 import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { StreamingMarkdownRenderer } from "@/components/ai-assistant/StreamingMarkdownRenderer";
 import { QuestionnaireFlow } from "@/components/ai-assistant/QuestionnaireFlow";
+import { StrategyRecommendationRenderer } from "@/components/ai-assistant/StrategyRecommendationRenderer";
 import { AISearchInput } from "@/components/home/ui";
 import { useChatStream } from "@/hooks/useChatStream";
 import { chatHistoryApi } from "@/lib/api/chat-history";
@@ -15,6 +16,7 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import type { Message, TextMessage, MarkdownMessage } from "@/types/message";
 import type { QuestionnaireAnswer } from "@/data/assistantQuestionnaire";
 import { QUESTIONNAIRE_CTA, QUESTIONNAIRE_START_BUTTON, createAnswer } from "@/data/assistantQuestionnaire";
+import { getTopRecommendations, type StrategyMatch } from "@/utils/strategyMatcher";
 
 // 메시지 생성 헬퍼 함수
 function createTextMessage(role: "user" | "assistant", content: string): TextMessage {
@@ -52,6 +54,7 @@ interface ChatSession {
   }>;
   // 새로운 설문 시스템용
   questionnaireAnswers?: QuestionnaireAnswer[];
+  strategyRecommendations?: StrategyMatch[];
   currentQuestionStep?: number;
 }
 
@@ -95,7 +98,7 @@ export function AIAssistantPageClient({
 
   // 새로운 설문 시스템 상태
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<QuestionnaireAnswer[]>([]);
-  const [currentQuestionStep, setCurrentQuestionStep] = useState<number>(1);
+  const [strategyRecommendations, setStrategyRecommendations] = useState<StrategyMatch[]>([]);
 
   // SSE 스트리밍 상태
   const [streamingMessage, setStreamingMessage] = useState<string>("");
@@ -218,6 +221,8 @@ export function AIAssistantPageClient({
         mode: currentMode,
         chatResponse: chatResponse,
         questionHistory: questionHistory,
+        questionnaireAnswers: questionnaireAnswers,
+        strategyRecommendations: strategyRecommendations,
       };
 
       if (existingIndex === -1) {
@@ -233,7 +238,7 @@ export function AIAssistantPageClient({
 
     // DB에도 저장 (로그인된 사용자만) - 비동기로 별도 실행
     saveChatToDB(sessionId, title, messages);
-  }, [sessionId, messages, currentMode, chatResponse, questionHistory, dedupeSessions]);
+  }, [sessionId, messages, currentMode, chatResponse, questionHistory, questionnaireAnswers, strategyRecommendations, dedupeSessions]);
 
   // 채팅 세션 클릭 핸들러 - 이전 대화 불러오기
   const handleChatSessionClick = async (chatId: string) => {
@@ -263,7 +268,11 @@ export function AIAssistantPageClient({
         setCurrentMode(fullSession.mode as "initial" | "chat" | "questionnaire");
         setChatResponse(null);
         setQuestionHistory([]);
+        // 로컬 세션에서 설문 데이터 복원 (DB에는 저장 안 됨)
+        setQuestionnaireAnswers(session.questionnaireAnswers || []);
+        setStrategyRecommendations(session.strategyRecommendations || []);
         console.log("Loaded messages from DB:", dbMessages.length);
+        console.log("Restored questionnaire data:", session.questionnaireAnswers?.length || 0, "answers");
       } catch (error) {
         console.error("Failed to load session from DB:", error);
         // 실패 시 로컬 세션 사용
@@ -281,6 +290,8 @@ export function AIAssistantPageClient({
     setCurrentMode(session.mode || "chat");
     setChatResponse(session.chatResponse || null);
     setQuestionHistory(session.questionHistory || []);
+    setQuestionnaireAnswers(session.questionnaireAnswers || []);
+    setStrategyRecommendations(session.strategyRecommendations || []);
   };
 
   const handleLargeCardClick = () => {
@@ -297,7 +308,6 @@ export function AIAssistantPageClient({
 
     // 설문 모드로 전환
     setCurrentMode("questionnaire");
-    setCurrentQuestionStep(1);
     setQuestionnaireAnswers([]);
 
     // AI 환영 메시지 추가
@@ -593,41 +603,34 @@ export function AIAssistantPageClient({
       });
     }
 
-    // 사용자 답변을 메시지에 추가
-    setMessages((prev) => [...prev, createTextMessage("user", answerText)]);
-
-    // 다음 질문으로 이동
-    setCurrentQuestionStep((prev) => prev + 1);
-  };
-
-  const handleQuestionnaireNavigate = (order: number) => {
-    console.log("Navigating to question:", order);
-    setCurrentQuestionStep(order);
+    // 메시지는 추가하지 않음 (선택지에 UI로만 표시)
   };
 
   const handleQuestionnaireComplete = async (tags: string[]) => {
     console.log("Questionnaire completed with tags:", tags);
 
-    // 전략 추천 요청 메시지 추가
-    const requestMessage = "이 태그들로 전략을 추천받고 싶어요";
-    setMessages((prev) => [...prev, createTextMessage("user", requestMessage)]);
+    // 전략 매칭 알고리즘 실행
+    const recommendations = getTopRecommendations(tags, 3);
+    console.log("Strategy recommendations:", recommendations);
 
-    // TODO: 백엔드 API 호출하여 전략 추천 받기
-    // 임시로 로딩 메시지 표시
-    setIsLoading(true);
+    // 전략 추천 결과 저장 (메시지 추가 없음)
+    setStrategyRecommendations(recommendations);
+  };
+
+  // 설문조사 다시 시작 핸들러
+  const handleQuestionnaireRestart = () => {
+    console.log("Restarting questionnaire");
+
+    // 설문 관련 상태만 초기화 (메시지는 유지)
+    setQuestionnaireAnswers([]);
+    setStrategyRecommendations([]);
+
+    // 사용자에게 재시작 안내 메시지 추가
+    const restartMessage = "설문조사를 처음부터 다시 시작합니다.";
     setMessages((prev) => [
       ...prev,
-      createMarkdownMessage("assistant", "태그를 분석하여 맞춤 전략을 추천하고 있습니다..."),
+      createMarkdownMessage("assistant", restartMessage),
     ]);
-
-    // 임시: 3초 후 완료 (실제로는 API 응답 처리)
-    setTimeout(() => {
-      setIsLoading(false);
-      setMessages((prev) => [
-        ...prev,
-        createMarkdownMessage("assistant", "전략 추천이 완료되었습니다! (백엔드 연동 필요)"),
-      ]);
-    }, 3000);
   };
 
   // 새 채팅 시작: 상태 초기화
@@ -638,7 +641,7 @@ export function AIAssistantPageClient({
     setChatResponse(null);
     setQuestionHistory([]);
     setQuestionnaireAnswers([]);
-    setCurrentQuestionStep(1);
+    setStrategyRecommendations([]);
   };
 
   return (
@@ -672,14 +675,21 @@ export function AIAssistantPageClient({
                 />
               </div>
 
-              {/* QuestionnaireFlow 컴포넌트 */}
+              {/* QuestionnaireFlow 컴포넌트 (항상 표시) */}
               <QuestionnaireFlow
-                currentStep={currentQuestionStep}
                 answers={questionnaireAnswers}
                 onAnswerSelect={handleQuestionnaireAnswerSelect}
                 onComplete={handleQuestionnaireComplete}
-                onNavigateToQuestion={handleQuestionnaireNavigate}
+                isRecommendationShown={strategyRecommendations.length > 0}
+                onRestart={handleQuestionnaireRestart}
               />
+
+              {/* 전략 추천 결과 (QuestionnaireFlow 아래에 추가) */}
+              {strategyRecommendations.length > 0 && (
+                <StrategyRecommendationRenderer
+                  recommendations={strategyRecommendations}
+                />
+              )}
             </div>
           </div>
         ) : currentMode === "chat" ? (

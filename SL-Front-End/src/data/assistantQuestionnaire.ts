@@ -277,3 +277,46 @@ export function createAnswer(
     tags: option.tags
   };
 }
+
+/**
+ * 태그 → 명확한 한글 설명 매핑
+ * 맥락 없이도 의미를 파악할 수 있도록 작성
+ */
+const TAG_LABEL_MAP: Record<string, string> = {
+  // 투자 기간
+  short_term: "단기 투자 선호",
+  mid_term: "중기 투자 선호",
+  long_term: "장기 투자 선호",
+
+  // 투자 스타일
+  style_value: "가치 투자 선호",
+  style_growth: "성장 투자 선호",
+  style_momentum: "모멘텀 투자 선호",
+  style_dividend: "배당 투자 선호",
+
+  // 위험 감수도
+  risk_high: "높은 위험 감수 가능",
+  risk_medium: "적당한 위험 감수",
+  risk_low: "낮은 위험 선호",
+
+  // 배당 vs 시세차익
+  prefer_dividend: "배당 수익 중시",
+  prefer_capital_gain: "시세차익 중시",
+  prefer_both: "배당과 시세차익 모두 중시",
+
+  // 종목 타입
+  sector_innovation: "혁신 기술 기업 선호",
+  sector_traditional: "전통 우량 기업 선호",
+  sector_small_cap: "중소형 성장주 선호",
+  sector_any: "종목 타입 무관",
+};
+
+/**
+ * 영어 태그를 명확한 한글 설명으로 변환
+ *
+ * @param tag - 영어 태그 (예: "risk_low")
+ * @returns 한글 설명 (예: "낮은 위험 선호") 또는 원본 태그
+ */
+export function getTagLabel(tag: string): string {
+  return TAG_LABEL_MAP[tag] || tag;
+}

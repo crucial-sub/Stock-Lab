@@ -1,0 +1,491 @@
+{
+  "strategies": [
+    {
+      "id": "surge_stocks",
+      "name": "오늘의 급등 종목",
+      "summary": "하루 동안 가장 많이 오른 급등주",
+      "description": "최근 급격히 상승한 종목들이에요. 단기적인 시장 흐름을 빠르게 파악하고, 트렌디한 종목들을 찾고자 할 때 참고할 수 있어요. 급등 종목은 대개 특정 뉴스, 긍정적인 실적 발표, 산업 내 호재 등으로 인해 투자자들의 주목을 받고 있어요.",
+      "tags": ["short_term", "style_momentum", "risk_high"],
+      "conditions": [
+        {
+          "condition": "시가총액 > 100억",
+          "conditionInfo": [
+            "시가총액 = 주가 * 총 발행 주식 수",
+            "회사의 시장가치"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "steady_growth",
+      "name": "꾸준 성장주",
+      "summary": "앞으로 안정적인 성장을 이룰 종목",
+      "description": "안정적이고 지속적인 성장을 보여주는 기업을 찾고자 하는 투자자에게 적합해요. 매출액과 영업이익 증가율이 양수인 기업을 선정함으로써, 꾸준한 매출 성장과 수익성 개선을 유지하는 기업만을 포함했어요. ROE가 높은 기업은 자본을 효과적으로 활용하여 수익성을 높이고 있음을 나타내며, 부채비율이 낮은 기업은 재무적 건전성이 높아 시장 변동에 더 안정적으로 대응할 수 있어요.",
+      "tags": ["mid_term", "long_term", "style_growth", "risk_medium", "sector_traditional"],
+      "conditions": [
+        {
+          "condition": "매출 CAGR(3Y) > 0",
+          "conditionInfo": ["최근 3년 매출의 연평균 증가율"]
+        },
+        {
+          "condition": "영업이익 CAGR(3Y) > 0",
+          "conditionInfo": ["최근 3년 영업이익의 연평균 증가율"]
+        },
+        {
+          "condition": "부채비율 < 100%",
+          "conditionInfo": [
+            "부채비율 = (부채총액 ÷ 자기자본) * 100",
+            "기업의 재무 안정성 지표"
+          ]
+        },
+        {
+          "condition": "ROE > 10%",
+          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+        }
+      ]
+    },
+    {
+      "id": "benjamin_graham",
+      "name": "벤저민 그레이엄의 전략",
+      "summary": "가치투자의 기초를 닦은 벤저민 그레이엄식의 전략",
+      "description": "벤저민 그레이엄의 가치 투자 철학을 바탕으로, 안정성과 재무 건전성이 뛰어난 종목을 찾는 데 중점을 뒀어요. 기술 관련 기업을 제외하고 매출이 일정 규모 이상인 기업을 선정함으로써 시장에서의 안정성을 확보했어요. 높은 유동비율과 순유동자산이 장기부채를 초과하는 조건은 재무적으로 안정적인 구조를 의미하며, 과거 10년간의 EPS 성장률과 지속적인 흑자 기록은 안정적 성장의 신호로 볼 수 있어요.",
+      "tags": ["long_term", "style_value", "risk_low", "sector_traditional"],
+      "conditions": [
+        {
+          "condition": "기술 기업 제외",
+          "conditionInfo": ["기술 업종의 기업들을 조건에서 제외"]
+        },
+        {
+          "condition": "매출 > 1,000억원",
+          "conditionInfo": ["제품·서비스 판매로 벌어들인 총수익"]
+        },
+        {
+          "condition": "유동비율 > 200%",
+          "conditionInfo": [
+            "유동비율 = (유동자산 ÷ 유동부채) * 100",
+            "단기 채무 상환 능력"
+          ]
+        },
+        {
+          "condition": "순유동자산 > 장기부채",
+          "conditionInfo": [
+            "순유동자산 : 유동자산 - 유동부채; 단기적으로 사용 가능한 자산",
+            "장기부채 : 상환기간이 1년 이상 남은 부채"
+          ]
+        },
+        {
+          "condition": "EPS 5년 성장률 > 30%",
+          "conditionInfo": ["5년간 주당순이익(EPS) 연평균 성장률"]
+        },
+        {
+          "condition": "최근 5년간 흑자 기업",
+          "conditionInfo": ["연도별 순이익 / EPS가 5년 연속 > 0"]
+        },
+        {
+          "condition": "PER < 15",
+          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+        },
+        {
+          "condition": "PBR*PER < 22",
+          "conditionInfo": ["주가순자산비율(PBR) * 주가수익비율(PER)"]
+        }
+      ]
+    },
+    {
+      "id": "peter_lynch",
+      "name": "피터린치의 전략",
+      "summary": "PER·PEG를 활용해 실적 대비 저평가된 성장주를 콕 집어주는 린치식 전략",
+      "description": "피터 린치의 투자 전략을 반영하여 다양한 성장 단계의 기업을 포함한 고성장주, 대형 우량주, 그리고 저성장주를 선별하는 데 중점을 뒀어요. PER과 PEG는 기업이 성장 대비 적정하게 평가되었는지를 보여주며, 저평가된 성장주를 찾는 데 유용해요.",
+      "tags": ["mid_term", "long_term", "style_growth", "style_value", "risk_medium", "prefer_both", "sector_small_cap"],
+      "conditions": [
+        {
+          "condition": "PER < 30",
+          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+        },
+        {
+          "condition": "0 < PEG < 1.8",
+          "conditionInfo": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
+        },
+        {
+          "condition": "재고/매출 < 5%",
+          "conditionInfo": ["재고의 효율적 운용 정도"]
+        },
+        {
+          "condition": "부채비율 < 150%",
+          "conditionInfo": [
+            "부채비율 = (부채총액 ÷ 자기자본) * 100",
+            "기업의 재무 안정성 지표"
+          ]
+        },
+        {
+          "condition": "ROE > 5%",
+          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+        },
+        {
+          "condition": "ROA > 1%",
+          "conditionInfo": [
+            "ROA = (순이익 ÷ 총자산) x 100",
+            "총자산 대비 순이익 비율"
+          ]
+        },
+        {
+          "condition": "배당수익률 > 3%",
+          "conditionInfo": [
+            "배당수익률 = (주당 배당금 ÷ 주가) * 100",
+            "투자 대비 배당 수익률"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "warren_buffett",
+      "name": "워렌버핏의 전략",
+      "summary": "오마하의 현인이라 불리는 워렌버핏식 내재가치 전략",
+      "description": "워렌 버핏의 투자 철학에 기반하여, 재무 건전성과 꾸준한 성장을 겸비한 기업을 선별했어요. 높은 ROE와 낮은 장기 부채 비율을 통해 자본을 효율적으로 활용하고, 재정 안정성을 유지하는 기업을 찾았어요. PER과 PBR 비율이 낮은 기업은 시장에서 저평가되었을 가능성이 높으며, 이와 함께 유동비율과 FCF가 양수인 경우 안정적인 현금 흐름을 기대할 수 있어요.",
+      "tags": ["long_term", "style_value", "risk_low", "prefer_both", "sector_traditional"],
+      "conditions": [
+        {
+          "condition": "ROE > 15%",
+          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+        },
+        {
+          "condition": "장기부채비율 < 100%",
+          "conditionInfo": [
+            "장기부채비율 = (장기부채 ÷ 총자산) * 100",
+            "자산 중 장기부채 비중"
+          ]
+        },
+        {
+          "condition": "유동비율 > 1.5",
+          "conditionInfo": [
+            "유동비율 = (유동자산 ÷ 유동부채) * 100",
+            "단기 채무 상환 능력"
+          ]
+        },
+        {
+          "condition": "FCF > 0",
+          "conditionInfo": [
+            "잉여현금흐름",
+            "기업이 자유롭게 쓸 수 있는 현금"
+          ]
+        },
+        {
+          "condition": "PER < 17",
+          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+        },
+        {
+          "condition": "PBR < 1.5",
+          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+        },
+        {
+          "condition": "부채비율 < 150%",
+          "conditionInfo": [
+            "부채비율 = (부채총액 ÷ 자기자본) * 100",
+            "기업의 재무 안정성 지표"
+          ]
+        },
+        {
+          "condition": "EPS 성장률 > 10%",
+          "conditionInfo": ["EPS의 전년 동기 대비 성장률"]
+        }
+      ]
+    },
+    {
+      "id": "william_oneil",
+      "name": "윌리엄 오닐의 전략",
+      "summary": "혁신적인 성장투자자 윌리엄 오닐의 고성장 모멘텀 전략",
+      "description": "성장성과 지속적인 수익성을 중시하는 투자자에게 적합한 종목들이에요. 분기 및 연간 높은 EPS 증가율을 통해, 안정적으로 수익을 성장시키는 기업을 선별할 수 있어요. 또한, 높은 ROE는 자본을 효율적으로 활용하여 수익을 창출하는 기업을 의미하며, 이는 윌리엄 오닐의 철학과 같이 자본 효율성이 높은 우량 기업을 찾는 데 유용해요.",
+      "tags": ["short_term", "mid_term", "style_momentum", "style_growth", "risk_high"],
+      "conditions": [
+        {
+          "condition": "EPS 성장률 (QoQ) > 18%",
+          "conditionInfo": ["EPS의 전 분기 대비 성장률"]
+        },
+        {
+          "condition": "EPS 성장률 > 18%",
+          "conditionInfo": ["EPS의 전년 동기 대비 성장률"]
+        },
+        {
+          "condition": "ROE > 17%",
+          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+        },
+        {
+          "condition": "현재가 > 52주 신고가의 85%",
+          "conditionInfo": []
+        }
+      ]
+    },
+    {
+      "id": "bill_ackman",
+      "name": "빌 애크먼의 전략",
+      "summary": "행동주의 가치투자자 빌 애크먼의 주가 재평가 전략",
+      "description": "가치와 성장을 동시에 추구하는 행동주의 가치투자 투자자를 위한 종목들이에요. ROIC가 높고 PER가 낮은 기업을 찾음으로써, 자본 수익성이 뛰어나고 시장에서 저평가된 종목을 선별할 수 있어요. 또한, 낮은 PER와 PBR 비율을 가진 기업은 재평가 가능성이 있어 액티비스트 전략에 적합해요.",
+      "tags": ["long_term", "style_value", "style_growth", "risk_medium", "prefer_both"],
+      "conditions": [
+        {
+          "condition": "ROIC > 13%",
+          "conditionInfo": [
+            "ROIC = (세후영업이익(NOPAT) ÷ 투하자본) x 100",
+            "투하자본으로 인한 이익률"
+          ]
+        },
+        {
+          "condition": "PER < 20",
+          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+        },
+        {
+          "condition": "PBR < 2",
+          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+        },
+        {
+          "condition": "부채비율 > 150%",
+          "conditionInfo": [
+            "부채비율 = (부채총액 ÷ 자기자본) * 100",
+            "기업의 재무 안정성 지표"
+          ]
+        },
+        {
+          "condition": "FCF > 0",
+          "conditionInfo": [
+            "잉여현금흐름",
+            "기업이 자유롭게 쓸 수 있는 현금"
+          ]
+        },
+        {
+          "condition": "배당 수익률 > 2%",
+          "conditionInfo": [
+            "배당수익률 = (주당 배당금 ÷ 주가) * 100",
+            "투자 대비 배당 수익률"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "charlie_munger",
+      "name": "찰리 멍거의 전략",
+      "summary": "고품질 기업 장기 투자자 찰리 멍거의 안정적인 수익창출 전략",
+      "description": "장기적으로 보유할 수 있는 고품질 기업을 찾고자 하는 투자자를 위한 종목들이에요. 높은 ROIC를 통해 자본 대비 효율이 우수한 기업을 선별하여 안정적인 수익 창출 가능성을 확인하고, 낮은 PER와 PBR은 가격 대비 가치가 높아 안전 마진을 확보한 종목을 찾는 데 도움을 줘요.",
+      "tags": ["long_term", "style_value", "style_growth", "risk_low", "sector_traditional"],
+      "conditions": [
+        {
+          "condition": "ROIC > 15%",
+          "conditionInfo": [
+            "ROIC = (세후영업이익(NOPAT) ÷ 투하자본) x 100",
+            "투하자본으로 인한 이익률"
+          ]
+        },
+        {
+          "condition": "PER < 10",
+          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+        },
+        {
+          "condition": "PBR < 1.5",
+          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+        },
+        {
+          "condition": "ROE > 15%",
+          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+        },
+        {
+          "condition": "매출 성장률 > 15%",
+          "conditionInfo": ["매출액의 전년 동기 대비 성장률"]
+        },
+        {
+          "condition": "부채비율 < 50%",
+          "conditionInfo": [
+            "부채비율 = (부채총액 ÷ 자기자본) * 100",
+            "기업의 재무 안정성 지표"
+          ]
+        },
+        {
+          "condition": "유동비율 > 2",
+          "conditionInfo": [
+            "유동비율 = (유동자산 ÷ 유동부채) * 100",
+            "단기 채무 상환 능력"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glenn_welling",
+      "name": "글렌 웰링의 전략",
+      "summary": "중소형주 중심 행동주의 글렌 웰링의 스핀오프 전략",
+      "description": "중소형 기업에서 운영 개선과 자산 가치를 지닌 종목을 발굴하고자 하는 행동주의 투자자를 위한 종목들이에요. 낮은 EV/EBITDA는 효율성 향상을 통해 기업 가치를 끌어올릴 가능성이 있는 기업을 찾아내며, 낮은 ROIC는 운영 개선 여지를 의미해요.",
+      "tags": ["mid_term", "long_term", "style_value", "risk_high", "sector_small_cap"],
+      "conditions": [
+        {
+          "condition": "EV/EBITDA < 8",
+          "conditionInfo": [
+            "EV/EBITDA = 기업가치(EV) ÷ 세전영업이익(EBITDA)",
+            "기업 인수 시 투자원금 회수가능 연수"
+          ]
+        },
+        {
+          "condition": "ROIC < 10%",
+          "conditionInfo": [
+            "ROIC = (세후영업이익(NOPAT) ÷ 투하자본) x 100",
+            "투하자본으로 인한 이익률"
+          ]
+        },
+        {
+          "condition": "PBR < 1.5",
+          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+        },
+        {
+          "condition": "PSR < 1.5",
+          "conditionInfo": ["PSR = 주가 ÷ 주당매출액", "주가매출비율"]
+        },
+        {
+          "condition": "0 < PEG < 1",
+          "conditionInfo": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
+        }
+      ]
+    },
+    {
+      "id": "cathie_wood",
+      "name": "캐시 우드의 전략",
+      "summary": "AI·로봇·바이오 혁신 기술 및 고성장 기업 투자자 캐시우드의 전략",
+      "description": "혁신적 기술과 고성장 기업을 추구하는 투자자에게 적합한 종목들이에요. 낮은 PEG 지수는 수익성과 성장 가능성이 균형 잡힌 기업을 의미하며, PSR이 낮을 경우 매출 대비 주가가 상대적으로 저평가된 혁신 기업을 찾는 데 도움이 돼요.",
+      "tags": ["long_term", "style_growth", "style_momentum", "risk_high", "sector_innovation"],
+      "conditions": [
+        {
+          "condition": "0 < PEG < 2",
+          "conditionInfo": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
+        },
+        {
+          "condition": "PSR < 20",
+          "conditionInfo": ["PSR = 주가 ÷ 주당매출액", "주가매출비율"]
+        },
+        {
+          "condition": "매출 성장률 > 20%",
+          "conditionInfo": ["매출액의 전년 동기 대비 성장률"]
+        },
+        {
+          "condition": "유동비율 > 2",
+          "conditionInfo": [
+            "유동비율 = (유동자산 ÷ 유동부채) * 100",
+            "단기 채무 상환 능력"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glenn_greenberg",
+      "name": "글렌 그린버그의 전략",
+      "summary": "소수 우량주를 고집하는 집중 투자자 글렌 그린버그의 안전마진 전략",
+      "description": "투자 안정성과 강력한 수익성을 중시하는 투자자를 위한 것으로, 저평가된 동시에 높은 수익성을 보유한 종목들이에요. 낮은 PER을 통해 상대적으로 저평가된 기업을 찾아가며, 높은 ROIC는 자본 대비 수익성이 우수한 기업을 식별해 성장 잠재력을 확인할 수 있게 합니다.",
+      "tags": ["long_term", "style_value", "risk_low", "sector_small_cap"],
+      "conditions": [
+        {
+          "condition": "PER < 15",
+          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+        },
+        {
+          "condition": "ROIC > 15%",
+          "conditionInfo": [
+            "ROIC = (세후영업이익(NOPAT) ÷ 투하자본) x 100",
+            "투하자본으로 인한 이익률"
+          ]
+        },
+        {
+          "condition": "부채비율 < 50%",
+          "conditionInfo": [
+            "부채비율 = (부채총액 ÷ 자기자본) * 100",
+            "기업의 재무 안정성 지표"
+          ]
+        },
+        {
+          "condition": "총 마진 성장률 > 3%",
+          "conditionInfo": ["총이익(매출-매출원가)의 전년 동기 대비 성장률"]
+        },
+        {
+          "condition": "FCF > 시가총액의 5%",
+          "conditionInfo": [
+            "잉여현금흐름",
+            "기업이 자유롭게 쓸 수 있는 현금"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "undervalued_dividend",
+      "name": "저평가 배당주",
+      "summary": "배당과 시세차익을 동시에 고려한 배당 종목",
+      "description": "장기적인 관점에서 배당과 기업을 성장성을 모두 갖춘 배당주를 찾고자 하는 투자자를 위한 종목들이에요. 현재 배당수익률이 과거보다 높은 종목을 통해, 현재 주가가 비교적 저평가 되어 있다는 점을 알 수 있어요.",
+      "tags": ["long_term", "style_value", "style_dividend", "risk_low", "prefer_dividend"],
+      "conditions": [
+        {
+          "condition": "배당수익률 > 과거 5년 평균",
+          "conditionInfo": [
+            "현금 배당 수익률 = (1주당 현금배당금 ÷ 주가) * 100"
+          ]
+        },
+        {
+          "condition": "FCF > 0",
+          "conditionInfo": [
+            "잉여현금흐름",
+            "기업이 자유롭게 쓸 수 있는 현금"
+          ]
+        },
+        {
+          "condition": "EPS 성장률 > 5%",
+          "conditionInfo": ["EPS의 전년 동기 대비 성장률"]
+        },
+        {
+          "condition": "배당금 성장 연수 >= 3년",
+          "conditionInfo": ["배당금이 연속 증가한 연수"]
+        },
+        {
+          "condition": "배당성향 > 30%",
+          "conditionInfo": [
+            "배당성향 = 배당금 ÷ 순이익 * 100",
+            "이익 중 배당금 지급 비율"
+          ]
+        },
+        {
+          "condition": "PBR < 1",
+          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+        },
+        {
+          "condition": "PER < 20",
+          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+        }
+      ]
+    },
+    {
+      "id": "long_term_dividend",
+      "name": "장기 고배당주",
+      "summary": "장기 투자에 적합한 배당 종목",
+      "description": "꾸준히 배당을 받을 수 있는 안정적인 종목을 찾는 투자자들을 위한 종목들이에요. 배당수익률이 4% 이상으로, 비교적 높은 배당을 제공하는 종목을 위주로 찾아봤어요. PER와 PBR 비율은 기업이 수익성과 자산 대비 기업이 얼마나 적정하게 평가되었는지를 파악하는 지표로, 저평가된 종목을 찾는 기준으로 활용되었어요.",
+      "tags": ["long_term", "style_dividend", "risk_low", "prefer_dividend", "sector_traditional"],
+      "conditions": [
+        {
+          "condition": "배당수익률 >= 4%",
+          "conditionInfo": [
+            "배당수익률 = (주당 배당금 ÷ 주가) * 100",
+            "투자 대비 배당 수익률"
+          ]
+        },
+        {
+          "condition": "PER < 20",
+          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+        },
+        {
+          "condition": "PBR < 1.5",
+          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+        },
+        {
+          "condition": "부채 비율 < 66%",
+          "conditionInfo": [
+            "부채비율 = (부채총액 ÷ 자기자본) * 100",
+            "기업의 재무 안정성 지표"
+          ]
+        },
+        {
+          "condition": "영업이익 CAGR(3Y) >= 3%",
+          "conditionInfo": ["최근 3년 영업이익의 연평균 증가율"]
+        }
+      ]
+    }
+  ]
+}

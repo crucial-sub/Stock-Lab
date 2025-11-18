@@ -33,7 +33,8 @@ class MarketQuoteService:
         sort_order: SortOrder = SortOrder.DESC,
         page: int = 1,
         page_size: int = 50,
-        user_id: Optional[UUID] = None
+        user_id: Optional[UUID] = None,
+        search: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         전체 종목 시세 조회
@@ -44,6 +45,7 @@ class MarketQuoteService:
             page: 페이지 번호
             page_size: 페이지 크기
             user_id: 사용자 ID (관심종목 판단용, 선택)
+            search: 검색어 (종목명 또는 종목코드, 부분 일치)
 
         Returns:
             시세 리스트 및 페이지네이션 정보
@@ -79,6 +81,17 @@ class MarketQuoteService:
         # 전일 주가 서브쿼리 (별칭: prev)
         PrevStockPrice = StockPrice.__table__.alias("prev_stock_price")
 
+        # WHERE 조건 구성
+        where_conditions = [StockPrice.trade_date == latest_trade_date]
+
+        # 검색어가 있으면 종목명 또는 종목코드로 필터링
+        if search and search.strip():
+            search_term = f"%{search.strip()}%"
+            where_conditions.append(
+                (Company.stock_name.ilike(search_term)) |
+                (Company.stock_code.ilike(search_term))
+            )
+
         query = (
             select(
                 Company.stock_code,
@@ -101,7 +114,7 @@ class MarketQuoteService:
                     PrevStockPrice.c.trade_date == prev_trade_date
                 )
             )
-            .where(StockPrice.trade_date == latest_trade_date)
+            .where(and_(*where_conditions))
             .order_by(order_func(sort_column))
             .offset(offset)
             .limit(page_size + 1)  # has_next 판단을 위해 1개 더 조회
@@ -115,12 +128,12 @@ class MarketQuoteService:
         if has_next:
             rows = rows[:page_size]
 
-        # 5. 전체 개수 조회
+        # 5. 전체 개수 조회 (검색 조건 포함)
         count_query = (
             select(func.count())
             .select_from(Company)
             .join(StockPrice, Company.company_id == StockPrice.company_id)
-            .where(StockPrice.trade_date == latest_trade_date)
+            .where(and_(*where_conditions))
         )
         count_result = await self.db.execute(count_query)
         total = count_result.scalar()

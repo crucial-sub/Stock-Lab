@@ -65,3 +65,4 @@ SL-Back-end/logs/quant_api.log
 *.log
 SL-Back-end/logs/
 SL-Front-End/.next/
+nu*

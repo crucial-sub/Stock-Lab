@@ -19,7 +19,6 @@ export function AutoTradingSection({
   const queryClient = useQueryClient();
   const [isActivating, setIsActivating] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
-  const [isExecuting, setIsExecuting] = useState(false);
 
   // 내 자동매매 전략 목록 조회
   const { data: strategies, isLoading } = useQuery({
@@ -39,7 +38,7 @@ export function AutoTradingSection({
     mutationFn: () =>
       autoTradingApi.activateAutoTrading({
         session_id: sessionId,
-        initial_capital: 50000000, // 5천만원 기본값
+        // initial_capital 제거 - 백엔드에서 키움 계좌 잔고 자동 조회
       }),
     onSuccess: (data) => {
       alert(data.message);
@@ -71,22 +70,6 @@ export function AutoTradingSection({
     },
   });
 
-  // 수동 실행 mutation (테스트용)
-  const executeMutation = useMutation({
-    mutationFn: (strategyId: string) =>
-      autoTradingApi.executeAutoTrading(strategyId),
-    onSuccess: (data) => {
-      alert(
-        `${data.message}\n선정: ${data.selected_count}개, 매수: ${data.bought_count}개`,
-      );
-      setIsExecuting(false);
-    },
-    onError: (error: any) => {
-      alert(error.response?.data?.detail || "자동매매 실행에 실패했습니다.");
-      setIsExecuting(false);
-    },
-  });
-
   const handleActivate = () => {
     if (sessionStatus?.toUpperCase() !== "COMPLETED") {
       alert("백테스트가 완료된 후에 활성화할 수 있습니다.");
@@ -102,12 +85,6 @@ export function AutoTradingSection({
     deactivateMutation.mutate(activeStrategy.strategy_id);
   };
 
-  const handleExecute = () => {
-    if (!activeStrategy) return;
-    setIsExecuting(true);
-    executeMutation.mutate(activeStrategy.strategy_id);
-  };
-
   if (isLoading) {
     return (
       <div className="bg-bg-surface rounded-lg shadow-card p-6">
@@ -121,86 +98,21 @@ export function AutoTradingSection({
 
   return (
     <div className="bg-bg-surface rounded-lg shadow-card p-6 mb-6">
-      <div className="flex items-start justify-between">
-        {/* 왼쪽: 정보 */}
-        <div className="flex-1">
-          <h2 className="text-lg font-bold text-text-strong mb-2">
+      <div className="flex items-center justify-between">
+        {/* 왼쪽: 제목 */}
+        <div>
+          <h2 className="text-lg font-bold text-text-strong">
             실전 자동매매 {activeStrategy ? "(활성화됨)" : ""}
           </h2>
-          <p className="text-sm text-text-muted mb-4">
+          <p className="text-sm text-text-muted mt-1">
             {activeStrategy
               ? "백테스트 전략을 기반으로 자동매매가 실행됩니다. (모의투자 전용)"
               : "백테스트 전략을 실전 자동매매로 전환하세요. (모의투자 전용)"}
           </p>
-
-          {/* 활성화된 전략 정보 */}
-          {activeStrategy && (
-            <div className="grid grid-cols-3 gap-6 bg-blue-50 dark:bg-blue-950/50 p-4 rounded-lg mb-4 border border-blue-200 dark:border-blue-700">
-              <div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">초기 자본금</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {Math.round(activeStrategy.initial_capital).toLocaleString(
-                    "ko-KR",
-                  )}
-                  원
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">현재 자본금</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {Math.round(activeStrategy.current_capital).toLocaleString(
-                    "ko-KR",
-                  )}
-                  원
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">현금 잔고</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {Math.round(activeStrategy.cash_balance).toLocaleString(
-                    "ko-KR",
-                  )}
-                  원
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">종목당 투자 비율</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {activeStrategy.per_stock_ratio}%
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">최대 보유 종목</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {activeStrategy.max_positions}개
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">리밸런싱 주기</p>
-                <p className="text-base font-semibold text-gray-900 dark:text-white">
-                  {activeStrategy.rebalance_frequency === "DAILY"
-                    ? "매일"
-                    : activeStrategy.rebalance_frequency}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* 안내 메시지 */}
-          {activeStrategy && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                💡 매일 오전 8시에 종목을 선정하고, 오전 9시에 자동으로
-                매수/매도를 실행합니다.
-                <br />
-                실시간 수익률은 &quot;내 잔고&quot; 페이지에서 확인하세요.
-              </p>
-            </div>
-          )}
         </div>
 
         {/* 오른쪽: 버튼 */}
-        <div className="ml-6 flex flex-col gap-3">
+        <div>
           {!activeStrategy ? (
             <button
               onClick={handleActivate}
@@ -218,30 +130,17 @@ export function AutoTradingSection({
               {isActivating ? "활성화 중..." : "자동매매 활성화"}
             </button>
           ) : (
-            <>
-              <button
-                onClick={handleExecute}
-                disabled={isExecuting}
-                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                  isExecuting
-                    ? "bg-blue-400 cursor-wait"
-                    : "bg-blue-500 hover:bg-blue-600"
-                }`}
-              >
-                {isExecuting ? "실행 중..." : "수동 실행 (테스트)"}
-              </button>
-              <button
-                onClick={handleDeactivate}
-                disabled={isDeactivating}
-                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                  isDeactivating
-                    ? "bg-gray-400 cursor-wait"
-                    : "bg-gray-500 hover:bg-gray-600"
-                }`}
-              >
-                {isDeactivating ? "비활성화 중..." : "자동매매 비활성화"}
-              </button>
-            </>
+            <button
+              onClick={handleDeactivate}
+              disabled={isDeactivating}
+              className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
+                isDeactivating
+                  ? "bg-gray-400 cursor-wait"
+                  : "bg-gray-500 hover:bg-gray-600"
+              }`}
+            >
+              {isDeactivating ? "비활성화 중..." : "자동매매 비활성화"}
+            </button>
           )}
         </div>
       </div>

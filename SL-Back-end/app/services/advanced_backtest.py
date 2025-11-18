@@ -266,7 +266,49 @@ async def _run_backtest_async(
 
             logger.info(f"백테스트 완료 - Session: {session_id}")
 
-            # 세션 상태 업데이트 (COMPLETED)
+            # ✅ BUG FIX: 백테스트 최종 통계를 SimulationStatistics에 저장
+            from app.models.simulation import SimulationStatistics
+            from sqlalchemy.dialects.postgresql import insert
+
+            # 1. 최종 통계 계산 (Pydantic 모델이므로 속성으로 접근)
+            stats = result.statistics
+            final_return = float(stats.total_return) if stats and stats.total_return is not None else 0
+            win_rate = float(stats.win_rate) if stats and stats.win_rate is not None else 0
+            total_trades = int(stats.total_trades) if stats and stats.total_trades is not None else 0
+            max_drawdown = float(stats.max_drawdown) if stats and stats.max_drawdown is not None else 0
+            sharpe_ratio = float(stats.sharpe_ratio) if stats and stats.sharpe_ratio is not None else 0
+            final_capital = float(stats.final_capital) if stats and stats.final_capital is not None else 0
+            annualized_return = float(stats.annualized_return) if stats and stats.annualized_return is not None else 0
+            volatility = float(stats.volatility) if stats and stats.volatility is not None else 0
+            winning_trades = int(stats.winning_trades) if stats and stats.winning_trades is not None else 0
+            losing_trades = int(stats.losing_trades) if stats and stats.losing_trades is not None else 0
+            profit_factor = float(stats.profit_loss_ratio) if stats and stats.profit_loss_ratio is not None else 0
+
+            # 2. SimulationStatistics 저장 (UPSERT)
+            stats_data = {
+                'session_id': session_id,
+                'total_return': final_return,
+                'annualized_return': annualized_return,
+                'max_drawdown': max_drawdown,
+                'volatility': volatility,
+                'sharpe_ratio': sharpe_ratio,
+                'total_trades': total_trades,
+                'winning_trades': winning_trades,
+                'losing_trades': losing_trades,
+                'win_rate': win_rate,
+                'profit_factor': profit_factor,
+                'final_capital': final_capital
+            }
+
+            stmt_stats = insert(SimulationStatistics).values(stats_data)
+            stmt_stats = stmt_stats.on_conflict_do_update(
+                index_elements=['session_id'],
+                set_=stats_data
+            )
+            await db.execute(stmt_stats)
+            logger.info(f"✅ SimulationStatistics 저장 완료")
+
+            # 3. 세션 상태 업데이트 (COMPLETED)
             stmt = (
                 update(SimulationSession)
                 .where(SimulationSession.session_id == session_id)
@@ -278,6 +320,33 @@ async def _run_backtest_async(
             )
             await db.execute(stmt)
             await db.commit()
+
+            logger.info(f"✅ 백테스트 최종 통계 저장 완료 - 수익률: {final_return:.2f}%, 승률: {win_rate:.2f}%, 거래: {total_trades}건")
+
+            # 🎯 랭킹 업데이트 (공개 전략인 경우)
+            try:
+                from app.services.ranking_service import get_ranking_service
+
+                # 전략 공개 여부 확인
+                strategy_query = select(PortfolioStrategy.is_public, PortfolioStrategy.strategy_id).where(
+                    PortfolioStrategy.strategy_id == strategy_id
+                )
+                strategy_result = await db.execute(strategy_query)
+                strategy_row = strategy_result.one_or_none()
+
+                if strategy_row:
+                    is_public, strat_id = strategy_row
+                    if is_public:
+                        ranking_service = await get_ranking_service()
+                        await ranking_service.add_to_ranking(
+                            session_id=session_id,
+                            total_return=float(final_return),
+                            strategy_id=strat_id,
+                            is_public=True
+                        )
+                        logger.info(f"🏆 랭킹 업데이트 완료: session={session_id}, return={final_return:.2f}%")
+            except Exception as e:
+                logger.warning(f"랭킹 업데이트 실패 (무시): {e}")
 
             # 🚀 Rate Limit 해제 (백테스트 완료 직후, Redis 연결이 살아있을 때)
             try:

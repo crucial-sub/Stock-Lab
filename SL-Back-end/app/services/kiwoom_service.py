@@ -7,6 +7,8 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -518,3 +520,77 @@ class KiwoomService:
         except requests.RequestException as e:
             logger.error(f"주식 매도 주문 실패: {e}")
             raise
+
+    @staticmethod
+    async def ensure_valid_token(db: AsyncSession, user: User) -> str:
+        """
+        키움 토큰 유효성 보장 - 만료 시 자동 갱신
+
+        Args:
+            db: 데이터베이스 세션
+            user: 유저 객체
+
+        Returns:
+            유효한 access_token
+
+        Raises:
+            ValueError: 토큰 갱신 실패
+        """
+        if not user.kiwoom_access_token:
+            raise ValueError("키움 토큰이 없습니다. 계정 연동을 먼저 진행해주세요.")
+
+        try:
+            # 간단한 API 호출로 토큰 유효성 테스트
+            test_result = KiwoomService.get_deposit_info(
+                access_token=user.kiwoom_access_token,
+                qry_tp="3"
+            )
+
+            # 토큰이 유효하면 그대로 반환
+            if test_result.get("return_code") == 0:
+                logger.debug(f"✅ 키움 토큰 유효 (user: {user.email})")
+                return user.kiwoom_access_token
+
+            # 토큰이 만료되었으면 갱신 시도
+            error_msg = test_result.get("return_msg", "")
+            logger.warning(f"⚠️ 키움 토큰 만료 감지: {error_msg}")
+
+            if not user.kiwoom_app_key or not user.kiwoom_app_secret:
+                raise ValueError("app_key/app_secret이 없어 토큰 갱신이 불가능합니다.")
+
+            # 토큰 갱신
+            logger.info(f"🔄 키움 토큰 자동 갱신 시작 (user: {user.email})")
+
+            new_token_response = KiwoomService.get_access_token(
+                app_key=user.kiwoom_app_key,
+                app_secret=user.kiwoom_app_secret
+            )
+
+            new_access_token = new_token_response.get("token")
+            expires_dt = new_token_response.get("expires_dt")
+
+            if not new_access_token:
+                raise ValueError("토큰 갱신 응답에 token 필드가 없습니다.")
+
+            # 만료 시간 계산
+            from datetime import timezone
+            if expires_dt:
+                try:
+                    expire_time = datetime.strptime(expires_dt, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                    user.kiwoom_token_expires_at = expire_time
+                except:
+                    user.kiwoom_token_expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+            else:
+                user.kiwoom_token_expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+
+            # DB 업데이트
+            user.kiwoom_access_token = new_access_token
+            await db.commit()
+            await db.refresh(user)
+
+            logger.info(f"✅ 키움 토큰 자동 갱신 성공 (user: {user.email})")
+            return new_access_token
+
+        except Exception as e:
+            logger.error(f"❌ 키움 토큰 검증/갱신 실패: {e}", exc_info=True)
+            raise ValueError(f"키움 토큰 갱신 실패: {e}")

@@ -1,9 +1,12 @@
 """LLM Chat API Server - FastAPI 기반"""
 import asyncio
-from fastapi import FastAPI, HTTPException
+import json
+import uuid
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, AsyncGenerator
 import uvicorn
 
 from handlers.chat_handler import ChatHandler
@@ -29,6 +32,24 @@ class ChatResponse(BaseModel):
 
 class DeleteSessionRequest(BaseModel):
     session_id: str
+
+
+# DSL 관련 모델
+class DSLRequest(BaseModel):
+    text: str
+
+
+class ConditionSchema(BaseModel):
+    factor: str
+    params: List = []
+    operator: str
+    right_factor: Optional[str] = None
+    right_params: List = []
+    value: Optional[float] = None
+
+
+class DSLResponse(BaseModel):
+    conditions: List[ConditionSchema]
 
 
 # FastAPI 앱 초기화
@@ -175,6 +196,187 @@ async def health_check():
         "handler_initialized": handler is not None,
         "version": "1.0.0"
     }
+
+
+@app.post("/api/v1/dsl/parse", response_model=DSLResponse)
+async def parse_dsl(request: DSLRequest):
+    """
+    자연어 전략 설명을 DSL JSON으로 변환
+
+    ### Request
+    ```json
+    {
+      "text": "PER 10 이하이고 ROE 15% 이상"
+    }
+    ```
+
+    ### Response
+    ```json
+    {
+      "conditions": [
+        {
+          "factor": "PER",
+          "params": [],
+          "operator": "<=",
+          "value": 10
+        }
+      ]
+    }
+    ```
+    """
+    try:
+        from schemas.dsl_generator import parse_strategy_text
+
+        result = parse_strategy_text(request.text)
+        # Pydantic v1 호환: dict() 사용
+        conditions = [ConditionSchema(**cond.dict()) for cond in result.conditions]
+        return DSLResponse(conditions=conditions)
+    except Exception as e:
+        print(f"DSL 파싱 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"DSL 변환에 실패했습니다: {str(e)}"
+        )
+
+
+async def generate_sse_stream(
+    message: str,
+    session_id: str
+) -> AsyncGenerator[str, None]:
+    """
+    SSE 스트림 생성기
+
+    기존 handler.handle() 응답을 토큰 단위로 분할하여 SSE 형식으로 전송합니다.
+
+    Args:
+        message: 사용자 메시지
+        session_id: 세션 ID
+
+    Yields:
+        SSE 형식의 문자열 ("data: {json}\n\n")
+    """
+    message_id = f"msg_{uuid.uuid4().hex[:12]}"
+
+    try:
+        # stream_start 이벤트 전송
+        yield f"data: {json.dumps({'type': 'stream_start', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+
+        # 전체 응답 생성 (기존 handler.handle 호출)
+        result = await handler.handle(message=message, session_id=session_id)
+        answer = result.get("answer", "")
+
+        # 토큰 단위 분할 및 전송 (5-10 토큰씩 배칭)
+        # 간단한 구현: 단어 단위로 분할 (공백 기준)
+        words = answer.split()
+        batch_size = 7  # 평균 배칭 크기
+
+        for i in range(0, len(words), batch_size):
+            batch = words[i:i + batch_size]
+            chunk_content = " ".join(batch)
+
+            # 마지막 청크가 아니면 공백 추가
+            if i + batch_size < len(words):
+                chunk_content += " "
+
+            # stream_chunk 이벤트 전송
+            chunk_event = {
+                "type": "stream_chunk",
+                "content": chunk_content,
+                "format": "markdown"
+            }
+            yield f"data: {json.dumps(chunk_event, ensure_ascii=False)}\n\n"
+
+            # 200ms 대기 (토큰 배칭 시뮬레이션)
+            await asyncio.sleep(0.2)
+
+        # ui_language가 있으면 전송
+        if result.get("ui_language"):
+            ui_language_event = {
+                "type": "ui_language",
+                "data": result["ui_language"]
+            }
+            yield f"data: {json.dumps(ui_language_event, ensure_ascii=False)}\n\n"
+
+        # stream_end 이벤트 전송
+        yield f"data: {json.dumps({'type': 'stream_end', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+
+    except Exception as e:
+        # 에러 이벤트 전송
+        error_str = str(e)
+
+        # Throttling 에러 감지
+        if "ThrottlingException" in error_str or "Too many requests" in error_str:
+            error_message = "요청이 많아 일시적으로 응답이 지연되고 있습니다.\n잠시 후(30초~1분) 다시 시도해주세요."
+            error_code = "THROTTLING"
+        else:
+            error_message = "응답 생성 중 오류가 발생했습니다. 다시 시도해주세요."
+            error_code = "INTERNAL_ERROR"
+
+        error_event = {
+            "type": "error",
+            "code": error_code,
+            "message": error_message
+        }
+        yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+
+
+@app.get("/api/v1/chat/stream")
+async def chat_stream(
+    sessionId: str = Query(..., description="채팅 세션 ID"),
+    message: str = Query(..., description="사용자 메시지")
+):
+    """
+    SSE 기반 채팅 스트리밍 엔드포인트
+
+    프론트엔드 EventSource API와 호환되는 SSE 프로토콜로 응답을 스트리밍합니다.
+
+    Query Parameters:
+        - sessionId: 채팅 세션 ID
+        - message: 사용자 메시지
+
+    Response:
+        - Content-Type: text/event-stream
+        - SSE 프로토콜 (data: {json}\n\n)
+
+    Events:
+        - stream_start: 스트리밍 시작
+        - stream_chunk: 콘텐츠 청크 (마크다운 형식)
+        - stream_end: 스트리밍 완료
+        - ui_language: UI 언어 데이터 (선택)
+        - error: 에러 발생
+    """
+    if handler is None:
+        # 챗봇 초기화 실패 시 에러 이벤트 즉시 전송
+        async def error_stream():
+            error_event = {
+                "type": "error",
+                "code": "CHATBOT_NOT_INITIALIZED",
+                "message": "챗봇을 초기화하지 못했습니다. 잠시 후 다시 시도해주세요."
+            }
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(
+            error_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"  # Nginx 버퍼링 비활성화
+            }
+        )
+
+    # SSE 스트리밍 응답 반환
+    return StreamingResponse(
+        generate_sse_stream(message, sessionId),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Nginx 버퍼링 비활성화
+        }
+    )
 
 
 if __name__ == "__main__":

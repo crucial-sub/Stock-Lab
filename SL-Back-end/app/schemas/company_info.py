@@ -43,8 +43,8 @@ class CompanyBasicInfo(BaseModel):
     industry: Optional[str] = None
 
     # 점수
-    # momentum_score: Optional[float] = Field(None, serialization_alias="momentumScore")
-    # fundamental_score: Optional[float] = Field(None, serialization_alias="fundamentalScore")
+    momentum_score: Optional[int] = Field(None, serialization_alias="momentumScore")
+    fundamental_score: Optional[int] = Field(None, serialization_alias="fundamentalScore")
 
     # 관심종목 여부
     is_favorite: bool = Field(False, serialization_alias="isFavorite", description="관심종목 여부")

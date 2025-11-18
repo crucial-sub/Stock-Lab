@@ -7,11 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
 from uuid import UUID
+import logging
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
 from app.models.user import User
 from app.schemas.user import TokenData
+from app.core.cache import get_redis
+
+logger = logging.getLogger(__name__)
 
 # Bearer 토큰 스키마
 security = HTTPBearer()
@@ -41,6 +45,26 @@ async def get_current_user(
     )
 
     token = credentials.credentials
+
+    # Redis가 있으면 블랙리스트 체크
+    try:
+        redis_client = get_redis()
+        if redis_client:
+            blacklist_key = f"token_blacklist:{token}"
+            is_blacklisted = await redis_client.exists(blacklist_key)
+            if is_blacklisted:
+                logger.info(f"Blocked blacklisted token")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="로그아웃된 토큰입니다",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Redis 에러는 로깅만 하고 계속 진행 (Redis 없어도 작동하도록)
+        logger.warning(f"Redis blacklist check failed: {e}")
+
     payload = decode_access_token(token)
 
     if payload is None:

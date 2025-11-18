@@ -1,0 +1,266 @@
+{
+  "doc_id": "quant_glossary_full",
+  "title": "퀀트 투자 용어사전 (초급~고급 통합)",
+  "doc_type": "glossary",
+  "category": "quant_glossary",
+  "difficulty": "all_levels",
+  "version": "1.0.0",
+  "updated_at": "2025-11-17",
+  "tags": [
+    "퀀트",
+    "투자",
+    "백테스트",
+    "팩터",
+    "재무지표",
+    "기술적분석",
+    "리스크관리",
+    "포트폴리오이론"
+  ],
+
+  "sections": {
+    "CAGR": {
+      "aliases": ["연평균 복리 수익률", "Compound Annual Growth Rate", "연복리"],
+      "category": "backtest_metric"
+    },
+    "MDD": {
+      "aliases": ["최대 낙폭", "Maximum Drawdown"],
+      "category": "backtest_metric"
+    },
+    "Sharpe Ratio": {
+      "aliases": ["샤프 비율", "Sharpe"],
+      "category": "backtest_metric"
+    },
+    "Win Rate": {
+      "aliases": ["승률"],
+      "category": "backtest_metric"
+    },
+    "Volatility": {
+      "aliases": ["변동성", "표준편차"],
+      "category": "backtest_metric"
+    },
+
+    "PER": {
+      "aliases": ["주가수익비율"],
+      "category": "fundamental"
+    },
+    "PBR": {
+      "aliases": ["주가순자산비율"],
+      "category": "fundamental"
+    },
+    "ROE": {
+      "aliases": ["자기자본이익률"],
+      "category": "profitability"
+    },
+    "EPS": {
+      "aliases": ["주당순이익"],
+      "category": "profitability"
+    },
+    "Debt Ratio": {
+      "aliases": ["부채비율"],
+      "category": "leverage"
+    },
+    "Dividend Yield": {
+      "aliases": ["배당수익률"],
+      "category": "income"
+    },
+    "Operating Margin": {
+      "aliases": ["영업이익률"],
+      "category": "profitability"
+    },
+    "Liquidity Ratios": {
+      "aliases": ["유동비율", "당좌비율"],
+      "category": "liquidity"
+    },
+
+    "Moving Average": {
+      "aliases": ["이동평균선", "MA"],
+      "category": "technical"
+    },
+    "RSI": {
+      "aliases": ["상대강도지수"],
+      "category": "technical"
+    },
+    "MACD": {
+      "aliases": ["이동평균 수렴확산지수"],
+      "category": "technical"
+    },
+
+    "Volume": {
+      "aliases": ["거래량"],
+      "category": "market"
+    },
+    "Market Cap": {
+      "aliases": ["시가총액"],
+      "category": "market"
+    },
+    "Foreign Ownership": {
+      "aliases": ["외국인 보유비율"],
+      "category": "market"
+    },
+
+    "Factor": {
+      "aliases": ["팩터"],
+      "category": "quant_core"
+    },
+    "Backtest": {
+      "aliases": ["백테스트"],
+      "category": "quant_core"
+    },
+    "Rebalancing": {
+      "aliases": ["리밸런싱"],
+      "category": "quant_core"
+    },
+    "Universe": {
+      "aliases": ["유니버스"],
+      "category": "quant_core"
+    },
+
+    "Sortino Ratio": {
+      "aliases": ["소티노", "Sortino"],
+      "category": "risk_adjusted"
+    },
+    "Calmar Ratio": {
+      "aliases": ["칼마", "Calmar"],
+      "category": "risk_adjusted"
+    },
+    "Beta": {
+      "aliases": ["베타"],
+      "category": "risk"
+    },
+    "Alpha": {
+      "aliases": ["알파"],
+      "category": "risk"
+    },
+    "Tracking Error": {
+      "aliases": ["추적오차"],
+      "category": "risk"
+    },
+
+    "FCF Yield": {
+      "aliases": ["자유현금흐름 수익률"],
+      "category": "valuation"
+    },
+    "Debt to EBITDA": {
+      "aliases": ["Debt/EBITDA"],
+      "category": "leverage"
+    },
+    "Interest Coverage Ratio": {
+      "aliases": ["이자보상배율"],
+      "category": "leverage"
+    },
+    "Growth Metrics": {
+      "aliases": ["EPS Growth", "Revenue Growth"],
+      "category": "growth"
+    },
+    "Profitability Margins": {
+      "aliases": ["Gross Margin", "Operating Margin"],
+      "category": "profitability"
+    },
+
+    "Bollinger Bands": {
+      "aliases": ["볼린저밴드"],
+      "category": "technical"
+    },
+    "ATR": {
+      "aliases": ["평균진폭범위"],
+      "category": "technical"
+    },
+    "Stochastic": {
+      "aliases": ["스토캐스틱"],
+      "category": "technical"
+    },
+
+    "Risk Parity": {
+      "aliases": [],
+      "category": "portfolio"
+    },
+    "Equal Weight": {
+      "aliases": [],
+      "category": "portfolio"
+    },
+    "Market Cap Weight": {
+      "aliases": [],
+      "category": "portfolio"
+    },
+    "Exposure": {
+      "aliases": ["노출도"],
+      "category": "portfolio"
+    },
+
+    "Factor Exposure": {
+      "aliases": [],
+      "category": "factor_model"
+    },
+    "Neutralization": {
+      "aliases": ["중립화"],
+      "category": "factor_model"
+    },
+    "Cross-sectional Factor Model": {
+      "aliases": ["단면 팩터"],
+      "category": "factor_model"
+    },
+    "Time-series Factor Model": {
+      "aliases": ["시계열 팩터"],
+      "category": "factor_model"
+    },
+    "PCA": {
+      "aliases": ["주성분 분석"],
+      "category": "factor_model"
+    },
+
+    "Drawdown Duration": {
+      "aliases": [],
+      "category": "risk"
+    },
+    "Tail Risk": {
+      "aliases": [],
+      "category": "risk"
+    },
+    "VaR": {
+      "aliases": ["Value at Risk"],
+      "category": "risk"
+    },
+    "CVaR": {
+      "aliases": ["Expected Shortfall"],
+      "category": "risk"
+    },
+    "Kelly Criterion": {
+      "aliases": ["켈리 공식"],
+      "category": "portfolio_optimization"
+    },
+
+    "Look-ahead Bias": {
+      "aliases": [],
+      "category": "bias"
+    },
+    "Survivorship Bias": {
+      "aliases": [],
+      "category": "bias"
+    },
+    "Data Snooping": {
+      "aliases": ["과최적화"],
+      "category": "bias"
+    },
+    "Rolling Window": {
+      "aliases": [],
+      "category": "data_method"
+    },
+
+    "Markowitz Optimization": {
+      "aliases": ["Markowitz", "현대 포트폴리오 이론"],
+      "category": "portfolio_optimization"
+    },
+    "Efficient Frontier": {
+      "aliases": ["효율적 투자선"],
+      "category": "portfolio_optimization"
+    },
+    "Black-Litterman Model": {
+      "aliases": ["BL 모델"],
+      "category": "portfolio_optimization"
+    },
+    "HRP": {
+      "aliases": ["Hierarchical Risk Parity"],
+      "category": "portfolio_optimization"
+    }
+  }
+}

@@ -594,6 +594,8 @@ class BacktestEngine:
                 df = pd.DataFrame(cached_data)
                 if 'report_date' in df.columns:
                     df['report_date'] = pd.to_datetime(df['report_date'])
+                if 'available_date' in df.columns:
+                    df['available_date'] = pd.to_datetime(df['available_date'])
                 return df
         except Exception as e:
             logger.debug(f"재무 캐시 조회 실패: {e}")
@@ -725,6 +727,19 @@ class BacktestEngine:
 
             financial_df['report_date'] = financial_df.apply(make_report_date, axis=1)
 
+            # 보고서 코드별 공시 지연 일수를 적용해 실제 사용 가능 날짜 추정
+            report_delay_map = {
+                '11011': 90,  # 사업보고서
+                '11012': 60,  # 반기보고서
+                '11013': 45,  # 1분기보고서
+                '11014': 45   # 3분기보고서
+            }
+            financial_df['report_delay_days'] = financial_df['report_code'].map(report_delay_map).fillna(90)
+            financial_df['available_date'] = financial_df['report_date'] + pd.to_timedelta(
+                financial_df['report_delay_days'], unit='D'
+            )
+            financial_df.drop(columns=['report_delay_days'], inplace=True)
+
             # 매출액 계산 (2023년처럼 직접 제공되지 않는 경우)
             # Revenue = Cost of Goods Sold + Gross Profit
             if '매출액' in financial_df.columns and '매출원가' in financial_df.columns and '매출총이익' in financial_df.columns:
@@ -743,6 +758,8 @@ class BacktestEngine:
                 cache_df = financial_df.copy()
                 if 'report_date' in cache_df.columns:
                     cache_df['report_date'] = cache_df['report_date'].astype(str)
+                if 'available_date' in cache_df.columns:
+                    cache_df['available_date'] = cache_df['available_date'].astype(str)
                 await cache.set(cache_key, cache_df.to_dict('records'), ttl=604800)
                 logger.info(f"💾 재무 데이터 캐시 저장 완료")
             except Exception as e:
@@ -1249,7 +1266,7 @@ class BacktestEngine:
             unique_stocks = financial_pl.select('stock_code').unique().to_pandas()['stock_code'].tolist()
             for stock in unique_stocks:
                 # 종목별로 한 번만 필터링하고 정렬
-                financial_dict[stock] = financial_pl.filter(pl.col('stock_code') == stock).sort('report_date')
+                financial_dict[stock] = financial_pl.filter(pl.col('stock_code') == stock).sort('available_date')
             logger.info(f"✅ 재무 데이터 색인화 완료: {len(financial_dict)}개 종목")
 
         unique_dates = sorted(price_data[price_data['date'] >= pd.Timestamp(start_date)]['date'].unique())
@@ -1375,17 +1392,17 @@ class BacktestEngine:
             for stock in latest_price.select('stock_code').unique().to_pandas()['stock_code']:
                 if stock not in financial_dict:
                     continue
-                stock_financial = financial_dict[stock].filter(pl.col('report_date') <= calc_date)
+                stock_financial = financial_dict[stock].filter(pl.col('available_date') <= calc_date)
                 if stock_financial.is_empty():
                     continue
 
                 # 최신 분기 재무 (PBR용)
-                latest_fin = stock_financial.sort('report_date', descending=True).head(1)
+                latest_fin = stock_financial.sort('available_date', descending=True).head(1)
 
                 # 연간 보고서 (PER용)
                 annual_reports = stock_financial.filter(pl.col('report_code') == '11011')
                 if not annual_reports.is_empty():
-                    annual_fin = annual_reports.sort('report_date', descending=True).head(1)
+                    annual_fin = annual_reports.sort('available_date', descending=True).head(1)
                     # 연간 보고서의 당기순이익과 최신 분기의 자본총계 결합
                     financial_records.append({
                         'stock_code': stock,
@@ -1405,7 +1422,7 @@ class BacktestEngine:
             financial_data = pl.DataFrame(financial_records)
         else:
             # 기존 방식: 전체 재무 데이터에서 필터링
-            latest_financial = financial_pl.filter(pl.col('report_date') <= calc_date)
+            latest_financial = financial_pl.filter(pl.col('available_date') <= calc_date)
             if latest_financial.is_empty():
                 return factors
 
@@ -1413,7 +1430,7 @@ class BacktestEngine:
             # 최신 분기 데이터 (PBR용)
             latest_fin = (
                 latest_financial
-                .sort('report_date', descending=True)
+                .sort('available_date', descending=True)
                 .group_by('stock_code')
                 .agg([
                     pl.col('자본총계').first().alias('자본총계')
@@ -1424,7 +1441,7 @@ class BacktestEngine:
             annual_fin = (
                 latest_financial
                 .filter(pl.col('report_code') == '11011')
-                .sort('report_date', descending=True)
+                .sort('available_date', descending=True)
                 .group_by('stock_code')
                 .agg([
                     pl.col('당기순이익').first().alias('당기순이익')
@@ -1485,10 +1502,10 @@ class BacktestEngine:
             # 사전 색인화된 데이터 사용
             financial_records = []
             for stock, stock_data in financial_dict.items():
-                stock_financial = stock_data.filter(pl.col('report_date') <= calc_date)
+                stock_financial = stock_data.filter(pl.col('available_date') <= calc_date)
                 if stock_financial.is_empty():
                     continue
-                latest = stock_financial.sort('report_date', descending=True).head(1)
+                latest = stock_financial.sort('available_date', descending=True).head(1)
                 financial_records.append({
                     'stock_code': stock,
                     '당기순이익': latest.select('당기순이익').to_pandas().iloc[0, 0] if '당기순이익' in latest.columns else None,
@@ -1502,13 +1519,13 @@ class BacktestEngine:
             latest_financial = pl.DataFrame(financial_records)
         else:
             # 🚀 Polars 벡터화: group_by로 종목별 최신 데이터 추출
-            filtered = financial_pl.filter(pl.col('report_date') <= calc_date)
+            filtered = financial_pl.filter(pl.col('available_date') <= calc_date)
             if filtered.is_empty():
                 return factors
 
             latest_financial = (
                 filtered
-                .sort('report_date', descending=True)
+                .sort('available_date', descending=True)
                 .group_by('stock_code')
                 .agg([
                     pl.col('당기순이익').first().alias('당기순이익'),
@@ -1562,19 +1579,19 @@ class BacktestEngine:
         if financial_dict is not None:
             stocks_to_process = list(financial_dict.keys())
         else:
-            current_financial = financial_pl.filter(pl.col('report_date') <= calc_date)
-            past_financial = financial_pl.filter(pl.col('report_date') <= year_ago)
+            current_financial = financial_pl.filter(pl.col('available_date') <= calc_date)
+            past_financial = financial_pl.filter(pl.col('available_date') <= year_ago)
             if current_financial.is_empty() or past_financial.is_empty():
                 return factors
             stocks_to_process = current_financial.select('stock_code').unique().to_pandas()['stock_code'].tolist()
 
         for stock in stocks_to_process:
             if financial_dict is not None:
-                current = financial_dict[stock].filter(pl.col('report_date') <= calc_date).sort('report_date', descending=True).head(1)
-                past = financial_dict[stock].filter(pl.col('report_date') <= year_ago).sort('report_date', descending=True).head(1)
+                current = financial_dict[stock].filter(pl.col('available_date') <= calc_date).sort('available_date', descending=True).head(1)
+                past = financial_dict[stock].filter(pl.col('available_date') <= year_ago).sort('available_date', descending=True).head(1)
             else:
-                current = current_financial.filter(pl.col('stock_code') == stock).sort('report_date', descending=True).head(1)
-                past = past_financial.filter(pl.col('stock_code') == stock).sort('report_date', descending=True).head(1)
+                current = current_financial.filter(pl.col('stock_code') == stock).sort('available_date', descending=True).head(1)
+                past = past_financial.filter(pl.col('stock_code') == stock).sort('available_date', descending=True).head(1)
 
             if past.is_empty():
                 continue
@@ -1959,6 +1976,7 @@ class BacktestEngine:
         # ⚡ 배치 commit 전략: 20개 거래일마다 commit
         progress_batch_count = 0
         PROGRESS_BATCH_SIZE = 20
+        saved_execution_ids = set()  # ✅ BUG FIX: 이미 DB에 저장된 execution ID 추적 (중복 저장 방지)
 
         # 🚀 EXTREME OPTIMIZATION: Price data 사전 색인화 (완전 벡터화 - 100배 빠름!)
         logger.info("🚀 가격 데이터 색인화 시작...")
@@ -1973,17 +1991,20 @@ class BacktestEngine:
         # 기본값 처리: high/low가 없으면 close 사용
         high_prices = price_data_indexed.get('high_price', price_data_indexed['close_price']).fillna(price_data_indexed['close_price'])
         low_prices = price_data_indexed.get('low_price', price_data_indexed['close_price']).fillna(price_data_indexed['close_price'])
+        open_prices = price_data_indexed.get('open_price', price_data_indexed['close_price']).fillna(price_data_indexed['close_price'])
 
         values = [
             {
                 'close_price': float(close),
                 'high_price': float(high),
-                'low_price': float(low)
+                'low_price': float(low),
+                'open_price': float(open_)
             }
-            for close, high, low in zip(
+            for close, high, low, open_ in zip(
                 price_data_indexed['close_price'],
                 high_prices,
-                low_prices
+                low_prices,
+                open_prices
             )
         ]
 
@@ -1999,6 +2020,7 @@ class BacktestEngine:
             daily_buy_count = 0  # 당일 매수 횟수
             daily_sell_count = 0  # 당일 매도 횟수
             daily_rebalance_sell_count = 0  # 리밸런싱 매도 횟수
+            daily_sold_stocks = set()  # ✅ BUG FIX: 당일 매도한 종목 추적 (같은 날 재매수 방지)
 
             # 🚀 최적화: O(1) 리밸런싱 날짜 체크
             is_rebalance_day = pd.Timestamp(trading_day) in rebalance_dates_set
@@ -2019,38 +2041,73 @@ class BacktestEngine:
                         trading_date=pd.Timestamp(trading_day)
                     )
 
-                    # 조건 불만족 종목 매도
+                    # 조건 불만족 종목 매도 (최소 보유기간 준수!)
                     stocks_to_sell = [stock for stock in holding_stocks if stock not in valid_holdings]
+
+                    # 최소 보유기간 설정 가져오기
+                    hold_cfg = self.hold_days or {}
+                    min_hold = hold_cfg.get('min_hold_days')
+
                     for stock_code in stocks_to_sell:
                         holding = holdings.get(stock_code)
                         if not holding:
                             continue
 
-                        # 🚀 EXTREME OPTIMIZATION: O(1) dictionary 조회
-                        price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
-                        if not price_info:
-                            continue
+                        # ✅ 최소 보유기간 체크 추가!
+                        # trading_day와 holding.entry_date를 date로 변환하여 비교
+                        trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+                        entry_date = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
+                        hold_days_count = (trading_day_date - entry_date).days
+                        if min_hold is not None and hold_days_count < min_hold:
+                            logger.debug(f"⏸️  리밸런싱 매도 보류: {stock_code} (보유 {hold_days_count}일 < 최소 {min_hold}일)")
+                            continue  # 최소 보유기간 미달이면 리밸런싱도 안 함!
 
-                        current_price = Decimal(str(price_info['close_price']))
-                        execution_price = current_price * (1 - self.slippage)
+                        # 🎯 익일 시가 조회 (리밸런싱도 익일 시가)
+                        next_day_price = None
+                        next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
+                        for i in range(1, 6):  # 최대 5일까지 거래일 찾기
+                            check_date = pd.Timestamp(trading_day) + pd.Timedelta(days=i)
+                            price_info_next = price_lookup.get((stock_code, check_date))
+                            if price_info_next:
+                                next_day_price = Decimal(str(price_info_next.get('open_price', price_info_next['close_price'])))
+                                next_sell_date = check_date.date()
+                                break
+
+                        if not next_day_price:
+                            # 익일 데이터 없으면 당일 종가로 매도
+                            price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
+                            if not price_info:
+                                continue
+                            next_day_price = Decimal(str(price_info['close_price']))
+                            next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
+                        execution_price = next_day_price * (1 - self.slippage)
 
                         amount = execution_price * holding.quantity
                         commission = amount * self.commission_rate
                         tax = amount * self.tax_rate
+                        net_amount = amount - commission - tax
+                        cost_basis = holding.entry_price * holding.quantity if holding.entry_price else Decimal("0")
+                        net_profit = net_amount - cost_basis
 
                         # 매도 실행
-                        cash_balance += amount - commission - tax
+                        cash_balance += net_amount
                         holding.is_open = False
-                        holding.exit_date = trading_day
+                        holding.exit_date = next_sell_date  # 익일
                         holding.exit_price = execution_price
-                        holding.realized_pnl = (execution_price - holding.entry_price) * holding.quantity
+                        holding.realized_pnl = net_profit
                         self.closed_positions.append(holding)
 
                         # 🔥 매도 기록 추가
+                        if cost_basis > 0:
+                            profit_rate = ((net_amount / cost_basis) - 1) * 100
+                        else:
+                            profit_rate = 0
                         executions.append({
-                            'execution_id': f"EXE-REBAL-{stock_code}-{trading_day}",
-                            'execution_date': trading_day,
-                            'trade_date': trading_day,
+                            'execution_id': f"EXE-REBAL-{stock_code}-{next_sell_date}",
+                            'execution_date': next_sell_date,  # 익일
+                            'trade_date': next_sell_date,  # 익일
                             'stock_code': stock_code,
                             'stock_name': holding.stock_name,
                             'side': 'SELL',
@@ -2061,11 +2118,14 @@ class BacktestEngine:
                             'commission': commission,
                             'tax': tax,
                             'realized_pnl': holding.realized_pnl,
-                            'selection_reason': 'REBALANCE'
+                            'return_pct': profit_rate,  # ✅ 수익률 추가
+                            'selection_reason': 'REBALANCE (next day open)',
+                            'hold_days': (next_sell_date - (holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date)).days  # ✅ 보유일수 추가!
                         })
 
                         del holdings[stock_code]
                         daily_rebalance_sell_count += 1
+                        daily_sold_stocks.add(stock_code)  # ✅ 당일 매도 종목 기록
 
             # 2단계: 목표가/손절가 등 일반 매도 (매일 체크)
             sell_trades = await self._execute_sells(
@@ -2085,9 +2145,13 @@ class BacktestEngine:
                     position.is_open = False
                     position.exit_date = trading_day
                     position.exit_price = trade['price']
-                    position.realized_pnl = (trade['price'] - position.entry_price) * position.quantity
+                    if trade.get('realized_pnl') is not None:
+                        position.realized_pnl = trade['realized_pnl']
+                    else:
+                        position.realized_pnl = (trade['price'] - position.entry_price) * position.quantity
                     self.closed_positions.append(position)
                     del holdings[trade['stock_code']]
+                    daily_sold_stocks.add(trade['stock_code'])  # ✅ 당일 매도 종목 기록
 
             # 3단계: 매수 (리밸런싱 날짜에만)
             if is_rebalance_day:
@@ -2110,7 +2174,10 @@ class BacktestEngine:
                 # 이미 보유 중인 종목은 매수 후보에서 제외 (리밸런싱에서는 유지)
                 new_buy_candidates = [s for s in buy_candidates if s not in holdings]
 
-                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개, 보유 {len(holdings)}개/{max_positions}개")
+                # ✅ BUG FIX: 당일 매도한 종목도 매수 후보에서 제외 (같은 날 재매수 방지)
+                new_buy_candidates = [s for s in new_buy_candidates if s not in daily_sold_stocks]
+
+                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개 (당일 매도 제외 {len(daily_sold_stocks)}개), 보유 {len(holdings)}개/{max_positions}개")
 
                 buy_candidates = new_buy_candidates
 
@@ -2279,39 +2346,47 @@ class BacktestEngine:
                     stmt = insert(SimulationDailyValue).values(daily_values_to_upsert)
                     await self.db.execute(stmt)
 
-                # 거래 내역 UPSERT (bulk)
-                trades_to_upsert = []
+                # ✅ BUG FIX: 중복 저장 방지 - 아직 저장되지 않은 거래만 필터링
+                trades_to_insert = []
                 for execution in executions:
-                    trades_to_upsert.append({
-                        'session_id': str(backtest_id),
-                        'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
-                        'stock_code': execution['stock_code'],
-                        'trade_type': execution['trade_type'],  # BUY or SELL
-                        'quantity': int(execution['quantity']),
-                        'price': float(execution['price']),
-                        'amount': float(execution['amount']),
-                        'commission': float(execution['commission']),
-                        'tax': float(execution.get('tax', 0)),
-                        'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
-                        'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None
-                    })
+                    exec_id = execution.get('execution_id')
+                    if exec_id and exec_id not in saved_execution_ids:
+                        trades_to_insert.append({
+                            'session_id': str(backtest_id),
+                            'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
+                            'stock_code': execution['stock_code'],
+                            'stock_name': execution.get('stock_name'),  # ✅ 종목명 추가!
+                            'trade_type': execution['trade_type'],  # BUY or SELL
+                            'quantity': int(execution['quantity']),
+                            'price': float(execution['price']),
+                            'amount': float(execution['amount']),
+                            'commission': float(execution['commission']),
+                            'tax': float(execution.get('tax', 0)),
+                            'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
+                            'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None,
+                            'holding_days': int(execution['hold_days']) if execution.get('hold_days') is not None else None,  # ✅ 보유일수 추가!
+                            'reason': execution.get('selection_reason')  # ✅ 매도 사유 추가!
+                        })
+                        saved_execution_ids.add(exec_id)
 
                 # Bulk INSERT (기존 데이터는 백테스트 시작 시 삭제됨)
-                if trades_to_upsert:
-                    stmt = insert(SimulationTrade).values(trades_to_upsert)
+                if trades_to_insert:
+                    stmt = insert(SimulationTrade).values(trades_to_insert)
                     await self.db.execute(stmt)
+                    logger.debug(f"✅ {len(trades_to_insert)}건 거래 저장 완료 (중복 제외)")
 
                 # ⚡ commit 제거 - 루프 완료 후 한 번만 commit!
 
                 # 진행률 로그 (사용자가 진행 상황 확인)
                 logger.info(f"📊 [{progress_percentage}%] {trading_day.date()} | 💰 {float(portfolio_value):,.0f}원 | 📈 {current_return:.2f}% | 📉 MDD {current_mdd:.2f}% | 매수 {daily_buy_count} | 매도 {total_sell_count} (리밸 {daily_rebalance_sell_count})")
 
-        # 백테스트 종료 시 모든 보유 종목 강제 매도
+        # 백테스트 종료 시 보유 종목 평가 (매도하지 않고 보유)
         if holdings:
             last_trading_day = trading_days[-1]
-            logger.info(f"🏁 백테스트 종료: {len(holdings)}개 보유 종목 강제 매도")
+            total_stock_value = Decimal("0")
+            logger.info(f"🏁 백테스트 종료: {len(holdings)}개 보유 종목 평가 (매도하지 않음)")
 
-            for stock_code, holding in list(holdings.items()):
+            for stock_code, holding in holdings.items():
                 # 마지막 거래일 가격 조회
                 current_price_data = price_data[
                     (price_data['stock_code'] == stock_code) &
@@ -2319,53 +2394,25 @@ class BacktestEngine:
                 ]
 
                 if current_price_data.empty:
-                    logger.warning(f"⚠️ {stock_code}: 마지막 거래일 가격 없음, 평균 매수가로 매도")
+                    logger.warning(f"⚠️ {stock_code}: 마지막 거래일 가격 없음, 평균 매수가로 평가")
                     current_price = holding.entry_price
                 else:
                     current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
 
-                execution_price = current_price * (1 - self.slippage)
-                amount = execution_price * holding.quantity
-                commission = amount * self.commission_rate
-                tax = amount * self.tax_rate
+                # 평가 금액 계산 (슬리피지/수수료/세금 없음)
+                stock_value = current_price * holding.quantity
+                total_stock_value += stock_value
 
-                logger.debug(f"  🔚 강제 매도: {stock_code} {holding.quantity}주 @ {execution_price:,.0f}원")
+                # 보유 종목 정보 업데이트 (매도하지 않음!)
+                holding.current_price = current_price
+                holding.unrealized_pnl = (current_price - holding.entry_price) * holding.quantity
+                holding.unrealized_pnl_pct = ((current_price / holding.entry_price) - 1) * 100
 
-                # 매도 거래 기록
-                cash_balance += amount - commission - tax
-                holding.is_open = False
-                holding.exit_date = last_trading_day
-                holding.exit_price = execution_price
-                holding.realized_pnl = (execution_price - holding.entry_price) * holding.quantity
-                self.closed_positions.append(holding)
+                logger.debug(f"  📊 평가: {stock_code} {holding.quantity}주 @ {current_price:,.0f}원 = {stock_value:,.0f}원")
 
-                # 체결 기록 추가
-                executions.append({
-                    'execution_id': len(executions) + 1,
-                    'execution_date': last_trading_day,
-                    'stock_code': stock_code,
-                    'side': 'SELL',
-                    'quantity': holding.quantity,
-                    'price': execution_price,
-                    'amount': amount,
-                    'commission': commission,
-                    'tax': tax,
-                    'reason': 'BACKTEST_END'
-                })
-                orders.append({
-                    'order_id': f"ORD-S-{stock_code}-{last_trading_day}-FORCE",
-                    'order_date': last_trading_day,
-                    'stock_code': stock_code,
-                    'stock_name': holding.stock_name,
-                    'side': 'SELL',
-                    'order_type': 'MARKET',
-                    'quantity': holding.quantity,
-                    'status': 'FILLED',
-                    'reason': 'BACKTEST_END'
-                })
+            logger.info(f"💰 총 평가금액: 현금 {cash_balance:,.0f}원 + 주식 {total_stock_value:,.0f}원 = {cash_balance + total_stock_value:,.0f}원")
 
-            # holdings 비우기
-            holdings.clear()
+            # ⚠️ 매도 기록을 남기지 않음! holdings도 유지!
 
         # ⚡ 극한 최적화: 시뮬레이션 완료 후 단 한 번만 commit!
         # Before: 20% 단위로 commit (5회)
@@ -2459,17 +2506,17 @@ class BacktestEngine:
             sell_reason = ""
             sell_reason_key = None
 
-            hold_days_count = (trading_day - holding.entry_date).days
+            # trading_day와 holding.entry_date를 date로 변환하여 비교
+            trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+            entry_date = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
+            hold_days_count = (trading_day_date - entry_date).days
             min_hold = hold_cfg.get('min_hold_days') if hold_cfg else None
             max_hold = hold_cfg.get('max_hold_days') if hold_cfg else None
             enforce_min_hold = min_hold is not None and hold_days_count < min_hold
 
-            if max_hold and hold_days_count >= max_hold:
-                should_sell = True
-                sell_reason = f"Max hold days reached ({hold_days_count}d)"
-                sell_reason_key = "hold"
-
-            if not should_sell and not enforce_min_hold and target_cfg:
+            # 🎯 매도 우선순위: 1) 손절가 2) 목표가 3) 최소 보유기간 4) 최대 보유일
+            # 손절가/목표가는 최소 보유기간 무시!
+            if target_cfg:
                 target_gain = target_cfg.get('target_gain')
                 stop_loss = target_cfg.get('stop_loss')
 
@@ -2483,7 +2530,7 @@ class BacktestEngine:
                 # 🚀 PERFORMANCE: 디버깅 로그 제거 (3,145번 호출 → 0번)
                 # logger.debug(f"📊 [{trading_day}] {stock_code} | 종가: {close_profit_rate:.2f}% | 고가: {high_profit_rate:.2f}% | 저가: {low_profit_rate:.2f}% | 목표: {target_gain}% | 손절: -{stop_loss}%")
 
-                # 손절가 우선 체크 (저가 기준)
+                # 1순위: 손절가 우선 체크 (저가 기준)
                 if stop_loss is not None and low_profit_rate <= -stop_loss:
                     should_sell = True
                     # 손절가에 정확히 매도된 것으로 간주
@@ -2495,7 +2542,7 @@ class BacktestEngine:
                     # 🚀 PERFORMANCE: 디버깅 로그 제거
                     # logger.debug(f"🛑 손절가 매도: {stock_code} | 저가: {low_profit_rate:.2f}% | 손절가 도달 -> {actual_loss_rate:.2f}%에 매도")
 
-                # 목표가 체크 (고가 기준)
+                # 2순위: 목표가 체크 (고가 기준)
                 elif target_gain is not None and high_profit_rate >= target_gain:
                     should_sell = True
                     # 목표가에 정확히 매도된 것으로 간주
@@ -2507,7 +2554,19 @@ class BacktestEngine:
                     # 🚀 PERFORMANCE: 디버깅 로그 제거
                     # logger.debug(f"🎯 목표가 매도: {stock_code} | 고가: {high_profit_rate:.2f}% | 목표가 도달 -> {actual_profit_rate:.2f}%에 매도")
 
-            if not should_sell and not enforce_min_hold:
+            # 3순위: 최소 보유기간 체크 (손절가/목표가 미도달 시)
+            # 최소 보유기간 미달이면 최대 보유일, 조건부 매도 등 다른 매도 불가
+            if enforce_min_hold:
+                continue  # 손절가/목표가 도달 안했고, 최소 보유기간도 미달이면 매도 안함
+
+            # 4순위: 최대 보유일 체크
+            if not should_sell and max_hold and hold_days_count >= max_hold:
+                should_sell = True
+                sell_reason = f"Max hold days reached ({hold_days_count}d)"
+                sell_reason_key = "hold"
+
+            # 5순위: 조건부 매도
+            if not should_sell:
                 for condition in sell_conditions:
                     if condition.get('type') == 'STOP_LOSS':
                         loss_rate = ((current_price / holding.entry_price) - 1) * 100
@@ -2532,7 +2591,7 @@ class BacktestEngine:
                             sell_reason_key = "hold"
                             break
 
-            if (not should_sell) and not enforce_min_hold and condition_sell and not date_factors.empty:
+            if (not should_sell) and condition_sell and not date_factors.empty:
                 condition_list = condition_sell.get('sell_conditions') or []
                 logic = condition_sell.get('sell_logic')
                 evaluator = self.condition_evaluator
@@ -2564,28 +2623,74 @@ class BacktestEngine:
                         sell_reason_key = "condition"
 
             if should_sell:
+                # 🎯 익일 시가 조회 (더 현실적인 백테스트)
+                # D일 매도 조건 만족 → D+1일 시가에 매도
+                if price_lookup:
+                    # 익일 찾기
+                    next_day = trading_day + pd.Timedelta(days=1)
+                    max_lookforward = 5  # 최대 5일까지 거래일 찾기
+                    next_day_price = None
+                    next_sell_date = None
+
+                    for i in range(max_lookforward):
+                        check_date = trading_day + pd.Timedelta(days=i+1)
+                        price_info_next = price_lookup.get((stock_code, check_date))
+                        if price_info_next:
+                            next_day_price = Decimal(str(price_info_next.get('open_price', price_info_next['close_price'])))
+                            next_sell_date = check_date.date()
+                            break
+
+                    if not next_day_price:
+                        # 익일 데이터 없으면 당일 종가로 매도
+                        next_day_price = close_price
+                        next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+                else:
+                    # Fallback: pandas로 익일 조회
+                    next_day_data = price_data[
+                        (price_data['stock_code'] == stock_code) &
+                        (price_data['date'] > trading_day)
+                    ].sort_values('date')
+
+                    if not next_day_data.empty:
+                        next_row = next_day_data.iloc[0]
+                        next_day_price = Decimal(str(next_row.get('open_price', next_row['close_price'])))
+                        next_sell_date = next_row['date'].date()
+                    else:
+                        # 익일 데이터 없으면 당일 종가로 매도
+                        next_day_price = close_price
+                        next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
                 # 매도 실행
                 quantity = holding.quantity
 
-                # 슬리피지 적용 (매도 시 불리하게 - 가격 하락)
-                execution_price = current_price * (1 - self.slippage)
-                price_meta = None
-                if sell_reason_key == "condition":
-                    price_meta = condition_sell_meta
-                elif sell_reason_key == "hold":
-                    price_meta = hold_cfg
-                execution_price = self._apply_price_adjustment(execution_price, price_meta)
+                # 목표가/손절가는 이론상 정확한 가격 사용, 나머지는 익일 시가
+                if sell_reason_key in ["target", "stop"]:
+                    # 목표가/손절가는 current_price 사용 (이미 목표가/손절가로 계산됨)
+                    execution_price = current_price * (1 - self.slippage)
+                else:
+                    # 보유일, 조건부 매도 등은 익일 시가
+                    execution_price = next_day_price * (1 - self.slippage)
 
                 amount = execution_price * quantity
                 commission = amount * self.commission_rate
                 tax = amount * self.tax_rate
+                net_amount = amount - commission - tax
+                cost_basis = holding.entry_price * quantity if holding.entry_price else Decimal("0")
+                profit = net_amount - cost_basis
+                if cost_basis > 0:
+                    profit_rate = ((net_amount / cost_basis) - 1) * 100
+                else:
+                    profit_rate = 0
 
-                profit = (execution_price - holding.entry_price) * quantity
-                profit_rate = ((execution_price / holding.entry_price) - 1) * 100
+                # 실제 체결일 결정 (date 타입으로 통일)
+                if sell_reason_key not in ["target", "stop"]:
+                    actual_sell_date = next_sell_date
+                else:
+                    actual_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
 
                 order = {
                     'order_id': f"ORD-S-{stock_code}-{trading_day}",
-                    'order_date': trading_day,
+                    'order_date': trading_day,  # 주문일은 오늘
                     'stock_code': stock_code,
                     'stock_name': holding.stock_name,
                     'side': 'SELL',
@@ -2597,10 +2702,10 @@ class BacktestEngine:
                 orders.append(order)
 
                 execution = {
-                    'execution_id': f"EXE-S-{stock_code}-{trading_day}",
+                    'execution_id': f"EXE-S-{stock_code}-{actual_sell_date}",
                     'order_id': order['order_id'],
-                    'execution_date': trading_day,
-                    'trade_date': trading_day,
+                    'execution_date': actual_sell_date,  # 체결일 (익일 또는 당일)
+                    'trade_date': actual_sell_date,
                     'stock_code': stock_code,
                     'stock_name': holding.stock_name,
                     'side': 'SELL',
@@ -2614,7 +2719,8 @@ class BacktestEngine:
                     'realized_pnl': profit,
                     'profit': profit,
                     'profit_rate': profit_rate,
-                    'hold_days': (trading_day - holding.entry_date).days,
+                    'return_pct': profit_rate,  # ✅ DB 저장용 키 추가
+                    'hold_days': (actual_sell_date - (holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date)).days,
                     'selection_reason': sell_reason,
                     'factors': {}
                 }
@@ -2732,16 +2838,104 @@ class BacktestEngine:
     def _apply_price_adjustment(
         self,
         price: Decimal,
-        meta: Optional[Dict[str, Any]]
+        meta: Optional[Dict[str, Any]],
+        *,
+        stock_code: Optional[str] = None,
+        holding: Optional[Position] = None,
+        trading_day: Optional[date] = None,
+        price_lookup: Optional[Dict] = None,
+        price_data: Optional[pd.DataFrame] = None
     ) -> Decimal:
-        """매도가격 오프셋 적용"""
+        """매도 기준가/오프셋 적용"""
         if not meta:
             return price
+
+        basis = self._normalize_price_basis(meta.get('sell_price_basis'))
+        adjusted_price = price
+
+        if basis == 'PREV_CLOSE':
+            prev_close = self._get_previous_close_price(stock_code, trading_day, price_lookup, price_data)
+            if prev_close is not None:
+                adjusted_price = prev_close
+        elif basis == 'OPEN':
+            open_price = self._get_price_from_lookup(stock_code, trading_day, 'open_price', price_lookup, price_data)
+            if open_price is not None:
+                adjusted_price = open_price
+        elif basis == 'ENTRY' and holding is not None and holding.entry_price:
+            adjusted_price = holding.entry_price
+        # CURRENT 기본값은 인자로 받은 price 사용
+
         offset_pct = meta.get('sell_price_offset')
-        if offset_pct is None:
-            return price
-        offset_value = offset_pct if isinstance(offset_pct, Decimal) else Decimal(str(offset_pct))
-        return price * (Decimal("1") + (offset_value / Decimal("100")))
+        if offset_pct is not None:
+            offset_value = offset_pct if isinstance(offset_pct, Decimal) else Decimal(str(offset_pct))
+            adjusted_price = adjusted_price * (Decimal("1") + (offset_value / Decimal("100")))
+
+        return adjusted_price
+
+    def _normalize_price_basis(self, basis: Optional[str]) -> str:
+        """한국어/영문 표기를 공통 코드로 정규화"""
+        if not basis:
+            return 'CURRENT'
+        normalized = str(basis).strip().upper()
+        mapping = {
+            '전일 종가': 'PREV_CLOSE',
+            'PREV CLOSE': 'PREV_CLOSE',
+            'PREV_CLOSE': 'PREV_CLOSE',
+            '이전종가': 'PREV_CLOSE',
+            '당일 시가': 'OPEN',
+            '시가': 'OPEN',
+            'OPEN': 'OPEN',
+            'CURRENT': 'CURRENT',
+            '당일 종가': 'CURRENT',
+            '현재가': 'CURRENT',
+            'ENTRY': 'ENTRY',
+            '평균매수가': 'ENTRY'
+        }
+        return mapping.get(basis, mapping.get(normalized, 'CURRENT'))
+
+    def _get_price_from_lookup(
+        self,
+        stock_code: Optional[str],
+        target_date: Optional[date],
+        field: str,
+        price_lookup: Optional[Dict],
+        price_data: Optional[pd.DataFrame]
+    ) -> Optional[Decimal]:
+        if not stock_code or target_date is None:
+            return None
+        target_ts = pd.Timestamp(target_date)
+        if price_lookup:
+            info = price_lookup.get((stock_code, target_ts))
+            if info and info.get(field) is not None:
+                return Decimal(str(info[field]))
+        if price_data is not None and field in price_data.columns:
+            row = price_data[
+                (price_data['stock_code'] == stock_code) &
+                (price_data['date'] == target_ts)
+            ]
+            if not row.empty:
+                value = row.iloc[0].get(field)
+                if value is not None and not pd.isna(value):
+                    return Decimal(str(value))
+        return None
+
+    def _get_previous_close_price(
+        self,
+        stock_code: Optional[str],
+        trading_day: Optional[date],
+        price_lookup: Optional[Dict],
+        price_data: Optional[pd.DataFrame]
+    ) -> Optional[Decimal]:
+        if not stock_code or trading_day is None:
+            return None
+        prev_day = pd.Timestamp(trading_day) - pd.Timedelta(days=1)
+        # 최대 일주일 전까지만 탐색
+        for _ in range(7):
+            price = self._get_price_from_lookup(stock_code, prev_day, 'close_price', price_lookup, price_data)
+            if price is not None:
+                return price
+            prev_day -= pd.Timedelta(days=1)
+        return None
 
     def _calculate_position_sizes(
         self,
@@ -2880,24 +3074,42 @@ class BacktestEngine:
             if current_price_data.empty:
                 continue
 
-            # 안전한 close_price 접근
+            # 🎯 익일 시가 조회 (더 현실적인 백테스트)
+            # D일 조건 만족 → D+1일 시가에 매수
+            next_day_price_data = price_data[
+                (price_data['stock_code'] == stock_code) &
+                (price_data['date'] > trading_day)
+            ].sort_values('date')
+
+            if next_day_price_data.empty:
+                # 익일 데이터 없음 (백테스트 기간 종료 직전)
+                continue
+
+            next_day_row = next_day_price_data.iloc[0]
+
+            # 익일 시가 조회
             try:
-                close_price_raw = current_price_data.iloc[0].get('close_price')
-                if close_price_raw is None or pd.isna(close_price_raw):
-                    logger.warning(f"⚠️ {stock_code}: close_price 없음, 매수 스킵")
-                    continue
-                current_price = Decimal(str(close_price_raw))
-                if current_price <= 0:
-                    logger.warning(f"⚠️ {stock_code}: 유효하지 않은 가격 ({current_price}), 매수 스킵")
+                open_price_raw = next_day_row.get('open_price')
+                if open_price_raw is None or pd.isna(open_price_raw):
+                    # 시가 없으면 종가 fallback
+                    open_price_raw = next_day_row.get('close_price')
+                    if open_price_raw is None or pd.isna(open_price_raw):
+                        logger.warning(f"⚠️ {stock_code}: 익일 가격 데이터 없음, 매수 스킵")
+                        continue
+
+                next_open_price = Decimal(str(open_price_raw))
+                if next_open_price <= 0:
+                    logger.warning(f"⚠️ {stock_code}: 유효하지 않은 가격 ({next_open_price}), 매수 스킵")
                     continue
             except (ValueError, TypeError, InvalidOperation) as e:
                 logger.warning(f"⚠️ {stock_code}: 가격 데이터 변환 실패 ({e}), 매수 스킵")
                 continue
 
             stock_name = current_price_data.iloc[0].get('stock_name', f"Stock_{stock_code}")
+            next_trade_date = next_day_row['date'].date()
 
-            # 슬리피지 적용
-            execution_price = current_price * (1 + self.slippage)
+            # 슬리피지 적용 (매수 시 불리하게 - 가격 상승)
+            execution_price = next_open_price * (1 + self.slippage)
 
             # 매수 가능 수량 계산
             quantity = int(allocation / execution_price)
@@ -2933,26 +3145,26 @@ class BacktestEngine:
                                 # 숫자로 변환 불가능한 값은 스킵
                                 continue
 
-            # 매수 실행
+            # 매수 실행 (익일 시가)
             order = {
                 'order_id': f"ORD-B-{stock_code}-{trading_day}",
-                'order_date': trading_day,
+                'order_date': trading_day,  # 주문일은 오늘
                 'stock_code': stock_code,
                 'stock_name': stock_name,
                 'side': 'BUY',
                 'order_type': 'MARKET',
                 'quantity': quantity,
                 'status': 'FILLED',
-                'reason': "Factor-based selection"
+                'reason': "Factor-based selection (next day open)"
             }
             if orders is not None:
                 orders.append(order)
 
             execution = {
-                'execution_id': f"EXE-B-{stock_code}-{trading_day}",
+                'execution_id': f"EXE-B-{stock_code}-{next_trade_date}",
                 'order_id': order['order_id'],
-                'execution_date': trading_day,
-                'trade_date': trading_day,
+                'execution_date': next_trade_date,  # 체결일은 익일
+                'trade_date': next_trade_date,  # 거래일은 익일
                 'stock_code': stock_code,
                 'stock_name': stock_name,
                 'side': 'BUY',
@@ -2964,7 +3176,7 @@ class BacktestEngine:
                 'tax': Decimal("0"),
                 'slippage': self.slippage,
                 'factors': trade_factors,
-                'selection_reason': "Factor-based selection"
+                'selection_reason': "Factor-based selection (next day open)"
             }
             if executions is not None:
                 executions.append(execution)
@@ -2982,17 +3194,17 @@ class BacktestEngine:
                 logger.debug(f"✅ 추가 매수: {stock_code} {quantity}주 @ {execution_price:,.0f}원 (평균가: {new_avg_price:,.0f}원)")
             else:
                 holdings[stock_code] = Position(
-                    position_id=f"POS-{stock_code}-{trading_day}",
+                    position_id=f"POS-{stock_code}-{next_trade_date}",
                     stock_code=stock_code,
                     stock_name=stock_name,
-                    entry_date=trading_day,
+                    entry_date=next_trade_date,  # 진입일은 익일
                     entry_price=execution_price,
                     quantity=quantity,
                     current_price=execution_price,
                     current_value=execution_price * quantity
                 )
                 new_position_count += 1
-                logger.debug(f"✅ 신규 매수: {stock_code} {quantity}주 @ {execution_price:,.0f}원")
+                logger.debug(f"✅ 신규 매수: {stock_code} {quantity}주 @ {execution_price:,.0f}원 (익일 시가)")
 
         return buy_trades, new_position_count
 
@@ -3829,7 +4041,7 @@ class BacktestEngine:
                     position.is_open = False
                     position.exit_date = current_date
                     position.exit_price = execution.price
-                    position.hold_days = (current_date - position.entry_date).days
+                    position.hold_days = (current_date - (position.entry_date.date() if hasattr(position.entry_date, 'date') else position.entry_date)).days
 
                     self.closed_positions.append(position)
                     del self.positions[stock_code]
@@ -3863,7 +4075,7 @@ class BacktestEngine:
                 # 최대 이익/손실 업데이트
                 position.max_profit = max(position.max_profit, position.unrealized_pnl)
                 position.max_loss = min(position.max_loss, position.unrealized_pnl)
-                position.hold_days = (date - position.entry_date).days
+                position.hold_days = (date - (position.entry_date.date() if hasattr(position.entry_date, 'date') else position.entry_date)).days
 
                 # 히스토리 기록
                 self.position_history.append({

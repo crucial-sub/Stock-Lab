@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authApi } from "@/lib/api/auth";
+import { Icon } from "@/components/common";
 
 /**
  * 전역 사이드바 네비게이션
@@ -84,10 +85,16 @@ interface SideNavProps {
   serverHasToken: boolean;
 }
 
+const SIDEBAR_ICON_COLORS = {
+  active: "#FFFFFF",
+  inactive: "#C8C8C8",
+};
 export function SideNav({ serverHasToken }: SideNavProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(serverHasToken);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     const checkLoginStatus = async () => {
@@ -127,6 +134,49 @@ export function SideNav({ serverHasToken }: SideNavProps) {
     }
     return pathname.startsWith(itemPath);
   };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await authApi.logout();
+      setIsLoggedIn(false);
+      router.push("/login");
+    } catch (error) {
+      console.error("Failed to logout:", error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const navItemContainerClass = (
+    active: boolean,
+    additional?: string,
+  ) =>
+    [
+      "flex items-center rounded-lg overflow-hidden",
+      "transition-all duration-300 ease-in-out",
+      isOpen
+        ? "gap-3 px-4 py-3 w-[204px] h-14"
+        : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
+      active
+        ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
+        : "text-sidebar-item hover:bg-sidebar-item-sub-active",
+      additional,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+  const navItemLabelClass = (active: boolean) =>
+    [
+      "text-xl whitespace-nowrap transition-all duration-300 ease-in-out",
+      isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden",
+      active
+        ? "font-semibold text-sidebar-item-active"
+        : "font-normal text-sidebar-item",
+    ]
+      .filter(Boolean)
+      .join(" ");
 
   return (
     <aside
@@ -182,40 +232,21 @@ export function SideNav({ serverHasToken }: SideNavProps) {
               <li key={item.path}>
                 <Link
                   href={item.path}
-                  className={[
-                    "flex items-center rounded-lg overflow-hidden",
-                    "transition-all duration-300 ease-in-out",
-                    isOpen
-                      ? "gap-3 px-4 py-3 w-[204px] h-14"
-                      : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
-                    active
-                      ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
-                      : "text-sidebar-item hover:bg-sidebar-item-sub-active",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                  className={navItemContainerClass(active)}
                   aria-current={active ? "page" : undefined}
                 >
                   <div className="relative w-5 h-5 shrink-0">
-                    <Image
+                    <Icon
                       src={item.icon}
-                      alt=""
-                      fill
-                      className="object-contain"
-                      aria-hidden="true"
+                      color={
+                        active
+                          ? SIDEBAR_ICON_COLORS.active
+                          : SIDEBAR_ICON_COLORS.inactive
+                      }
+                      size={20}
                     />
                   </div>
-                  <span
-                    className={[
-                      "text-xl font-semibold whitespace-nowrap",
-                      "transition-all duration-300 ease-in-out",
-                      isOpen
-                        ? "opacity-100 w-auto"
-                        : "opacity-0 w-0 overflow-hidden",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
+                  <span className={navItemLabelClass(active)}>
                     {item.label}
                   </span>
                 </Link>
@@ -256,46 +287,48 @@ export function SideNav({ serverHasToken }: SideNavProps) {
               <li key={item.path}>
                 <Link
                   href={item.path}
-                  className={[
-                    "flex items-center rounded-lg overflow-hidden",
-                    "transition-all duration-300 ease-in-out",
-                    isOpen
-                      ? "gap-3 px-4 py-3 w-[204px] h-14"
-                      : "gap-0 px-0 py-0 w-[52px] h-14 justify-center",
-                    active
-                      ? "bg-sidebar-item-active text-sidebar-item-active border border-sidebar-item-active"
-                      : "text-sidebar-item hover:bg-sidebar-item-sub-active",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                  className={navItemContainerClass(active)}
                   aria-current={active ? "page" : undefined}
                 >
                   <div className="relative w-5 h-5 shrink-0">
-                    <Image
+                    <Icon
                       src={item.icon}
-                      alt=""
-                      fill
-                      className="object-contain"
-                      aria-hidden="true"
+                      color={
+                        active
+                          ? SIDEBAR_ICON_COLORS.active
+                          : SIDEBAR_ICON_COLORS.inactive
+                      }
+                      size={20}
                     />
                   </div>
-                  <span
-                    className={[
-                      "text-xl font-semibold whitespace-nowrap",
-                      "transition-all duration-300 ease-in-out",
-                      isOpen
-                        ? "opacity-100 w-auto"
-                        : "opacity-0 w-0 overflow-hidden",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
+                  <span className={navItemLabelClass(active)}>
                     {item.label}
                   </span>
                 </Link>
               </li>
             );
           })}
+          {isLoggedIn ? (
+            <li>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className={navItemContainerClass(false, "text-left disabled:opacity-60 disabled:cursor-not-allowed")}
+                disabled={isLoggingOut}
+              >
+                <div className="relative w-5 h-5 shrink-0">
+                  <Icon
+                    src="/icons/logout.svg"
+                    color={SIDEBAR_ICON_COLORS.inactive}
+                    size={20}
+                  />
+                </div>
+                <span className={navItemLabelClass(false)}>
+                  {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
+                </span>
+              </button>
+            </li>
+          ) : null}
         </ul>
       </nav>
     </aside>

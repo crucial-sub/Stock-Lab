@@ -47,8 +47,8 @@ async def parse_strategy(req: DSLRequest):
 
     try:
         result = parse_strategy_text(req.text)
-        # dict 형태로 변환 후 스키마에 매핑
-        conditions = [ConditionSchema(**cond.model_dump()) for cond in result.conditions]
+        # dict 형태로 변환 후 스키마에 매핑 (Pydantic v1 호환)
+        conditions = [ConditionSchema(**cond.dict()) for cond in result.conditions]
         return DSLResponse(conditions=conditions)
     except Exception as e:
         return make_error_response(

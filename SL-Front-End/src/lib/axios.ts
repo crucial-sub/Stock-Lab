@@ -7,6 +7,7 @@
 
 import axios from "axios";
 import { getAuthTokenFromCookie } from "./auth/token";
+import { useAuthStore } from "@/stores/authStore";
 
 /**
  * Axios 기본 인스턴스
@@ -71,15 +72,18 @@ axiosInstance.interceptors.response.use(
         return Promise.reject(error);
       }
 
-      // 401 에러: 인증 실패
+      // 401 에러: 인증 실패 (토큰 만료 또는 유효하지 않음)
       if (status === 401) {
-        // 로그인 페이지로 리다이렉트 등의 처리
         console.error("인증 실패:", data);
+        // 세션 만료 모달 표시
+        useAuthStore.getState().setSessionExpired(true);
       }
 
-      // 403 에러: 권한 없음
+      // 403 에러: 권한 없음 (토큰은 유효하지만 권한 부족 or 토큰 만료)
       if (status === 403) {
         console.error("권한 없음:", data);
+        // 세션 만료 모달 표시
+        useAuthStore.getState().setSessionExpired(true);
       }
 
       // 500 에러: 서버 오류

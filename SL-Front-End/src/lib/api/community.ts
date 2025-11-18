@@ -179,6 +179,7 @@ export const communityApi = {
     search?: string;
     page?: number;
     limit?: number;
+    orderBy?: string;
   }): Promise<PostListResponse> => {
     const response = await axiosInstance.get<PostListResponse>(
       "/community/posts",

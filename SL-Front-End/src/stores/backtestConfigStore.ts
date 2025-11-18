@@ -33,11 +33,13 @@ interface BacktestConfigStore extends BacktestRunRequest {
 
   // Buy 조건 관리 함수
   addBuyConditionUI: () => void;
+  addBuyConditionUIWithData: (data: Partial<BuyConditionUI>) => void;
   updateBuyConditionUI: (id: string, updates: Partial<BuyConditionUI>) => void;
   removeBuyConditionUI: (id: string) => void;
 
   // Sell 조건 관리 함수
   addSellConditionUI: () => void;
+  addSellConditionUIWithData: (data: Partial<SellConditionUI>) => void;
   updateSellConditionUI: (
     id: string,
     updates: Partial<SellConditionUI>,
@@ -165,6 +167,24 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
         };
       }),
 
+    addBuyConditionUIWithData: (data) =>
+      set((state) => {
+        const newId = String.fromCharCode(65 + state.buyConditionsUI.length);
+        return {
+          buyConditionsUI: [
+            ...state.buyConditionsUI,
+            {
+              id: newId,
+              factorName: null,
+              subFactorName: null,
+              operator: ">",
+              value: "",
+              ...data,
+            },
+          ],
+        };
+      }),
+
     updateBuyConditionUI: (id, updates) =>
       set((state) => ({
         buyConditionsUI: state.buyConditionsUI.map((c) =>
@@ -192,6 +212,24 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
               subFactorName: null,
               operator: ">",
               value: "",
+            },
+          ],
+        };
+      }),
+
+    addSellConditionUIWithData: (data) =>
+      set((state) => {
+        const newId = String.fromCharCode(65 + state.sellConditionsUI.length);
+        return {
+          sellConditionsUI: [
+            ...state.sellConditionsUI,
+            {
+              id: newId,
+              factorName: null,
+              subFactorName: null,
+              operator: ">",
+              value: "",
+              ...data,
             },
           ],
         };

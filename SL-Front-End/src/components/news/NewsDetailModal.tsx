@@ -1,4 +1,4 @@
-﻿import { Icon } from "@/components/common/Icon";
+import { Icon } from "@/components/common/Icon";
 import type { NewsItem } from "@/types/news";
 
 interface NewsDetailModalProps {
@@ -6,60 +6,108 @@ interface NewsDetailModalProps {
   onClose: () => void;
 }
 
+const sentimentBadge: Record<
+  NonNullable<NewsItem["sentiment"]>,
+  { label: string; className: string }
+> = {
+  positive: {
+    label: "긍정",
+    className: "bg-[#DDFFE5] text-[#00CE00] border-[0.5px] border-[#00CE00]",
+  },
+  neutral: {
+    label: "중립",
+    className: "bg-[#FFF1D6] text-[#FFAA00] border-[0.5px] border-[#FFAA00]",
+  },
+  negative: {
+    label: "부정",
+    className: "bg-[#FFE5E5] text-[#FF6464] border-[0.5px] border-[#FF6464]",
+  },
+};
+
 export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
+  const subtitle = news.subtitle || news.summary || "";
+  const bodyContent = news.content || news.summary || "";
+  const sentiment = sentimentBadge[news.sentiment] || sentimentBadge.neutral;
+  const pressLabel = news.pressName || news.source || "";
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-0 py-10"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-3xl rounded-[8px] bg-white p-[1rem] shadow-card max-h-[90vh] overflow-y-auto"
+        className="relative w-full max-w-[800px] rounded-[12px] bg-white shadow-[0_30px_80px_rgba(0,0,0,0.25)] max-h-[90vh] overflow-y-auto"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-[8px] border-b border-border-default bg-white px-3 py-2">
-          <div className="flex flex-col gap-0.5 text-sm text-text-muted">
-            <span>{news.tickerLabel || "종목"}</span>
-            <span className="text-text-body font-semibold">
-              {news.publishedAt || ""}
-            </span>
-          </div>
+        <div className="relative py-3 text-center text-[1rem] text-[#646464] shadow-elev-card-soft">
+          <span className="font-normal">
+            {news.title}
+          </span>
           <button
             type="button"
             aria-label="닫기"
-            className="h-9 w-9 rounded-full bg-[#FF6464] text-white"
             onClick={onClose}
+            className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center"
           >
-            ×
+            <span className="block h-3 w-3 rounded-full bg-[#FF6464]" />
           </button>
         </div>
 
-        <div className="p-4">
-          <h2 className="text-[1.75rem] font-semibold text-text-strong">
+        <div className="px-5 py-5">
+          <span className="text-[1.5rem] font-semibold text-black">
             {news.title}
-          </h2>
-          <p className="mt-2 text-sm text-text-muted">{news.source || ""}</p>
+          </span>
+          
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-[1rem] text-[#A0A0A0]">
+            {news.publishedAt && <span>{news.publishedAt}</span>}
+            {news.link && (
+              <a
+                href={news.link}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex max-w-full items-center gap-1 text-[#A0A0A0] hover:text-brand"
+              >
+                <Icon
+                  src="/icons/link.svg"
+                  alt="원문 링크"
+                  size={16}
+                  color="currentColor"
+                />
+                <span
+                  className="max-w-[280px] truncate"
+                  title={news.link}
+                >
+                  {news.link}
+                </span>
+              </a>
+            )}
+          </div>
 
-          {news.content && (
-            <p className="mt-4 text-base leading-relaxed text-text-body whitespace-pre-line">
-              {news.content}
-            </p>
-          )}
-
-          {news.link && (
-            <a
-              href={news.link}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-brand-primary"
+          <div className="mt-2 flex flex-wrap gap-2 text-sm font-medium">
+            <span className="rounded-[4px] bg-[#E1E1E1] px-3 py-1 text-[#000000] border-[0.5px] border-[#000000]">
+              {news.tickerLabel || "종목 이름"}
+            </span>
+            {news.themeName && (
+              <span className="rounded-[4px] bg-[#F4E2FF] px-3 py-1 text-brand-purple border-[0.5px] border-brand-purple">
+                {news.themeName}
+              </span>
+            )}
+            <span
+              className={`rounded-[4px] px-3 py-1 ${sentiment.className}`}
             >
-              <Icon
-                src="/icons/link.svg"
-                alt="원문 링크 아이콘"
-                size={20}
-                color="currentColor"
-              />
-              원문에서 보기
-            </a>
+              {sentiment.label}
+            </span>
+            {pressLabel && (
+              <span className="rounded-[4px] bg-[#EAF5FF] px-3 py-1 text-[#007DFC] border-[0.5px] border-[#007DFC]">
+                {pressLabel}
+              </span>
+            )}
+          </div>
+
+          {bodyContent && (
+            <p className="mt-6 text-[1rem] font-normal text-[#000000] whitespace-pre-line">
+              {bodyContent}
+            </p>
           )}
         </div>
       </div>

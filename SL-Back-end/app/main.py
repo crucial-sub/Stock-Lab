@@ -14,8 +14,9 @@ import os
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history
 from app.api.v1 import industries, realtime
+from app.services.auto_trading_scheduler import start_scheduler, stop_scheduler
 
 settings = get_settings()
 
@@ -49,6 +50,32 @@ async def lifespan(app: FastAPI):
     try:
         await cache.initialize()
         logger.info("Redis cache initialized successfully")
+
+        # 🎯 Redis 랭킹 재구축 (서버 시작 시)
+        try:
+            from app.services.ranking_service import get_ranking_service
+            from app.core.database import AsyncSessionLocal
+            from app.core.cache import get_redis
+
+            ranking_service = await get_ranking_service()
+
+            if ranking_service.enabled:
+                # Redis가 비어있는지 확인
+                redis_client = get_redis()
+                ranking_count = await redis_client.zcard("rankings:all")
+
+                if ranking_count == 0:
+                    logger.info("🔄 Redis 랭킹이 비어있음. DB에서 재구축 시작...")
+
+                    # DB에서 랭킹 재구축
+                    async with AsyncSessionLocal() as db:
+                        rebuilt_count = await ranking_service.rebuild_from_db(db, limit=100)
+                        logger.info(f"✅ Redis 랭킹 재구축 완료: {rebuilt_count}개 항목")
+                else:
+                    logger.info(f"✅ Redis 랭킹 이미 존재: {ranking_count}개 항목")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis 랭킹 재구축 실패 (무시): {e}")
+
     except Exception as e:
         logger.warning(f"Redis initialization failed: {e}")
         logger.warning("Running without cache")
@@ -58,10 +85,25 @@ async def lifespan(app: FastAPI):
         # await init_db()  # 주의: 테이블 재생성
         logger.info("Database initialized (dev mode)")
 
+    # 자동매매 스케줄러 시작
+    try:
+        start_scheduler()
+        logger.info("✅ Auto trading scheduler started")
+    except Exception as e:
+        logger.error(f"❌ Failed to start scheduler: {e}")
+
     yield
 
     # Shutdown
     logger.info("=== Quant Investment API 종료 ===")
+
+    # 스케줄러 종료
+    try:
+        stop_scheduler()
+        logger.info("✅ Auto trading scheduler stopped")
+    except Exception as e:
+        logger.error(f"❌ Failed to stop scheduler: {e}")
+
     await cache.close()
     await close_db()
 
@@ -198,6 +240,12 @@ app.include_router(
     auto_trading.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Auto Trading"]
+)
+
+app.include_router(
+    chat_history.router,
+    prefix=f"{settings.API_V1_PREFIX}/chat",
+    tags=["Chat History"]
 )
 
 app.include_router(

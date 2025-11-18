@@ -109,11 +109,12 @@ services:
   # ChatBot API (Development with hot-reload)
   chatbot:
     build:
-      context: ./SL-ChatBot/chatbot
-      dockerfile: Dockerfile
+      context: ./SL-ChatBot
+      dockerfile: ./chatbot/Dockerfile
     container_name: sl_chatbot_dev
     env_file:
       - .env
+      - ./SL-ChatBot/.env
     environment:
       PYTHONUNBUFFERED: 1
       DEBUG: "true"
@@ -122,6 +123,9 @@ services:
     volumes:
       # Mount source code for hot-reload
       - ./SL-ChatBot/chatbot/src:/app/src
+      - ./SL-ChatBot/api:/app/api
+      - ./SL-ChatBot/config:/app/config
+      - ./SL-ChatBot/prompts:/app/prompts
       - ./SL-ChatBot/chatbot/requirements.txt:/app/requirements.txt
       - ./SL-ChatBot/chatbot/config.yaml:/app/config.yaml
     networks:

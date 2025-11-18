@@ -9,9 +9,9 @@
 
 interface StrategyCardProps {
   /** 전략 제목 */
-  title: string;
+  question: string;
   /** 전략 설명 (멀티라인 지원) */
-  description: string;
+  description?: string;
   /** 클릭 핸들러 */
   onClick?: () => void;
   /** 카드 크기 (기본: small) */
@@ -19,7 +19,7 @@ interface StrategyCardProps {
 }
 
 export function StrategyCard({
-  title,
+  question,
   description,
   onClick,
   size = "small",
@@ -34,19 +34,27 @@ export function StrategyCard({
         "bg-surface border border-surface",
         "rounded-lg",
         "transition-all duration-200",
-        "hover:border-brand-soft hover:shadow-elev-card",
+        "flex",
+        "flex-col",
+        "gap-2",
+        "hover:bg-[#FFFFFF0D]",
+        "hover:border-brand-purple",
+        "hover:shadow-elev-brand",
+        "hover:text-brand-purple",
         "text-left",
+        "px-5 py-4",
         isLarge
-          ? "w-full max-w-[1000px] h-[112px] px-5 py-4"
-          : "w-[480px] h-[112px] px-5 py-4",
+          ? "w-full max-w-[62.5rem]"
+          : "w-[30rem]",
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <h3 className="text-xl font-semibold text-black mb-2">{title}</h3>
-      <p className="text-base leading-[1.4] text-muted whitespace-pre-line">
+      <h3 className="text-[1.25rem] font-semibold">{question}</h3>
+      {description && <p className="text-muted whitespace-pre-line">
         {description}
-      </p>
+      </p>}
+
     </button>
   );
 }

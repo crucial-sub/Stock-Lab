@@ -17,7 +17,7 @@ services:
     networks:
       - quant_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d quant_investment_db"]
+      test: ["CMD-SHELL", "pg_isready -d quant_investment_db || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -51,8 +51,8 @@ services:
       - ./SL-Back-end/.env.local
     environment:
       # 로컬 개발 환경용 데이터베이스 연결 (Docker 네트워크 내부)
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres123@postgres:5432/quant_investment_db
-      DATABASE_SYNC_URL: postgresql://postgres:postgres123@postgres:5432/quant_investment_db
+      DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
+      DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
       # Redis 설정은 .env.local에서 관리
       # 로컬: redis:6379 (Docker 컨테이너)
       # 프로덕션(EC2): clustercfg.sl-redis-cl.lvbc9o.apn2.cache.amazonaws.com:6379

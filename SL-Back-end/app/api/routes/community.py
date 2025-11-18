@@ -798,41 +798,37 @@ async def toggle_comment_like(
 async def get_top_rankings(
     db: AsyncSession = Depends(get_db)
 ):
-    """상위 3개 수익률 랭킹 조회 (캐시 사용)"""
+    """상위 3개 수익률 랭킹 조회 (Redis Sorted Set 사용)"""
     try:
-        # Redis 캐시 확인
-        try:
-            from app.core.cache import get_redis
-            redis_client = get_redis()
-            if redis_client:
-                cached = await redis_client.get("community:rankings:top3")
-                if cached:
-                    logger.info("캐시에서 랭킹 조회")
-                    data = json.loads(cached)
-                    return TopRankingsResponse(**data)
-        except Exception as e:
-            logger.warning(f"Redis 캐시 조회 실패: {e}")
+        from app.services.ranking_service import get_ranking_service
 
-        # DB 조회
+        # 🚀 Redis Sorted Set에서 TOP 3 조회 (O(1))
+        ranking_service = await get_ranking_service()
+
+        if ranking_service.enabled:
+            # Redis에서 세션 ID 가져오기
+            top_session_ids = await ranking_service.get_top_rankings(limit=3)
+
+            if top_session_ids:
+                # DB에서 상세 정보만 조회 (필요한 것만 SELECT)
+                rankings = await _get_rankings_by_session_ids(db, top_session_ids)
+
+                response = TopRankingsResponse(
+                    rankings=rankings,
+                    updated_at=datetime.now()
+                )
+
+                logger.info(f"✅ Redis Sorted Set에서 TOP 3 조회 완료")
+                return response
+
+        # ⚠️ Fallback: Redis 실패 시 DB 직접 조회
+        logger.warning("Redis Sorted Set 조회 실패, DB로 폴백")
         rankings = await _get_rankings_from_db(db, limit=3)
 
         response = TopRankingsResponse(
             rankings=rankings,
             updated_at=datetime.now()
         )
-
-        # 캐시 저장 (1시간)
-        try:
-            from app.core.cache import get_redis
-            redis_client = get_redis()
-            if redis_client:
-                await redis_client.setex(
-                    "community:rankings:top3",
-                    3600,  # 1 hour
-                    response.model_dump_json()
-                )
-        except Exception as e:
-            logger.warning(f"Redis 캐시 저장 실패: {e}")
 
         return response
 
@@ -881,12 +877,74 @@ async def get_rankings(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def _get_rankings_by_session_ids(
+    db: AsyncSession,
+    session_ids: List[str]
+) -> List[RankingItem]:
+    """
+    세션 ID 리스트로 랭킹 데이터 조회 (Redis Sorted Set용)
+
+    Args:
+        db: DB 세션
+        session_ids: 세션 ID 리스트 (이미 정렬됨)
+
+    Returns:
+        RankingItem 리스트
+    """
+    from sqlalchemy import cast
+    from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
+
+    if not session_ids:
+        return []
+
+    # session_id IN (...) 쿼리 (순서 유지를 위해 CASE 사용)
+    query = (
+        select(
+            PortfolioStrategy,
+            SimulationSession,
+            SimulationStatistics,
+            User
+        )
+        .join(SimulationSession, SimulationSession.strategy_id == PortfolioStrategy.strategy_id)
+        .join(SimulationStatistics, SimulationStatistics.session_id == SimulationSession.session_id)
+        .outerjoin(User, User.user_id == cast(PortfolioStrategy.user_id, PostgreSQL_UUID))
+        .where(SimulationSession.session_id.in_(session_ids))
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    # session_id -> 데이터 매핑
+    session_map = {}
+    for strategy, session, stats, user in rows:
+        session_map[session.session_id] = (strategy, session, stats, user)
+
+    # Redis에서 받은 순서대로 정렬
+    rankings = []
+    for rank, session_id in enumerate(session_ids, start=1):
+        if session_id in session_map:
+            strategy, session, stats, user = session_map[session_id]
+            rankings.append(RankingItem(
+                rank=rank,
+                strategy_id=strategy.strategy_id,
+                session_id=session.session_id,
+                strategy_name=strategy.strategy_name,
+                author_nickname=user.nickname if user and not strategy.is_anonymous else None,
+                total_return=stats.total_return,
+                annualized_return=stats.annualized_return,
+                max_drawdown=stats.max_drawdown,
+                sharpe_ratio=stats.sharpe_ratio
+            ))
+
+    return rankings
+
+
 async def _get_rankings_from_db(
     db: AsyncSession,
     offset: int = 0,
     limit: int = 3
 ) -> List[RankingItem]:
-    """DB에서 랭킹 데이터 조회"""
+    """DB에서 랭킹 데이터 조회 (Fallback용)"""
     from sqlalchemy import cast
     from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
 

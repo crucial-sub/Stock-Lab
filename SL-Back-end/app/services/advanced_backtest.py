@@ -323,6 +323,31 @@ async def _run_backtest_async(
 
             logger.info(f"✅ 백테스트 최종 통계 저장 완료 - 수익률: {final_return:.2f}%, 승률: {win_rate:.2f}%, 거래: {total_trades}건")
 
+            # 🎯 랭킹 업데이트 (공개 전략인 경우)
+            try:
+                from app.services.ranking_service import get_ranking_service
+
+                # 전략 공개 여부 확인
+                strategy_query = select(PortfolioStrategy.is_public, PortfolioStrategy.strategy_id).where(
+                    PortfolioStrategy.strategy_id == strategy_id
+                )
+                strategy_result = await db.execute(strategy_query)
+                strategy_row = strategy_result.one_or_none()
+
+                if strategy_row:
+                    is_public, strat_id = strategy_row
+                    if is_public:
+                        ranking_service = await get_ranking_service()
+                        await ranking_service.add_to_ranking(
+                            session_id=session_id,
+                            total_return=float(final_return),
+                            strategy_id=strat_id,
+                            is_public=True
+                        )
+                        logger.info(f"🏆 랭킹 업데이트 완료: session={session_id}, return={final_return:.2f}%")
+            except Exception as e:
+                logger.warning(f"랭킹 업데이트 실패 (무시): {e}")
+
             # 🚀 Rate Limit 해제 (백테스트 완료 직후, Redis 연결이 살아있을 때)
             try:
                 # user_id 조회

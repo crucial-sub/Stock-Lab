@@ -46,6 +46,7 @@ class UserResponse(UserBase):
     is_active: bool
     is_superuser: bool
     created_at: datetime
+    has_kiwoom_account: bool = False  # 키움 계좌 연동 여부
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -18,7 +18,8 @@ export interface UserResponse {
   is_active: boolean;
   is_superuser: boolean;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  has_kiwoom_account?: boolean;
 }
 
 export interface Token {
@@ -82,6 +83,23 @@ export const authApi = {
    */
   getCurrentUser: async (): Promise<UserResponse> => {
     const response = await axiosInstance.get<UserResponse>("/auth/me");
+    return response.data;
+  },
+
+  /**
+   * 현재 로그인한 유저 정보 조회 (서버 사이드)
+   */
+  getCurrentUserServer: async (token: string): Promise<UserResponse> => {
+    const axios = (await import("axios")).default;
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const response = await axios.get<UserResponse>(
+      `${baseURL}/api/v1/auth/me`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
     return response.data;
   },
 

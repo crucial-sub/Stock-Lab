@@ -4,6 +4,7 @@ export interface NewsItem {
   id: string;
   title: string;
   subtitle?: string;
+  llm_summary?: string;
   summary: string;
   content: string;
   tickerLabel: string;

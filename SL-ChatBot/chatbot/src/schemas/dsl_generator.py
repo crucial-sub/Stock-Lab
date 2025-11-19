@@ -53,14 +53,11 @@ DSL 스키마:
   ]
 }
 
-사용 가능한 팩터 (화이트리스트):
-PER, PBR, PSR, PCR, PEG,
-ROE, ROA, EPS, EBITDA, OperatingProfitMargin, DebtRatio, DividendYield,
-SMA, EMA, RSI, MACD,
-MOMENTUM_3M, MOMENTUM_6M, MOMENTUM_12M,
-VOLATILITY_20D, VOLATILITY_60D,
-TURNOVER_RATE_20D, VOLUME_MA_20,
-PRICE_CHANGE_1D, PRICE_CHANGE_5D
+사용 가능한 팩터:
+- 기본 재무/기술/모멘텀 팩터: PER, PBR, PSR, PCR, PEG, ROE, ROA, EPS, EBITDA, OperatingProfitMargin, DebtRatio, DividendYield,
+  SMA, EMA, RSI, MACD, MOMENTUM_3M/6M/12M, VOLATILITY_20D/60D, TURNOVER_RATE_20D, VOLUME_MA_20,
+  PRICE_CHANGE_1D/5D, RET_1D/5D
+- 그 외 입력된 팩터명도 그대로 허용 (화이트리스트에 없어도 반환)
 
 사용 가능한 연산자:
 >, <, >=, <=, ==

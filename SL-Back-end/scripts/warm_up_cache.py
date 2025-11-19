@@ -22,9 +22,15 @@ async def warm_up_company_info(db):
     logger.info("=== 종목 정보 캐시 시작 ===")
 
     result = await db.execute(
-        select(Company).where(Company.stock_code.isnot(None))
+        select(
+            Company.company_id,
+            Company.stock_code,
+            Company.company_name,
+            Company.market_type,
+            Company.industry
+        ).where(Company.stock_code.isnot(None))
     )
-    companies = result.scalars().all()
+    companies = result.all()
 
     for company in companies:
         cache_key = f"quant:company:{company.stock_code}"

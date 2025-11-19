@@ -33,11 +33,19 @@ yarn-error.log*
 # Environment variables - DO NOT COMMIT
 # ------------------------------------
 # Ignore all .env files in any directory, but keep the examples.
+.env
+.env.local
+.env.production
+.env.ec2
 **/.env
+**/.env.local
+**/.env.production
+**/.env.ec2
 **/.env.*
 !.env.example
 !**/.env.example
-!**/.env.local.example
+!**/.env.*.example
+!**/.env.tunnel.template
 
 # vercel
 .vercel

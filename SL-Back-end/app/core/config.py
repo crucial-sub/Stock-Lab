@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     BACKTEST_MEMORY_LIMIT_GB: int = 8
 
     # CORS - 환경 변수로 설정 가능, 기본값은 와일드카드
-    BACKEND_CORS_ORIGINS: str = "*"  # 환경변수로 쉼표 구분 리스트 전달 가능
+    BACKEND_CORS_ORIGINS: Union[str, List[str]] = "*"  # 환경변수로 쉼표 구분 리스트 전달 가능
 
     @field_validator('BACKEND_CORS_ORIGINS', mode='before')
     @classmethod

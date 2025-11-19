@@ -73,4 +73,5 @@ SL-Back-end/logs/quant_api.log
 *.log
 SL-Back-end/logs/
 SL-Front-End/.next/
+docker-compose.override.yml
 nu*

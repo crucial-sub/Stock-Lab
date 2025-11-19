@@ -47,7 +47,11 @@ class Settings(BaseSettings):
     BACKTEST_MEMORY_LIMIT_GB: int = 8
 
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    BACKEND_CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://54.180.34.167:3000",  # EC2 public IP
+    ]
 
     # Logging
     LOG_LEVEL: str = "INFO"

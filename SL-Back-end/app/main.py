@@ -128,11 +128,20 @@ app = FastAPI(
 )
 
 # CORS 설정
-cors_origins = (
-    settings.BACKEND_CORS_ORIGINS.split(",")
-    if settings.BACKEND_CORS_ORIGINS != "*"
-    else ["*"]
-)
+import json
+try:
+    # JSON 배열 형식으로 파싱 시도 (예: ["http://localhost:3000", "http://localhost:8080"])
+    cors_origins = json.loads(settings.BACKEND_CORS_ORIGINS) if settings.BACKEND_CORS_ORIGINS != "*" else ["*"]
+except (json.JSONDecodeError, TypeError):
+    # JSON 파싱 실패 시 쉼표로 분리 (예: "http://localhost:3000,http://localhost:8080")
+    cors_origins = (
+        settings.BACKEND_CORS_ORIGINS.split(",")
+        if settings.BACKEND_CORS_ORIGINS != "*"
+        else ["*"]
+    )
+
+logger.info(f"CORS origins configured: {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,

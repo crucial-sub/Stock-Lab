@@ -8,6 +8,10 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="User message", min_length=1)
     session_id: Optional[str] = Field(None, description="Session ID for conversation history")
     answer: Optional[dict] = Field(None, description="Questionnaire answer {question_id, option_id}")
+    client_type: Optional[Literal["assistant", "ai_helper"]] = Field(
+        "assistant",
+        description="Client context (assistant UI or AI helper UI)"
+    )
 
 
 class RecommendRequest(BaseModel):

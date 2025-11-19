@@ -218,6 +218,7 @@ export function useChatStream(
       const url = new URL("/api/v1/chat/stream", baseUrl);
       url.searchParams.set("sessionId", sessionId);
       url.searchParams.set("message", message);
+      url.searchParams.set("clientType", "assistant");
 
       try {
         // EventSource 생성

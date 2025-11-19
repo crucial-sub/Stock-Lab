@@ -1,11 +1,12 @@
 """
-퀀트 전략 DSL 파서 유틸리티 (한국어 버전)
+퀀트 전략 DSL 파서 유틸리티 
 한국어/영어 자연어 → JSON 조건 DSL 변환
 """
 
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, List, Optional, Dict
 from pathlib import Path
@@ -55,12 +56,19 @@ DSL 스키마:
 
 사용 가능한 팩터:
 - 기본 재무/기술/모멘텀 팩터: PER, PBR, PSR, PCR, PEG, ROE, ROA, EPS, EBITDA, OperatingProfitMargin, DebtRatio, DividendYield,
-  SMA, EMA, RSI, MACD, MOMENTUM_3M/6M/12M, VOLATILITY_20D/60D, TURNOVER_RATE_20D, VOLUME_MA_20,
-  PRICE_CHANGE_1D/5D, RET_1D/5D
+  SMA, EMA, RSI, MACD, MOMENTUM_3M/6M/12M, VOLATILITY_20D/60D, TURNOVER_RATE_20D, VOLUME_MA_20
+- 수익률/가격 변화 팩터: RET_[N]D (N일 수익률), PRICE_CHANGE_[N]D (N일 가격 변화)
+  - N은 1, 3, 5, 7, 10, 20, 60 등 어떤 숫자도 가능
+  - 예: RET_3D, RET_10D, PRICE_CHANGE_7D
 - 그 외 입력된 팩터명도 그대로 허용 (화이트리스트에 없어도 반환)
 
 사용 가능한 연산자:
 >, <, >=, <=, ==
+
+중요 규칙:
+- "N일동안 X% 오르면" → RET_[N]D >= X (X는 소수, 예: 0.05 = 5%, 0.10 = 10%)
+- "N일 전 대비 X% 상승" → RET_[N]D >= X (동일)
+- 퍼센트는 항상 소수로 변환 (5% → 0.05, 10% → 0.10)
 
 예시:
 입력: "PER 10 이하"
@@ -77,6 +85,36 @@ DSL 스키마:
     }
   ]
 }
+
+입력: "3일동안 8% 이상 오르면 매수"
+출력:
+{
+  "conditions": [
+    {
+      "factor": "RET_3D",
+      "params": [],
+      "operator": ">=",
+      "right_factor": null,
+      "right_params": [],
+      "value": 0.08
+    }
+  ]
+}
+
+입력: "10일동안 10% 이상 오르면 매수"
+출력:
+{
+  "conditions": [
+    {
+      "factor": "RET_10D",
+      "params": [],
+      "operator": ">=",
+      "right_factor": null,
+      "right_params": [],
+      "value": 0.10
+    }
+  ]
+}
 """
 
 # ======================================
@@ -85,12 +123,17 @@ DSL 스키마:
 _bedrock_client = None
 _factor_alias_map: Dict[str, str] = {}
 _operator_map: Dict[str, str] = {}
+_known_factors: set[str] = set()
 
 def get_bedrock_client():
     global _bedrock_client
     if _bedrock_client is None:
         _bedrock_client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
     return _bedrock_client
+
+
+def _normalize_factor_key(value: str) -> str:
+    return re.sub(r"\s+", "", value).lower()
 
 
 def _load_alias_and_operator_maps():
@@ -116,6 +159,46 @@ def _load_alias_and_operator_maps():
             _operator_map = data.get("operator_map", {})
     except Exception as exc:
         logger.warning("operator_rules.yaml 로드 실패: %s", exc)
+
+
+def _load_known_factors():
+    """Load known factor identifiers from metadata."""
+    global _known_factors
+    if _known_factors:
+        return
+
+    meta_path = Path("/app/rag/documents/factors/metadata.json")
+    if not meta_path.exists():
+        meta_path = Path(__file__).parent.parent.parent / "rag" / "documents" / "factors" / "metadata.json"
+
+    if meta_path.exists():
+        try:
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            docs = data.get("documents", [])
+            for doc in docs:
+                for token in (
+                    [doc.get("id")]
+                    + (doc.get("subcategories") or [])
+                    + (doc.get("keywords") or [])
+                ):
+                    if isinstance(token, str) and token.strip():
+                        _known_factors.add(_normalize_factor_key(token))
+        except Exception as exc:
+            logger.warning("팩터 메타데이터 로드 실패: %s", exc)
+
+    # alias에서 사용하는 정식 팩터명도 추가
+    for target in _factor_alias_map.values():
+        if isinstance(target, str):
+            _known_factors.add(_normalize_factor_key(target))
+
+    # 기본 제공 팩터 (메타데이터 누락 대비)
+    defaults = [
+        "PER", "PBR", "PEG", "ROE", "ROA", "EPS",
+        "PRICE_CHANGE_1D", "PRICE_CHANGE_5D",
+        "RET_1D", "RET_5D",
+    ]
+    for token in defaults:
+        _known_factors.add(_normalize_factor_key(token))
 
 # ======================================
 # DSL 스키마 모델
@@ -147,6 +230,8 @@ def _normalize_condition(cond: Dict[str, Any]) -> Dict[str, Any]:
     """factor/operator 정규화."""
     if not _factor_alias_map and not _operator_map:
         _load_alias_and_operator_maps()
+    if not _known_factors:
+        _load_known_factors()
 
     factor = cond.get("factor")
     if isinstance(factor, str):
@@ -158,6 +243,20 @@ def _normalize_condition(cond: Dict[str, Any]) -> Dict[str, Any]:
         key = op.lower().strip()
         cond["operator"] = _operator_map.get(op) or _operator_map.get(key) or op
 
+    normalized_factor_key = None
+    if isinstance(cond.get("factor"), str):
+        normalized_factor_key = _normalize_factor_key(cond["factor"])
+        factor_upper = cond["factor"].upper()
+
+        # RET_[N]D 또는 PRICE_CHANGE_[N]D 패턴은 자동 허용
+        is_dynamic_factor = (
+            re.match(r"^RET_\d+D$", factor_upper) or
+            re.match(r"^PRICE_CHANGE_\d+D$", factor_upper)
+        )
+
+        if _known_factors and not is_dynamic_factor and normalized_factor_key not in _known_factors:
+            raise ValueError(f"unknown_factor:{cond.get('factor')}")
+
     # between 처리: Claude가 value를 리스트로 주는 경우 대비
     if cond.get("operator") == "between" and isinstance(cond.get("value"), list) and len(cond["value"]) == 2:
         low, high = cond["value"]
@@ -165,6 +264,14 @@ def _normalize_condition(cond: Dict[str, Any]) -> Dict[str, Any]:
             {**{k: v for k, v in cond.items() if k != "value"}, "operator": ">", "value": low},
             {**{k: v for k, v in cond.items() if k != "value"}, "operator": "<", "value": high},
         ]
+
+    # 퍼센트 계산
+    factor_upper = str(cond.get("factor", "")).upper()
+    if factor_upper.startswith(("RET_", "PRICE_CHANGE_")):
+        val = cond.get("value")
+        if isinstance(val, (int, float)) and val >= 1:
+            cond["value"] = val / 100.0
+
     return cond
 
 # ======================================
@@ -225,7 +332,11 @@ def parse_strategy_text(text: str) -> StrategyResponse:
     conditions = claude_payload.get("conditions", [])
     normalized: List[Condition] = []
     for raw in conditions:
-        norm = _normalize_condition(raw)
+        try:
+            norm = _normalize_condition(raw)
+        except ValueError as exc:
+            logger.warning("지원하지 않는 팩터 조건 무시: %s", exc)
+            continue
         if isinstance(norm, list):
             # between 같은 경우 두 조건으로 확장
             for n in norm:

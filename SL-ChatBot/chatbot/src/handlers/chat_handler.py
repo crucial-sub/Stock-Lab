@@ -140,7 +140,8 @@ class ChatHandler:
         self.rag_retriever = None
         self.factor_sync = None
         self.news_retriever = None
-        self.agent_executor = None
+        self.agent_executors: Dict[str, Any] = {}
+        self.system_prompts: Dict[str, str] = {}
         self.conversation_history = {}
         # 설문/추천 상태
         self.session_state: Dict[str, Dict[str, Any]] = {}
@@ -293,6 +294,7 @@ class ChatHandler:
             }
         # For backtest templates
         self.strategy_backtest_templates = {}
+        self.strategy_alias_map = {}
         for s in strategies:
             sid = s.get("id")
             if not sid:
@@ -302,6 +304,12 @@ class ChatHandler:
                 "buy_conditions": self._filter_valid_conditions(s.get("buy_conditions", [])),
                 "sell_conditions": self._filter_valid_conditions(s.get("sell_conditions", [])),
             }
+            alias_tokens = self._build_strategy_aliases(
+                sid,
+                s.get("name"),
+                s.get("aliases", []),
+            )
+            self.strategy_alias_map[sid] = alias_tokens
 
     def _load_forbidden_patterns(self):
         """금지 패턴을 외부 설정에서 로드 (없으면 기본값 사용)."""
@@ -439,41 +447,50 @@ class ChatHandler:
 
                 # 3. 시스템 프롬프트 로드
                 print("Step 3: 시스템 프롬프트 로드 중...")
-                # Docker: /app/prompts/system.txt, Local: ./prompts/system.txt
-                prompt_path = Path("/app/prompts/system.txt")
-                if not prompt_path.exists():
-                    prompt_path = Path(__file__).parent.parent.parent / "prompts" / "system.txt"
-                system_prompt = prompt_path.read_text(encoding='utf-8') if prompt_path.exists() else "당신은 정량 투자 자문가입니다."
-                print(f"Step 3 OK: 시스템 프롬프트 로드 완료 ({len(system_prompt)} 자)")
+                prompt_specs = {
+                    "assistant": {
+                        "filename": "system_assistant.txt",
+                        "fallback": "당신은 정량 투자 자문가이자 투자 개념을 설명하는 어시스턴트입니다."
+                    },
+                    "ai_helper": {
+                        "filename": "system_ai_helper.txt",
+                        "fallback": "당신은 백테스트 조건을 생성하고 DSL을 만드는 AI 헬퍼입니다."
+                    },
+                }
+                self.system_prompts = {}
+                for mode, spec in prompt_specs.items():
+                    self.system_prompts[mode] = self._load_system_prompt_content(
+                        spec["filename"],
+                        spec["fallback"]
+                    )
+                    print(f"  - {mode} 프롬프트 {len(self.system_prompts[mode])}자 로드")
+                print("Step 3 OK: 시스템 프롬프트 로드 완료")
 
-                # 4. Claude 도구 호출 프롬프트 생성
-                print("Step 4: Claude 프롬프트 템플릿 생성 중...")
-                # Claude는 도구 호출을 기본 지원
-                tool_calling_prompt = ChatPromptTemplate.from_messages([
-                    (
-                        "system",
-                        system_prompt
-                        + "\n\n필요할 때 다음 도구를 사용할 수 있습니다."
-                        + "\n\n{agent_scratchpad}"
-                    ),
-                    MessagesPlaceholder("chat_history"),
-                    ("user", "참고자료:\n{context}\n\n질문: {input}"),
-                ])
-                print("Step 4 OK: Claude 프롬프트 템플릿 생성 완료")
-
-                # 5. Claude 에이전트 생성
-                print("Step 5: Claude 에이전트와 Executor 생성 중...")
-                # Claude는 도구 호출(Tool Calling)을 기본 지원
-                agent = create_tool_calling_agent(self.llm_client, tools, tool_calling_prompt)
-                print(f"  Claude 에이전트 생성 완료, AgentExecutor 생성 중...")
-                self.agent_executor = AgentExecutor(
-                    agent=agent,
-                    tools=tools,
-                    verbose=False,  # Throttling 방지를 위해 verbose 비활성화
-                    return_intermediate_steps=True,
-                    handle_parsing_errors=True
-                )
-                print("Step 5 OK: AgentExecutor 생성 완료")
+                # 4. Claude 도구 호출 프롬프트/에이전트 생성
+                print("Step 4: Claude 프롬프트 및 AgentExecutor 생성 중...")
+                self.agent_executors = {}
+                for mode, system_prompt in self.system_prompts.items():
+                    prompt_template = ChatPromptTemplate.from_messages([
+                        (
+                            "system",
+                            system_prompt
+                            + "\n\n필요할 때 다음 도구를 사용할 수 있습니다."
+                            + "\n\n{agent_scratchpad}"
+                        ),
+                        MessagesPlaceholder("chat_history"),
+                        ("user", "참고자료:\n{context}\n\n질문: {input}"),
+                    ])
+                    agent = create_tool_calling_agent(self.llm_client, tools, prompt_template)
+                    executor = AgentExecutor(
+                        agent=agent,
+                        tools=tools,
+                        verbose=False,
+                        return_intermediate_steps=True,
+                        handle_parsing_errors=True
+                    )
+                    self.agent_executors[mode] = executor
+                    print(f"  - {mode} AgentExecutor 생성 완료")
+                print("Step 4 OK: 모든 AgentExecutor 생성 완료")
 
                 print("✅ LangChain AgentExecutor 생성 성공")
             except Exception as e:
@@ -483,7 +500,13 @@ class ChatHandler:
         else:
             print(f"경고: 에이전트 초기화 건너뜀. 제공자={self.provider}, get_tools={get_tools is not None}")
 
-    async def handle(self, message: str, session_id: Optional[str] = None, answer: Optional[dict] = None) -> dict:
+    async def handle(
+        self,
+        message: str,
+        session_id: Optional[str] = None,
+        answer: Optional[dict] = None,
+        client_type: Optional[str] = "assistant"
+    ) -> dict:
         """사용자 메시지를 처리합니다.
 
         Args:
@@ -497,8 +520,12 @@ class ChatHandler:
         if session_id is None:
             session_id = str(uuid.uuid4())
 
+        client_type = (client_type or "assistant").lower()
+        if client_type not in ("assistant", "ai_helper"):
+            client_type = "assistant"
+
         # 설문/전략 추천 플로우 (ui_language)
-        if answer or self._is_strategy_request(message):
+        if answer or (client_type == "assistant" and self._is_strategy_request(message)):
             return await self._handle_questionnaire_flow(session_id, answer, message)
 
         # 0-0. 도메인(금융/투자) 외 질문 차단
@@ -533,12 +560,14 @@ class ChatHandler:
 
         # 1. Classify intent
         intent = await self._classify_intent(message)
+        if client_type == "ai_helper" and intent not in {"dsl_generation", "backtest_configuration", "explain"}:
+            intent = "dsl_generation"
 
         # 2. Intent에 따라 다른 핸들러 호출
         if intent == 'dsl_generation':
             response = await self._handle_dsl_mode(message, session_id)
         elif intent == 'explain':
-            response = await self._handle_explain_mode(message, session_id)
+            response = await self._handle_explain_mode(message, session_id, client_type)
         else:
             # 기존 통합 플로우 (recommend, general 등)
             context = await self._retrieve_context(message, intent)
@@ -546,7 +575,7 @@ class ChatHandler:
                 response = self._handle_backtest_configuration(message, session_id)
             else:
                 response = await self._generate_response_langchain(
-                    message, intent, context, session_id
+                    message, intent, context, session_id, client_type
                 )
 
         response["session_id"] = session_id
@@ -738,8 +767,8 @@ class ChatHandler:
         # 전략 추천 키워드
         recommend_keywords = ['전략 추천', 'recommend', '추천']
         backtest_keywords = [
-            '백테스트 설정', '전략으로 진행', '전략으로 백테스트', '이 전략으로', '자동 설정',
-            '백테스트 진행', '설정해줘', '전략 실행', '전략 설정', '실행해줘','하고싶어'
+            '백테스트 설정', '전략으로 진행', '전략으로 백테스트', '이 전략으로', '자동 설정','백테스팅', '백테스트',
+            '백테스트 진행', '설정해줘', '전략 실행', '전략 설정', '실행해줘','하고싶어','조건 설정','조건 만들어줘'
         ]
 
         # 단일 지표/팩터 + 질문형(뭐/의미/설명)은 explain으로 우선 처리
@@ -770,15 +799,117 @@ class ChatHandler:
 
     def _handle_backtest_configuration(self, message: str, session_id: str) -> dict:
         """전략 선택 후 백테스트 설정 UI Language를 반환하고 기본 DSL을 저장."""
+        state = self.session_state.get(session_id, {})
+        message_lower = message.lower().strip()
+
+        # 사용자가 이전에 선택지를 받았고 "1", "2", "3" 중 하나를 선택한 경우
+        if "pending_custom_condition" in state:
+            custom_info = state["pending_custom_condition"]
+            user_choice = None
+
+            # 사용자 선택 확인
+            if message_lower in ["1", "①", "커스텀", "커스텀만", "커스텀 조건만"]:
+                user_choice = 1
+            elif message_lower in ["2", "②", "전략", "전략만", "전략만 적용"]:
+                user_choice = 2
+            elif message_lower in ["3", "③", "둘다", "모두", "전략 + 커스텀", "커스텀 + 전략"]:
+                user_choice = 3
+
+            if user_choice:
+                # 선택에 따라 백테스트 조건 설정
+                days = custom_info["days"]
+                pct_value = custom_info["pct_value"]
+
+                # 커스텀 매수 조건 생성
+                custom_buy_condition = {
+                    "factor": f"RET_{days}D",
+                    "operator": ">",
+                    "value": pct_value,
+                    "params": []
+                }
+
+                if user_choice == 1:
+                    # 커스텀 조건만 적용
+                    state["backtest_conditions"] = {
+                        "buy": [custom_buy_condition],
+                        "sell": []
+                    }
+                    state["selected_strategy"] = "custom"
+                    strategy_name = "커스텀 조건"
+                elif user_choice == 2:
+                    # 기본 전략만 적용 (워렌버핏)
+                    matched_id = "warren_buffett"
+                    tpl = self.strategy_backtest_templates[matched_id]
+                    state["backtest_conditions"] = {
+                        "buy": self._filter_valid_conditions(tpl["buy_conditions"]),
+                        "sell": self._filter_valid_conditions(tpl["sell_conditions"]),
+                    }
+                    state["selected_strategy"] = matched_id
+                    strategy_name = tpl["strategy_name"]
+                else:  # user_choice == 3
+                    # 전략 + 커스텀 조건 모두 적용
+                    matched_id = "warren_buffett"
+                    tpl = self.strategy_backtest_templates[matched_id]
+                    buy_conditions = self._filter_valid_conditions(tpl["buy_conditions"])
+                    buy_conditions.append(custom_buy_condition)
+                    state["backtest_conditions"] = {
+                        "buy": buy_conditions,
+                        "sell": self._filter_valid_conditions(tpl["sell_conditions"]),
+                    }
+                    state["selected_strategy"] = f"{matched_id}_custom"
+                    strategy_name = f"{tpl['strategy_name']} + 커스텀 조건"
+
+                # pending_custom_condition 제거
+                del state["pending_custom_condition"]
+
+                # UI Language 생성 및 반환
+                return self._generate_backtest_ui(state, strategy_name, session_id)
+
+        # 커스텀 수익률 조건(예: 5일 전 대비 5% 상승) 여부를 먼저 감지해 전략 덮어쓰기 방지
+        import re
+        ret_pattern = re.search(r"(\d+)\s*일.*?(\d+)\s*%.*?(상승|증가|올라)", message)
+        has_custom_return = bool(ret_pattern)
+
         # 전략 식별 (간단히 이름 매칭)
-        message_lower = message.lower()
         message_norm = self._normalize_text(message)
         matched_id = None
         for sid, meta in self.strategy_backtest_templates.items():
-            name_norm = self._normalize_text(meta["strategy_name"])
-            if sid in message_norm or name_norm in message_norm:
+            alias_tokens = self.strategy_alias_map.get(sid, [])
+            if not alias_tokens:
+                alias_tokens = [self._normalize_text(meta["strategy_name"])]
+            if any(token and token in message_norm for token in alias_tokens):
                 matched_id = sid
                 break
+
+        # 전략 미지정 + 커스텀 조건이 감지되면 자동 전략 설정을 피하고 명확화 질문
+        if not matched_id and has_custom_return:
+            days, pct, _ = ret_pattern.groups()
+            pct_value = float(pct) / 100 if pct else None
+            example = f"RET_{days}D > {pct_value:.2f}" if pct_value is not None else ""
+
+            # 세션에 커스텀 조건 정보 저장 (사용자 선택을 위해)
+            state = self.session_state.setdefault(session_id, {})
+            state["pending_custom_condition"] = {
+                "days": days,
+                "pct": pct,
+                "pct_value": pct_value,
+                "example": example
+            }
+
+            return {
+                "answer": (
+                    f"{days}일 전 대비 {pct}% 상승 조건이 감지됐어요.\n"
+                    "백테스트를 어떻게 진행할까요?\n"
+                    "① 커스텀 조건만 적용 (예: "
+                    f"{example})\n"
+                    "② 특정 전략만 적용 (전략명 알려주세요)\n"
+                    "③ 전략 + 커스텀 조건 모두 적용\n"
+                    "원하는 번호나 전략명을 알려주세요."
+                ),
+                "intent": "clarify_backtest",
+                "session_id": session_id,
+            }
+
         # 기본값: 워렌버핏
         if not matched_id:
             matched_id = "warren_buffett"
@@ -913,6 +1044,72 @@ class ChatHandler:
 
         return "\n".join(context_parts) if context_parts else ""
 
+    def _generate_backtest_ui(self, state: dict, strategy_name: str) -> dict:
+        """백테스트 UI Language 생성 헬퍼 함수"""
+        answer = (
+            f"{strategy_name}으로 진행할게요.\n"
+            "해당 전략의 매수 기준과 매도 기준을 자동으로 설정했습니다.\n\n"
+            "설정이 완료되면 바로 결과를 확인하실 수 있어요."
+        )
+
+        ui_language = {
+            "type": "backtest_configuration",
+            "strategy": {
+                "strategy_id": state.get("selected_strategy", "custom"),
+                "strategy_name": strategy_name,
+            },
+            "configuration_fields": [
+                {
+                    "field_id": "initial_capital",
+                    "label": "초기 투자 금액",
+                    "type": "number",
+                    "unit": "원",
+                    "default_value": 10000000,
+                    "min_value": 1000000,
+                    "max_value": 1000000000,
+                    "step": 1000000,
+                    "required": True,
+                },
+                {
+                    "field_id": "start_date",
+                    "label": "백테스트 시작일",
+                    "type": "date",
+                    "default_value": "2021-01-01",
+                    "min_value": "2005-01-01",
+                    "max_value": "2025-01-01",
+                    "required": True,
+                },
+                {
+                    "field_id": "end_date",
+                    "label": "백테스트 종료일",
+                    "type": "date",
+                    "default_value": "2024-12-31",
+                    "min_value": "2005-01-01",
+                    "max_value": "2025-01-01",
+                    "required": True,
+                },
+                {
+                    "field_id": "rebalance_frequency",
+                    "label": "리밸런싱 주기",
+                    "type": "select",
+                    "default_value": "MONTHLY",
+                    "options": [
+                        {"value": "DAILY", "label": "매일"},
+                        {"value": "WEEKLY", "label": "매주"},
+                        {"value": "MONTHLY", "label": "매월"},
+                    ],
+                    "required": True,
+                },
+            ],
+        }
+
+        return {
+            "answer": answer,
+            "intent": "backtest_configuration",
+            "ui_language": ui_language,
+            "backtest_conditions": state["backtest_conditions"],
+        }
+
     def _filter_valid_conditions(self, conditions: List[dict]) -> List[dict]:
         """factor/operator 없는 조건은 백테스트 오류를 방지하기 위해 제거."""
         valid = [
@@ -927,6 +1124,33 @@ class ChatHandler:
     def _normalize_text(self, text: str) -> str:
         """소문자 + 공백 제거로 간단히 정규화."""
         return re.sub(r"\s+", "", text.lower())
+
+    def _build_strategy_aliases(self, strategy_id: str, name: Optional[str], aliases: Optional[List[str]]) -> List[str]:
+        """전략 이름/별칭을 정규화된 토큰 리스트로 생성."""
+        tokens: set[str] = set()
+
+        def _add(token: Optional[str]):
+            if not token or not isinstance(token, str):
+                return
+            normalized = self._normalize_text(token)
+            if normalized:
+                tokens.add(normalized)
+
+        _add(strategy_id)
+        _add(name)
+        if name:
+            stripped = re.sub(r"전략$", "", name).strip()
+            _add(stripped)
+
+        if aliases and isinstance(aliases, list):
+            for alias in aliases:
+                if not isinstance(alias, str):
+                    continue
+                _add(alias)
+                stripped_alias = re.sub(r"전략$", "", alias).strip()
+                _add(stripped_alias)
+
+        return list(tokens)
 
     def _load_dsl_system_prompt(self) -> Optional[str]:
         """Load DSL-specific portion from system.txt if present."""
@@ -952,15 +1176,48 @@ class ChatHandler:
 
         return content
 
+    def _load_system_prompt_content(self, filename: str, fallback_text: str) -> str:
+        """Load custom system prompt, fallback to legacy system.txt or default text."""
+        prompt_path = Path("/app/prompts") / filename
+        if not prompt_path.exists():
+            prompt_path = Path(__file__).parent.parent.parent / "prompts" / filename
+
+        if prompt_path.exists():
+            try:
+                return prompt_path.read_text(encoding="utf-8")
+            except Exception as exc:
+                print(f"경고: {filename} 로드 실패 ({exc}), 기본 프롬프트 사용")
+
+        legacy_path = Path("/app/prompts/system.txt")
+        if not legacy_path.exists():
+            legacy_path = Path(__file__).parent.parent.parent / "prompts" / "system.txt"
+        if legacy_path.exists():
+            try:
+                return legacy_path.read_text(encoding="utf-8")
+            except Exception:
+                pass
+
+        return fallback_text
+
+    def _get_agent_executor(self, client_type: str):
+        """Return AgentExecutor for client_type (fallback to assistant)."""
+        normalized = "ai_helper" if client_type == "ai_helper" else "assistant"
+        executor = self.agent_executors.get(normalized)
+        if executor:
+            return executor
+        return self.agent_executors.get("assistant")
+
     async def _generate_response_langchain(
         self,
         message: str,
         intent: str,
         context: str,
-        session_id: Optional[str]
+        session_id: Optional[str],
+        client_type: str = "assistant"
     ) -> dict:
         """Generate response using LangChain Agent."""
-        if not self.agent_executor:
+        executor = self._get_agent_executor(client_type)
+        if not executor:
             error_msg = (
                 "LangChain Agent not initialized. "
                 f"Provider: {self.provider}, "
@@ -974,11 +1231,12 @@ class ChatHandler:
             }
 
         # Get or create conversation memory for the session
-        if session_id not in self.conversation_history:
-            self.conversation_history[session_id] = ConversationBufferWindowMemory(
+        memory_key = f"{client_type}:{session_id}"
+        if memory_key not in self.conversation_history:
+            self.conversation_history[memory_key] = ConversationBufferWindowMemory(
                 k=5, memory_key="chat_history", return_messages=True
             )
-        memory = self.conversation_history[session_id]
+        memory = self.conversation_history[memory_key]
 
         try:
             # Use asyncio.to_thread to run the synchronous invoke method in a separate thread
@@ -1003,11 +1261,11 @@ class ChatHandler:
 
 
             # LangChain 0.2+에서는 ainvoke 지원, 없으면 sync invoke를 쓰되 스레드로 오프로드
-            if hasattr(self.agent_executor, "ainvoke"):
-                response = await self.agent_executor.ainvoke(invoke_input)
+            if hasattr(executor, "ainvoke"):
+                response = await executor.ainvoke(invoke_input)
             else:
                 response = await asyncio.to_thread(
-                    self.agent_executor.invoke,
+                    executor.invoke,
                     invoke_input
                 )
 
@@ -1153,11 +1411,116 @@ class ChatHandler:
                 return {
                     "answer": "조건을 파싱할 수 없습니다. 더 구체적인 조건을 입력해주세요.\n\n예시:\n- PER 10 이하\n- ROE 15% 이상\n- RSI 30 이하면 매수",
                     "intent": "dsl_generation",
-                    "backtest_conditions": []
+                    "backtest_conditions": {"buy": [], "sell": []}
                 }
 
+            # 메시지를 분석해서 매수/매도 조건 분리
+            import re
+
+            buy_keywords = ["매수", "상승", "오르면", "오를", "상향", "돌파"]
+            sell_keywords = ["매도", "하락", "내리면", "떨어지면", "내림", "손절", "하향"]
+
+            message_lower = message.lower()
+
+            def _percent_variants(value: float) -> List[str]:
+                """value(소수)를 사람이 입력한 퍼센트 표현으로 변환."""
+                pct = abs(value * 100)
+                variants = set()
+                formatted = (
+                    str(int(pct))
+                    if float(pct).is_integer()
+                    else f"{pct:.2f}".rstrip("0").rstrip(".")
+                )
+                variants.add(f"{formatted}%")
+                variants.add(f"{formatted} %")
+                variants.add(f"{formatted}퍼센트")
+                variants.add(f"{formatted} 퍼센트")
+                variants.add(f"{pct}%")
+                variants.add(f"{pct} %")
+                variants.add(str(value))
+                return [v.lower() for v in variants if v]
+
+            def _find_indicator_position(cond: Dict[str, Any]) -> int:
+                """조건과 연관된 텍스트의 대략적인 위치 탐색."""
+                factor = cond.get("factor", "")
+                params = cond.get("params", []) or []
+                value = cond.get("value")
+                search_tokens: List[str] = []
+
+                if isinstance(factor, str) and factor:
+                    search_tokens.append(factor.lower())
+                    match = re.match(r"(?:RET|PRICE_CHANGE)_(\d+)D", factor.upper())
+                    if match:
+                        days_token = match.group(1)
+                        search_tokens.extend([
+                            f"{days_token}일",
+                            f"{days_token} 일",
+                            f"{days_token}일간",
+                            f"{days_token} 일간",
+                        ])
+
+                for param in params:
+                    token = str(param).strip()
+                    if token:
+                        search_tokens.append(token.lower())
+
+                if isinstance(value, (int, float)):
+                    search_tokens.extend(_percent_variants(value))
+
+                for token in search_tokens:
+                    pos = message_lower.find(token)
+                    if pos != -1:
+                        return pos
+                return -1
+
+            def _find_keyword_after(start: int, keywords: List[str]) -> int:
+                best = -1
+                for kw in keywords:
+                    idx = message_lower.find(kw, max(start, 0))
+                    if idx != -1 and (best == -1 or idx < best):
+                        best = idx
+                return best
+
+            def _find_keyword_before(start: int, keywords: List[str]) -> int:
+                best = -1
+                end = start if start != -1 else len(message_lower)
+                for kw in keywords:
+                    idx = message_lower.rfind(kw, 0, end)
+                    if idx != -1 and idx > best:
+                        best = idx
+                return best
+
+            def _classify_condition(cond: Dict[str, Any]) -> str:
+                indicator_pos = _find_indicator_position(cond)
+                start_idx = indicator_pos if indicator_pos != -1 else 0
+
+                buy_pos = _find_keyword_after(start_idx, buy_keywords)
+                sell_pos = _find_keyword_after(start_idx, sell_keywords)
+                if buy_pos != -1 or sell_pos != -1:
+                    if sell_pos == -1 or (buy_pos != -1 and buy_pos <= sell_pos):
+                        return "buy"
+                    return "sell"
+
+                # 키워드를 뒤에서 찾는 경우 (예: "매도 조건: ...")
+                buy_prev = _find_keyword_before(start_idx, buy_keywords)
+                sell_prev = _find_keyword_before(start_idx, sell_keywords)
+                if buy_prev == -1 and sell_prev == -1:
+                    return "buy"
+                if sell_prev == -1 or (buy_prev != -1 and buy_prev >= sell_prev):
+                    return "buy"
+                return "sell"
+
+            buy_conditions: List[Dict[str, Any]] = []
+            sell_conditions: List[Dict[str, Any]] = []
+            for cond in conditions:
+                target_bucket = _classify_condition(cond)
+                if target_bucket == "sell":
+                    sell_conditions.append(cond)
+                else:
+                    buy_conditions.append(cond)
+
             # 조건들을 자연어로 포맷팅
-            condition_lines = []
+            all_condition_lines = []
             for cond in conditions:
                 factor = cond['factor']
                 operator = cond['operator']
@@ -1172,17 +1535,20 @@ class ChatHandler:
 
                 # value가 있으면 비교 조건
                 if value is not None:
-                    condition_lines.append(f"• {factor_str} {operator} {value}")
+                    all_condition_lines.append(f"• {factor_str} {operator} {value}")
                 else:
-                    condition_lines.append(f"• {factor_str}")
+                    all_condition_lines.append(f"• {factor_str}")
 
-            conditions_text = "\n".join(condition_lines)
+            conditions_text = "\n".join(all_condition_lines)
             answer_text = f"다음 조건이 생성되었습니다:\n{conditions_text}"
 
             return {
                 "answer": answer_text,
                 "intent": "dsl_generation",
-                "backtest_conditions": conditions
+                "backtest_conditions": {
+                    "buy": buy_conditions,
+                    "sell": sell_conditions
+                }
             }
         except Exception as e:
             print(f"DSL 생성 오류: {e}")
@@ -1194,7 +1560,7 @@ class ChatHandler:
                 "backtest_conditions": []
             }
 
-    async def _handle_explain_mode(self, message: str, session_id: str) -> dict:
+    async def _handle_explain_mode(self, message: str, session_id: str, client_type: str) -> dict:
         """설명 모드 처리.
 
         - RAG 검색 활성화 (지식 베이스 활용)
@@ -1225,7 +1591,7 @@ class ChatHandler:
 
         # LangChain Agent로 응답 생성 (RAG 컨텍스트 포함)
         return await self._generate_response_langchain(
-            message, 'explain', context, session_id
+            message, 'explain', context, session_id, client_type
         )
 
     def _check_investment_advisory_policy(self, message: str) -> Optional[str]:

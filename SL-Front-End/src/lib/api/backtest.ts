@@ -1,6 +1,12 @@
 /**
  * 백테스트 관련 API 함수
  * - 백테스트 실행, 결과 조회 API를 제공합니다
+ *
+ * SSE 스트리밍 백테스트:
+ * - POST /api/v1/backtest/execute-stream
+ * - EventSource를 통한 실시간 진행 상황 수신
+ * - useBacktestStream 훅에서 직접 처리
+ * - 참조: src/hooks/useBacktestStream.ts
  */
 
 import type {

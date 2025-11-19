@@ -11,6 +11,8 @@
  * - stream_chunk: 실시간 콘텐츠 청크
  * - stream_end: 스트리밍 종료 신호
  * - ui_language: 구조화된 UI 데이터 (설문, 전략 추천, 백테스트 결과 등)
+ * - backtest_progress: 백테스트 진행 상황 (10%마다 전송)
+ * - backtest_complete: 백테스트 완료 및 최종 결과
  * - error: 에러 발생
  */
 export type SSEEventType =
@@ -18,6 +20,8 @@ export type SSEEventType =
   | "stream_chunk"
   | "stream_end"
   | "ui_language"
+  | "backtest_progress"
+  | "backtest_complete"
   | "error";
 
 /**
@@ -88,6 +92,129 @@ export interface SSEErrorEvent extends SSEEvent {
 }
 
 /**
+ * 백테스트 수익률 데이터 포인트
+ */
+export interface YieldPoint {
+  /** 날짜 (ISO 8601 형식, e.g., "2024-01-15T00:00:00Z") */
+  date: string;
+  /** 누적 수익률 (%) */
+  cumulativeReturn: number;
+  /** 매수 횟수 */
+  buyCount: number;
+  /** 매도 횟수 */
+  sellCount: number;
+}
+
+/**
+ * 백테스트 진행 상황 이벤트 (10%마다 전송)
+ */
+export interface SSEBacktestProgressEvent extends SSEEvent {
+  type: "backtest_progress";
+  data: {
+    /** 진행률 (0, 10, 20, ..., 100) */
+    progress: number;
+
+    /** 증분 데이터 (이번 10% 구간의 새 데이터) */
+    incremental: {
+      /** 수익률 데이터 포인트 배열 */
+      yieldPoints: YieldPoint[];
+    };
+
+    /** 누적 통계 (체크포인트) */
+    cumulative: {
+      /** 현재 누적 수익률 (%) */
+      currentReturn: number;
+      /** 경과 시간 (밀리초) */
+      elapsedTime: number;
+      /** 예상 남은 시간 (밀리초) */
+      estimatedRemainingTime: number;
+    };
+  };
+}
+
+/**
+ * 백테스트 통계 데이터
+ */
+export interface BacktestStatistics {
+  /** 총 수익률 (%) */
+  totalReturn: number;
+  /** 연환산 수익률 CAGR (%) */
+  annualizedReturn: number;
+  /** 최대 낙폭 MDD (%) */
+  maxDrawdown: number;
+  /** 샤프 비율 */
+  sharpeRatio: number;
+  /** 승률 (%) */
+  winRate: number;
+  /** 일 평균 수익률 (%) */
+  dailyAvgReturn?: number;
+  /** 투자 원금 */
+  initialCapital: number;
+  /** 총 손익 */
+  totalProfit: number;
+  /** 현재 총 자산 */
+  currentAssets: number;
+}
+
+/**
+ * 기간별 수익률 데이터
+ */
+export interface PeriodReturn {
+  /** 기간 레이블 (예: "1M", "3M", "6M", "1Y") */
+  label: string;
+  /** 수익률 (%) */
+  value: number;
+}
+
+/**
+ * 백테스트 완료 이벤트
+ */
+export interface SSEBacktestCompleteEvent extends SSEEvent {
+  type: "backtest_complete";
+  data: {
+    /** 백테스트 ID */
+    backtestId: string;
+
+    /** 최종 통계 */
+    statistics: BacktestStatistics;
+
+    /** 전체 수익률 데이터 (결과 UI용) */
+    allYieldPoints: YieldPoint[];
+
+    /** 기간별 수익률 (StatisticsSection용) */
+    periodReturns: PeriodReturn[];
+
+    /** 연도별 수익률 데이터 */
+    yearlyReturns?: Array<{
+      year: number;
+      return: number;
+    }>;
+
+    /** 월별 수익률 데이터 */
+    monthlyReturns?: Array<{
+      month: string; // "2024-01"
+      return: number;
+    }>;
+
+    /** 종목별 수익률 데이터 */
+    stockWiseReturns?: Array<{
+      stockName: string;
+      return: number;
+      weight: number;
+    }>;
+
+    /** 총 자산 데이터 */
+    totalAssetsData?: Array<{
+      date: string;
+      assets: number;
+    }>;
+
+    /** 마크다운 요약 */
+    summary: string;
+  };
+}
+
+/**
  * 모든 SSE 이벤트의 유니온 타입
  */
 export type SSEEventUnion =
@@ -95,6 +222,8 @@ export type SSEEventUnion =
   | SSEStreamChunkEvent
   | SSEStreamEndEvent
   | SSEUILanguageEvent
+  | SSEBacktestProgressEvent
+  | SSEBacktestCompleteEvent
   | SSEErrorEvent;
 
 /**

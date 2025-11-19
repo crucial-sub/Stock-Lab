@@ -204,6 +204,23 @@ export async function deleteBacktest(backtestId: string): Promise<void> {
 }
 
 /**
+ * 백테스트 결과를 포트폴리오로 저장
+ * - POST /backtest/{backtestId}/save-portfolio
+ * - 백테스트 결과를 사용자의 포트폴리오로 저장합니다
+ *
+ * @param backtestId - 백테스트 ID
+ * @returns 저장 완료 메시지
+ */
+export async function savePortfolio(
+  backtestId: string,
+): Promise<{ message: string }> {
+  const response = await axiosInstance.post<{ message: string }>(
+    `/backtest/${backtestId}/save-portfolio`,
+  );
+  return response.data;
+}
+
+/**
  * 백테스트 초기화 데이터 통합 조회
  * - GET /initialize
  * - 팩터, 서브팩터, 테마 목록을 한 번에 조회합니다

@@ -16,7 +16,6 @@ import {
 import type {
   GuestCommunityPost,
   GuestMarketIndex,
-  GuestMarketNews,
   GuestMarketStock,
   HomeCommunityHighlight,
   HomePortfolioHighlight,
@@ -25,6 +24,7 @@ import type {
   MarketStock,
 } from "@/types";
 import { marketQuoteApi } from "@/lib/api/market-quote";
+import { fetchLatestNews } from "@/lib/api/news";
 
 /**
  * 홈 페이지 클라이언트 컴포넌트
@@ -62,6 +62,8 @@ interface HomePageClientProps {
   hasKiwoomAccount: boolean;
   kiwoomAccountData: KiwoomAccountData | null;
   dashboardData: DashboardData;
+  marketStocksInitial: MarketStock[];
+  marketNewsInitial: MarketNews[];
 }
 
 const parseNumericValue = (value?: string | number): number => {
@@ -98,14 +100,6 @@ const guestMarketStocksFallback: GuestMarketStock[] = Array.from({ length: 5 }).
     change: "+0.00%",
     price: "-",
     volume: "-",
-  }),
-);
-
-const guestMarketNews: GuestMarketNews[] = Array.from({ length: 5 }).map(
-  (_, index) => ({
-    id: `news-${index}`,
-    title: "크래프톤 정글의 SW-AI랩 신규 런칭, 차세대 AI 교육...",
-    badge: "크래프톤",
   }),
 );
 
@@ -236,23 +230,29 @@ const authCommunityHighlights: HomeCommunityHighlight[] = [
   },
 ];
 
-const MarketNews: MarketNews[] = Array.from({ length: 5 }).map(
-  (_, index) => ({
-    id: `news-${index}`,
-    title: "크래프톤 정글의 SW-AI랩 신규 런칭, 차세대 AI 교육...",
-    badge: "크래프톤",
-  }),
-);
-
 export function HomePageClient({
   userName,
   isLoggedIn,
   hasKiwoomAccount,
   kiwoomAccountData,
   dashboardData,
+  marketStocksInitial,
+  marketNewsInitial,
 }: HomePageClientProps) {
-  const [marketStocks, setMarketStocks] = useState<MarketStock[]>(marketStocksFallback);
-  const [guestMarketStocks, setGuestMarketStocks] = useState<GuestMarketStock[]>(guestMarketStocksFallback);
+  const [marketStocks, setMarketStocks] = useState<MarketStock[]>(marketStocksInitial.length ? marketStocksInitial : marketStocksFallback);
+  const [guestMarketStocks, setGuestMarketStocks] = useState<GuestMarketStock[]>(
+    marketStocksInitial.length
+      ? marketStocksInitial.map((item) => ({
+          id: item.id,
+          name: item.name,
+          tag: item.tag,
+          change: item.change,
+          price: item.price,
+          volume: item.volume,
+        }))
+      : guestMarketStocksFallback,
+  );
+  const [marketNews, setMarketNews] = useState<MarketNews[]>(marketNewsInitial.length ? marketNewsInitial : []);
 
   useEffect(() => {
     let isMounted = true;
@@ -268,16 +268,15 @@ export function HomePageClient({
             .slice(0, 5);
 
           if (sortedByVolume.length && isMounted) {
-            setMarketStocks(
-              sortedByVolume.map((item) => ({
-                id: item.stockCode,
-                name: item.stockName,
-                tag: item.stockCode,
-                change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
-                price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
-                volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
-              })),
-            );
+            const mapped = sortedByVolume.map((item) => ({
+              id: item.stockCode,
+              name: item.stockName,
+              tag: item.stockCode,
+              change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+              price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
+              volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+            }));
+            setMarketStocks(mapped);
             return;
           }
         } catch (error) {
@@ -294,28 +293,16 @@ export function HomePageClient({
           pageSize: 5,
         });
         if (isMounted) {
-          setMarketStocks(
-            topVolume.items.map((item) => ({
-              id: item.code,
-              name: item.name,
-              tag: item.code,
-              change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
-              price: item.price ? `${item.price.toLocaleString()}원` : "-",
-              volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
-            })),
-          );
-
-          // 게스트용 카드도 동일 소스 재사용
-          setGuestMarketStocks(
-            topVolume.items.map((item) => ({
-              id: item.code,
-              name: item.name,
-              tag: item.code,
-              change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
-              price: item.price ? `${item.price.toLocaleString()}원` : "-",
-              volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
-            })),
-          );
+          const mapped = topVolume.items.map((item) => ({
+            id: item.code,
+            name: item.name,
+            tag: item.code,
+            change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+            price: item.price ? `${item.price.toLocaleString()}원` : "-",
+            volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+          }));
+          setMarketStocks(mapped);
+          setGuestMarketStocks(mapped);
         }
       } catch (error) {
         console.warn("전체 종목 시황 조회 실패:", error);
@@ -328,6 +315,29 @@ export function HomePageClient({
     };
   }, [isLoggedIn]);
 
+  // 최신 뉴스 5개 (백엔드 정렬: id desc 가정)
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        const newsList = await fetchLatestNews(5);
+        setMarketNews(
+          newsList.slice(0, 5).map((item) => ({
+            id: item.id,
+            title: item.title,
+            badge: item.tickerLabel || item.stockCode || "뉴스",
+          })),
+        );
+      } catch (error) {
+        console.warn("주요 시황 뉴스 조회 실패:", error);
+      }
+    };
+
+    // 서버에서 내려준 초기 값이 없을 때만 호출
+    if (!marketNews.length) {
+      fetchNews();
+    }
+  }, [marketNews.length]);
+
   if (!isLoggedIn) {
     return (
       <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
@@ -336,7 +346,7 @@ export function HomePageClient({
           <GuestMarketInsightSection
             indexes={guestMarketIndexes}
             stocks={guestMarketStocks}
-            news={guestMarketNews}
+            news={marketNews}
           />
           <GuestCommunityPreviewSection posts={guestCommunityPosts} />
         </div>
@@ -379,7 +389,7 @@ export function HomePageClient({
         <PerformanceChartSection />
         <MarketInsightSection
           stocks={marketStocks}
-          news={MarketNews}
+          news={marketNews}
         />
         <HighlightsSection
           portfolios={authPortfolios}

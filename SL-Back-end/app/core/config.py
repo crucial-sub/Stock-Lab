@@ -1,5 +1,8 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
+from typing import List, Literal, Union
 from functools import lru_cache
+import json
 import os
 import sys
 
@@ -52,6 +55,18 @@ class Settings(BaseSettings):
 
     # CORS - 환경 변수로 설정 가능, 기본값은 와일드카드
     BACKEND_CORS_ORIGINS: str = "*"  # 환경변수로 쉼표 구분 리스트 전달 가능
+
+    @field_validator('BACKEND_CORS_ORIGINS', mode='before')
+    @classmethod
+    def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        """JSON 문자열을 리스트로 파싱"""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # 쉼표로 구분된 문자열 처리
+                return [origin.strip() for origin in v.split(',')]
+        return v
 
     # Logging
     LOG_LEVEL: str = "INFO"

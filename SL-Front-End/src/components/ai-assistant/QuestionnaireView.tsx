@@ -2,11 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { QuestionnaireUILanguage } from "@/lib/api/chatbot";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+import { Message } from "@/types/message";
 
 interface QuestionnaireViewProps {
   uiLanguage: QuestionnaireUILanguage;

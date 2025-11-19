@@ -91,16 +91,18 @@ export function ChatMessage({ role, content, backtestConditions }: ChatMessagePr
                   <em className="italic text-gray-700">{children}</em>
                 ),
                 // 코드 블록 스타일
-                code: ({ inline, children }) =>
-                  inline ? (
-                    <code className="bg-gray-100 text-pink-600 px-1.5 py-0.5 rounded text-sm font-mono">
+                code: ({ node, children, ...props }) => {
+                  const isInline = !node || node.position?.start.line === node.position?.end.line;
+                  return isInline ? (
+                    <code className="bg-gray-100 text-pink-600 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
                       {children}
                     </code>
                   ) : (
-                    <code className="block bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm font-mono">
+                    <code className="block bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm font-mono" {...props}>
                       {children}
                     </code>
-                  ),
+                  );
+                },
                 pre: ({ children }) => (
                   <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4">
                     {children}

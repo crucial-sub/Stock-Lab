@@ -40,6 +40,7 @@ export function BacktestConfigRenderer({ message }: BacktestConfigRendererProps)
 
   const [errors, setErrors] = useState<ValidationError>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   /**
    * 투자 금액 유효성 검증
@@ -155,6 +156,7 @@ export function BacktestConfigRenderer({ message }: BacktestConfigRendererProps)
     if (!validateForm()) return;
 
     setIsSubmitting(true);
+    setApiError(null); // 이전 에러 초기화
 
     try {
       // TODO: API 호출 구현
@@ -171,17 +173,22 @@ export function BacktestConfigRenderer({ message }: BacktestConfigRendererProps)
       });
 
       if (!response.ok) {
-        throw new Error("백테스트 시작에 실패했습니다.");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "백테스트 시작에 실패했습니다.");
       }
 
       const data = await response.json();
       console.log("Backtest started:", data);
 
-      // TODO: 로딩 메시지 추가
+      // TODO: 로딩 메시지를 채팅 히스토리에 추가
       // TODO: SSE로 진행 상황 수신
     } catch (error) {
       console.error("Backtest error:", error);
-      alert("백테스트 시작 중 오류가 발생했습니다.");
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "백테스트 시작 중 오류가 발생했습니다.";
+      setApiError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -330,10 +337,25 @@ export function BacktestConfigRenderer({ message }: BacktestConfigRendererProps)
         </div>
 
         {/* 안내 문구 */}
-        {isFormValid && !isSubmitting && (
+        {isFormValid && !isSubmitting && !apiError && (
           <p className="mt-3 text-xs text-gray-500 text-center">
             ✓ 모든 입력값이 유효합니다. 백테스트를 시작할 수 있습니다.
           </p>
+        )}
+
+        {/* API 에러 메시지 */}
+        {apiError && (
+          <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3">
+            <div className="flex items-start gap-2">
+              <span className="text-red-600 text-lg">⚠️</span>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900">
+                  오류가 발생했습니다
+                </p>
+                <p className="mt-1 text-xs text-red-700">{apiError}</p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

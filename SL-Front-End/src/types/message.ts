@@ -72,7 +72,7 @@ export interface Strategy {
   summary: string;
   description: string;
   tags: string[];
-  matchScore: number; // 0-100, 태그 일치도
+  matchScore?: number; // 0-100, 태그 일치도 (전략 추천 시 계산)
   conditions: Condition[];
 }
 

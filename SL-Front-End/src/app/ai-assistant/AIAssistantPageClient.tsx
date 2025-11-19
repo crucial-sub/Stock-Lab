@@ -7,6 +7,7 @@ import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { StreamingMarkdownRenderer } from "@/components/ai-assistant/StreamingMarkdownRenderer";
 import { QuestionnaireFlow } from "@/components/ai-assistant/QuestionnaireFlow";
 import { StrategyRecommendationRenderer } from "@/components/ai-assistant/StrategyRecommendationRenderer";
+import { BacktestConfigRenderer } from "@/components/ai-assistant/renderers/BacktestConfigRenderer";
 import { AISearchInput } from "@/components/home/ui";
 import { useChatStream } from "@/hooks/useChatStream";
 import { chatHistoryApi } from "@/lib/api/chat-history";
@@ -55,6 +56,7 @@ interface ChatSession {
   // 새로운 설문 시스템용
   questionnaireAnswers?: QuestionnaireAnswer[];
   strategyRecommendations?: StrategyMatch[];
+  selectedStrategy?: { id: string; name: string };
   currentQuestionStep?: number;
 }
 
@@ -99,6 +101,7 @@ export function AIAssistantPageClient({
   // 새로운 설문 시스템 상태
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<QuestionnaireAnswer[]>([]);
   const [strategyRecommendations, setStrategyRecommendations] = useState<StrategyMatch[]>([]);
+  const [selectedStrategy, setSelectedStrategy] = useState<{ id: string; name: string } | null>(null);
 
   // SSE 스트리밍 상태
   const [streamingMessage, setStreamingMessage] = useState<string>("");
@@ -656,6 +659,24 @@ export function AIAssistantPageClient({
     ]);
   };
 
+  // 전략 선택 핸들러
+  const handleStrategySelect = (strategyId: string, strategyName: string) => {
+    console.log("Strategy selected:", strategyId, strategyName);
+
+    // 선택된 전략 저장 (UI에서 백테스트 설정 폼 표시)
+    setSelectedStrategy({ id: strategyId, name: strategyName });
+
+    // 스크롤을 부드럽게 아래로 이동
+    setTimeout(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({
+          top: scrollContainerRef.current.scrollHeight,
+          behavior: "smooth",
+        });
+      }
+    }, 100);
+  };
+
   // 새 채팅 시작: 상태 초기화
   const handleNewChat = () => {
     console.log("🔄 Starting new chat - clearing all state");
@@ -713,7 +734,34 @@ export function AIAssistantPageClient({
               {strategyRecommendations.length > 0 && (
                 <StrategyRecommendationRenderer
                   recommendations={strategyRecommendations}
+                  onSelectStrategy={handleStrategySelect}
                 />
+              )}
+
+              {/* 전략 선택 후 안내 메시지 및 백테스트 설정 */}
+              {selectedStrategy && (
+                <div className="w-full max-w-[1000px] mx-auto mb-6">
+                  {/* 안내 메시지 */}
+                  <div className="flex justify-start mb-6">
+                    <div className="max-w-[95%] rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+                      <p className="text-sm text-gray-700">
+                        선택하신 <span className="font-semibold text-purple-600">{selectedStrategy.name}</span> 전략을 적용하여 과거 데이터를 기반으로 테스트해보겠습니다.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 백테스트 설정 폼 */}
+                  <BacktestConfigRenderer
+                    message={{
+                      id: `backtest_${Date.now()}`,
+                      type: "backtest_config",
+                      role: "assistant",
+                      strategyId: selectedStrategy.id,
+                      strategyName: selectedStrategy.name,
+                      createdAt: Date.now(),
+                    }}
+                  />
+                </div>
               )}
             </div>
           </div>

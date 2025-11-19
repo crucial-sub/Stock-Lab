@@ -346,13 +346,15 @@ async def run_backtest(
 
         # 4. 전략 생성
         strategy_id = str(uuid.uuid4())
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        strategy_name = f"{current_user.nickname}-{timestamp}"
 
         # 선택된 매매 대상 문자열 생성
         targets_str = "전체 종목" if request.trade_targets.use_all_stocks else f"{', '.join(request.trade_targets.selected_themes[:3])}{'...' if len(request.trade_targets.selected_themes) > 3 else ''}"
 
         strategy = PortfolioStrategy(
             strategy_id=strategy_id,
-            strategy_name=request.strategy_name,
+            strategy_name=strategy_name,
             description=f"User: {current_user.user_id}, Target: {targets_str}",
             strategy_type="FACTOR_BASED",
             universe_type="THEME",  # 테마 기반 선택

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { HomePageClient } from "./HomePageClient";
 import { authApi } from "@/lib/api/auth";
 import { autoTradingApi } from "@/lib/api/auto-trading";
+import { kiwoomApi } from "@/lib/api/kiwoom";
 
 /**
  * 홈 페이지 (서버 컴포넌트)
@@ -17,6 +18,7 @@ export default async function HomePage() {
 
   let userName = "게스트";
   let hasKiwoomAccount = false;
+  let kiwoomAccountData = null;
   let dashboardData = {
     total_assets: 0,
     total_return: 0,
@@ -33,7 +35,21 @@ export default async function HomePage() {
       userName = userInfo.nickname || "사용자";
       hasKiwoomAccount = userInfo.has_kiwoom_account || false;
 
-      // 2. 포트폴리오 대시보드 데이터 가져오기
+      // 2. 키움 계좌 연동되어 있으면 잔고 조회
+      if (hasKiwoomAccount) {
+        try {
+          const kiwoomStatus = await kiwoomApi.getStatusServer(token);
+          if (kiwoomStatus.is_connected) {
+            const accountResponse = await kiwoomApi.getAccountBalanceServer(token);
+            // API 응답이 { data, message } 형태일 수 있어 데이터 필드 우선 사용
+            kiwoomAccountData = (accountResponse as { data?: unknown }).data ?? accountResponse;
+          }
+        } catch (error) {
+          console.warn("키움 계좌 데이터 조회 실패:", error);
+        }
+      }
+
+      // 3. 포트폴리오 대시보드 데이터 가져오기
       try {
         dashboardData = await autoTradingApi.getPortfolioDashboardServer(token);
       } catch (error) {
@@ -49,6 +65,7 @@ export default async function HomePage() {
       userName={userName}
       isLoggedIn={isLoggedIn}
       hasKiwoomAccount={hasKiwoomAccount}
+      kiwoomAccountData={kiwoomAccountData}
       dashboardData={dashboardData}
     />
   );

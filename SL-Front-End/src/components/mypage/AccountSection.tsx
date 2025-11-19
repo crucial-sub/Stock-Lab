@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { KiwoomConnectModal } from "@/components/modal/KiwoomConnectModal";
 import { kiwoomApi } from "@/lib/api/kiwoom";
+import { formatAmount, formatPercent, getProfitColor } from "@/lib/formatters";
 
 export function AccountSection() {
   const [isKiwoomConnected, setIsKiwoomConnected] = useState(false);
@@ -47,25 +48,6 @@ export function AccountSection() {
   const handleKiwoomSuccess = () => {
     setIsKiwoomConnected(true);
     fetchAccountBalance();
-  };
-
-  const formatAmount = (value: string | number): string => {
-    const num = typeof value === "string" ? Number.parseInt(value, 10) : value;
-    if (Number.isNaN(num)) return "0";
-    return num.toLocaleString("ko-KR");
-  };
-
-  const formatPercent = (value: string | number): string => {
-    const num = typeof value === "string" ? Number.parseFloat(value) : value;
-    if (Number.isNaN(num)) return "0.00";
-    return num.toFixed(2);
-  };
-
-  const getProfitColor = (value: string | number): string => {
-    const num = typeof value === "string" ? Number.parseFloat(value) : value;
-    if (num > 0) return "text-price-up";
-    if (num < 0) return "text-price-down";
-    return "text-text-muted";
   };
 
   return (

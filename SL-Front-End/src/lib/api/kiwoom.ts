@@ -77,4 +77,38 @@ export const kiwoomApi = {
     );
     return data;
   },
+
+  /**
+   * 키움증권 연동 상태 조회 (서버 사이드)
+   */
+  getStatusServer: async (token: string): Promise<KiwoomStatusResponse> => {
+    const axios = (await import("axios")).default;
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const { data } = await axios.get<KiwoomStatusResponse>(
+      `${baseURL}/api/v1/kiwoom/credentials/status`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return data;
+  },
+
+  /**
+   * 계좌 잔고 조회 (서버 사이드)
+   */
+  getAccountBalanceServer: async (token: string): Promise<AccountBalance> => {
+    const axios = (await import("axios")).default;
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const { data } = await axios.get<AccountBalance>(
+      `${baseURL}/api/v1/kiwoom/account/balance`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return data;
+  },
 };

@@ -98,3 +98,30 @@ export function formatDateToCard(isoDateStr: string): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}.${month}.${day}`;
 }
+
+/**
+ * 밀리초를 사람이 읽기 쉬운 시간 형식으로 변환
+ * @param milliseconds 밀리초
+ * @returns "Xs" 또는 "Xm Ys" 형식 문자열
+ *
+ * @example
+ * formatDuration(5000) // "5초"
+ * formatDuration(65000) // "1분 5초"
+ * formatDuration(125000) // "2분 5초"
+ */
+export function formatDuration(milliseconds: number): string {
+  const seconds = Math.floor(milliseconds / 1000);
+
+  if (seconds < 60) {
+    return `${seconds}초`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (remainingSeconds === 0) {
+    return `${minutes}분`;
+  }
+
+  return `${minutes}분 ${remainingSeconds}초`;
+}

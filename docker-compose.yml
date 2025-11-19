@@ -49,12 +49,7 @@ services:
     container_name: sl_backend
     env_file:
       - ./SL-Back-end/.env.local
-    # Environment variables are loaded from .env.local
-    # No need to specify DATABASE_URL here as it's in .env.local
-    environment:
-      # Override only if explicitly set in root .env file
-      DATABASE_URL: ${DATABASE_URL}
-      DATABASE_SYNC_URL: ${DATABASE_SYNC_URL}
+    # All environment variables are managed in .env.local
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:

@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import List, Literal
 from functools import lru_cache
 import os
 import sys
@@ -15,10 +14,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     DATABASE_SYNC_URL: str = ""  # 동기 URL (선택사항)
     DATABASE_ECHO: bool = False  # SQL 로깅 (선택사항)
-    DATABASE_POOL_SIZE: int = 20
-    DATABASE_MAX_OVERFLOW: int = 40
-    DATABASE_POOL_TIMEOUT: int = 30
-    DATABASE_POOL_RECYCLE: int = 3600
+    DATABASE_POOL_SIZE: int = 50  # 20 → 50 (동시 백테스트 지원)
+    DATABASE_MAX_OVERFLOW: int = 100  # 40 → 100 (피크 타임 대응)
+    DATABASE_POOL_TIMEOUT: int = 60  # 30 → 60 (타임아웃 여유)
+    DATABASE_POOL_RECYCLE: int = 1800  # 3600 → 1800 (더 자주 재활용)
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -51,8 +50,8 @@ class Settings(BaseSettings):
     BACKTEST_MAX_CONCURRENT_JOBS: int = 2
     BACKTEST_MEMORY_LIMIT_GB: int = 8
 
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
+    # CORS - 환경 변수로 설정 가능, 기본값은 와일드카드
+    BACKEND_CORS_ORIGINS: str = "*"  # 환경변수로 쉼표 구분 리스트 전달 가능
 
     # Logging
     LOG_LEVEL: str = "INFO"

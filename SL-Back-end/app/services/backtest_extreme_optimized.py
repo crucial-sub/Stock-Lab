@@ -26,6 +26,9 @@ import pickle
 from pathlib import Path
 import hashlib
 
+# Polars 멀티프로세싱 데드락 방지 (fork → spawn)
+multiprocessing.set_start_method('spawn', force=True)
+
 logger = logging.getLogger(__name__)
 
 try:

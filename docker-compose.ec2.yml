@@ -17,6 +17,29 @@ services:
     networks:
       - quant_network
 
+  chatbot:
+    build:
+      context: ./SL-ChatBot
+      dockerfile: ./chatbot/Dockerfile
+    container_name: sl_chatbot_prod
+    env_file:
+      - .env
+      - ./SL-ChatBot/.env
+    environment:
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "${CHATBOT_PORT:-8003}:8003"
+    volumes:
+      - ./SL-ChatBot/chatbot/src:/app/src
+      - ./SL-ChatBot/api:/app/api
+      - ./SL-ChatBot/config:/app/config
+      - ./SL-ChatBot/prompts:/app/prompts
+      - ./SL-ChatBot/chatbot/requirements.txt:/app/requirements.txt
+      - ./SL-ChatBot/chatbot/config.yaml:/app/config.yaml
+    restart: unless-stopped
+    networks:
+      - quant_network
+
   frontend:
     build:
       context: ./SL-Front-End
@@ -24,11 +47,13 @@ services:
     container_name: sl_frontend_prod
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
+      NEXT_PUBLIC_CHATBOT_API_URL: ${NEXT_PUBLIC_CHATBOT_API_URL:-http://localhost:8003}
       API_BASE_URL: ${API_BASE_URL:-http://backend:8000/api/v1}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
+      - chatbot
     volumes:
       - ./SL-Front-End:/app
       - /app/node_modules

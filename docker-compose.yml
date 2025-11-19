@@ -49,18 +49,15 @@ services:
     container_name: sl_backend
     env_file:
       - ./SL-Back-end/.env.local
+    # Environment variables are loaded from .env.local
+    # No need to specify DATABASE_URL here as it's in .env.local
     environment:
-      # 로컬 개발 환경용 데이터베이스 연결 (Docker 네트워크 내부)
-      DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
-      DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
-      # Redis 설정은 .env.local에서 관리
-      # 로컬: redis:6379 (Docker 컨테이너)
-      # 프로덕션(EC2): clustercfg.sl-redis-cl.lvbc9o.apn2.cache.amazonaws.com:6379
+      # Override only if explicitly set in root .env file
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_SYNC_URL: ${DATABASE_SYNC_URL}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -80,9 +77,11 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
+        NEXT_PUBLIC_CHATBOT_API_URL: ${NEXT_PUBLIC_CHATBOT_API_URL:-http://localhost:8000}
     container_name: sl_frontend
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
+      NEXT_PUBLIC_CHATBOT_API_URL: ${NEXT_PUBLIC_CHATBOT_API_URL:-http://localhost:8000}
       API_BASE_URL: ${API_BASE_URL:-http://backend:8000/api/v1}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"

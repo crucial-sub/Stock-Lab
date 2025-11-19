@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   HighlightsSection,
   MarketInsightSection,
@@ -23,6 +24,7 @@ import type {
   MarketNews,
   MarketStock,
 } from "@/types";
+import { marketQuoteApi } from "@/lib/api/market-quote";
 
 /**
  * 홈 페이지 클라이언트 컴포넌트
@@ -88,14 +90,14 @@ const guestMarketIndexes: GuestMarketIndex[] = [
   { label: "KOSDAQ", value: "906.24", change: "+22.4%" },
 ];
 
-const guestMarketStocks: GuestMarketStock[] = Array.from({ length: 3 }).map(
+const guestMarketStocksFallback: GuestMarketStock[] = Array.from({ length: 5 }).map(
   (_, index) => ({
-    id: `stock-${index}`,
-    name: "크래프톤",
-    tag: "IT",
-    change: "+22.4%",
-    price: "226,000원",
-    volume: "113억",
+    id: `guest-${index}`,
+    name: "종목",
+    tag: "예시",
+    change: "+0.00%",
+    price: "-",
+    volume: "-",
   }),
 );
 
@@ -106,6 +108,15 @@ const guestMarketNews: GuestMarketNews[] = Array.from({ length: 5 }).map(
     badge: "크래프톤",
   }),
 );
+
+// 로그인/로그아웃 공통 시황: 로그인 시 관심종목 상위, 비로그인 시 전체 상위
+const marketStocksFallback: MarketStock[] = [
+  { id: "guest-1", name: "크래프톤", tag: "예시", change: "+0.00%", price: "226,000원", volume: "113억" },
+  { id: "guest-2", name: "삼성전자", tag: "예시", change: "+0.00%", price: "70,000원", volume: "99억" },
+  { id: "guest-3", name: "LG에너지솔루션", tag: "예시", change: "+0.00%", price: "400,000원", volume: "87억" },
+  { id: "guest-4", name: "현대차", tag: "예시", change: "+0.00%", price: "200,000원", volume: "70억" },
+  { id: "guest-5", name: "카카오", tag: "예시", change: "+0.00%", price: "60,000원", volume: "65억" },
+];
 
 const guestCommunityPosts: GuestCommunityPost[] = Array.from({ length: 3 }).map(
   (_, index) => ({
@@ -225,17 +236,6 @@ const authCommunityHighlights: HomeCommunityHighlight[] = [
   },
 ];
 
-const MarketStocks: MarketStock[] = Array.from({ length: 5 }).map(
-  (_, index) => ({
-    id: `stock-${index}`,
-    name: "크래프톤",
-    tag: "IT",
-    change: "+22.4%",
-    price: "226,000원",
-    volume: "113억",
-  }),
-);
-
 const MarketNews: MarketNews[] = Array.from({ length: 5 }).map(
   (_, index) => ({
     id: `news-${index}`,
@@ -251,6 +251,83 @@ export function HomePageClient({
   kiwoomAccountData,
   dashboardData,
 }: HomePageClientProps) {
+  const [marketStocks, setMarketStocks] = useState<MarketStock[]>(marketStocksFallback);
+  const [guestMarketStocks, setGuestMarketStocks] = useState<GuestMarketStock[]>(guestMarketStocksFallback);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTopVolume = async () => {
+      // 관심종목 기준 (로그인)
+      if (isLoggedIn) {
+        try {
+          const favorites = await marketQuoteApi.getFavorites();
+          const sortedByVolume = favorites.items
+            .filter((item) => item.volume !== null && item.volume !== undefined)
+            .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+            .slice(0, 5);
+
+          if (sortedByVolume.length && isMounted) {
+            setMarketStocks(
+              sortedByVolume.map((item) => ({
+                id: item.stockCode,
+                name: item.stockName,
+                tag: item.stockCode,
+                change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+                price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
+                volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+              })),
+            );
+            return;
+          }
+        } catch (error) {
+          console.warn("관심종목 기준 시황 조회 실패, 전체 상위로 대체:", error);
+        }
+      }
+
+      // 로그인 안 됐거나 관심 5종 부족 시: 전체 종목 체결량 상위
+      try {
+        const topVolume = await marketQuoteApi.getMarketQuotes({
+          sortBy: "volume",
+          sortOrder: "desc",
+          page: 1,
+          pageSize: 5,
+        });
+        if (isMounted) {
+          setMarketStocks(
+            topVolume.items.map((item) => ({
+              id: item.code,
+              name: item.name,
+              tag: item.code,
+              change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+              price: item.price ? `${item.price.toLocaleString()}원` : "-",
+              volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+            })),
+          );
+
+          // 게스트용 카드도 동일 소스 재사용
+          setGuestMarketStocks(
+            topVolume.items.map((item) => ({
+              id: item.code,
+              name: item.name,
+              tag: item.code,
+              change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+              price: item.price ? `${item.price.toLocaleString()}원` : "-",
+              volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+            })),
+          );
+        }
+      } catch (error) {
+        console.warn("전체 종목 시황 조회 실패:", error);
+      }
+    };
+
+    fetchTopVolume();
+    return () => {
+      isMounted = false;
+    };
+  }, [isLoggedIn]);
+
   if (!isLoggedIn) {
     return (
       <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
@@ -301,7 +378,7 @@ export function HomePageClient({
         <StatsOverviewSection stats={authenticatedStats} />
         <PerformanceChartSection />
         <MarketInsightSection
-          stocks={MarketStocks}
+          stocks={marketStocks}
           news={MarketNews}
         />
         <HighlightsSection

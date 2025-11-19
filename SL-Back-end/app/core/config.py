@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from typing import List
 from functools import lru_cache
 
 
@@ -46,12 +45,8 @@ class Settings(BaseSettings):
     BACKTEST_MAX_CONCURRENT_JOBS: int = 2
     BACKTEST_MEMORY_LIMIT_GB: int = 8
 
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://54.180.34.167:3000",  # EC2 public IP
-    ]
+    # CORS - 환경 변수로 설정 가능, 기본값은 와일드카드
+    BACKEND_CORS_ORIGINS: str = "*"  # 환경변수로 쉼표 구분 리스트 전달 가능
 
     # Logging
     LOG_LEVEL: str = "INFO"

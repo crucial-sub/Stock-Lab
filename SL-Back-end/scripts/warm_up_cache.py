@@ -11,9 +11,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.cache import cache
 from app.models.company import Company
 from app.models.stock_price import StockPrice
-from app.models.balance_sheet import BalanceSheet
-from app.models.income_statement import IncomeStatement
-from app.models.cashflow_statement import CashflowStatement
+from app.models.financial_statement import FinancialStatement
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,7 +22,7 @@ async def warm_up_company_info(db):
     logger.info("=== 종목 정보 캐시 시작 ===")
 
     result = await db.execute(
-        select(Company).where(Company.is_active == True)
+        select(Company).where(Company.stock_code.isnot(None))
     )
     companies = result.scalars().all()
 
@@ -42,7 +40,7 @@ async def warm_up_company_info(db):
     return len(companies)
 
 
-async def warm_up_stock_prices(db, days: int = 365):
+async def warm_up_stock_prices(db, days: int = 1095):
     """전체 종목 시세 데이터 캐시"""
     logger.info(f"=== 최근 {days}일 시세 데이터 캐시 시작 ===")
 
@@ -50,11 +48,13 @@ async def warm_up_stock_prices(db, days: int = 365):
     start_date = end_date - timedelta(days=days)
 
     result = await db.execute(
-        select(Company).where(Company.is_active == True)
+        select(Company).where(Company.stock_code.isnot(None))
     )
     companies = result.scalars().all()
 
     total = len(companies)
+    cached_count = 0
+
     for i, company in enumerate(companies, 1):
         result = await db.execute(
             select(StockPrice)
@@ -82,126 +82,95 @@ async def warm_up_stock_prices(db, days: int = 365):
                 for p in prices
             ]
             await cache.set(cache_key, data_list, ttl=0)
+            cached_count += 1
 
         if i % 100 == 0:
-            logger.info(f"진행: {i}/{total} ({i/total*100:.1f}%)")
+            logger.info(f"진행: {i}/{total} ({i/total*100:.1f}%) - 캐시됨: {cached_count}")
 
-    logger.info(f"✅ {total}개 종목 시세 캐시 완료")
-    return total
+    logger.info(f"✅ {total}개 종목 중 {cached_count}개 시세 캐시 완료")
+    return cached_count
 
 
-async def warm_up_balance_sheets(db):
-    """전체 종목 재무상태표 캐시"""
-    logger.info("=== 재무상태표 데이터 캐시 시작 ===")
+async def warm_up_financial_statements(db):
+    """전체 종목 재무제표 캐시"""
+    logger.info("=== 재무제표 데이터 캐시 시작 ===")
 
     result = await db.execute(
-        select(Company).where(Company.is_active == True)
+        select(Company).where(Company.stock_code.isnot(None))
     )
     companies = result.scalars().all()
 
     total = len(companies)
+    cached_count = 0
+
     for i, company in enumerate(companies, 1):
+        # 해당 기업의 재무제표 조회 (최근 8개)
         result = await db.execute(
-            select(BalanceSheet)
-            .where(BalanceSheet.company_id == company.company_id)
-            .order_by(BalanceSheet.created_at.desc())
-            .limit(8)  # 최근 8분기
-        )
-        balance_sheets = result.scalars().all()
-
-        if balance_sheets:
-            cache_key = f"quant:balance_sheet:{company.stock_code}"
-            data_list = [
-                {
-                    "account_nm": bs.account_nm,
-                    "thstrm_amount": bs.thstrm_amount,
-                    "frmtrm_amount": bs.frmtrm_amount,
-                }
-                for bs in balance_sheets
-            ]
-            await cache.set(cache_key, data_list, ttl=0)
-
-        if i % 100 == 0:
-            logger.info(f"진행: {i}/{total} ({i/total*100:.1f}%)")
-
-    logger.info(f"✅ {total}개 종목 재무상태표 캐시 완료")
-    return total
-
-
-async def warm_up_income_statements(db):
-    """전체 종목 손익계산서 캐시"""
-    logger.info("=== 손익계산서 데이터 캐시 시작 ===")
-
-    result = await db.execute(
-        select(Company).where(Company.is_active == True)
-    )
-    companies = result.scalars().all()
-
-    total = len(companies)
-    for i, company in enumerate(companies, 1):
-        result = await db.execute(
-            select(IncomeStatement)
-            .where(IncomeStatement.company_id == company.company_id)
-            .order_by(IncomeStatement.created_at.desc())
+            select(FinancialStatement)
+            .where(FinancialStatement.company_id == company.company_id)
+            .order_by(
+                FinancialStatement.bsns_year.desc(),
+                FinancialStatement.reprt_code.desc()
+            )
             .limit(8)
         )
-        income_statements = result.scalars().all()
+        statements = result.scalars().all()
 
-        if income_statements:
-            cache_key = f"quant:income_statement:{company.stock_code}"
-            data_list = [
-                {
-                    "account_nm": ins.account_nm,
-                    "thstrm_amount": ins.thstrm_amount,
-                    "frmtrm_amount": ins.frmtrm_amount,
+        if statements:
+            cache_key = f"quant:financial_statements:{company.stock_code}"
+            data_list = []
+
+            for stmt in statements:
+                stmt_data = {
+                    "stmt_id": stmt.stmt_id,
+                    "bsns_year": stmt.bsns_year,
+                    "reprt_code": stmt.reprt_code,
+                    "fs_div": stmt.fs_div,
                 }
-                for ins in income_statements
-            ]
+
+                # 재무상태표 데이터
+                if stmt.balance_sheets:
+                    stmt_data["balance_sheets"] = [
+                        {
+                            "account_nm": bs.account_nm,
+                            "thstrm_amount": bs.thstrm_amount,
+                            "frmtrm_amount": bs.frmtrm_amount,
+                        }
+                        for bs in stmt.balance_sheets
+                    ]
+
+                # 손익계산서 데이터
+                if stmt.income_statements:
+                    stmt_data["income_statements"] = [
+                        {
+                            "account_nm": ins.account_nm,
+                            "thstrm_amount": ins.thstrm_amount,
+                            "frmtrm_amount": ins.frmtrm_amount,
+                        }
+                        for ins in stmt.income_statements
+                    ]
+
+                # 현금흐름표 데이터
+                if stmt.cashflow_statements:
+                    stmt_data["cashflow_statements"] = [
+                        {
+                            "account_nm": cf.account_nm,
+                            "thstrm_amount": cf.thstrm_amount,
+                            "frmtrm_amount": cf.frmtrm_amount,
+                        }
+                        for cf in stmt.cashflow_statements
+                    ]
+
+                data_list.append(stmt_data)
+
             await cache.set(cache_key, data_list, ttl=0)
+            cached_count += 1
 
         if i % 100 == 0:
-            logger.info(f"진행: {i}/{total} ({i/total*100:.1f}%)")
+            logger.info(f"진행: {i}/{total} ({i/total*100:.1f}%) - 캐시됨: {cached_count}")
 
-    logger.info(f"✅ {total}개 종목 손익계산서 캐시 완료")
-    return total
-
-
-async def warm_up_cashflow_statements(db):
-    """전체 종목 현금흐름표 캐시"""
-    logger.info("=== 현금흐름표 데이터 캐시 시작 ===")
-
-    result = await db.execute(
-        select(Company).where(Company.is_active == True)
-    )
-    companies = result.scalars().all()
-
-    total = len(companies)
-    for i, company in enumerate(companies, 1):
-        result = await db.execute(
-            select(CashflowStatement)
-            .where(CashflowStatement.company_id == company.company_id)
-            .order_by(CashflowStatement.created_at.desc())
-            .limit(8)
-        )
-        cashflow_statements = result.scalars().all()
-
-        if cashflow_statements:
-            cache_key = f"quant:cashflow_statement:{company.stock_code}"
-            data_list = [
-                {
-                    "account_nm": cf.account_nm,
-                    "thstrm_amount": cf.thstrm_amount,
-                    "frmtrm_amount": cf.frmtrm_amount,
-                }
-                for cf in cashflow_statements
-            ]
-            await cache.set(cache_key, data_list, ttl=0)
-
-        if i % 100 == 0:
-            logger.info(f"진행: {i}/{total} ({i/total*100:.1f}%)")
-
-    logger.info(f"✅ {total}개 종목 현금흐름표 캐시 완료")
-    return total
+    logger.info(f"✅ {total}개 종목 중 {cached_count}개 재무제표 캐시 완료")
+    return cached_count
 
 
 async def main():
@@ -215,24 +184,22 @@ async def main():
     async with AsyncSessionLocal() as db:
         try:
             # 1. 종목 정보
-            await warm_up_company_info(db)
+            company_count = await warm_up_company_info(db)
 
             # 2. 시세 데이터 (최근 3년)
-            await warm_up_stock_prices(db, days=1095)
+            price_count = await warm_up_stock_prices(db, days=1095)
 
-            # 3. 재무상태표
-            await warm_up_balance_sheets(db)
-
-            # 4. 손익계산서
-            await warm_up_income_statements(db)
-
-            # 5. 현금흐름표
-            await warm_up_cashflow_statements(db)
+            # 3. 재무제표 (3개 통합)
+            financial_count = await warm_up_financial_statements(db)
 
             # 캐시 통계 출력
             stats = await cache.get_cache_stats()
             logger.info("========================================")
-            logger.info("캐시 통계:")
+            logger.info("캐시 완료:")
+            logger.info(f"  종목 정보: {company_count}개")
+            logger.info(f"  시세 데이터: {price_count}개")
+            logger.info(f"  재무제표: {financial_count}개")
+            logger.info("Redis 통계:")
             logger.info(f"  사용 메모리: {stats.get('used_memory_human', 'N/A')}")
             logger.info(f"  최대 메모리: {stats.get('used_memory_peak_human', 'N/A')}")
             logger.info(f"  히트율: {stats.get('hit_ratio', 0)*100:.2f}%")

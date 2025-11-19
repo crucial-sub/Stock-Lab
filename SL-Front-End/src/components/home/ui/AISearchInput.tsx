@@ -25,12 +25,15 @@ interface AISearchInputProps {
   onSubmit?: (value: string) => void;
   /** 추가 CSS 클래스 */
   className?: string;
+  /** 입력창 비활성화 여부 */
+  disabled?: boolean;
 }
 
 export function AISearchInput({
   placeholder = "만들고 싶은 전략을 AI에게 요청하세요!",
   onSubmit,
   className = "",
+  disabled = false,
 }: AISearchInputProps) {
   const [value, setValue] = useState("");
 
@@ -66,6 +69,7 @@ export function AISearchInput({
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
+        disabled={disabled}
         className={[
           "flex-1 h-full px-5",
           "bg-transparent",
@@ -73,6 +77,7 @@ export function AISearchInput({
           "placeholder:text-muted placeholder:font-semibold",
           "outline-none",
           "rounded-lg",
+          disabled && "cursor-not-allowed opacity-50",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -82,12 +87,12 @@ export function AISearchInput({
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={!value.trim()}
+        disabled={disabled || !value.trim()}
         className={[
           "flex items-center justify-center",
           "w-10 h-10 mr-[10px]",
-          "bg-button-primary-soft",
           "rounded-md",
+          "bg-[#AC64FF]",
           "transition-all duration-200",
           "disabled:opacity-50 disabled:cursor-not-allowed",
           "hover:shadow-elev-brand",
@@ -101,7 +106,7 @@ export function AISearchInput({
             src="/icons/arrow-upward.svg"
             alt=""
             fill
-            className="object-contain"
+            className="object-contain w-10 h-10"
             aria-hidden="true"
           />
         </div>

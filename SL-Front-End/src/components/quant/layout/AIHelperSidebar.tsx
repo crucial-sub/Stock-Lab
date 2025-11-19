@@ -215,7 +215,7 @@ export function AIHelperSidebar({
         setSessionId(response.session_id);
 
         // AI 응답 메시지 추가
-        const backtestConditions = response.backtest_conditions || {};
+        const backtestConditions: any = response.backtest_conditions || {};
         const buyConditions = backtestConditions.buy || backtestConditions || [];
         const sellConditions = backtestConditions.sell || [];
 

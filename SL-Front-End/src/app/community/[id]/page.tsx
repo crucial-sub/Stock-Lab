@@ -63,7 +63,13 @@ export default function PostDetailPage({
 
   // 댓글을 flat 구조로 변환 (재귀적으로 replies 포함)
   const flattenComments = (
-    comments: typeof commentsData.comments
+    comments: Array<{
+      commentId: string;
+      content: string;
+      authorNickname: string | null;
+      createdAt: string;
+      replies: any[];
+    }>
   ): Array<{
     id: number;
     author: string;

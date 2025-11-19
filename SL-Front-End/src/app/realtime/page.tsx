@@ -152,7 +152,7 @@ export default function RealtimePage() {
               latest: tick,
               price: tick.data.price,
               change_rate: newRate,
-              showFlash: hasChanged,
+              showFlash: Boolean(hasChanged),
               volume,
               tradingValue
             }

@@ -99,7 +99,6 @@ export function CumulativeReturnsChart({
         valueXField: "date",
         stroke: am5.color(0xef4444), // 빨간색
         fill: am5.color(0xef4444),
-        fillOpacity: 0.3,
         tooltip: am5.Tooltip.new(root, {
           labelText: "{valueY.formatNumber('#.##')}%",
         }),

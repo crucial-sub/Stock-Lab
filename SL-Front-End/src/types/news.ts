@@ -20,4 +20,5 @@ export interface NewsListParams {
   keyword?: string;
   themes?: string[];
   filter?: string;
+  limit?: number;
 }

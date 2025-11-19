@@ -77,13 +77,15 @@ export function RankingCard({
           <p className="text-sm text-muted">최근 7일 수익률</p>
         </div>
 
-        {/* 복제하기 버튼 */}
-        <button
-          onClick={onCopy}
-          className="inline-flex justify-center items-center h-7 px-4 py-1 text-white bg-brand-purple rounded-[6.25rem]"
-        >
-          복제하기
-        </button>
+        {/* 복제하기 버튼 (onCopy가 제공된 경우만 표시) */}
+        {onCopy && (
+          <button
+            onClick={onCopy}
+            className="inline-flex justify-center items-center h-7 px-4 py-1 text-white bg-brand-purple rounded-[6.25rem]"
+          >
+            복제하기
+          </button>
+        )}
       </div>
     </article>
   );

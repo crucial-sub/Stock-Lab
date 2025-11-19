@@ -128,10 +128,15 @@ app = FastAPI(
 )
 
 # CORS 설정
+# validator에서 이미 List[str]로 변환됨
 cors_origins = (
-    settings.BACKEND_CORS_ORIGINS.split(",")
-    if settings.BACKEND_CORS_ORIGINS != "*"
-    else ["*"]
+    settings.BACKEND_CORS_ORIGINS
+    if isinstance(settings.BACKEND_CORS_ORIGINS, list)
+    else (
+        settings.BACKEND_CORS_ORIGINS.split(",")
+        if settings.BACKEND_CORS_ORIGINS != "*"
+        else ["*"]
+    )
 )
 app.add_middleware(
     CORSMiddleware,

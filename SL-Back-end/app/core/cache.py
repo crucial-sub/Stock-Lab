@@ -147,13 +147,21 @@ class RedisCache:
                 return False
 
             serialized = pickle.dumps(value)
-            ttl = ttl or settings.CACHE_TTL_SECONDS
 
-            await client.setex(
-                key,
-                timedelta(seconds=ttl),
-                serialized
-            )
+            # ttl이 None이거나 0이면 만료 시간 없이 저장
+            if ttl is None:
+                ttl = settings.CACHE_TTL_SECONDS
+
+            if ttl == 0:
+                # TTL 없이 영구 저장
+                await client.set(key, serialized)
+            else:
+                # TTL 설정하여 저장
+                await client.setex(
+                    key,
+                    timedelta(seconds=ttl),
+                    serialized
+                )
             return True
         except Exception as e:
             logger.warning(f"Cache set error for key {key}: {e}")

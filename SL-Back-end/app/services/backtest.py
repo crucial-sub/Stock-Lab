@@ -567,9 +567,9 @@ class BacktestEngine:
         logger.info(f"📊 시세 데이터 로드 완료: {len(df):,}개 레코드, {df['stock_code'].nunique()}개 종목")
         logger.info(f"📅 시세 데이터 날짜 범위: {df['date'].min().date()} ~ {df['date'].max().date()}")
 
-        # 🚀 캐시 저장 (1일 TTL)
+        # 🚀 캐시 저장 (영구 - 과거 데이터는 불변)
         try:
-            await cache.set(cache_key, df.to_dict('records'), ttl=86400)
+            await cache.set(cache_key, df.to_dict('records'), ttl=0)
             logger.info(f"💾 시세 데이터 캐시 저장 완료")
         except Exception as e:
             logger.debug(f"시세 캐시 저장 실패: {e}")
@@ -760,7 +760,7 @@ class BacktestEngine:
                     cache_df['report_date'] = cache_df['report_date'].astype(str)
                 if 'available_date' in cache_df.columns:
                     cache_df['available_date'] = cache_df['available_date'].astype(str)
-                await cache.set(cache_key, cache_df.to_dict('records'), ttl=604800)
+                await cache.set(cache_key, cache_df.to_dict('records'), ttl=0)
                 logger.info(f"💾 재무 데이터 캐시 저장 완료")
             except Exception as e:
                 logger.debug(f"재무 캐시 저장 실패: {e}")
@@ -1212,7 +1212,7 @@ class BacktestEngine:
             # 캐시 저장
             if cache_enabled and cache_key and date_rows:
                 try:
-                    await cache.set(cache_key, date_rows, ttl=604800)
+                    await cache.set(cache_key, date_rows, ttl=0)
                 except Exception as e:
                     logger.debug(f"캐시 저장 실패: {e}")
 

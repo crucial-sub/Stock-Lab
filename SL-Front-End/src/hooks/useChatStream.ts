@@ -214,7 +214,7 @@ export function useChatStream(
       // SSE 엔드포인트 URL 생성
       const baseUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL ||
                       process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api/v1', '') ||
-                      window.location.origin.replace(':3000', ':8000');
+                      window.location.origin.replace(':3000', ':8003');
       const url = new URL("/api/v1/chat/stream", baseUrl);
       url.searchParams.set("sessionId", sessionId);
       url.searchParams.set("message", message);

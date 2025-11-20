@@ -87,6 +87,31 @@ services:
       - quant_network
     restart: unless-stopped
 
+  # Chatbot Service
+  chatbot:
+    build:
+      context: ./SL-ChatBot
+      dockerfile: ./chatbot/Dockerfile
+    container_name: sl_chatbot
+    environment:
+      PORT: ${PORT:-8003}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      AWS_KB_ID: ${AWS_KB_ID}
+      RETRIEVER_TYPE: ${RETRIEVER_TYPE:-aws_kb}
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "${CHATBOT_PORT:-8003}:8003"
+    volumes:
+      - ./SL-ChatBot/chatbot/src:/app/src
+      - ./SL-ChatBot/api:/app/api
+      - ./SL-ChatBot/config:/app/config
+      - ./SL-ChatBot/prompts:/app/prompts
+    networks:
+      - quant_network
+    restart: unless-stopped
+
   # Redis Commander (Development Tool - Optional)
   redis-commander:
     image: rediscommander/redis-commander:latest

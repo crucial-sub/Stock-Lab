@@ -19,6 +19,19 @@ import type { QuestionnaireAnswer } from "@/data/assistantQuestionnaire";
 import { QUESTIONNAIRE_CTA, QUESTIONNAIRE_START_BUTTON, createAnswer } from "@/data/assistantQuestionnaire";
 import { getTopRecommendations, type StrategyMatch } from "@/utils/strategyMatcher";
 
+// crypto.randomUUID polyfill (HTTP 환경 지원)
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback: 간단한 UUID v4 생성
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 // 메시지 생성 헬퍼 함수
 function createTextMessage(role: "user" | "assistant", content: string): TextMessage {
   return {
@@ -302,7 +315,7 @@ export function AIAssistantPageClient({
     console.log("Starting strategy recommendation flow");
 
     // 세션 ID 생성
-    const newSessionId = crypto.randomUUID();
+    const newSessionId = generateUUID();
     setSessionId(newSessionId);
 
     // 사용자 메시지 추가
@@ -333,7 +346,7 @@ export function AIAssistantPageClient({
 
     // 세션 ID 생성 (없는 경우) - UUID 형식으로 생성
     if (!sessionId) {
-      const newSessionId = crypto.randomUUID();
+      const newSessionId = generateUUID();
       setSessionId(newSessionId);
       saveChatSession(newSessionId, userMessage);
     }
@@ -377,7 +390,7 @@ export function AIAssistantPageClient({
 
     // 세션 ID 생성 (없는 경우) - UUID 형식으로 생성
     if (!sessionId) {
-      const newSessionId = crypto.randomUUID();
+      const newSessionId = generateUUID();
       setSessionId(newSessionId);
       saveChatSession(newSessionId, value);
     }

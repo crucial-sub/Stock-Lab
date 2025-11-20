@@ -210,6 +210,7 @@ def start_scheduler():
     )
 
     # 오전 9시: 매수/매도 실행 (월~금)
+    logger.info("   - 새벽 3시: 캐시 워밍 (매일)")
     scheduler.add_job(
         execute_trades_for_active_strategies,
         trigger=CronTrigger(
@@ -224,10 +225,24 @@ def start_scheduler():
     )
 
     scheduler.start()
+
+    # 새벽 3시: 캐시 워밍 (매일)
+    scheduler.add_job(
+        run_cache_warming_job,
+        trigger=CronTrigger(
+            hour=3,
+            minute=0,
+            timezone="Asia/Seoul"
+        ),
+        id="cache_warming_3am",
+        name="새벽 3시 캐시 워밍",
+        replace_existing=True
+    )
     logger.info("=" * 80)
     logger.info("🚀 자동매매 스케줄러 시작")
     logger.info("   - 오전 7시: 종목 선정 (월~금)")
     logger.info("   - 오전 9시: 매수/매도 실행 (월~금)")
+    logger.info("   - 새벽 3시: 캐시 워밍 (매일)")
     logger.info("=" * 80)
 
 
@@ -263,3 +278,14 @@ def get_scheduler_status():
         "running": scheduler.running,
         "jobs": jobs
     }
+
+
+# ==================== 캐시 워밍 스케줄러 추가 ====================
+
+async def run_cache_warming_job():
+    """
+    캐시 워밍 작업 (매일 새벽 3시 실행)
+    """
+    from app.services.cache_warmer import run_cache_warming
+    await run_cache_warming()
+

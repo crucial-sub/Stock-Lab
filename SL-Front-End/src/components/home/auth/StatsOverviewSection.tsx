@@ -17,7 +17,7 @@ export function StatsOverviewSection({ stats }: StatsOverviewSectionProps) {
 
   return (
     <section className="flex w-full flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {stats.map((stat) => (
           <article
             key={stat.id}

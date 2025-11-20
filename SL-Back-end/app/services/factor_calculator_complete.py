@@ -634,18 +634,21 @@ class CompleteFactorCalculator:
         )
 
         # WORKING_CAPITAL_RATIO: 운전자본비율 = (유동자산 - 유동부채) / 자산총계 * 100
-        result['WORKING_CAPITAL_RATIO'] = latest.apply(
-            lambda row: _safe_ratio(
+        def calc_working_capital(row):
+            ratio = _safe_ratio(
                 (row.get('유동자산', 0) - row.get('유동부채', 0)),
                 row.get('자산총계')
-            ) * 100 if row.get('자산총계', 0) > 0 else None, axis=1
-        )
+            )
+            return ratio * 100 if ratio is not None else None
+
+        result['WORKING_CAPITAL_RATIO'] = latest.apply(calc_working_capital, axis=1)
 
         # EQUITY_RATIO: 자기자본비율 = 자본총계 / 자산총계 * 100
-        result['EQUITY_RATIO'] = latest.apply(
-            lambda row: _safe_ratio(row.get('자본총계'), row.get('자산총계')) * 100
-            if _safe_ratio(row.get('자본총계'), row.get('자산총계')) is not None else None, axis=1
-        )
+        def calc_equity_ratio(row):
+            ratio = _safe_ratio(row.get('자본총계'), row.get('자산총계'))
+            return ratio * 100 if ratio is not None else None
+
+        result['EQUITY_RATIO'] = latest.apply(calc_equity_ratio, axis=1)
 
         # ALTMAN_Z_SCORE: 알트만 Z스코어 (간소화 버전)
         # Z = 1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5

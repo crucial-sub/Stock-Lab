@@ -166,7 +166,6 @@ export function StockPriceChart({
     // 라인 스타일 설정 (부드럽고 연속적인 라인)
     series.strokes.template.setAll({
       strokeWidth: 2.5,
-      tension: 0.5, // 곡선 부드럽게
     });
 
     // 데이터 포인트 숨김 (깔끔한 라인만)

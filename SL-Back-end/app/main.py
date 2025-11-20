@@ -8,8 +8,6 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 import logging
-from logging.handlers import RotatingFileHandler
-import os
 
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
@@ -20,17 +18,11 @@ from app.services.auto_trading_scheduler import start_scheduler, stop_scheduler
 
 settings = get_settings()
 
-# 로깅 설정
-os.makedirs("logs", exist_ok=True)
+# 로깅 설정 (콘솔 출력만 사용)
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        RotatingFileHandler(
-            settings.LOG_FILE,
-            maxBytes=10*1024*1024,  # 10MB
-            backupCount=5
-        ),
         logging.StreamHandler()
     ]
 )
@@ -136,10 +128,20 @@ app = FastAPI(
 )
 
 # CORS 설정
+# validator에서 이미 List[str]로 변환됨
+cors_origins = (
+    settings.BACKEND_CORS_ORIGINS
+    if isinstance(settings.BACKEND_CORS_ORIGINS, list)
+    else (
+        settings.BACKEND_CORS_ORIGINS.split(",")
+        if settings.BACKEND_CORS_ORIGINS != "*"
+        else ["*"]
+    )
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=False if "*" in cors_origins else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

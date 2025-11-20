@@ -1,20 +1,44 @@
+# ============================================
 # Production Docker Compose Configuration
-# This file is for EC2 deployment with external RDS and ElastiCache
+# ============================================
+# For EC2 deployment with AWS RDS and ElastiCache
+#
+# Prerequisites:
+# - .env.production file in project root
+# - SL-Back-end/.env file configured
+#
+# Usage:
+#   Build and start: docker-compose -f docker-compose.prod.yml up -d --build
+#   View logs:       docker-compose -f docker-compose.prod.yml logs -f
+#   Stop:            docker-compose -f docker-compose.prod.yml down
+#   Restart:         docker-compose -f docker-compose.prod.yml restart
+# ============================================
+
+version: '3.8'
 
 services:
-  # FastAPI Backend
+  # ============================================
+  # FastAPI Backend Service
+  # ============================================
   backend:
     build:
       context: ./SL-Back-end
       dockerfile: Dockerfile
     container_name: sl_backend_prod
-    restart: always
+    restart: unless-stopped
     env_file:
       - ./SL-Back-end/.env
+    environment:
+      # Override specific settings for Docker environment
+      PYTHONUNBUFFERED: 1
+      TZ: Asia/Seoul
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
+      # Persist logs outside container
       - ./SL-Back-end/logs:/app/logs
+      # Optional: Mount cache directory for better performance
+      - backend_cache:/app/.cache
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -28,8 +52,19 @@ services:
         max-file: "3"
     networks:
       - app_network
+    # Resource limits (adjust based on EC2 instance size)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
 
-  # Next.js Frontend
+  # ============================================
+  # Next.js Frontend Service
+  # ============================================
   frontend:
     build:
       context: ./SL-Front-End
@@ -37,12 +72,13 @@ services:
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
     container_name: sl_frontend_prod
-    restart: always
+    restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
       NODE_ENV: production
+      TZ: Asia/Seoul
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       backend:
         condition: service_healthy
@@ -59,7 +95,29 @@ services:
         max-file: "3"
     networks:
       - app_network
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
 
+# ============================================
+# Networks
+# ============================================
 networks:
   app_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  backend_cache:
+    driver: local

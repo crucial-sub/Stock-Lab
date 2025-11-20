@@ -210,7 +210,6 @@ def start_scheduler():
     )
 
     # 오전 9시: 매수/매도 실행 (월~금)
-    logger.info("   - 새벽 3시: 캐시 워밍 (매일)")
     scheduler.add_job(
         execute_trades_for_active_strategies,
         trigger=CronTrigger(
@@ -224,8 +223,6 @@ def start_scheduler():
         replace_existing=True
     )
 
-    scheduler.start()
-
     # 새벽 3시: 캐시 워밍 (매일)
     scheduler.add_job(
         run_cache_warming_job,
@@ -238,6 +235,9 @@ def start_scheduler():
         name="새벽 3시 캐시 워밍",
         replace_existing=True
     )
+
+    scheduler.start()
+
     logger.info("=" * 80)
     logger.info("🚀 자동매매 스케줄러 시작")
     logger.info("   - 오전 7시: 종목 선정 (월~금)")

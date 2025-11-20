@@ -17,7 +17,31 @@ import { StatisticsSection } from "@/components/quant/result/sections/Statistics
 import { ResultChartsSection } from "./ResultChartsSection";
 import { SummaryMarkdown } from "./SummaryMarkdown";
 import { SavePortfolioButton } from "./SavePortfolioButton";
-import type { BacktestCompleteData } from "@/hooks/useBacktestStream";
+import type { BacktestResult } from "@/types/api";
+
+/**
+ * 백테스트 완료 데이터 타입
+ */
+export interface BacktestCompleteData {
+  /** 백테스트 ID */
+  backtestId: string;
+  /** 통계 정보 */
+  statistics: BacktestResult["statistics"];
+  /** 전체 수익률 포인트 */
+  allYieldPoints: BacktestResult["yieldPoints"];
+  /** 기간별 수익률 */
+  periodReturns: Array<{ label: string; value: number }>;
+  /** 연도별 수익률 */
+  yearlyReturns?: Array<{ year: string; return: number }>;
+  /** 월별 수익률 */
+  monthlyReturns?: Array<{ month: string; return: number }>;
+  /** 종목별 수익률 */
+  stockWiseReturns?: Array<{ stockName: string; return: number }>;
+  /** 총 자산 데이터 */
+  totalAssetsData?: Array<{ date: string; totalAssets: number }>;
+  /** AI 요약 */
+  summary: string;
+}
 
 /**
  * BacktestResultView Props
@@ -74,7 +98,7 @@ export function BacktestResultView({
   const { statistics, periodReturns, backtestId, summary } = result;
 
   return (
-    <div className="w-full max-w-[900px] mx-auto space-y-8 py-6">
+    <div className="w-full max-w-[900px] mx-auto space-y-8 py-6 bg-white">
       {/* 1. 헤더 - 사용자명 + 전략명 */}
       <div className="text-center border-b border-gray-200 pb-4">
         <h1 className="text-2xl font-bold text-gray-900">

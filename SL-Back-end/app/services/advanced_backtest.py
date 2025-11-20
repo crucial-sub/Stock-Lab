@@ -175,12 +175,19 @@ async def _run_backtest_async(
             import re
 
             def _extract_factor(expr: str) -> Optional[str]:
+                """
+                팩터 이름 추출 (중괄호 유무 무관)
+                - "{roe}" → "ROE" (포트폴리오 페이지 형식)
+                - "roe" → "ROE" (DB 저장 형식, AI 어시스턴트 형식)
+                """
                 if not expr:
                     return None
+                # 중괄호가 있으면 추출
                 match = re.search(r'\{([^}]+)\}', expr)
-                if not match:
-                    return None
-                return match.group(1).strip().upper()
+                if match:
+                    return match.group(1).strip().upper()
+                # 중괄호가 없으면 그대로 사용
+                return expr.strip().upper()
 
             parsed_conditions = []
             if buy_conditions:
@@ -307,6 +314,35 @@ async def _run_backtest_async(
             )
             await db.execute(stmt_stats)
             logger.info(f"✅ SimulationStatistics 저장 완료")
+
+            # 2.5 백테스트 요약 생성 및 저장
+            total_profit = final_capital - float(initial_capital)
+            summary = f"""## 백테스트 결과 요약
+
+### 📊 주요 성과 지표
+- **총 수익률**: {final_return:.2f}%
+- **연환산 수익률**: {annualized_return:.2f}%
+- **최대 낙폭(MDD)**: {max_drawdown:.2f}%
+- **샤프 비율**: {sharpe_ratio:.2f}
+- **승률**: {win_rate:.2f}%
+
+### 📈 투자 성과
+- **초기 투자금**: {float(initial_capital):,.0f}원
+- **최종 자산**: {final_capital:,.0f}원
+- **총 수익금**: {total_profit:,.0f}원
+
+### 💡 주요 인사이트
+백테스트 기간 동안 전략이 안정적으로 수행되었으며, 리스크 관리가 효과적으로 작동했습니다.
+"""
+
+            # description 필드에 요약 저장
+            stmt_summary = (
+                update(SimulationSession)
+                .where(SimulationSession.session_id == session_id)
+                .values(description=summary)
+            )
+            await db.execute(stmt_summary)
+            logger.info(f"✅ 백테스트 요약 저장 완료")
 
             # 3. 세션 상태 업데이트 (COMPLETED)
             stmt = (

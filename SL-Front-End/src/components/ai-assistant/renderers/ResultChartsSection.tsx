@@ -19,7 +19,7 @@ import { YearlyReturnsChart } from "@/components/quant/result/charts/YearlyRetur
 import { MonthlyReturnsChart } from "@/components/quant/result/charts/MonthlyReturnsChart";
 import { StockWiseReturnsChart } from "@/components/quant/result/charts/StockWiseReturnsChart";
 import { TotalAssetsChart } from "@/components/quant/result/charts/TotalAssetsChart";
-import type { BacktestCompleteData } from "@/hooks/useBacktestStream";
+import type { BacktestCompleteData } from "./BacktestResultView";
 
 /**
  * 차트 탭 타입 정의
@@ -95,22 +95,22 @@ export function ResultChartsSection({ result }: ResultChartsSectionProps) {
     {
       id: "yearly",
       label: "연도별 수익률",
-      hasData: (result.yearlyReturns?.length ?? 0) > 0,
+      hasData: result.allYieldPoints.length > 0,
     },
     {
       id: "monthly",
       label: "월별 수익률",
-      hasData: (result.monthlyReturns?.length ?? 0) > 0,
+      hasData: result.allYieldPoints.length > 0,
     },
     {
       id: "stockwise",
       label: "종목별 비중",
-      hasData: (result.stockWiseReturns?.length ?? 0) > 0,
+      hasData: result.allYieldPoints.length > 0,
     },
     {
       id: "totalassets",
       label: "총 자산",
-      hasData: (result.totalAssetsData?.length ?? 0) > 0,
+      hasData: result.allYieldPoints.length > 0,
     },
   ];
 

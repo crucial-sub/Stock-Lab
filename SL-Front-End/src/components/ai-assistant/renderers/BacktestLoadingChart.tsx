@@ -4,7 +4,14 @@ import * as am5 from "@amcharts/amcharts5";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
 import * as am5xy from "@amcharts/amcharts5/xy";
 import { useEffect, useRef } from "react";
-import type { YieldPoint } from "@/types/sse";
+
+// YieldPoint 타입 정의
+interface YieldPoint {
+  date: string;
+  cumulativeReturn?: number;
+  buyCount?: number;
+  sellCount?: number;
+}
 
 /**
  * BacktestLoadingChart Props
@@ -223,7 +230,7 @@ export function BacktestLoadingChart({
     const chartData: ChartDataPoint[] = accumulatedYieldPoints.map(
       (point) => ({
         date: new Date(point.date).getTime(),
-        cumulativeReturn: point.cumulativeReturn,
+        cumulativeReturn: point.cumulativeReturn || 0,
         buyCount: point.buyCount || 0,
         sellCount: point.sellCount || 0,
         sellCountNegative: -(point.sellCount || 0), // 음수 변환

@@ -95,6 +95,16 @@ export interface BacktestConfig {
   endDate: string;           // YYYY-MM-DD
 }
 
+// 백테스트 실행 메시지
+export interface BacktestExecutionMessage extends BaseMessage {
+  type: "backtest_execution";
+  backtestId: string;
+  strategyId: string;
+  strategyName: string;
+  userName?: string; // 선택적 필드 (미래에 사용자 정보를 추가할 수 있음)
+  config: BacktestConfig;
+}
+
 export interface BacktestResultMessage extends BaseMessage {
   type: "backtest_result";
   backtestId: string;
@@ -136,4 +146,5 @@ export type Message =
   | UserSelectionMessage
   | StrategyRecommendationMessage
   | BacktestConfigMessage
+  | BacktestExecutionMessage
   | BacktestResultMessage;

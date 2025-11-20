@@ -7,11 +7,26 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { BacktestConfigMessage, BacktestConfig } from "@/types/message";
+import { getStrategyDetail } from "@/lib/api/investment-strategy";
+import { authApi } from "@/lib/api/auth";
 
 interface BacktestConfigRendererProps {
   message: BacktestConfigMessage;
+  /**
+   * 백테스트 시작 시 호출되는 콜백
+   * @param strategyName - 전략명
+   * @param config - 백테스트 설정
+   */
+  onBacktestStart?: (
+    strategyName: string,
+    config: {
+      investmentAmount: number;
+      startDate: string;
+      endDate: string;
+    }
+  ) => void;
 }
 
 interface ValidationError {
@@ -23,24 +38,43 @@ interface ValidationError {
 /**
  * 백테스트 설정 메시지를 렌더링하는 컴포넌트
  */
-export function BacktestConfigRenderer({ message }: BacktestConfigRendererProps) {
-  // 기본값: 투자 금액 5,000만원, 시작일 3년 전, 종료일 오늘
+export function BacktestConfigRenderer({
+  message,
+  onBacktestStart,
+}: BacktestConfigRendererProps) {
+  // 기본값: 투자 금액 5,000만원, 시작일 1년 1일 전, 종료일 1일 전
   const today = new Date().toISOString().split("T")[0];
-  const threeYearsAgo = new Date(
-    new Date().setFullYear(new Date().getFullYear() - 3)
-  )
-    .toISOString()
-    .split("T")[0];
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const oneYearAndOneDayAgo = new Date(
+    Date.now() - (365 + 1) * 24 * 60 * 60 * 1000
+  ).toISOString().split("T")[0];
 
   const [config, setConfig] = useState<BacktestConfig>({
     investmentAmount: 5000,
-    startDate: threeYearsAgo,
-    endDate: today,
+    startDate: oneYearAndOneDayAgo,
+    endDate: yesterday,
   });
 
   const [errors, setErrors] = useState<ValidationError>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  /**
+   * 현재 사용자 정보 로드
+   */
+  useEffect(() => {
+    async function loadCurrentUser() {
+      try {
+        const user = await authApi.getCurrentUser();
+        setUserId(user.user_id);
+      } catch (error) {
+        console.error("Failed to load user:", error);
+        setApiError("사용자 정보를 불러올 수 없습니다.");
+      }
+    }
+    loadCurrentUser();
+  }, []);
 
   /**
    * 투자 금액 유효성 검증
@@ -151,43 +185,42 @@ export function BacktestConfigRenderer({ message }: BacktestConfigRendererProps)
 
   /**
    * 백테스트 시작 핸들러
+   *
+   * POST /backtest/run API 호출은 handleBacktestStart에서 수행
+   * 여기서는 전략명과 설정만 부모 컴포넌트에 전달
    */
   async function handleStartBacktest() {
     if (!validateForm()) return;
+
+    if (!userId) {
+      setApiError("사용자 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
 
     setIsSubmitting(true);
     setApiError(null); // 이전 에러 초기화
 
     try {
-      // TODO: API 호출 구현
-      const response = await fetch("/api/assistant/backtest", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sessionId: "temp_session_id", // TODO: 실제 세션 ID 사용
-          strategyId: message.strategyId,
-          config,
-        }),
-      });
+      // 1. 전략 상세 정보 조회 (전략명을 위해 필요)
+      const strategyDetail = await getStrategyDetail(message.strategyId);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "백테스트 시작에 실패했습니다.");
+      // 부모 컴포넌트에 백테스트 시작 알림
+      // handleBacktestStart가 POST API 호출 후 백엔드에서 backtestId를 받아옴
+      if (onBacktestStart) {
+        onBacktestStart(strategyDetail.name, config);
+      } else {
+        // 콜백이 없는 경우 경고 표시
+        console.warn(
+          "onBacktestStart callback not provided. " +
+          "Parent component should handle backtest execution message."
+        );
       }
-
-      const data = await response.json();
-      console.log("Backtest started:", data);
-
-      // TODO: 로딩 메시지를 채팅 히스토리에 추가
-      // TODO: SSE로 진행 상황 수신
     } catch (error) {
-      console.error("Backtest error:", error);
+      console.error("Backtest preparation error:", error);
       const errorMessage =
         error instanceof Error
           ? error.message
-          : "백테스트 시작 중 오류가 발생했습니다.";
+          : "백테스트 준비 중 오류가 발생했습니다.";
       setApiError(errorMessage);
     } finally {
       setIsSubmitting(false);

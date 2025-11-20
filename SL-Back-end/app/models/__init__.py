@@ -51,6 +51,9 @@ from app.models.community import (
     CommunityCommentLike,
 )
 
+# 투자 전략 모델
+from app.models.investment_strategy import InvestmentStrategy
+
 __all__ = [
     # 기본 데이터 모델
     "Company",
@@ -94,4 +97,6 @@ __all__ = [
     "CommunityComment",
     "CommunityLike",
     "CommunityCommentLike",
+    # 투자 전략 모델
+    "InvestmentStrategy",
 ]

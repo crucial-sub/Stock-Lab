@@ -137,7 +137,8 @@ class VectorizedConditionEvaluator:
             value = cond.get('value', 0)
 
             # NaN 처리: factor가 NaN이 아닌 경우만
-            condition_str = f"({factor}.notna() and {factor} {operator} {value})"
+            # 백틱으로 컬럼명을 감싸서 pandas query가 컬럼으로 인식하도록 함
+            condition_str = f"(`{factor}`.notna() and `{factor}` {operator} {value})"
 
             condition_map[cond_id] = condition_str
 

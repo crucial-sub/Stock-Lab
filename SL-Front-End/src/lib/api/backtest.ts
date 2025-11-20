@@ -20,6 +20,7 @@ import type {
   SubFactor,
   Themes,
 } from "@/types/api";
+export type { BacktestRunRequest } from "@/types/api";
 import { axiosInstance, axiosServerInstance } from "../axios";
 
 /**
@@ -213,9 +214,11 @@ export async function deleteBacktest(backtestId: string): Promise<void> {
  */
 export async function savePortfolio(
   backtestId: string,
-): Promise<{ message: string }> {
-  const response = await axiosInstance.post<{ message: string }>(
+  portfolioName?: string
+): Promise<{ message: string; success: boolean; portfolio_id: string | null }> {
+  const response = await axiosInstance.post<{ message: string; success: boolean; portfolio_id: string | null }>(
     `/backtest/${backtestId}/save-portfolio`,
+    portfolioName ? { name: portfolioName } : {}
   );
   return response.data;
 }

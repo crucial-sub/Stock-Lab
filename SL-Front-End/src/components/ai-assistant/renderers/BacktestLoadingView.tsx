@@ -2,7 +2,28 @@
 
 import { BacktestLoadingChart } from "./BacktestLoadingChart";
 import { formatDuration } from "@/lib/date-utils";
-import type { AccumulatedData } from "@/hooks/useBacktestStream";
+
+/**
+ * 백테스트 누적 데이터 타입
+ */
+interface AccumulatedData {
+  /** 수익률 포인트 배열 */
+  yieldPoints: Array<{
+    date: string;
+    buyCount?: number;
+    sellCount?: number;
+    cumulativeReturn?: number;
+  }>;
+  /** 통계 정보 */
+  statistics: {
+    /** 현재 누적 수익률 */
+    currentReturn: number;
+    /** 경과 시간 (초) */
+    elapsedTime: number;
+    /** 예상 남은 시간 (초) */
+    estimatedRemainingTime: number;
+  };
+}
 
 /**
  * BacktestLoadingView Props
@@ -63,7 +84,7 @@ export function BacktestLoadingView({
           <span className="text-gray-500 mb-1">누적 수익률</span>
           <span className={`text-lg font-bold ${returnColor}`}>
             {returnPrefix}
-            {currentReturn.toFixed(2)}%
+            {(currentReturn || 0).toFixed(2)}%
           </span>
         </div>
 

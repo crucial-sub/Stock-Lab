@@ -4,9 +4,9 @@
 - 결과 조회
 - 상태 확인
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
@@ -24,7 +24,8 @@ from app.models.simulation import (
     TradingRule,
     SimulationStatistics,
     SimulationDailyValue,
-    SimulationTrade
+    SimulationTrade,
+    Factor
 )
 from app.models.backtest import BacktestSession
 from app.models.company import Company
@@ -244,6 +245,7 @@ class BacktestResultResponse(BaseModel):
     trades: List[BacktestTrade]
     yield_points: List[BacktestYieldPoint] = Field(..., serialization_alias="yieldPoints")
     universe_stocks: List[UniverseStock] = Field(default_factory=list, serialization_alias="universeStocks")
+    summary: Optional[str] = None
     created_at: datetime = Field(..., serialization_alias="createdAt")
     completed_at: Optional[datetime] = Field(None, serialization_alias="completedAt")
 
@@ -399,14 +401,12 @@ async def run_backtest(
 
         # 6. 매수 조건을 파싱하여 StrategyFactor로 저장
         import re
-        logger.info(f"매수 조건 파싱 시작: {len(request.buy_conditions)}개 조건")
         for condition in request.buy_conditions:
             # BuyCondition 모델은 이미 분리된 필드를 가지고 있음
             # exp_left_side: 조건식 좌변 (e.g., "이동평균({PER},{20일})")
             # inequality: 부등호 (e.g., ">")
             # exp_right_side: 조건식 우변 (e.g., 10)
             expression_str = f"{condition.exp_left_side} {condition.inequality} {condition.exp_right_side}"
-            logger.info(f"조건 파싱 중: {condition.name} = {expression_str}")
 
             # exp_left_side에서 팩터 이름 추출
             # 예: "이동평균({PER},{20일})" 또는 "{PER}" 또는 "{주가순자산률 (PBR)}"
@@ -425,11 +425,7 @@ async def run_backtest(
                     # 괄호가 없으면 전체 이름 사용 (공백 제거)
                     factor_name = full_factor_name.strip()
 
-                logger.info(f"추출된 팩터: {factor_name}, 연산자: {operator}, 임계값: {threshold}")
-
                 # Factor 테이블에서 factor_id 조회 (대소문자 구분 없이)
-                from app.models.simulation import Factor
-                from sqlalchemy import func
                 factor_query = select(Factor).where(func.upper(Factor.factor_id) == factor_name.upper())
                 factor_result = await db.execute(factor_query)
                 factor = factor_result.scalar_one_or_none()
@@ -457,7 +453,6 @@ async def run_backtest(
                     direction="POSITIVE"
                 )
                 db.add(strategy_factor)
-                logger.info(f"StrategyFactor 추가됨: {factor.factor_id} (입력값: {factor_name})")
 
         # 우선순위 팩터도 추가 (정렬용)
         if request.priority_factor and request.priority_factor != "없음":
@@ -879,6 +874,7 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
         trades=trade_list,
         yield_points=yield_points,
         universe_stocks=universe_stocks_list,
+        summary=None,
         created_at=session.created_at,
         completed_at=session.completed_at  # completed_at 사용 (updated_at 없음)
     )
@@ -939,6 +935,7 @@ async def get_backtest_result(
             ),
             trades=[],
             yield_points=[],
+            summary=None,
             created_at=session.created_at,
             completed_at=session.completed_at
         )
@@ -1121,6 +1118,7 @@ async def get_backtest_result(
         trades=trade_list,
         yield_points=yield_points,
         universe_stocks=universe_stocks_list,
+        summary=session.description if session.description else None,
         created_at=session.created_at,
         completed_at=session.completed_at
     )
@@ -1758,3 +1756,47 @@ async def get_backtest_init_data():
 async def list_available_themes():
     """사용 가능한 테마 목록"""
     return {"themes": THEME_DEFINITIONS}
+
+
+@router.post("/backtest/{backtest_id}/save-portfolio")
+async def save_backtest_as_portfolio(
+    backtest_id: str,
+    request: dict = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional)
+):
+    """
+    백테스트 결과를 포트폴리오로 저장
+
+    TODO: 실제 포트폴리오 저장 로직 구현 필요
+    현재는 404 에러 방지를 위한 스텁 엔드포인트입니다.
+
+    구현 필요 사항:
+    - PortfolioStrategy 레코드 생성
+    - 백테스트 설정 및 통계 복사
+    - 사용자별 포트폴리오 관리
+    """
+    # 백테스트 세션 확인
+    session_query = select(SimulationSession).where(SimulationSession.session_id == backtest_id)
+    session_result = await db.execute(session_query)
+    session = session_result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
+
+    # 포트폴리오 이름 (optional, 프론트엔드에서 전달될 수 있음)
+    portfolio_name = request.get("name", f"백테스트_{backtest_id[:8]}")
+
+    # TODO: 실제 저장 로직 구현
+    # - PortfolioStrategy 생성
+    # - InvestmentStrategy 연결
+    # - 전략 설정 복사
+    # - 통계 정보 저장
+
+    logger.info(f"포트폴리오 저장 요청 - backtest_id: {backtest_id}, name: {portfolio_name}")
+
+    return {
+        "success": True,
+        "message": "포트폴리오 저장 기능은 개발 중입니다. 향후 업데이트 예정입니다.",
+        "portfolio_id": None  # TODO: 실제 포트폴리오 ID 반환
+    }

@@ -16,17 +16,27 @@ import { QuestionRenderer } from "./renderers/QuestionRenderer";
 import { UserSelectionRenderer } from "./renderers/UserSelectionRenderer";
 import { StrategyRecommendationRenderer } from "./renderers/StrategyRecommendationRenderer";
 import { BacktestConfigRenderer } from "./renderers/BacktestConfigRenderer";
+import { BacktestExecutionRenderer } from "./renderers/BacktestExecutionRenderer";
 import { BacktestResultRenderer } from "./renderers/BacktestResultRenderer";
 
 interface MessageRendererProps {
   message: Message;
+  /** 백테스트 시작 콜백 (BacktestConfigRenderer에서 사용) */
+  onBacktestStart?: (
+    strategyName: string,
+    config: {
+      investmentAmount: number;
+      startDate: string;
+      endDate: string;
+    }
+  ) => void;
 }
 
 /**
  * 메시지 타입에 따라 적절한 렌더러를 선택하여 렌더링하는 컴포넌트
  * switch-case로 타입 가드를 적용하여 타입 안전성 보장
  */
-export function MessageRenderer({ message }: MessageRendererProps) {
+export function MessageRenderer({ message, onBacktestStart }: MessageRendererProps) {
   // switch-case로 타입 가드 적용
   switch (message.type) {
     case "text":
@@ -45,7 +55,22 @@ export function MessageRenderer({ message }: MessageRendererProps) {
       return <StrategyRecommendationRenderer message={message} />;
 
     case "backtest_config":
-      return <BacktestConfigRenderer message={message} />;
+      return <BacktestConfigRenderer message={message} onBacktestStart={onBacktestStart} />;
+
+    case "backtest_execution":
+      return (
+        <BacktestExecutionRenderer
+          backtestId={message.backtestId}
+          strategyId={message.strategyId}
+          strategyName={message.strategyName}
+          userName={message.userName || "사용자"}
+          config={{
+            initialCapital: message.config.investmentAmount * 10000, // 만원 → 원 변환
+            startDate: message.config.startDate,
+            endDate: message.config.endDate,
+          }}
+        />
+      );
 
     case "backtest_result":
       return <BacktestResultRenderer message={message} />;

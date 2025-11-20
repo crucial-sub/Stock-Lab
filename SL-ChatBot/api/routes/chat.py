@@ -213,7 +213,7 @@ async def generate_sse_stream(
 async def chat_stream(
     sessionId: str = Query(..., description="채팅 세션 ID"),
     message: str = Query(..., description="사용자 메시지"),
-    clientType: str = Query("assistant", description="클라이언트 유형 (assistant 또는 ai_helper)")
+    clientType: str = Query("assistant", description="클라이언트 유형 (assistant, ai_helper, home_widget)")
 ):
     """
     SSE 기반 채팅 스트리밍 엔드포인트

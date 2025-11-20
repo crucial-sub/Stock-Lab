@@ -134,6 +134,9 @@ except ImportError:
 class ChatHandler:
     """Handles conversation flow and orchestrates components."""
 
+    GREETING_KEYWORDS = {"안녕", "안녕하세요", "hi", "hello", "하이", "헬로"}
+    DEFAULT_GREETING_RESPONSE = "안녕하세요! AI assistent 입니다 :) 어떤 도움이 필요하신가요?"
+
     def __init__(self, config_path: str = "config.yaml"):
         self.config_path = config_path
         self.llm_client = None
@@ -456,6 +459,10 @@ class ChatHandler:
                         "filename": "system_ai_helper.txt",
                         "fallback": "당신은 백테스트 조건을 생성하고 DSL을 만드는 AI 헬퍼입니다."
                     },
+                    "home_widget": {
+                        "filename": "system_home_widget.txt",
+                        "fallback": "당신은 홈 화면 위젯에서 간결하게 금융 질문을 돕는 어시스턴트입니다."
+                    },
                 }
                 self.system_prompts = {}
                 for mode, spec in prompt_specs.items():
@@ -521,12 +528,20 @@ class ChatHandler:
             session_id = str(uuid.uuid4())
 
         client_type = (client_type or "assistant").lower()
-        if client_type not in ("assistant", "ai_helper"):
+        if client_type not in ("assistant", "ai_helper", "home_widget"):
             client_type = "assistant"
 
         # 설문/전략 추천 플로우 (ui_language)
         if answer or (client_type == "assistant" and self._is_strategy_request(message)):
             return await self._handle_questionnaire_flow(session_id, answer, message)
+
+        if self._is_simple_greeting(message):
+            return {
+                "answer": self.DEFAULT_GREETING_RESPONSE,
+                "intent": "greeting",
+                "session_id": session_id,
+                "sources": []
+            }
 
         # 0-0. 도메인(금융/투자) 외 질문 차단
         domain_violation = self._check_domain_restriction(message)
@@ -580,6 +595,12 @@ class ChatHandler:
 
         response["session_id"] = session_id
         return response
+
+    def _is_simple_greeting(self, message: str) -> bool:
+        if not message:
+            return False
+        plain = message.strip().lower()
+        return plain in self.GREETING_KEYWORDS
 
     def _is_strategy_request(self, message: str) -> bool:
         """전략 추천 설문을 시작할지 여부 판단."""
@@ -736,7 +757,7 @@ class ChatHandler:
             "찰리 멍거", "멍거",
             "조엘 그린블라트", "그린블라트",
         ]
-
+        
         if any(k.lower() in msg for k in finance_keywords + strategy_people):
             return None
 
@@ -767,7 +788,7 @@ class ChatHandler:
         # 전략 추천 키워드
         recommend_keywords = ['전략 추천', 'recommend', '추천']
         backtest_keywords = [
-            '백테스트 설정', '전략으로 진행', '전략으로 백테스트', '이 전략으로', '자동 설정','백테스팅', '백테스트',
+            '백테스트 설정', '전략으로 진행', '전략으로 백테스트', '이 전략으로', '자동 설정','백테스팅', '백테스트',"테스트",
             '백테스트 진행', '설정해줘', '전략 실행', '전략 설정', '실행해줘','하고싶어','조건 설정','조건 만들어줘'
         ]
 
@@ -1201,7 +1222,12 @@ class ChatHandler:
 
     def _get_agent_executor(self, client_type: str):
         """Return AgentExecutor for client_type (fallback to assistant)."""
-        normalized = "ai_helper" if client_type == "ai_helper" else "assistant"
+        if client_type == "ai_helper":
+            normalized = "ai_helper"
+        elif client_type == "home_widget":
+            normalized = "home_widget"
+        else:
+            normalized = "assistant"
         executor = self.agent_executors.get(normalized)
         if executor:
             return executor

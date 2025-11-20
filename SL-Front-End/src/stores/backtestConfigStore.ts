@@ -36,6 +36,7 @@ interface BacktestConfigStore extends BacktestRunRequest {
   addBuyConditionUIWithData: (data: Partial<BuyConditionUI>) => void;
   updateBuyConditionUI: (id: string, updates: Partial<BuyConditionUI>) => void;
   removeBuyConditionUI: (id: string) => void;
+  setBuyConditionsUI: (conditions: BuyConditionUI[]) => void;
 
   // Sell 조건 관리 함수
   addSellConditionUI: () => void;
@@ -45,6 +46,7 @@ interface BacktestConfigStore extends BacktestRunRequest {
     updates: Partial<SellConditionUI>,
   ) => void;
   removeSellConditionUI: (id: string) => void;
+  setSellConditionsUI: (conditions: SellConditionUI[]) => void;
 
   // API 변환 함수
   syncUIToAPI: () => void;

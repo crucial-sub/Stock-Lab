@@ -11,6 +11,7 @@ import { TradingActivityChart } from "./TradingActivityChart";
 
 interface BacktestLoadingStateProps {
   backtestId: string;
+  strategyName?: string;
   status: "pending" | "running";
   progress: number;
   buyCount?: number;
@@ -31,6 +32,7 @@ interface BacktestLoadingStateProps {
 
 export function BacktestLoadingState({
   backtestId,
+  strategyName,
   status,
   progress,
   buyCount,
@@ -51,7 +53,7 @@ export function BacktestLoadingState({
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-accent-error">
-                {backtestId}
+                {strategyName || backtestId}
               </h1>
               <p className="text-sm text-text-body mt-1">
                 {status === "pending"

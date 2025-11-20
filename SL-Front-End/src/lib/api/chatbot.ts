@@ -25,6 +25,7 @@ export interface ChatRequest {
     question_id: string;
     option_id: string;
   };
+  client_type?: "assistant" | "ai_helper" | "home_widget";
 }
 
 export interface OptionCard {

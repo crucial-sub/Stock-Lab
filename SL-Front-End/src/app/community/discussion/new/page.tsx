@@ -23,7 +23,7 @@ export default function FreeBoardNewPostPage() {
       },
       {
         onSuccess: (post) => {
-          router.push(`/community/discussion/${post.postId}`);
+          router.push(`/community/${post.postId}`);
         },
         onError: (error) => {
           alert(`게시 실패: ${error.message}`);

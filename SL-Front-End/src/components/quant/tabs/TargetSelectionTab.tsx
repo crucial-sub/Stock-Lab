@@ -10,7 +10,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Title } from "@/components/common";
 import {
   StockCount,
@@ -28,6 +28,7 @@ import { getUniversesSummary, getUniverseStockCount } from "@/lib/api/universes"
 import type { UniverseInfo } from "@/types/universe";
 import { useBacktestConfigStore } from "@/stores";
 import { FieldPanel } from "../ui";
+import { authApi } from "@/lib/api/auth";
 
 export default function TargetSelectionTab() {
   const { getBacktestRequest } = useBacktestConfigStore();
@@ -60,6 +61,32 @@ export default function TargetSelectionTab() {
   // 백테스트 실행 상태
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [strategyName, setStrategyName] = useState("");
+  const [nickname, setNickname] = useState("사용자");
+
+  // 기본 전략명: 닉네임-YYYYMMDD-HHMMSS (백엔드와 동일 포맷)
+  const defaultStrategyName = useMemo(() => {
+    const prefix = nickname || "사용자";
+    const ts = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const timestamp = `${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}`;
+    return `${prefix}-${timestamp}`;
+  }, [nickname]);
+
+  // 닉네임 불러오기 (기본값 접두어)
+  useEffect(() => {
+    const loadNickname = async () => {
+      try {
+        const user = await authApi.getCurrentUser();
+        if (user?.nickname) {
+          setNickname(user.nickname);
+        }
+      } catch (err) {
+        console.warn("닉네임 조회 실패, 기본값 사용:", err);
+      }
+    };
+    loadNickname();
+  }, []);
 
   // 유니버스 데이터 가져오기
   useEffect(() => {
@@ -303,7 +330,12 @@ export default function TargetSelectionTab() {
       setIsRunning(true);
       setError(null);
 
-      const request = getBacktestRequest();
+      const finalStrategyName = strategyName || defaultStrategyName;
+
+      const request = {
+        ...getBacktestRequest(),
+        strategy_name: finalStrategyName,
+      };
 
       console.log("=== 백테스트 요청 데이터 ===");
       console.log(JSON.stringify(request, null, 2));
@@ -315,7 +347,8 @@ export default function TargetSelectionTab() {
       console.log(JSON.stringify(response, null, 2));
       console.log("========================");
 
-      router.push(`/quant/result/${response.backtestId}`);
+      const encodedStrategy = encodeURIComponent(finalStrategyName);
+      router.push(`/quant/result/${response.backtestId}?strategyName=${encodedStrategy}`);
     } catch (err: any) {
       console.error("=== 백테스트 실행 실패 ===");
       console.error("Error:", err);
@@ -349,6 +382,19 @@ export default function TargetSelectionTab() {
         selectedCount={finalSelectedCount}
         totalCount={finalTotalCount}
       />
+
+      {/* 전략 이름 입력 */}
+      <FieldPanel conditionType="target">
+        <div className="space-y-2">
+          <Title variant="subtitle">전략 이름</Title>
+          <input
+            type="text"
+            value={strategyName || defaultStrategyName}
+            onChange={(e) => setStrategyName(e.target.value)}
+            className="w-full px-4 py-2 border border-border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary"
+          />
+        </div>
+      </FieldPanel>
 
       {/* 매매 대상 종목 */}
       <FieldPanel conditionType="target">

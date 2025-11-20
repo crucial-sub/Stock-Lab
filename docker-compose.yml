@@ -80,15 +80,42 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
+        NEXT_PUBLIC_CHATBOT_API_URL: ${NEXT_PUBLIC_CHATBOT_API_URL:-http://localhost:8000}
     container_name: sl_frontend
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
+      NEXT_PUBLIC_CHATBOT_API_URL: ${NEXT_PUBLIC_CHATBOT_API_URL:-http://localhost:8000}
       API_BASE_URL: ${API_BASE_URL:-http://backend:8000/api/v1}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - quant_network
+    restart: unless-stopped
+
+  # Chatbot Service
+  chatbot:
+    build:
+      context: ./SL-ChatBot
+      dockerfile: ./chatbot/Dockerfile
+    container_name: sl_chatbot
+    environment:
+      PORT: ${PORT:-8003}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      AWS_KB_ID: ${AWS_KB_ID}
+      RETRIEVER_TYPE: ${RETRIEVER_TYPE:-aws_kb}
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "${CHATBOT_PORT:-8003}:8003"
+    volumes:
+      - ./SL-ChatBot/chatbot/src:/app/src
+      - ./SL-ChatBot/api:/app/api
+      - ./SL-ChatBot/config:/app/config
+      - ./SL-ChatBot/prompts:/app/prompts
     networks:
       - quant_network
     restart: unless-stopped

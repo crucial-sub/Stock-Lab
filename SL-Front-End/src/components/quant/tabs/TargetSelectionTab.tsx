@@ -197,9 +197,11 @@ export default function TargetSelectionTab() {
       setIsRunning(true);
       setError(null);
 
+      const finalStrategyName = strategyName || defaultStrategyName;
+
       const request = {
         ...getBacktestRequest(),
-        strategy_name: strategyName || defaultStrategyName,
+        strategy_name: finalStrategyName,
       };
 
       console.log("=== 백테스트 요청 데이터 ===");
@@ -212,7 +214,8 @@ export default function TargetSelectionTab() {
       console.log(JSON.stringify(response, null, 2));
       console.log("========================");
 
-      router.push(`/quant/result/${response.backtestId}`);
+      const encodedStrategy = encodeURIComponent(finalStrategyName);
+      router.push(`/quant/result/${response.backtestId}?strategyName=${encodedStrategy}`);
     } catch (err: any) {
       console.error("=== 백테스트 실행 실패 ===");
       console.error("Error:", err);

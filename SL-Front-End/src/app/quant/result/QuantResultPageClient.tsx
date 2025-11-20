@@ -35,12 +35,14 @@ import { mockBacktestResult } from "@/mocks/backtestResult";
 
 interface QuantResultPageClientProps {
   backtestId: string;
+  initialStrategyName?: string;
 }
 
 type TabType = "stockInfo" | "returns" | "statistics" | "history" | "settings";
 
 export function QuantResultPageClient({
   backtestId,
+  initialStrategyName,
 }: QuantResultPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("stockInfo");
   const queryClient = useQueryClient();
@@ -117,6 +119,7 @@ export function QuantResultPageClient({
     return (
       <BacktestLoadingState
         backtestId={backtestId}
+        strategyName={statusData.strategyName || initialStrategyName}
         status={statusData.status}
         progress={statusData.progress || 0}
         buyCount={statusData.buyCount}

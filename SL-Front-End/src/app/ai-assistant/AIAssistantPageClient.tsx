@@ -588,6 +588,7 @@ export function AIAssistantPageClient({
           question_id: questionId,
           option_id: optionId,
         },
+        client_type: "assistant",
       });
 
       setSessionId(response.session_id);

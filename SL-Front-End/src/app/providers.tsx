@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { getQueryClient } from "@/lib/query-client";
 import { SessionExpiredModal } from "@/components/modal/SessionExpiredModal";
 import { useAuthStore } from "@/stores/authStore";
+import { FloatingChatWidget } from "@/components/home/FloatingChatWidget";
 
 export function Providers({ children }: { children: ReactNode }) {
   // 브라우저 환경에서 싱글톤 QueryClient 사용
@@ -29,6 +30,8 @@ export function Providers({ children }: { children: ReactNode }) {
         isOpen={isSessionExpired}
         onClose={() => setSessionExpired(false)}
       />
+      {/* 전역 플로팅 챗봇 (시세/뉴스/커뮤니티/퀀트 탭에서도 노출) */}
+      <FloatingChatWidget />
     </QueryClientProvider>
   );
 }

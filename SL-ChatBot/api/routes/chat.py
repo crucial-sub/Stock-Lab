@@ -81,7 +81,8 @@ async def chat_message(request: ChatRequest):
         result = await chatbot.chat(
             message=request.message,
             session_id=request.session_id,
-            answer=request.answer
+            answer=request.answer,
+            client_type=request.client_type or "assistant"
         )
 
         print(f"DEBUG CHAT: User message: {request.message}")
@@ -94,7 +95,7 @@ async def chat_message(request: ChatRequest):
             intent=result.get("intent"),
             context=result.get("context"),
             conditions=result.get("conditions"),
-            session_id=request.session_id,
+            session_id=result.get("session_id") or request.session_id,
             ui_language=result.get("ui_language"),
             backtest_conditions=result.get("backtest_conditions")
         )
@@ -123,7 +124,8 @@ async def chat_message(request: ChatRequest):
 async def generate_sse_stream(
     message: str,
     session_id: str,
-    chatbot
+    chatbot,
+    client_type: str = "assistant"
 ) -> AsyncGenerator[str, None]:
     """
     SSE 스트림 생성기
@@ -145,7 +147,11 @@ async def generate_sse_stream(
         yield f"data: {json.dumps({'type': 'stream_start', 'messageId': message_id}, ensure_ascii=False)}\n\n"
 
         # 전체 응답 생성 (기존 chatbot.chat 호출)
-        result = await chatbot.chat(message=message, session_id=session_id)
+        result = await chatbot.chat(
+            message=message,
+            session_id=session_id,
+            client_type=client_type
+        )
         answer = result.get("answer", "")
 
         # 토큰 단위 분할 및 전송 (5-10 토큰씩 배칭)
@@ -206,7 +212,8 @@ async def generate_sse_stream(
 @router.get("/stream")
 async def chat_stream(
     sessionId: str = Query(..., description="채팅 세션 ID"),
-    message: str = Query(..., description="사용자 메시지")
+    message: str = Query(..., description="사용자 메시지"),
+    clientType: str = Query("assistant", description="클라이언트 유형 (assistant, ai_helper, home_widget)")
 ):
     """
     SSE 기반 채팅 스트리밍 엔드포인트
@@ -252,7 +259,7 @@ async def chat_stream(
 
     # SSE 스트리밍 응답 반환
     return StreamingResponse(
-        generate_sse_stream(message, sessionId, chatbot),
+        generate_sse_stream(message, sessionId, chatbot, clientType),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -274,7 +281,8 @@ async def delete_session(session_id: str):
         )
 
     # Clear session history
-    if session_id in chatbot.handler.conversation_history:
-        del chatbot.handler.conversation_history[session_id]
+    keys_to_delete = [key for key in chatbot.handler.conversation_history.keys() if key.endswith(f":{session_id}")]
+    for key in keys_to_delete:
+        del chatbot.handler.conversation_history[key]
 
     return {"message": "Session deleted", "session_id": session_id}

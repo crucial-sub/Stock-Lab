@@ -167,12 +167,16 @@ class NewsRepository:
             뉴스 리스트
         """
         try:
-            # 프론트에서 받은 한글 테마명을 영어로 변환
-            # 예: "전기·전자" -> "electronics"
+            # 프론트에서 받은 값이 테마인지 회사명인지 판단
+            # 테마일 경우 영어 코드로 변환, 회사명일 경우 그대로 사용
             search_theme = THEME_MAPPING_REVERSE.get(theme, theme)
 
+            # 회사명(종목명)으로도 검색 가능하도록 OR 조건 추가
             query = select(NewsArticle).where(
-                NewsArticle.theme == search_theme
+                or_(
+                    NewsArticle.theme == search_theme,
+                    NewsArticle.company_name == theme
+                )
             ).order_by(
                 NewsArticle.analyzed_at.desc()
             ).limit(limit)
@@ -188,22 +192,37 @@ class NewsRepository:
     @staticmethod
     async def get_available_themes(db: AsyncSession) -> List[str]:
         """
-        DB에 실제로 존재하는 테마 목록 조회
+        DB에 실제로 존재하는 회사명(종목명) 목록 조회
 
         Args:
             db: 데이터베이스 세션
 
         Returns:
-            테마 목록
+            회사명 목록
         """
         try:
-            query = select(NewsArticle.theme).distinct().where(
-                NewsArticle.theme.isnot(None)
+            query = (
+                select(NewsArticle.company_name)
+                .distinct()
+                .where(
+                    NewsArticle.company_name.isnot(None),
+                    NewsArticle.company_name != ""
+                )
+                .order_by(NewsArticle.company_name.asc())
             )
 
             result = await db.execute(query)
-            themes = result.scalars().all()
+            companies = result.scalars().all()
 
+            # company_name이 비어있을 경우를 대비해 테마명으로 대체
+            if companies:
+                return list(companies)
+
+            theme_query = select(NewsArticle.theme).distinct().where(
+                NewsArticle.theme.isnot(None)
+            )
+            theme_result = await db.execute(theme_query)
+            themes = theme_result.scalars().all()
             return list(themes) if themes else []
         except Exception as e:
             logger.error(f"Failed to get available themes: {e}")
@@ -227,8 +246,7 @@ def _serialize_news(article: NewsArticle) -> Dict:
     # 날짜 선택 (우선순위: analyzed_at(분석 완료 시간) > crawled_at > news_date)
     published_at = ""
 
-    # 분석 완료 시간을 우선순위로 표시
-    date_obj = article.analyzed_at or article.crawled_at or article.news_date
+    date_obj = article.news_date or article.crawled_at or article.analyzed_at
 
     if date_obj:
         try:
@@ -261,10 +279,9 @@ def _serialize_news(article: NewsArticle) -> Dict:
     }
     sentiment = sentiment_map.get(article.sentiment_label, "neutral")
 
-    # 테마명을 영어(DB) -> 한국어(프론트) 매핑
-    theme_name = None
-    if article.theme:
-        # DB에 저장된 값이 영어 코드이므로 매핑을 통해 한국어로 변환
+    # 카테고리는 기본적으로 회사명(종목명)으로 표기, 없으면 테마명 매핑
+    theme_name = article.company_name or None
+    if not theme_name and article.theme:
         theme_name = THEME_MAPPING.get(article.theme.lower(), article.theme)
 
     # 종목명 결정: company_name > stock_code 매핑 > 빈 문자열

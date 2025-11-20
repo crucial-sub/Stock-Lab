@@ -210,6 +210,7 @@ export function AIHelperSidebar({
         const response = await sendChatMessage({
           message: contextMessage,
           session_id: sessionId || undefined,
+          client_type: "ai_helper",
         });
 
         setSessionId(response.session_id);
@@ -219,15 +220,6 @@ export function AIHelperSidebar({
         const buyConditions = backtestConditions.buy || backtestConditions || [];
         const sellConditions = backtestConditions.sell || [];
 
-        // intent가 backtest_configuration이면 기본 조건 자동 적용
-        const isAutoApply = response.intent === "backtest_configuration";
-        if (isAutoApply && buyConditions.length > 0) {
-            onBuyConditionsAdd?.(buyConditions);
-        }
-        if (isAutoApply && sellConditions.length > 0) {
-            onSellConditionsAdd?.(sellConditions);
-        }
-
         setMessages((prev) => [
           ...prev,
           {
@@ -235,8 +227,8 @@ export function AIHelperSidebar({
             content: response.answer,
             backtestConditionsBuy: buyConditions,
             backtestConditionsSell: sellConditions,
-            appliedBuy: isAutoApply && buyConditions.length > 0,
-            appliedSell: isAutoApply && sellConditions.length > 0,
+            appliedBuy: false,
+            appliedSell: false,
           },
         ]);
       } catch (error) {
@@ -252,7 +244,7 @@ export function AIHelperSidebar({
         setIsLoading(false);
       }
     },
-    [sessionId, isLoading, currentBuyConditions, currentSellConditions, onBuyConditionsAdd, onSellConditionsAdd]
+    [sessionId, isLoading, currentBuyConditions, currentSellConditions]
   );
 
   return (

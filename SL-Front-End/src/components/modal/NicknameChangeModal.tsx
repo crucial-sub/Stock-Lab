@@ -76,7 +76,7 @@ export function NicknameChangeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay">
-      <div className="bg-base-0 rounded-xl shadow-elev-strong w-full max-w-md p-6">
+      <div className="bg-base-0 rounded-[12px] shadow-elev-strong w-full max-w-md p-6">
         <h2 className="text-xl font-bold text-text-body mb-4">닉네임 변경</h2>
 
         <div className="mb-4">
@@ -87,7 +87,7 @@ export function NicknameChangeModal({
             type="text"
             value={currentNickname}
             disabled
-            className="w-full px-4 py-3 bg-surface border border-surface rounded-lg text-text-muted"
+            className="w-full px-4 py-3 bg-surface border border-surface rounded-[12px] text-text-muted"
           />
         </div>
 
@@ -105,33 +105,33 @@ export function NicknameChangeModal({
                 setError(null);
               }}
               placeholder="새로운 닉네임을 입력하세요"
-              className="flex-1 px-4 py-3 bg-surface border border-surface rounded-lg text-text-body focus:border-brand-soft focus:shadow-elev-brand transition-all"
+              className="flex-1 px-4 py-3 bg-surface border border-surface rounded-[12px] text-text-body focus:border-brand-soft focus:shadow-elev-brand transition-all"
             />
             <button
               onClick={handleCheckNickname}
               disabled={!newNickname || newNickname === currentNickname}
-              className="px-4 py-3 bg-surface text-text-body rounded-lg hover:bg-button-primary-soft hover:text-brand transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-3 bg-[#1822340D] text-muted rounded-[12px] hover:bg-[#C8C8C8] hover:text-body transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               중복확인
             </button>
           </div>
           {isAvailable === true && (
-            <p className="text-sm text-positive mt-2">사용 가능한 닉네임입니다</p>
+            <p className="text-sm text-brand-purple mt-2">사용 가능한 닉네임입니다</p>
           )}
-          {error && <p className="text-sm text-price-down mt-2">{error}</p>}
+          {error && <p className="text-price-up mt-2">{error}</p>}
         </div>
 
         <div className="flex gap-3">
           <button
             onClick={handleClose}
-            className="flex-1 px-4 py-3 bg-surface text-text-body rounded-lg hover:bg-sidebar-item-sub-active transition-colors"
+            className="flex-1 px-4 py-3 bg-[#1822340D] text-body rounded-[12px] hover:bg-[#C8C8C8] transition-colors"
           >
             취소
           </button>
           <button
             onClick={handleSubmit}
             disabled={isLoading || !isAvailable}
-            className="flex-1 px-4 py-3 bg-button-primary-soft text-brand rounded-lg hover:bg-brand hover:text-base-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-3 bg-brand-purple text-white rounded-[12px] hover:bg-brand-purple/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? "변경 중..." : "변경하기"}
           </button>

@@ -1,0 +1,338 @@
+120일 이동평균
+12개월 모멘텀
+12개월 수익률
+1개월 모멘텀
+1개월 수익률
+1년 배당 성장률
+20일 거래량 비율
+20일 변동성
+20일 이동평균
+20일 회전율
+250일 이동평균
+3개월 모멘텀
+3개월 수익률
+3년 배당 성장률 (CAGR)
+52주 High/Low 대비 위치
+52주 신고가 경과일
+52주 신저가 경과일
+52주 최고가 대비
+52주 최저가 대비
+5일 이동평균
+60일 변동성
+60일 이동평균
+6개월 모멘텀
+6개월 수익률
+ACCRUALS_RATIO
+ACCUMULATION_DISTRIBUTION
+ADX
+ADX (추세 강도)
+ALTMAN_Z_SCORE
+AMIHUD_ILLIQUIDITY
+AROON_DOWN
+AROON_UP
+ASSET_GROWTH_1Y
+ASSET_GROWTH_YOY
+ASSET_QUALITY
+ASSET_TURNOVER
+ATR
+ATR (평균진폭)
+AVG_TRADING_VALUE
+Accumulation/Distribution Line
+Altman Z-Score
+Aroon Down
+Aroon Up
+BETA
+BOLLINGER_POSITION
+BOLLINGER_WIDTH
+BOOK_TO_MARKET
+BOOK_VALUE_GROWTH_1Y
+CAPE Ratio
+CAPEX_TO_OCF
+CAPEX_TO_SALES
+CAPE_RATIO
+CASHFLOW
+CASH_CONVERSION_EFFICIENCY
+CASH_RATIO
+CCI
+CFF_RATIO
+CFI_TO_ASSETS
+CFO_TO_SALES
+CMF
+CMF (차이킨 자금흐름)
+COMPOSITE
+CURRENT_RATIO
+DAYS_FROM_52W_HIGH
+DAYS_FROM_52W_LOW
+DEBT_RATIO
+DEBT_TO_EQUITY
+DISTANCE_FROM_52W_HIGH
+DISTANCE_FROM_52W_LOW
+DIVIDEND
+DIVIDEND_CONSISTENCY
+DIVIDEND_GROWTH_1Y
+DIVIDEND_GROWTH_3Y
+DIVIDEND_GROWTH_YOY
+DIVIDEND_PAYOUT_RATIO
+DIVIDEND_YIELD
+DOWNSIDE_VOLATILITY
+DUPONT_ROE
+EARNINGS_GROWTH_1Y
+EARNINGS_GROWTH_3Y
+EARNINGS_QUALITY
+EARNINGS_YIELD
+EASE_OF_MOVEMENT
+EBITDA_MARGIN
+EBITDA마진
+EFFICIENCY
+ENTERPRISE_YIELD
+EPS_GROWTH_YOY
+EPS성장률
+EPS성장률(YoY)
+EQUITY_MULTIPLIER
+EV/EBITDA
+EV/FCF
+EV/Sales
+EV_EBITDA
+EV_FCF
+EV_SALES
+FCF 수익률
+FCF_MARGIN
+FCF_TO_SALES
+FCF_YIELD
+FCF마진
+FINANCIAL_LEVERAGE
+FIN_QUALITY
+FIXED_ASSET_TURNOVER
+FORCE_INDEX
+FREE_CASH_FLOW
+GPM
+GRAHAM_NUMBER
+GREENBLATT_RANK
+GROWTH
+HISTORICAL_VOLATILITY_20
+HISTORICAL_VOLATILITY_60
+INTEREST_COVERAGE
+INTRADAY_VOLATILITY
+INVENTORY_TURNOVER
+MACD
+MACD 시그널
+MACD 히스토그램
+MACD_HISTOGRAM
+MACD_SIGNAL
+MAGIC_FORMULA
+MAX_DRAWDOWN
+MA_120
+MA_20
+MA_250
+MA_5
+MA_60
+MFI
+MFI (자금흐름지수)
+MICROSTRUCTURE
+MOMENTUM
+MOMENTUM_12M
+MOMENTUM_1M
+MOMENTUM_3M
+MOMENTUM_6M
+NET_INCOME_GROWTH_YOY
+NPM
+OBV
+OBV (거래량누적)
+OCF_GROWTH_1Y
+OCF_RATIO
+OPERATING_INCOME_GROWTH_YOY
+OPERATING_LEVERAGE
+OPM
+PARKINSON_VOLATILITY
+PBR
+PCR
+PEG
+PEG Ratio
+PEG_RATIO
+PER
+PIOTROSKI_F_SCORE
+PRICE_POSITION
+PRICE_TO_FCF
+PRICE_VS_MA20
+PROFITABILITY
+PROFITABILITY_SCORE
+PSR
+PSR (Price to Sales)
+PS_RATIO
+PTBV
+Parkinson 변동성
+Price to FCF
+QUALITY
+QUALITY_SCORE
+QUICK_RATIO
+RECEIVABLES_TURNOVER
+REINVESTMENT_RATE
+RELATIVE_STRENGTH
+RETURN_12M
+RETURN_1M
+RETURN_3M
+RETURN_6M
+REVENUE_GROWTH_1Y
+REVENUE_GROWTH_3Y
+REVENUE_GROWTH_QOQ
+REVENUE_GROWTH_YOY
+RISK
+ROA
+ROE
+ROIC
+RSI
+RSI (상대강도지수)
+RSI(14)
+RSI_14
+SHAREHOLDER_YIELD
+SHARPE_RATIO
+SORTINO_RATIO
+STABILITY
+STABILITY_SCORE
+STOCHASTIC_14
+SUSTAINABLE_GROWTH_RATE
+TECHNICAL
+TRIX
+TURNOVER_RATE_20D
+ULTIMATE_OSCILLATOR
+Ultimate Oscillator
+VALUATION
+VALUE
+VOLATILITY
+VOLATILITY_20D
+VOLATILITY_60D
+VOLUME
+VOLUME_MA_20
+VOLUME_MA_5
+VOLUME_MOMENTUM
+VOLUME_PRICE_TREND
+VOLUME_RATIO_20D
+VOLUME_ROC
+VOLUME_SURGE
+VWAP
+VWAP (거래량가중평균가격)
+WEEK_52_POSITION
+WILLIAMS_R
+WORKING_CAPITAL_TURNOVER
+ZMIJEWSKI_SCORE
+Zmijewski 스코어
+factor
+factor_cashflow
+factor_composite
+factor_dividend
+factor_efficiency
+factor_fin_quality
+factor_growth
+factor_microstructure
+factor_momentum
+factor_profitability
+factor_quality
+factor_risk
+factor_stability
+factor_technical
+factor_valuation
+factor_value
+factor_volatility
+factor_volume
+가격 압력 지수
+가격 위치
+가격 이동 용이성
+가격모멘텀
+가치주
+거래량 20일 평균
+거래량 5일 평균
+거래량 급증률
+거래량 모멘텀
+거래량 변화율
+거래량-가격 추세
+고성장
+고정자산회전율
+골든크로스
+그레이엄 넘버
+그린블랫 순위
+기술적지표
+기업수익률
+내재가치
+당좌비율
+듀폰 분석 ROE
+마법 공식
+매출성장
+매출성장률
+매출성장률(QoQ)
+매출성장률(YoY)
+매출액증가율(1Y)
+매출액증가율(3Y CAGR)
+매출채권회전율
+매출총이익률
+발생액 비율
+배당 지속성
+배당성장
+배당성장률
+배당성장률(YoY)
+배당성향
+배당수익률
+배당종목
+베타
+볼린저밴드 위치
+볼린저밴드 폭
+부채비율
+부채비율(%)
+상대강도
+샤프 비율
+소르티노 비율
+수익모멘텀
+수익성 점수
+순이익률
+순이익성장률(YoY)
+순이익증가율(1Y)
+순이익증가율(3Y CAGR)
+순자산증가율
+스토캐스틱(14)
+아미후드 비유동성
+역사적 변동성 (20일)
+역사적 변동성 (60일)
+영업 레버리지
+영업이익률
+영업이익성장률(YoY)
+영업현금흐름/매출액
+영업현금흐름비율
+영업현금흐름증가율
+운전자본회전율
+윌리엄스 %R
+유동비율
+이익수익률
+이익증가율
+이익품질
+이자보상배수
+이자보상배율
+일중 변동성
+잉여현금흐름
+잉여현금흐름/매출액
+자기자본승수
+자본지출/매출액
+자본지출/영업현금흐름
+자산 품질
+자산성장률(YoY)
+자산증가율
+자산회전율
+장부가 대비 시가
+재고자산회전율
+재무 레버리지
+재무건전성
+재무안정성 점수
+재무현금흐름비율
+재투자율
+재평가
+저평가
+주가 vs 20일선 괴리율
+주주수익률
+지속가능성장률
+최대 낙폭
+추세
+투자현금흐름/자산
+평균 거래대금
+품질점수
+피오트로스키 F-스코어
+하방 변동성
+현금비율
+현금전환효율성

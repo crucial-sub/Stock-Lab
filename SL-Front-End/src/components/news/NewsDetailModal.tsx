@@ -25,10 +25,17 @@ const sentimentBadge: Record<
 };
 
 export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
-  const subtitle = news.subtitle || news.summary || "";
-  const bodyContent = news.content || news.summary || "";
+  // 상단(링크 위) 요약: content 우선, 없으면 summary
+  const subtitle = news.content || news.summary || news.subtitle || "";
+  // 하단 본문: llm_summary 우선, 없으면 content → summary
+  const bodyContent =
+    (news as any)?.llm_summary ||
+    news.summary ||
+    news.content ||
+    "";
   const sentiment = sentimentBadge[news.sentiment] || sentimentBadge.neutral;
-  const pressLabel = news.pressName || news.source || "";
+  const pressLabel = news.pressName || (news as any)?.media_name || news.source || "";
+  const tickerLabel = news.tickerLabel || news.stockCode || "종목 이름";
 
   return (
     <div
@@ -54,9 +61,14 @@ export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
         </div>
 
         <div className="px-5 py-5">
-          <span className="text-[1.5rem] font-semibold text-black">
+          <div className="text-[1.5rem] font-semibold text-black">
             {news.title}
-          </span>
+          </div>
+          {subtitle && (
+            <div className="mt-1 text-[1rem] font-normal text-[#4A4A4A]">
+              {subtitle}
+            </div>
+          )}
           
           <div className="mt-2 flex flex-wrap items-center gap-3 text-[1rem] text-[#A0A0A0]">
             {news.publishedAt && <span>{news.publishedAt}</span>}
@@ -85,7 +97,7 @@ export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
 
           <div className="mt-2 flex flex-wrap gap-2 text-sm font-medium">
             <span className="rounded-[4px] bg-[#E1E1E1] px-3 py-1 text-[#000000] border-[0.5px] border-[#000000]">
-              {news.tickerLabel || "종목 이름"}
+              {tickerLabel}
             </span>
             {news.themeName && (
               <span className="rounded-[4px] bg-[#F4E2FF] px-3 py-1 text-brand-purple border-[0.5px] border-brand-purple">

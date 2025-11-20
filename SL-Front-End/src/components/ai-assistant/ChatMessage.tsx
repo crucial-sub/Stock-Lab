@@ -1,10 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
+import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -17,27 +18,60 @@ interface ChatMessageProps {
  */
 export function ChatMessage({ role, content, backtestConditions }: ChatMessageProps) {
   const isUser = role === "user";
-  const router = useRouter();
+  const {
+    buyConditionsUI,
+    sellConditionsUI,
+    setBuyConditionsUI,
+    setSellConditionsUI,
+  } = useBacktestConfigStore();
 
-  const extractBuyConditions = () => {
-    if (!backtestConditions) return [];
-    if (Array.isArray(backtestConditions)) return backtestConditions;
-    if (Array.isArray(backtestConditions?.buy)) return backtestConditions.buy;
-    return [];
-  };
+  const { buyConditions, sellConditions } = useMemo(() => {
+    const buy = [];
+    const sell = [];
+    if (backtestConditions) {
+      if (Array.isArray(backtestConditions)) {
+        buy.push(...backtestConditions);
+      } else {
+        if (Array.isArray(backtestConditions.buy)) buy.push(...backtestConditions.buy);
+        if (Array.isArray(backtestConditions.sell)) sell.push(...backtestConditions.sell);
+      }
+    }
+    return { buyConditions: buy, sellConditions: sell };
+  }, [backtestConditions]);
 
-  const buyConditions = extractBuyConditions();
-  const hasConditions = buyConditions.length > 0;
-
-  const handleBacktest = () => {
-    if (!hasConditions) return;
-
-    const queryParams = new URLSearchParams({
-      conditions: JSON.stringify(buyConditions),
+  const convertToUI = (conditions: any[], existingLength: number, prefix: string) => {
+    return conditions.map((cond, idx) => {
+      const id = String.fromCharCode(65 + existingLength + idx);
+      const factorName = cond?.factor ?? null;
+      const operator = cond?.operator ?? "";
+      const value = cond?.value !== undefined && cond?.value !== null ? String(cond.value) : "";
+      const argument =
+        Array.isArray(cond?.params) && cond.params.length ? cond.params.join(",") : undefined;
+      return {
+        id: `${prefix}${id}`,
+        factorName,
+        subFactorName: null,
+        operator,
+        value,
+        argument,
+      };
     });
-    // 백테스트 신규 페이지로 이동하며 조건을 전달
-    router.push(`/quant/new?${queryParams.toString()}`);
   };
+
+  const handleApplyBuy = () => {
+    if (!buyConditions.length) return;
+    const mapped = convertToUI(buyConditions, buyConditionsUI.length, "B");
+    setBuyConditionsUI([...buyConditionsUI, ...mapped]);
+  };
+
+  const handleApplySell = () => {
+    if (!sellConditions.length) return;
+    const mapped = convertToUI(sellConditions, sellConditionsUI.length, "S");
+    setSellConditionsUI([...sellConditionsUI, ...mapped]);
+  };
+
+  const hasBuyConditions = buyConditions.length > 0;
+  const hasSellConditions = sellConditions.length > 0;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6`}>
@@ -157,14 +191,26 @@ export function ChatMessage({ role, content, backtestConditions }: ChatMessagePr
           </div>
         )}
 
-        {/* 백테스트 조건이 있으면 버튼 표시 */}
-        {!isUser && hasConditions && (
-          <button
-            onClick={handleBacktest}
-            className="mt-3 w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
-          >
-            설정하기
-          </button>
+        {/* 조건 생성 응답일 때 매수/매도 추가 버튼 */}
+        {!isUser && (hasBuyConditions || hasSellConditions) && (
+          <div className="mt-3 flex w-full flex-col gap-2 sm:flex-row">
+            {hasBuyConditions && (
+              <button
+                onClick={handleApplyBuy}
+                className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+              >
+                매수 조건에 추가
+              </button>
+            )}
+            {hasSellConditions && (
+              <button
+                onClick={handleApplySell}
+                className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
+              >
+                매도 조건에 추가
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

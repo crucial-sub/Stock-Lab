@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { DiscussionPreviewSection } from "@/components/community";
 
 /**

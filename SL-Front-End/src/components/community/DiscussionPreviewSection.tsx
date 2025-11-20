@@ -28,7 +28,7 @@ export function DiscussionPreviewSection({
     data: discussionPosts,
     isLoading,
     error,
-  } = usePostsQuery({ postType: "DISCUSSION", limit : 3});
+  } = usePostsQuery({ postType: "DISCUSSION", limit : 5});
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);

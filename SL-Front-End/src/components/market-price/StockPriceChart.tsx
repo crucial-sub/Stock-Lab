@@ -67,22 +67,27 @@ export function StockPriceChart({
       })
       .sort((a, b) => a.date - b.date);
 
-    // 기간에 따라 최근 N개 데이터만 선택
-    const filteredData = allValidData.slice(
-      -Math.min(period, allValidData.length),
-    );
+    // 기간(일수) 기준으로 최근 데이터 필터링 (주말/공휴일 포함)
+    const lastTimestamp = allValidData[allValidData.length - 1]?.date ?? 0;
+    const cutoffTimestamp = lastTimestamp - period * 24 * 60 * 60 * 1000;
+    let filteredData = allValidData.filter((point) => point.date >= cutoffTimestamp);
+
+    if (filteredData.length === 0) {
+      filteredData = allValidData.slice(-Math.min(period, allValidData.length));
+    }
 
     // 데이터가 없으면 차트를 그리지 않음
     if (filteredData.length === 0) {
       return;
     }
 
-    // 최고가, 최저가 찾기
+    // 최고가, 최저가, 마지막 값 찾기
     const prices = filteredData.map((d) => d.value);
     const maxPrice = Math.max(...prices);
     const minPrice = Math.min(...prices);
     const _maxPoint = filteredData.find((d) => d.value === maxPrice)!;
     const _minPoint = filteredData.find((d) => d.value === minPrice)!;
+    const lastPoint = filteredData[filteredData.length - 1];
 
     // 색상 결정 (상승: 빨강, 하락: 파랑)
     const chartColor = isRising ? 0xff6464 : 0x007dfc;
@@ -114,20 +119,39 @@ export function StockPriceChart({
     const xRenderer = am5xy.AxisRendererX.new(root, {
       minGridDistance: 50,
     });
-    xRenderer.labels.template.set("visible", false);
-    xRenderer.grid.template.set("visible", false);
+    xRenderer.labels.template.setAll({
+      visible: true,
+      fontSize: 8,
+      fill: am5.color(0x97a3ba),
+      centerY: am5.p50,
+      paddingTop: 4,
+    });
+    xRenderer.grid.template.setAll({
+      stroke: am5.color(0xe9eef7),
+      strokeOpacity: 0.4,
+    });
 
     const xAxis = chart.xAxes.push(
       am5xy.DateAxis.new(root, {
         baseInterval: { timeUnit: "day", count: 1 },
+        grindIntervals: [{ timeUnit: "week", count: 1 }],
         renderer: xRenderer,
       }),
     );
 
     // Y축 (가격) - 라벨과 그리드 완전히 숨김
     const yRenderer = am5xy.AxisRendererY.new(root, {});
-    yRenderer.labels.template.set("visible", false);
-    yRenderer.grid.template.set("visible", false);
+    yRenderer.labels.template.setAll({
+      visible: true,
+      fontSize: 8,
+      fill: am5.color(0x97a3ba),
+      centerY: am5.p50,
+    });
+    yRenderer.grid.template.setAll({
+      stroke: am5.color(0xe9eef7),
+      strokeOpacity: 0.6,
+      strokeDasharray: [2, 4],
+    });
 
     const yAxis = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
@@ -136,6 +160,22 @@ export function StockPriceChart({
     );
 
     // 라인 시리즈 생성 (깔끔한 단일 라인)
+    const areaGradient = am5.LinearGradient.new(root, {
+      stops: [
+        { color: am5.color(chartColor), opacity: 0.25 },
+        { color: am5.color(chartColor), opacity: 0 },
+      ],
+      rotation: 90,
+    });
+
+    const strokeGradient = am5.LinearGradient.new(root, {
+      stops: [
+        { color: am5.color(chartColor), opacity: 0.9 },
+        { color: am5.color(chartColor), opacity: 0.5 },
+      ],
+      rotation: 0,
+    });
+
     const series = chart.series.push(
       am5xy.LineSeries.new(root, {
         name: "주가",
@@ -165,8 +205,17 @@ export function StockPriceChart({
 
     // 라인 스타일 설정 (부드럽고 연속적인 라인)
     series.strokes.template.setAll({
+<<<<<<< HEAD
       strokeWidth: 2.5,
       tension: 0.5, // 곡선 부드럽게
+=======
+      strokeWidth: 2,
+      strokeGradient,
+    });
+    series.fills.template.setAll({
+      visible: true,
+      fillGradient: areaGradient,
+>>>>>>> f5f9a26 (Refactor: 세부 종목 창 디자인 수정)
     });
 
     // 데이터 포인트 숨김 (깔끔한 라인만)
@@ -221,6 +270,39 @@ export function StockPriceChart({
       const dataItem = target.dataItem as any;
       if (!dataItem) return false;
       return dataItem.get("valueY") === minPrice;
+    });
+
+    // 현재가 기준선
+    const lastRange = yAxis.createAxisRange(
+      yAxis.makeDataItem({
+        value: lastPoint.value,
+      }),
+    );
+    lastRange.get("grid").setAll({
+      stroke: am5.color(chartColor),
+      strokeOpacity: 0.6,
+      strokeDasharray: [6, 6],
+    });
+    lastRange.get("label").setAll({
+      text: `${lastPoint.value.toLocaleString()}원`,
+      fontSize: 10,
+      fontWeight: "400",
+      fill: am5.color(chartColor),
+      background: am5.RoundedRectangle.new(root, {
+        fill: am5.color(0xffffff),
+        fillOpacity: 0.9,
+        cornerRadiusTL: 4,
+        cornerRadiusBL: 4,
+        cornerRadiusTR: 4,
+        cornerRadiusBR: 4,
+        stroke: am5.color(chartColor),
+        strokeOpacity: 0.3,
+      }),
+      paddingLeft: 4,
+      paddingRight: 4,
+      paddingTop: 2,
+      paddingBottom: 2,
+      centerY: am5.p50,
     });
 
     // 커서 추가 (마우스 오버 시 수직선만)

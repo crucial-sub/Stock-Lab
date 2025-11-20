@@ -24,6 +24,8 @@ import {
   type StockInfo,
   searchStocks,
 } from "@/lib/api/industries";
+import { getUniversesSummary, getUniverseStockCount } from "@/lib/api/universes";
+import type { UniverseInfo } from "@/types/universe";
 import { useBacktestConfigStore } from "@/stores";
 import { FieldPanel } from "../ui";
 import { authApi } from "@/lib/api/auth";
@@ -32,6 +34,12 @@ export default function TargetSelectionTab() {
   const { getBacktestRequest } = useBacktestConfigStore();
   const router = useRouter();
 
+  // 유니버스 데이터 상태
+  const [universes, setUniverses] = useState<UniverseInfo[]>([]);
+  const [selectedUniverses, setSelectedUniverses] = useState<Set<string>>(
+    new Set()
+  );
+
   // 산업 데이터 상태 (DB에서 가져옴)
   const [industries, setIndustries] = useState<string[]>([]);
   const [industryStockCounts, setIndustryStockCounts] = useState<
@@ -39,6 +47,10 @@ export default function TargetSelectionTab() {
   >(new Map());
   const [isLoadingIndustries, setIsLoadingIndustries] = useState(true);
   const [totalStockCount, setTotalStockCount] = useState(0);
+
+  // 유니버스 기반 종목 수 (동적 계산)
+  const [universeBasedStockCount, setUniverseBasedStockCount] = useState(0);
+  const [universeTotalStockCount, setUniverseTotalStockCount] = useState(0);
 
   // 종목 검색 및 선택 상태
   const [searchQuery, setSearchQuery] = useState("");
@@ -74,6 +86,38 @@ export default function TargetSelectionTab() {
       }
     };
     loadNickname();
+  }, []);
+
+  // 유니버스 데이터 가져오기
+  useEffect(() => {
+    async function fetchUniverses() {
+      try {
+        const data = await getUniversesSummary();
+        setUniverses(data.universes);
+
+        // 기본적으로 모든 유니버스 선택
+        const allUniverseIds = new Set(data.universes.map((u) => u.id));
+        setSelectedUniverses(allUniverseIds);
+
+        // 전체 유니버스의 종목 수 가져오기 (전체 카운트용)
+        try {
+          const totalResponse = await getUniverseStockCount(Array.from(allUniverseIds));
+          setUniverseTotalStockCount(totalResponse.stockCount);
+          console.log("🔢 전체 유니버스 종목 수:", totalResponse.stockCount);
+        } catch (err) {
+          console.error("전체 유니버스 종목 수 조회 실패:", err);
+        }
+
+        console.log("=== 유니버스 데이터 로드 성공 ===");
+        console.log("유니버스 수:", data.universes.length);
+        console.log("기본 선택된 유니버스:", allUniverseIds.size);
+        console.log("========================");
+      } catch (err) {
+        console.error("유니버스 데이터 로드 실패:", err);
+      }
+    }
+
+    fetchUniverses();
   }, []);
 
   // DB에서 산업 목록 가져오기
@@ -117,6 +161,24 @@ export default function TargetSelectionTab() {
   const [selectedIndustryStockCount, setSelectedIndustryStockCount] =
     useState(0);
 
+  // 최종 선택된 종목 수 계산
+  // 1. 유니버스가 선택되어 있고 유효한 종목 수가 있으면 유니버스 기반 사용
+  // 2. 유니버스가 선택되어 있지만 종목 수가 0이면 산업 기반으로 폴백
+  // 3. 유니버스가 없으면 산업 기반 종목 수 사용
+  // 4. 개별 선택 종목 추가
+  const finalSelectedCount =
+    selectedUniverses.size > 0 && universeBasedStockCount > 0
+      ? universeBasedStockCount + selectedStocks.size
+      : selectedIndustryStockCount + selectedStocks.size;
+
+  // 최종 전체 종목 수 계산
+  // 유니버스가 선택되어 있고 유효한 값이 있으면 유니버스 전체 수 사용
+  // 그렇지 않으면 산업 기반 전체 수 사용
+  const finalTotalCount =
+    selectedUniverses.size > 0 && universeTotalStockCount > 0
+      ? universeTotalStockCount
+      : totalStockCount;
+
   // 커스텀 훅으로 매매 대상 선택 로직 관리
   const {
     selectedIndustries,
@@ -127,12 +189,56 @@ export default function TargetSelectionTab() {
     industries,
     [],
     Array.from(selectedStocks),
-    selectedIndustryStockCount + selectedStocks.size, // 최종 선택된 종목 수
-    totalStockCount,
+    finalSelectedCount, // 유니버스 또는 산업 기반 종목 수
+    finalTotalCount,    // 유니버스 또는 산업 기반 전체 수
   );
 
-  // 최종 선택된 종목 수 = 체크박스로 선택된 산업의 종목 + 개별 검색으로 선택된 종목
-  const finalSelectedCount = selectedIndustryStockCount + selectedStocks.size;
+  // 유니버스 선택 변경 시 스토어 업데이트 및 종목 수 계산
+  const { trade_targets, setTradeTargets } = useBacktestConfigStore();
+  useEffect(() => {
+    setTradeTargets({
+      ...trade_targets,
+      selected_universes: Array.from(selectedUniverses),
+    });
+  }, [selectedUniverses]);
+
+  // 선택된 유니버스의 종목 수 계산
+  useEffect(() => {
+    async function fetchUniverseStockCount() {
+      if (selectedUniverses.size === 0) {
+        setUniverseBasedStockCount(0);
+        setUniverseTotalStockCount(0);
+        // 유니버스가 없을 때는 스토어도 업데이트
+        setTradeTargets((prev) => ({
+          ...prev,
+          total_stock_count: totalStockCount,
+        }));
+        return;
+      }
+
+      try {
+        const response = await getUniverseStockCount(
+          Array.from(selectedUniverses)
+        );
+        setUniverseBasedStockCount(response.stockCount);
+        setUniverseTotalStockCount(response.stockCount);
+        console.log("🔢 유니버스 기반 종목 수:", response.stockCount);
+
+        // 유니버스 종목 수를 스토어에 직접 업데이트
+        setTradeTargets((prev) => ({
+          ...prev,
+          total_stock_count: response.stockCount,
+          selected_stock_count: response.stockCount,
+        }));
+      } catch (err) {
+        console.error("유니버스 종목 수 조회 실패:", err);
+        setUniverseBasedStockCount(0);
+        setUniverseTotalStockCount(0);
+      }
+    }
+
+    fetchUniverseStockCount();
+  }, [selectedUniverses, setTradeTargets, totalStockCount]);
 
   // 종목 검색 핸들러
   const handleSearch = async (query: string) => {
@@ -152,6 +258,33 @@ export default function TargetSelectionTab() {
       setSearchResults([]);
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  // 유니버스 선택/해제 토글
+  const toggleUniverse = (universeId: string) => {
+    const newSelected = new Set(selectedUniverses);
+    if (newSelected.has(universeId)) {
+      newSelected.delete(universeId);
+    } else {
+      newSelected.add(universeId);
+    }
+    setSelectedUniverses(newSelected);
+  };
+
+  // 유니버스 전체선택 여부
+  const isAllUniversesSelected =
+    universes.length > 0 && selectedUniverses.size === universes.length;
+
+  // 유니버스 전체선택/해제 토글
+  const toggleAllUniverses = () => {
+    if (isAllUniversesSelected) {
+      // 전체 해제
+      setSelectedUniverses(new Set());
+    } else {
+      // 전체 선택
+      const allUniverseIds = new Set(universes.map((u) => u.id));
+      setSelectedUniverses(allUniverseIds);
     }
   };
 
@@ -247,7 +380,7 @@ export default function TargetSelectionTab() {
       {/* 헤더 */}
       <TradeTargetHeader
         selectedCount={finalSelectedCount}
-        totalCount={totalStockCount}
+        totalCount={finalTotalCount}
       />
 
       {/* 전략 이름 입력 */}
@@ -267,11 +400,16 @@ export default function TargetSelectionTab() {
       <FieldPanel conditionType="target">
         <StockCount
           selectedCount={finalSelectedCount}
-          totalCount={totalStockCount}
+          totalCount={finalTotalCount}
         />
 
-        {/* 주식 테마 선택 (DB 산업 데이터) */}
+        {/* 주식 유니버스 및 테마 선택 (DB 산업 데이터) */}
         <UniverseThemeSelection
+          universes={universes}
+          selectedUniverses={selectedUniverses}
+          isAllUniversesSelected={isAllUniversesSelected}
+          onToggleUniverse={toggleUniverse}
+          onToggleAllUniverses={toggleAllUniverses}
           industries={industries}
           selectedIndustries={selectedIndustries}
           isAllIndustriesSelected={isAllIndustriesSelected}

@@ -116,6 +116,7 @@ async def _run_backtest_async(
     benchmark: str,
     target_themes: List[str],
     target_stocks: List[str],
+    target_universes: List[str],
     use_all_stocks: bool,
     buy_conditions: List[dict],
     buy_logic: str,
@@ -141,6 +142,7 @@ async def _run_backtest_async(
             logger.info(f"초기 자본금: {initial_capital:,}원")
             logger.info(f"전체 종목 사용: {use_all_stocks}")
             logger.info(f"선택된 테마: {target_themes}")
+            logger.info(f"선택된 유니버스: {target_universes}")
             logger.info(f"선택된 종목: {target_stocks}")
             logger.info(f"매수 조건: {buy_conditions}")
             logger.info(f"리밸런싱 주기: {rebalance_frequency}")
@@ -257,8 +259,9 @@ async def _run_backtest_async(
                 benchmark=benchmark,
                 commission_rate=Decimal(str(commission_rate / 100)),  # % -> decimal
                 slippage=Decimal(str(slippage / 100)),  # % -> decimal
-                target_themes=target_themes if not use_all_stocks else [],
-                target_stocks=target_stocks if not use_all_stocks else [],
+                target_themes=target_themes,
+                target_stocks=target_stocks,
+                target_universes=target_universes,
                 per_stock_ratio=per_stock_ratio,
                 max_buy_value=max_buy_value_won,
                 max_daily_stock=max_daily_stock

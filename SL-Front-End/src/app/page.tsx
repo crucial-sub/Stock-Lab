@@ -61,7 +61,7 @@ export default async function HomePage() {
       // 4. 시황/뉴스 데이터 서버 사이드로 미리 가져오기
       try {
         const axios = (await import("axios")).default;
-        const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://backend:8000/api/v1";
+        const baseURL = process.env.API_BASE_URL || "http://backend:8000/api/v1";
 
         if (hasKiwoomAccount) {
           // 관심종목 체결량 상위 5
@@ -125,7 +125,7 @@ export default async function HomePage() {
     // 게스트 사용자를 위해 서버에서 기본 시황/뉴스 가져오기
     try {
       const axios = (await import("axios")).default;
-      const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://backend:8000/api/v1";
+      const baseURL = process.env.API_BASE_URL || "http://backend:8000/api/v1";
       const quotes = await axios.get(`${baseURL}/market/quotes`, {
         params: { sort_by: "volume", sort_order: "desc", page: 1, page_size: 5 },
       });

@@ -257,7 +257,7 @@ export const autoTradingApi = {
   ): Promise<AutoTradingStrategyResponse[]> => {
     const axios = (await import("axios")).default;
     // Docker 환경에서는 컨테이너 이름 사용
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
+    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
     const response = await axios.get<AutoTradingStrategyResponse[]>(
       `${baseURL}/api/v1/auto-trading/my-strategies`,
       {
@@ -363,7 +363,7 @@ export const autoTradingApi = {
     total_trades_today: number;
   }> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
+    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
     const response = await axios.get(
       `${baseURL}/api/v1/auto-trading/dashboard`,
       {

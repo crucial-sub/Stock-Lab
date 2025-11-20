@@ -13,7 +13,7 @@ import json
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history, universes
 from app.api.v1 import industries, realtime
 from app.services.auto_trading_scheduler import start_scheduler, stop_scheduler
 
@@ -269,6 +269,12 @@ app.include_router(
     community.router,
     prefix=f"{settings.API_V1_PREFIX}/community",
     tags=["Community"]
+)
+
+app.include_router(
+    universes.router,
+    prefix=f"{settings.API_V1_PREFIX}/universes",
+    tags=["Universes"]
 )
 
 # Root 엔드포인트

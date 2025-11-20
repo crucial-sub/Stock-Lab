@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   FreeBoardPostCard,
@@ -9,7 +9,7 @@ import {
 import { usePostsQuery } from "@/hooks/useCommunityQuery";
 import { useDebounce } from "@/hooks";
 
-const TAG_FILTERS = ["전체", "질문", "토론", "정보 공유"];
+const DEFAULT_TAG_OPTIONS = ["전체", "질문", "토론", "정보 공유"];
 const SORT_OPTIONS = [
   { label: "날짜 순 정렬", value: "createdAt_desc" },
   { label: "공감 순 정렬", value: "like_desc" },
@@ -23,89 +23,86 @@ export function FreeBoardListPageClient({
   searchParams,
 }: FreeBoardListPageClientProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const params = useSearchParams();
 
-  const [searchInput, setSearchInput] = useState(searchParams.q ?? "");
-  const [selectedTag, setSelectedTag] = useState(
-    searchParams.tag ?? TAG_FILTERS[0],
-  );
-  const [sortOption, setSortOption] = useState(
-    searchParams.sort ?? SORT_OPTIONS[0].value,
-  );
-  const [page, setPage] = useState(
-    Number(searchParams.page) > 0 ? Number(searchParams.page) : 1,
-  );
+  const [searchInput, setSearchInput] = useState("");
+  const [tagOptions, setTagOptions] = useState<string[]>(DEFAULT_TAG_OPTIONS);
+  const [selectedTags, setSelectedTags] = useState<string[]>(["전체"]);
+  const [sortOption, setSortOption] = useState(SORT_OPTIONS[0].value);
+  const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebounce(searchInput, 300);
+  const tagFilter = selectedTags.filter((t) => t !== "전체");
 
   const queryParams = useMemo(
     () => ({
       postType: "DISCUSSION",
       search: debouncedSearch || undefined,
-      tags:
-        selectedTag && selectedTag !== TAG_FILTERS[0]
-          ? selectedTag
-          : undefined,
       page,
       limit: 10,
       orderBy: sortOption,
     }),
-    [debouncedSearch, selectedTag, page, sortOption],
+    [debouncedSearch, page, sortOption],
   );
 
   const { data, isLoading, isError } = usePostsQuery(queryParams);
+
+  // 태그 옵션을 데이터에서 수집
+  useEffect(() => {
+    if (!data?.posts) return;
+    const collected = new Set<string>(DEFAULT_TAG_OPTIONS);
+    data.posts.forEach((post) => post.tags?.forEach((t) => collected.add(t)));
+    const next = Array.from(collected);
+    if (next.join(",") !== tagOptions.join(",")) {
+      setTagOptions(next);
+    }
+    // 선택된 태그가 옵션에 없으면 전체로 리셋
+    const invalidSelected = selectedTags.filter(
+      (t) => t !== "전체" && !collected.has(t),
+    );
+    if (invalidSelected.length) {
+      setSelectedTags(["전체"]);
+      setPage(1);
+    }
+  }, [data?.posts, tagOptions, selectedTags]);
+
   const filteredPosts = useMemo(() => {
     if (!data?.posts) return [];
-    if (!queryParams.tags) return data.posts;
-    // 백엔드 필터 실패 대비 프런트에서 한 번 더 필터링
-    return data.posts.filter((post) => post.tags?.includes(queryParams.tags as string));
-  }, [data?.posts, queryParams.tags]);
-
-  const updateSearchParams = (next: Record<string, string | number>) => {
-    const newParams = new URLSearchParams(params.toString());
-    Object.entries(next).forEach(([key, value]) => {
-      if (value === "" || value === undefined || value === null) {
-        newParams.delete(key);
-      } else {
-        newParams.set(key, String(value));
-      }
-    });
-    const queryString = newParams.toString();
-    router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-      scroll: false,
-    });
-  };
+    if (!tagFilter.length || selectedTags.includes("전체")) return data.posts;
+    return data.posts.filter((post) =>
+      post.tags?.some((t) => tagFilter.includes(t)),
+    );
+  }, [data?.posts, tagFilter, selectedTags]);
 
   const handleSearch = () => {
     setPage(1);
-    updateSearchParams({
-      q: searchInput || "",
-      tag: selectedTag !== TAG_FILTERS[0] ? selectedTag : "",
-      sort: sortOption,
-      page: 1,
-    });
+    // 실제 API 요청은 상태 변경으로 트리거됨
   };
 
-  const handleTagClick = (tag: string) => {
-    setSelectedTag(tag);
-    setPage(1);
-    updateSearchParams({
-      tag: tag !== TAG_FILTERS[0] ? tag : "",
-      page: 1,
+  const handleTagToggle = (tag: string) => {
+    if (tag === "전체") {
+      setSelectedTags(["전체"]);
+      setPage(1);
+      return;
+    }
+    setSelectedTags((prev) => {
+      const withoutAll = prev.filter((t) => t !== "전체");
+      const next = withoutAll.includes(tag)
+        ? withoutAll.filter((t) => t !== tag)
+        : [...withoutAll, tag];
+      const final = next.length ? next : ["전체"];
+      setPage(1);
+      return final;
     });
   };
 
   const handleSortChange = (value: string) => {
     setSortOption(value);
     setPage(1);
-    updateSearchParams({ sort: value, page: 1 });
   };
 
   const handlePageChange = (nextPage: number) => {
     if (nextPage < 1 || (data && !data.hasNext && nextPage > data.page)) return;
     setPage(nextPage);
-    updateSearchParams({ page: nextPage });
   };
 
   return (
@@ -159,13 +156,13 @@ export function FreeBoardListPageClient({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {TAG_FILTERS.map((tag) => {
-            const selected = selectedTag === tag;
+          {tagOptions.map((tag) => {
+            const selected = selectedTags.includes(tag);
             return (
               <button
                 key={tag}
                 type="button"
-                onClick={() => handleTagClick(tag)}
+                onClick={() => handleTagToggle(tag)}
                 className={`rounded-full px-4 py-1 text-sm font-semibold ${
                   selected
                     ? "bg-brand-purple text-white"

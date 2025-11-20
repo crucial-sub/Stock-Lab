@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 import logging
+import json
 
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
@@ -128,18 +129,23 @@ app = FastAPI(
 )
 
 # CORS 설정
-import json
-try:
-    # JSON 배열 형식으로 파싱 시도 (예: ["http://localhost:3000", "http://localhost:8080"])
-    cors_origins = json.loads(settings.BACKEND_CORS_ORIGINS) if settings.BACKEND_CORS_ORIGINS != "*" else ["*"]
-except (json.JSONDecodeError, TypeError):
-    # JSON 파싱 실패 시 쉼표로 분리 (예: "http://localhost:3000,http://localhost:8080")
-    cors_origins = (
-        settings.BACKEND_CORS_ORIGINS.split(",")
-        if settings.BACKEND_CORS_ORIGINS != "*"
-        else ["*"]
-    )
+# NOTE: `json` already imported at module level.
+def _parse_cors_origins(value):
+    if value == "*":
+        return ["*"]
+    if isinstance(value, list):
+        return value
 
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+cors_origins = _parse_cors_origins(settings.BACKEND_CORS_ORIGINS)
 logger.info(f"CORS origins configured: {cors_origins}")
 
 app.add_middleware(
@@ -149,7 +155,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # 요청 로깅 미들웨어
 @app.middleware("http")

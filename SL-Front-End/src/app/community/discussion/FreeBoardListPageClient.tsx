@@ -55,6 +55,12 @@ export function FreeBoardListPageClient({
   );
 
   const { data, isLoading, isError } = usePostsQuery(queryParams);
+  const filteredPosts = useMemo(() => {
+    if (!data?.posts) return [];
+    if (!queryParams.tags) return data.posts;
+    // 백엔드 필터 실패 대비 프런트에서 한 번 더 필터링
+    return data.posts.filter((post) => post.tags?.includes(queryParams.tags as string));
+  }, [data?.posts, queryParams.tags]);
 
   const updateSearchParams = (next: Record<string, string | number>) => {
     const newParams = new URLSearchParams(params.toString());
@@ -181,12 +187,12 @@ export function FreeBoardListPageClient({
               게시글을 불러오지 못했습니다.
             </p>
           )}
-          {!isLoading && !isError && data?.posts.length === 0 && (
+          {!isLoading && !isError && filteredPosts.length === 0 && (
             <p className="py-10 text-center text-[#646464]">
               게시글이 없습니다.
             </p>
           )}
-          {data?.posts.map((post) => (
+          {filteredPosts.map((post) => (
             <FreeBoardPostCard
               key={post.postId}
               tag={post.tags?.[0] || "일반"}
@@ -203,7 +209,7 @@ export function FreeBoardListPageClient({
               views={post.viewCount}
               likes={post.likeCount}
               comments={post.commentCount}
-              onClick={() => router.push(`/community/discussion/${post.postId}`)}
+              onClick={() => router.push(`/community/${post.postId}`)}
             />
           ))}
         </div>

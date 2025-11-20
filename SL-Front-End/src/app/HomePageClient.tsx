@@ -5,7 +5,6 @@ import {
   HighlightsSection,
   MarketInsightSection,
   PerformanceChartSection,
-  KiwoomAccountSummary,
   StatsOverviewSection,
 } from "@/components/home/auth";
 import {
@@ -13,6 +12,7 @@ import {
   GuestPortfolioSection,
 } from "@/components/home/guest";
 import { DiscussionPreviewSection } from "@/components/community";
+import { FloatingChatWidget } from "@/components/home/FloatingChatWidget";
 import type {
   GuestMarketIndex,
   GuestMarketStock,
@@ -324,63 +324,69 @@ export function HomePageClient({
 
   if (!isLoggedIn) {
     return (
-      <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
-        <div className="flex w-full max-w-[1000px] flex-col gap-10">
-          <GuestPortfolioSection />
-          <GuestMarketInsightSection
-            indexes={guestMarketIndexes}
-            stocks={guestMarketStocks}
-            news={marketNews}
-          />
-          <DiscussionPreviewSection limit={3} />
+      <>
+        <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
+          <div className="flex w-full max-w-[1000px] flex-col gap-10">
+            <GuestPortfolioSection />
+            <GuestMarketInsightSection
+              indexes={guestMarketIndexes}
+              stocks={guestMarketStocks}
+              news={marketNews}
+            />
+            <DiscussionPreviewSection limit={3} />
+          </div>
         </div>
-      </div>
+        <FloatingChatWidget />
+      </>
     );
   }
 
   const authenticatedStats = buildAuthenticatedStats(dashboardData, kiwoomAccountData);
 
   return (
-    <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
-      <div className="flex w-full max-w-[1000px] flex-col gap-10">
-        <div className="text-[2rem] font-semibold text-text-body">
-          안녕하세요, {userName}님
-        </div>
-
-        {/* 계좌 연동 안내 */}
-        {!hasKiwoomAccount && (
-          <div className="bg-bg-surface rounded-lg shadow-card p-6 border-2 border-accent-primary">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-text-title mb-2">
-                  증권사 계좌 연동이 필요합니다
-                </h3>
-                <p className="text-text-body">
-                  자동매매 기능을 사용하려면 키움증권 모의투자 계좌를 연동해주세요.
-                </p>
-              </div>
-              <a
-                href="/mypage"
-                className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/90 transition-colors font-semibold whitespace-nowrap"
-              >
-                증권사 계좌 연동하기
-              </a>
-            </div>
+    <>
+      <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
+        <div className="flex w-full max-w-[1000px] flex-col gap-10">
+          <div className="text-[2rem] font-semibold text-text-body">
+            안녕하세요, {userName}님
           </div>
-        )}
 
-        <StatsOverviewSection stats={authenticatedStats} />
-        <PerformanceChartSection />
-        <MarketInsightSection
-          stocks={marketStocks}
-          news={marketNews}
-        />
-        <HighlightsSection
-          portfolios={authPortfolios}
-          posts={authCommunityHighlights}
-        />
-        <DiscussionPreviewSection limit={3} className="mt-4" />
+          {/* 계좌 연동 안내 */}
+          {!hasKiwoomAccount && (
+            <div className="bg-bg-surface rounded-lg shadow-card p-6 border-2 border-accent-primary">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-text-title mb-2">
+                    증권사 계좌 연동이 필요합니다
+                  </h3>
+                  <p className="text-text-body">
+                    자동매매 기능을 사용하려면 키움증권 모의투자 계좌를 연동해주세요.
+                  </p>
+                </div>
+                <a
+                  href="/mypage"
+                  className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/90 transition-colors font-semibold whitespace-nowrap"
+                >
+                  증권사 계좌 연동하기
+                </a>
+              </div>
+            </div>
+          )}
+
+          <StatsOverviewSection stats={authenticatedStats} />
+          <PerformanceChartSection />
+          <MarketInsightSection
+            stocks={marketStocks}
+            news={marketNews}
+          />
+          <HighlightsSection
+            portfolios={authPortfolios}
+            posts={authCommunityHighlights}
+          />
+          <DiscussionPreviewSection limit={3} className="mt-4" />
+        </div>
       </div>
-    </div>
+      <FloatingChatWidget />
+    </>
   );
 }

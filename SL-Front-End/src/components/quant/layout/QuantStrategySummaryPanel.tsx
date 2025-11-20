@@ -98,6 +98,8 @@ export default function QuantStrategySummaryPanel({
   const setEndDate = useBacktestConfigStore((state) => state.setEndDate);
   const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
   const addSellConditionUIWithData = useBacktestConfigStore((state) => state.addSellConditionUIWithData);
+  const setBuyLogic = useBacktestConfigStore((state) => state.setBuyLogic);
+  const setConditionSell = useBacktestConfigStore((state) => state.setConditionSell);
 
   // 날짜 초기화 (클라이언트 사이드에서만 실행)
   // setter 함수는 안정적이므로 dependency에서 제외 (React Compiler가 자동 처리)
@@ -141,6 +143,20 @@ export default function QuantStrategySummaryPanel({
         });
       }
     });
+
+    // 조건 추가 후 논리식 자동 생성 (2개 이상일 때만)
+    setTimeout(() => {
+      const updatedConditions = useBacktestConfigStore.getState().buyConditionsUI;
+      const validConditions = updatedConditions.filter(c => c.factorName);
+      if (validConditions.length >= 2) {
+        const logic = validConditions.map(c => c.id).join(" and ");
+        setBuyLogic(logic);
+      }
+      if(validConditions.length >=3){
+        const logic = validConditions.map(c => c.id).join(" or ");
+        setBuyLogic(logic);
+      }
+    }, 100);
   };
 
   // AI 헬퍼에서 생성된 조건을 매도 조건에 추가
@@ -165,6 +181,28 @@ export default function QuantStrategySummaryPanel({
         });
       }
     });
+
+    // 조건 추가 후 논리식 자동 생성 (2개 이상일 때만)
+    setTimeout(() => {
+      const state = useBacktestConfigStore.getState();
+      const updatedConditions = state.sellConditionsUI;
+      const validConditions = updatedConditions.filter(c => c.factorName);
+
+      if (validConditions.length >= 2) {
+        const logic = validConditions.map(c => c.id).join(" and ");
+        const currentConditionSell = state.condition_sell || {
+          sell_conditions: [],
+          sell_logic: "",
+          sell_price_basis: "당일 시가",
+          sell_price_offset: 0,
+        };
+
+        setConditionSell({
+          ...currentConditionSell,
+          sell_logic: logic,
+        });
+      }
+    }, 100);
   };
 
   return (

@@ -4,10 +4,12 @@ Redis 캐싱 유틸리티
 """
 import json
 import hashlib
-from typing import Optional, Any, Dict
+import ssl
+from typing import Optional, Any, Dict, Union
 from datetime import timedelta
 import redis.asyncio as redis
 from redis.asyncio import ConnectionPool
+from redis.asyncio.cluster import RedisCluster, ClusterNode
 import pickle
 import logging
 
@@ -17,36 +19,87 @@ logger = logging.getLogger(__name__)
 
 
 class RedisCache:
-    """Redis 캐시 관리자 (Multi Event Loop 지원)"""
+    """Redis 캐시 관리자 (Multi Event Loop 지원, Cluster Mode 지원)"""
 
     def __init__(self):
         self._pool: Optional[ConnectionPool] = None
-        self._client: Optional[redis.Redis] = None
-        self._loop_clients: Dict[int, redis.Redis] = {}  # Event loop별 클라이언트 저장
+        self._client: Optional[Union[redis.Redis, RedisCluster]] = None
+        self._loop_clients: Dict[int, Union[redis.Redis, RedisCluster]] = {}  # Event loop별 클라이언트 저장
+        self._is_cluster_mode: bool = False  # Cluster Mode 여부
 
     async def initialize(self):
-        """Redis 연결 초기화"""
-        if not self._pool:
-            self._pool = ConnectionPool(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                password=settings.REDIS_PASSWORD if hasattr(settings, 'REDIS_PASSWORD') else None,
-                # 🚀 PRODUCTION OPTIMIZATION: Connection Pool 확장 (동시 사용자 지원)
-                max_connections=100,    # 20 → 100으로 확장 (동시 100명 백테스트 지원)
-                socket_keepalive=True,  # TCP keepalive 활성화
-                # socket_keepalive_options 제거 (Docker 환경 호환성)
-                health_check_interval=30,  # 30초마다 연결 상태 확인
-                decode_responses=False,  # Binary 데이터 처리용
-                socket_connect_timeout=5,  # 연결 타임아웃 5초
-                retry_on_timeout=True  # 타임아웃 시 재시도
-            )
-            self._client = redis.Redis(connection_pool=self._pool)
+        """Redis 연결 초기화 (Cluster Mode 자동 감지)"""
+        if not self._client:
+            # Cluster Mode 감지: clustercfg. 접두사로 시작하면 Cluster Mode
+            self._is_cluster_mode = settings.REDIS_HOST.startswith("clustercfg.")
+
+            if self._is_cluster_mode:
+                # ElastiCache Cluster Mode
+                logger.info(f"Detected Redis Cluster Mode: {settings.REDIS_HOST}")
+
+                if settings.REDIS_SSL:
+                    logger.info("Redis Cluster SSL/TLS enabled")
+
+                # RedisCluster 클라이언트 생성
+                startup_nodes = [ClusterNode(settings.REDIS_HOST, settings.REDIS_PORT)]
+
+                cluster_kwargs = {
+                    "startup_nodes": startup_nodes,
+                    "decode_responses": False,
+                }
+
+                # 선택적 파라미터 추가
+                if hasattr(settings, 'REDIS_PASSWORD') and settings.REDIS_PASSWORD:
+                    cluster_kwargs["password"] = settings.REDIS_PASSWORD
+
+                if settings.REDIS_SSL:
+                    cluster_kwargs["ssl"] = True
+
+                self._client = RedisCluster(**cluster_kwargs)
+            else:
+                # 단일 노드 Redis (로컬 개발 환경)
+                logger.info(f"Detected single-node Redis: {settings.REDIS_HOST}")
+
+                # SSL 설정 (ElastiCache 전송 중 암호화)
+                if settings.REDIS_SSL:
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                    logger.info("Redis SSL/TLS enabled for ElastiCache encryption in-transit")
+
+                    self._pool = ConnectionPool.from_url(
+                        f"rediss://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
+                        password=settings.REDIS_PASSWORD if hasattr(settings, 'REDIS_PASSWORD') and settings.REDIS_PASSWORD else None,
+                        ssl_cert_reqs=None,
+                        ssl_check_hostname=False,
+                        max_connections=100,
+                        socket_keepalive=True,
+                        health_check_interval=30,
+                        decode_responses=False,
+                        socket_connect_timeout=5,
+                        retry_on_timeout=True
+                    )
+                else:
+                    self._pool = ConnectionPool(
+                        host=settings.REDIS_HOST,
+                        port=settings.REDIS_PORT,
+                        db=settings.REDIS_DB,
+                        password=settings.REDIS_PASSWORD if hasattr(settings, 'REDIS_PASSWORD') and settings.REDIS_PASSWORD else None,
+                        max_connections=100,
+                        socket_keepalive=True,
+                        health_check_interval=30,
+                        decode_responses=False,
+                        socket_connect_timeout=5,
+                        retry_on_timeout=True
+                    )
+
+                self._client = redis.Redis(connection_pool=self._pool)
 
             # 연결 테스트
             try:
                 await self._client.ping()
-                logger.info("Redis connection established successfully")
+                mode_str = "Cluster Mode" if self._is_cluster_mode else "Single Node"
+                logger.info(f"Redis connection established successfully ({mode_str})")
             except Exception as e:
                 logger.error(f"Failed to connect to Redis: {e}")
                 raise
@@ -62,8 +115,8 @@ class RedisCache:
             await client.close()
         self._loop_clients.clear()
 
-    def _get_loop_client(self) -> Optional[redis.Redis]:
-        """현재 event loop에 맞는 Redis 클라이언트 반환"""
+    def _get_loop_client(self) -> Optional[Union[redis.Redis, RedisCluster]]:
+        """현재 event loop에 맞는 Redis 클라이언트 반환 (Cluster Mode 지원)"""
         try:
             import asyncio
 
@@ -89,16 +142,47 @@ class RedisCache:
                 return self._loop_clients[loop_id]
 
             # 새 루프용 클라이언트 생성
-            logger.info(f"Creating new Redis client for event loop {loop_id}")
-            new_client = redis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                password=settings.REDIS_PASSWORD if hasattr(settings, 'REDIS_PASSWORD') else None,
-                decode_responses=False,
-                socket_connect_timeout=5,
-                retry_on_timeout=True
-            )
+            logger.info(f"Creating new Redis client for event loop {loop_id} ({'Cluster' if self._is_cluster_mode else 'Single'})")
+
+            if self._is_cluster_mode:
+                # Cluster Mode 클라이언트 생성
+                startup_nodes = [ClusterNode(settings.REDIS_HOST, settings.REDIS_PORT)]
+
+                cluster_kwargs = {
+                    "startup_nodes": startup_nodes,
+                    "decode_responses": False,
+                }
+
+                if hasattr(settings, 'REDIS_PASSWORD') and settings.REDIS_PASSWORD:
+                    cluster_kwargs["password"] = settings.REDIS_PASSWORD
+
+                if settings.REDIS_SSL:
+                    cluster_kwargs["ssl"] = True
+
+                new_client = RedisCluster(**cluster_kwargs)
+            else:
+                # 단일 노드 클라이언트 생성
+                if settings.REDIS_SSL:
+                    new_client = redis.Redis.from_url(
+                        f"rediss://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}",
+                        password=settings.REDIS_PASSWORD if hasattr(settings, 'REDIS_PASSWORD') and settings.REDIS_PASSWORD else None,
+                        ssl_cert_reqs=None,
+                        ssl_check_hostname=False,
+                        decode_responses=False,
+                        socket_connect_timeout=5,
+                        retry_on_timeout=True
+                    )
+                else:
+                    new_client = redis.Redis(
+                        host=settings.REDIS_HOST,
+                        port=settings.REDIS_PORT,
+                        db=settings.REDIS_DB,
+                        password=settings.REDIS_PASSWORD if hasattr(settings, 'REDIS_PASSWORD') and settings.REDIS_PASSWORD else None,
+                        decode_responses=False,
+                        socket_connect_timeout=5,
+                        retry_on_timeout=True
+                    )
+
             self._loop_clients[loop_id] = new_client
             return new_client
 
@@ -282,9 +366,9 @@ def get_cache() -> RedisCache:
     return cache
 
 
-def get_redis() -> Optional[redis.Redis]:
+def get_redis() -> Optional[Union[redis.Redis, RedisCluster]]:
     """
-    Redis 클라이언트 인스턴스 반환 (Event Loop 안전)
+    Redis 클라이언트 인스턴스 반환 (Event Loop 안전, Cluster Mode 지원)
     백테스트 진행률 등 실시간 데이터 저장용
     """
     return cache._get_loop_client()

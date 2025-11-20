@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: str = ""
+    REDIS_SSL: bool = False  # ElastiCache 전송 중 암호화 활성화 시 True
     REDIS_CACHE_TTL: int = 3600
     CACHE_TTL_SECONDS: int = 3600  # 1 hour default
     CACHE_PREFIX: str = "quant"

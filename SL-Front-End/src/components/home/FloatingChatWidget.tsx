@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, useMemo, type FormEvent } from "react";
 import { sendChatMessage } from "@/lib/api/chatbot";
+import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 
 type MessageRole = "assistant" | "user" | "system";
 
@@ -9,6 +10,7 @@ interface WidgetMessage {
   id: string;
   role: MessageRole;
   content: string;
+  backtestConditions?: any;
 }
 
 const createMessageId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -26,6 +28,12 @@ export function FloatingChatWidget() {
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const {
+    buyConditionsUI,
+    sellConditionsUI,
+    setBuyConditionsUI,
+    setSellConditionsUI,
+  } = useBacktestConfigStore();
 
   useEffect(() => {
     if (isOpen && endRef.current) {
@@ -75,6 +83,7 @@ export function FloatingChatWidget() {
         id: createMessageId(),
         role: "assistant",
         content: response.answer,
+        backtestConditions: response.backtest_conditions,
       });
     } catch (error) {
       console.error("FloatingChatWidget send error:", error);
@@ -132,6 +141,55 @@ export function FloatingChatWidget() {
               {messages.map((message) => {
                 const isUser = message.role === "user";
                 const isSystem = message.role === "system";
+
+                const bc = message.backtestConditions;
+                const buyConditions: any[] = [];
+                const sellConditions: any[] = [];
+                if (bc) {
+                  if (Array.isArray(bc)) {
+                    buyConditions.push(...bc);
+                  } else {
+                    if (Array.isArray(bc.buy)) buyConditions.push(...bc.buy);
+                    if (Array.isArray(bc.sell)) sellConditions.push(...bc.sell);
+                  }
+                }
+
+                const convertToUI = (conditions: any[], existingLength: number, prefix: string) =>
+                  conditions.map((cond, idx) => {
+                    const id = String.fromCharCode(65 + existingLength + idx);
+                    const factorName = cond?.factor ?? null;
+                    const operator = cond?.operator ?? "";
+                    const value =
+                      cond?.value !== undefined && cond?.value !== null ? String(cond.value) : "";
+                    const argument =
+                      Array.isArray(cond?.params) && cond.params.length
+                        ? cond.params.join(",")
+                        : undefined;
+                    return {
+                      id: `${prefix}${id}`,
+                      factorName,
+                      subFactorName: null,
+                      operator,
+                      value,
+                      argument,
+                    };
+                  });
+
+                const handleApplyBuy = () => {
+                  if (!buyConditions.length) return;
+                  const mapped = convertToUI(buyConditions, buyConditionsUI.length, "B");
+                  setBuyConditionsUI([...buyConditionsUI, ...mapped]);
+                };
+
+                const handleApplySell = () => {
+                  if (!sellConditions.length) return;
+                  const mapped = convertToUI(sellConditions, sellConditionsUI.length, "S");
+                  setSellConditionsUI([...sellConditionsUI, ...mapped]);
+                };
+
+                const hasBuyConditions = buyConditions.length > 0;
+                const hasSellConditions = sellConditions.length > 0;
+
                 return (
                   <div
                     key={message.id}
@@ -151,6 +209,26 @@ export function FloatingChatWidget() {
                       ].join(" ")}
                     >
                       {message.content}
+                      {!isUser && (hasBuyConditions || hasSellConditions) && (
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                          {hasBuyConditions && (
+                            <button
+                              onClick={handleApplyBuy}
+                              className="w-full rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-purple-700"
+                            >
+                              매수 조건에 추가
+                            </button>
+                          )}
+                          {hasSellConditions && (
+                            <button
+                              onClick={handleApplySell}
+                              className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                            >
+                              매도 조건에 추가
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -161,7 +239,7 @@ export function FloatingChatWidget() {
               <div className="flex gap-2">
                 <textarea
                   className="h-16 flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="예: PER이 낮은 성장주 알려줘"
+                  placeholder="예: 쿼트투자가 뭐야?"
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
                   disabled={isSending}

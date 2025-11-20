@@ -616,7 +616,37 @@ class ChatHandler:
 
     async def _handle_home_widget_shortcuts(self, message: str) -> Optional[dict]:
         """홈 위젯에서 자주 요청되는 단순 응답 처리."""
-        if not message or not self._is_home_widget_news_request(message):
+        if not message:
+            return None
+
+        # 1) 팩터/스크리닝 요청을 간단 템플릿으로 처리 (종목명 금지)
+        if self._is_home_widget_screening_request(message):
+            per_threshold = self._extract_number(message, default=10)
+            buy_conditions: List[Dict[str, Any]] = [
+                {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": per_threshold},
+                {"factor": "revenue_cagr_3y", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "eps_growth_rate", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "ROE", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "DebtRatio", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 150},
+            ]
+
+            answer = (
+                "## 요약\n"
+                f"PER<={per_threshold}, 성장률>10%, ROE>10%, 부채비율<150% 조건을 버튼으로 추가할 수 있습니다.\n\n"
+                "### 다음 단계\n"
+                "- 매수/매도 조건 버튼으로 바로 적용\n"
+                "- 수치 조정이 필요하면 말씀해 주세요"
+            )
+
+            return {
+                "answer": answer,
+                "intent": "dsl_suggestion",
+                "sources": [],
+                "backtest_conditions": {"buy": buy_conditions, "sell": []},
+            }
+
+        # 2) 뉴스/시장 요약 요청 처리
+        if not self._is_home_widget_news_request(message):
             return None
 
         news_items: List[Dict[str, Any]] = []

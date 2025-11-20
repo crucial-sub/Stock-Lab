@@ -18,7 +18,7 @@ interface DiscussionPreviewSectionProps {
  */
 export function DiscussionPreviewSection({
   title = "자유게시판",
-  limit = 5,
+  limit,
   showMoreHref = "/community/discussion",
   className = "",
 }: DiscussionPreviewSectionProps) {
@@ -28,7 +28,7 @@ export function DiscussionPreviewSection({
     data: discussionPosts,
     isLoading,
     error,
-  } = usePostsQuery({ postType: "DISCUSSION", limit : 5});
+  } = usePostsQuery({ postType: "DISCUSSION", limit : limit});
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);

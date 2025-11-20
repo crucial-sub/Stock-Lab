@@ -543,6 +543,12 @@ class ChatHandler:
                 "sources": []
             }
 
+        if client_type == "home_widget":
+            home_widget_response = await self._handle_home_widget_shortcuts(message)
+            if home_widget_response:
+                home_widget_response["session_id"] = session_id
+                return home_widget_response
+
         # 0-0. 도메인(금융/투자) 외 질문 차단
         domain_violation = self._check_domain_restriction(message)
         if domain_violation:
@@ -607,6 +613,82 @@ class ChatHandler:
         msg = (message or "").lower()
         triggers = ["전략 추천", "추천받고 싶어요", "추천 해줘", "설문", "투자 성향"]
         return any(t in msg for t in triggers) or msg.strip() == ""
+
+    async def _handle_home_widget_shortcuts(self, message: str) -> Optional[dict]:
+        """홈 위젯에서 자주 요청되는 단순 응답 처리."""
+        if not message or not self._is_home_widget_news_request(message):
+            return None
+
+        news_items: List[Dict[str, Any]] = []
+        if self.news_retriever:
+            try:
+                news_items = await self.news_retriever.search_news_by_keyword(message.strip(), max_results=3)
+            except Exception as exc:
+                print(f"[WARN] 홈 위젯 뉴스 검색 실패: {exc}")
+
+        if not news_items:
+            return {
+                "answer": "## 요약\n해당 종목의 최신 뉴스 데이터를 찾을 수 없습니다.\n\n### 다음 단계\n- 뉴스 탭에서 직접 최신 기사를 확인해주세요.\n- 다른 종목이나 지표를 입력해 주세요.",
+                "intent": "news_summary",
+                "sources": []
+            }
+
+        primary = news_items[0]
+        title = primary.get("title") or "최신 뉴스"
+        published = (
+            primary.get("publishedAt")
+            or (primary.get("date") or {}).get("display")
+            or ""
+        )
+        snippet = primary.get("summary") or primary.get("content") or ""
+        snippet = snippet.strip().replace("\n", " ")
+        if len(snippet) > 160:
+            snippet = snippet[:157] + "..."
+
+        main_sentence = f"{title}"
+        if published:
+            main_sentence += f" ({published})"
+        if snippet:
+            main_sentence += f" - {snippet}"
+
+        extras = []
+        for item in news_items[1:3]:
+            sub_title = item.get("title")
+            if not sub_title:
+                continue
+            sub_published = (
+                item.get("publishedAt")
+                or (item.get("date") or {}).get("display")
+                or ""
+            )
+            if sub_published:
+                extras.append(f"{sub_title} ({sub_published})")
+            else:
+                extras.append(sub_title)
+
+        if extras:
+            secondary_sentence = f"추가 기사: {', '.join(extras)}."
+        else:
+            secondary_sentence = "추가로 궁금한 기업이 있으면 알려주세요."
+
+        answer = (
+            f"## 요약\n{main_sentence} {secondary_sentence}\n\n"
+            "### 다음 단계\n"
+            "- 뉴스 탭에서 나머지 기사와 세부 내용을 확인하세요.\n"
+            "- 궁금한 다른 종목이나 지표를 알려주세요."
+        )
+
+        return {
+            "answer": answer,
+            "intent": "news_summary",
+            "sources": []
+        }
+
+    def _is_home_widget_news_request(self, message: str) -> bool:
+        if not message:
+            return False
+        lower = message.lower()
+        return "뉴스" in lower or "동향" in lower or "headline" in lower
 
     async def _handle_questionnaire_flow(self, session_id: str, answer: Optional[dict], message: str) -> dict:
         """5문항 설문 → 전략 추천 UI Language 생성."""

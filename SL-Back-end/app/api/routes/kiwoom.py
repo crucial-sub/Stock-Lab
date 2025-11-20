@@ -2,7 +2,7 @@
 키움증권 API 라우터
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 import logging
 
@@ -30,7 +30,7 @@ router = APIRouter(
 async def register_kiwoom_credentials(
     credentials: KiwoomCredentialsRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     키움증권 API KEY 등록
@@ -121,13 +121,18 @@ async def get_kiwoom_status(
 @router.delete("/credentials")
 async def delete_kiwoom_credentials(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     키움증권 연동 해제
     """
     try:
-        user = db.query(User).filter(User.user_id == current_user.user_id).first()
+        from sqlalchemy import select
+
+        stmt = select(User).where(User.user_id == current_user.user_id)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -139,7 +144,7 @@ async def delete_kiwoom_credentials(
         user.kiwoom_access_token = None
         user.kiwoom_token_expires_at = None
 
-        db.commit()
+        await db.commit()
 
         return {"message": "키움증권 연동이 해제되었습니다."}
 
@@ -156,7 +161,7 @@ async def delete_kiwoom_credentials(
 @router.get("/account/balance", response_model=AccountBalanceResponse)
 async def get_account_balance(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     통합 계좌 잔고 조회 (실시간)
@@ -169,13 +174,13 @@ async def get_account_balance(
     - 체결 (ka10076): 체결 주문 내역
     """
     try:
-        # 토큰 갱신이 필요한 경우 갱신
-        access_token = KiwoomService.refresh_token_if_needed(db, current_user)
-
-        if not access_token:
+        # 토큰 유효성 확인 및 자동 갱신 (만료된 경우에도 처리)
+        try:
+            access_token = await KiwoomService.ensure_valid_token(db, current_user)
+        except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="키움증권 연동이 필요합니다. 먼저 API KEY를 등록해주세요."
+                detail=str(e)
             )
 
         # 통합 잔고 조회 (5개 API 호출)
@@ -200,19 +205,19 @@ async def get_account_balance(
 async def buy_stock(
     order_request: StockOrderRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     주식 매수 주문
     """
     try:
-        # 토큰 갱신이 필요한 경우 갱신
-        access_token = KiwoomService.refresh_token_if_needed(db, current_user)
-
-        if not access_token:
+        # 토큰 유효성 확인 및 자동 갱신 (만료된 경우에도 처리)
+        try:
+            access_token = await KiwoomService.ensure_valid_token(db, current_user)
+        except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="키움증권 연동이 필요합니다. 먼저 API KEY를 등록해주세요."
+                detail=str(e)
             )
 
         # 매수 주문
@@ -244,19 +249,19 @@ async def buy_stock(
 async def sell_stock(
     order_request: StockOrderRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     주식 매도 주문
     """
     try:
-        # 토큰 갱신이 필요한 경우 갱신
-        access_token = KiwoomService.refresh_token_if_needed(db, current_user)
-
-        if not access_token:
+        # 토큰 유효성 확인 및 자동 갱신 (만료된 경우에도 처리)
+        try:
+            access_token = await KiwoomService.ensure_valid_token(db, current_user)
+        except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="키움증권 연동이 필요합니다. 먼저 API KEY를 등록해주세요."
+                detail=str(e)
             )
 
         # 매도 주문

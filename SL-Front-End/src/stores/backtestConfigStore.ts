@@ -76,7 +76,11 @@ interface BacktestConfigStore extends BacktestRunRequest {
   setConditionSell: (value: BacktestRunRequest["condition_sell"]) => void;
 
   // 매매 대상 업데이트
-  setTradeTargets: (value: BacktestRunRequest["trade_targets"]) => void;
+  setTradeTargets: (
+    value:
+      | BacktestRunRequest["trade_targets"]
+      | ((prev: BacktestRunRequest["trade_targets"]) => BacktestRunRequest["trade_targets"])
+  ) => void;
 
   // 모든 설정 초기화
   reset: () => void;
@@ -338,7 +342,10 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
     setConditionSell: (value) => set({ condition_sell: value }),
 
     // 매매 대상 업데이트 함수
-    setTradeTargets: (value) => set({ trade_targets: value }),
+    setTradeTargets: (value) =>
+      set((state) => ({
+        trade_targets: typeof value === "function" ? value(state.trade_targets) : value,
+      })),
 
     // 초기화 함수
     reset: () => set(defaultConfig),

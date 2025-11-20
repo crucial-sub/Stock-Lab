@@ -268,6 +268,7 @@ class BacktestEngine:
         slippage: float = 0.001,  # 0.1% 기본값
         target_themes: List[str] = None,  # 선택된 산업/테마
         target_stocks: List[str] = None,  # 선택된 종목 코드
+        target_universes: List[str] = None,  # 선택된 유니버스
         per_stock_ratio: Optional[float] = None,
         max_buy_value: Optional[Decimal] = None,
         max_daily_stock: Optional[int] = None
@@ -315,15 +316,16 @@ class BacktestEngine:
         # 매매 대상 필터 저장
         self.target_themes = target_themes or []
         self.target_stocks = target_stocks or []
+        self.target_universes = target_universes or []
 
         try:
             # 1. 데이터 준비
             logger.info(f"백테스트 시작: {backtest_id}")
             logger.info(f"📅 백테스트 기간: {start_date} ~ {end_date}")
-            logger.info(f"매매 대상 필터 - 테마: {self.target_themes}, 종목: {self.target_stocks}")
+            logger.info(f"매매 대상 필터 - 테마: {self.target_themes}, 종목: {self.target_stocks}, 유니버스: {self.target_universes}")
 
             # 순차 데이터 로딩 (SQLAlchemy AsyncSession은 동시 작업 미지원)
-            price_data = await self._load_price_data(start_date, end_date, target_themes, target_stocks)
+            price_data = await self._load_price_data(start_date, end_date, target_themes, target_stocks, target_universes)
             financial_data = await self._load_financial_data(start_date, end_date)
 
             # 1.5. 기존 백테스트 결과 삭제 (재실행 시 중복 방지)
@@ -470,11 +472,12 @@ class BacktestEngine:
         start_date: date,
         end_date: date,
         target_themes: List[str] = None,
-        target_stocks: List[str] = None
+        target_stocks: List[str] = None,
+        target_universes: List[str] = None
     ) -> pd.DataFrame:
         """가격 데이터 로드 (매매 대상 필터 적용) + Redis 캐싱"""
 
-        logger.info(f"📊 가격 데이터 로드 - target_themes: {target_themes}, target_stocks: {target_stocks}")
+        logger.info(f"📊 가격 데이터 로드 - target_themes: {target_themes}, target_stocks: {target_stocks}, target_universes: {target_universes}")
 
         # 🚀 Redis 캐시 키 생성
         from app.core.cache import get_cache
@@ -482,7 +485,8 @@ class BacktestEngine:
 
         themes_key = ','.join(sorted(target_themes)) if target_themes else 'all'
         stocks_key = ','.join(sorted(target_stocks)) if target_stocks else 'all'
-        cache_key = f"price_data:{start_date}:{end_date}:{themes_key}:{stocks_key}"
+        universes_key = ','.join(sorted(target_universes)) if target_universes else 'all'
+        cache_key = f"price_data:{start_date}:{end_date}:{themes_key}:{stocks_key}:{universes_key}"
 
         # 🚀 캐시 조회
         try:
@@ -505,18 +509,35 @@ class BacktestEngine:
         ]
 
         # 매매 대상 필터 적용
-        if target_themes or target_stocks:
+        if target_themes or target_stocks or target_universes:
             filter_conditions = []
 
             if target_themes:
                 # 선택된 산업(테마)에 속한 종목만
+                logger.info(f"🎯 테마 필터: {len(target_themes)}개 산업 - {target_themes[:3]}...")
                 filter_conditions.append(Company.industry.in_(target_themes))
 
             if target_stocks:
                 # 선택된 개별 종목만
+                logger.info(f"🎯 개별 종목 필터: {len(target_stocks)}개")
                 filter_conditions.append(Company.stock_code.in_(target_stocks))
 
-            # OR 조건으로 결합 (테마 또는 개별 종목)
+            if target_universes:
+                # 선택된 유니버스에 속한 종목만
+                from app.services.universe_service import UniverseService
+                universe_service = UniverseService(self.db)
+                universe_stock_codes = await universe_service.get_stock_codes_by_universes(
+                    target_universes,
+                    trade_date=start_date.strftime("%Y%m%d")
+                )
+                if universe_stock_codes:
+                    logger.info(f"🎯 유니버스 필터링: {len(universe_stock_codes)}개 종목 (유니버스: {target_universes})")
+                    filter_conditions.append(Company.stock_code.in_(universe_stock_codes))
+                else:
+                    logger.warning(f"⚠️ 유니버스에 종목이 없습니다: {target_universes}")
+
+            # OR 조건으로 결합 (테마 또는 개별 종목 또는 유니버스)
+            logger.info(f"🔍 필터 조건 개수: {len(filter_conditions)} (OR 결합)")
             if len(filter_conditions) > 1:
                 conditions.append(or_(*filter_conditions))
             elif len(filter_conditions) == 1:
@@ -977,7 +998,8 @@ class BacktestEngine:
 
             # 🚀 Polars 벡터화된 팩터 계산 (내부적으로 최적화됨)
             if financial_pl is not None or financial_dict is not None:
-                if any(f in required_factors for f in ['PER', 'PBR']):
+                value_factor_list = ['PER', 'PBR', 'PSR', 'PCR', 'DIVIDEND_YIELD', 'EARNINGS_YIELD', 'FCF_YIELD', 'EV_EBITDA', 'EV_SALES', 'BOOK_TO_MARKET']
+                if any(f in required_factors for f in value_factor_list):
                     try:
                         value_map = self._calculate_value_factors(price_until_date, financial_pl, calc_date, financial_dict)
                         filtered_value_map = {stock: {k: v for k, v in factors.items() if k in required_factors} for stock, factors in value_map.items()}
@@ -985,7 +1007,7 @@ class BacktestEngine:
                     except Exception as e:
                         logger.error(f"가치 팩터 에러 ({calc_date}): {e}")
 
-                if any(f in required_factors for f in ['ROE', 'ROA']):
+                if any(f in required_factors for f in ['ROE', 'ROA', 'DEBT_RATIO', 'GPM', 'OPM', 'NPM']):
                     try:
                         profit_map = self._calculate_profitability_factors(financial_pl, calc_date, financial_dict)
                         filtered_profit_map = {stock: {k: v for k, v in factors.items() if k in required_factors} for stock, factors in profit_map.items()}
@@ -993,7 +1015,19 @@ class BacktestEngine:
                     except Exception as e:
                         logger.error(f"수익성 팩터 에러 ({calc_date}): {e}")
 
-                if any(f in required_factors for f in ['SALES_GROWTH', 'EARNINGS_GROWTH']):
+                if any(f in required_factors for f in ['DEBT_TO_EQUITY', 'EQUITY_RATIO', 'CURRENT_RATIO', 'QUICK_RATIO', 'CASH_RATIO', 'INTEREST_COVERAGE']):
+                    try:
+                        stability_map = self._calculate_stability_factors(financial_pl, calc_date, financial_dict)
+                        filtered_stability_map = {stock: {k: v for k, v in factors.items() if k in required_factors} for stock, factors in stability_map.items()}
+                        self._merge_factor_maps(stock_factor_map, filtered_stability_map)
+                    except Exception as e:
+                        logger.error(f"안정성 팩터 에러 ({calc_date}): {e}")
+
+                growth_factor_list = ['REVENUE_GROWTH', 'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y', 'SALES_GROWTH',
+                                      'EARNINGS_GROWTH', 'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y',
+                                      'OPERATING_INCOME_GROWTH', 'ASSET_GROWTH', 'ASSET_GROWTH_3Y',
+                                      'EQUITY_GROWTH', 'GROSS_PROFIT_GROWTH']
+                if any(f in required_factors for f in growth_factor_list):
                     try:
                         growth_map = self._calculate_growth_factors(financial_pl, calc_date, financial_dict)
                         filtered_growth_map = {stock: {k: v for k, v in factors.items() if k in required_factors} for stock, factors in growth_map.items()}
@@ -1118,8 +1152,9 @@ class BacktestEngine:
 
             # 선택적 팩터 계산
             if financial_pl is not None or financial_dict is not None:
-                # 가치 팩터 (PER, PBR)
-                if any(f in required_factors for f in ['PER', 'PBR']):
+                # 가치 팩터 (PER, PBR, PSR, PCR, DIVIDEND_YIELD, EARNINGS_YIELD, FCF_YIELD, EV_EBITDA, EV_SALES, BOOK_TO_MARKET)
+                value_factor_list = ['PER', 'PBR', 'PSR', 'PCR', 'DIVIDEND_YIELD', 'EARNINGS_YIELD', 'FCF_YIELD', 'EV_EBITDA', 'EV_SALES', 'BOOK_TO_MARKET']
+                if any(f in required_factors for f in value_factor_list):
                     try:
                         value_map = self._calculate_value_factors(price_until_date, financial_pl, calc_date, financial_dict)
                         filtered_value_map = {}
@@ -1129,8 +1164,8 @@ class BacktestEngine:
                     except Exception as e:
                         logger.error(f"가치 팩터 계산 에러 ({calc_date}): {e}")
 
-                # 수익성 팩터 (ROE, ROA)
-                if any(f in required_factors for f in ['ROE', 'ROA']):
+                # 수익성 팩터 (ROE, ROA, DEBT_RATIO, GPM, OPM, NPM)
+                if any(f in required_factors for f in ['ROE', 'ROA', 'DEBT_RATIO', 'GPM', 'OPM', 'NPM']):
                     try:
                         profit_map = self._calculate_profitability_factors(financial_pl, calc_date, financial_dict)
                         filtered_profit_map = {}
@@ -1140,8 +1175,23 @@ class BacktestEngine:
                     except Exception as e:
                         logger.error(f"수익성 팩터 계산 에러 ({calc_date}): {e}")
 
+                # 안정성 팩터 (DEBT_TO_EQUITY, EQUITY_RATIO, CURRENT_RATIO, QUICK_RATIO, CASH_RATIO, INTEREST_COVERAGE)
+                if any(f in required_factors for f in ['DEBT_TO_EQUITY', 'EQUITY_RATIO', 'CURRENT_RATIO', 'QUICK_RATIO', 'CASH_RATIO', 'INTEREST_COVERAGE']):
+                    try:
+                        stability_map = self._calculate_stability_factors(financial_pl, calc_date, financial_dict)
+                        filtered_stability_map = {}
+                        for stock, factors in stability_map.items():
+                            filtered_stability_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
+                        self._merge_factor_maps(stock_factor_map, filtered_stability_map)
+                    except Exception as e:
+                        logger.error(f"안정성 팩터 계산 에러 ({calc_date}): {e}")
+
                 # 성장성 팩터
-                if any(f in required_factors for f in ['SALES_GROWTH', 'EARNINGS_GROWTH']):
+                growth_factor_list = ['REVENUE_GROWTH', 'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y', 'SALES_GROWTH',
+                                      'EARNINGS_GROWTH', 'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y',
+                                      'OPERATING_INCOME_GROWTH', 'ASSET_GROWTH', 'ASSET_GROWTH_3Y',
+                                      'EQUITY_GROWTH', 'GROSS_PROFIT_GROWTH']
+                if any(f in required_factors for f in growth_factor_list):
                     try:
                         growth_map = self._calculate_growth_factors(financial_pl, calc_date, financial_dict)
                         filtered_growth_map = {}
@@ -1249,10 +1299,12 @@ class BacktestEngine:
         required_factors = self._extract_required_factors(buy_conditions or [], priority_factor)
         if not required_factors:
             logger.info("모든 팩터 계산 (조건 없음)")
-            required_factors = {'PER', 'PBR', 'ROE', 'ROA', 'MOMENTUM_1M', 'MOMENTUM_3M',
-                              'MOMENTUM_6M', 'MOMENTUM_12M', 'VOLATILITY_20D', 'VOLATILITY_60D',
-                              'VOLUME_RATIO_20D', 'TURNOVER_RATE_20D', 'BOLLINGER_POSITION',
-                              'BOLLINGER_WIDTH', 'RSI', 'MACD'}
+            required_factors = {'PER', 'PBR', 'PSR', 'PCR', 'DIVIDEND_YIELD', 'EARNINGS_YIELD', 'FCF_YIELD', 'EV_EBITDA', 'EV_SALES', 'BOOK_TO_MARKET',
+                              'ROE', 'ROA', 'DEBT_RATIO', 'GPM', 'OPM', 'NPM',
+                              'DEBT_TO_EQUITY', 'CURRENT_RATIO', 'QUICK_RATIO', 'INTEREST_COVERAGE',
+                              'MOMENTUM_1M', 'MOMENTUM_3M', 'MOMENTUM_6M', 'MOMENTUM_12M',
+                              'VOLATILITY_20D', 'VOLATILITY_60D', 'VOLUME_RATIO_20D', 'TURNOVER_RATE_20D',
+                              'BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'RSI', 'MACD'}
 
         # Polars DataFrame으로 변환
         price_pl = pl.from_pandas(price_data)
@@ -1510,7 +1562,11 @@ class BacktestEngine:
                     'stock_code': stock,
                     '당기순이익': latest.select('당기순이익').to_pandas().iloc[0, 0] if '당기순이익' in latest.columns else None,
                     '자본총계': latest.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in latest.columns else None,
-                    '자산총계': latest.select('자산총계').to_pandas().iloc[0, 0] if '자산총계' in latest.columns else None
+                    '자산총계': latest.select('자산총계').to_pandas().iloc[0, 0] if '자산총계' in latest.columns else None,
+                    '부채총계': latest.select('부채총계').to_pandas().iloc[0, 0] if '부채총계' in latest.columns else None,
+                    '매출액': latest.select('매출액').to_pandas().iloc[0, 0] if '매출액' in latest.columns else None,
+                    '매출원가': latest.select('매출원가').to_pandas().iloc[0, 0] if '매출원가' in latest.columns else None,
+                    '영업이익': latest.select('영업이익').to_pandas().iloc[0, 0] if '영업이익' in latest.columns else None
                 })
 
             if not financial_records:
@@ -1530,11 +1586,15 @@ class BacktestEngine:
                 .agg([
                     pl.col('당기순이익').first().alias('당기순이익'),
                     pl.col('자본총계').first().alias('자본총계'),
-                    pl.col('자산총계').first().alias('자산총계')
+                    pl.col('자산총계').first().alias('자산총계'),
+                    pl.col('부채총계').first().alias('부채총계'),
+                    pl.col('매출액').first().alias('매출액'),
+                    pl.col('매출원가').first().alias('매출원가'),
+                    pl.col('영업이익').first().alias('영업이익')
                 ])
             )
 
-        # 🚀 Polars 벡터화: ROE, ROA 계산 (벡터 연산)
+        # 🚀 Polars 벡터화: ROE, ROA, DEBT_RATIO, GPM, OPM, NPM 계산 (벡터 연산)
         result = latest_financial.select([
             pl.col('stock_code'),
             # ROE = (당기순이익 / 자본총계) * 100
@@ -1554,7 +1614,43 @@ class BacktestEngine:
             )
             .then((pl.col('당기순이익') / pl.col('자산총계')) * 100)
             .otherwise(None)
-            .alias('ROA')
+            .alias('ROA'),
+            # DEBT_RATIO = (부채총계 / 자본총계) * 100
+            pl.when(
+                (pl.col('부채총계').is_not_null()) &
+                (pl.col('자본총계').is_not_null()) &
+                (pl.col('자본총계') > 0)
+            )
+            .then((pl.col('부채총계') / pl.col('자본총계')) * 100)
+            .otherwise(None)
+            .alias('DEBT_RATIO'),
+            # GPM = ((매출액 - 매출원가) / 매출액) * 100
+            pl.when(
+                (pl.col('매출액').is_not_null()) &
+                (pl.col('매출원가').is_not_null()) &
+                (pl.col('매출액') > 0)
+            )
+            .then(((pl.col('매출액') - pl.col('매출원가')) / pl.col('매출액')) * 100)
+            .otherwise(None)
+            .alias('GPM'),
+            # OPM = (영업이익 / 매출액) * 100
+            pl.when(
+                (pl.col('영업이익').is_not_null()) &
+                (pl.col('매출액').is_not_null()) &
+                (pl.col('매출액') > 0)
+            )
+            .then((pl.col('영업이익') / pl.col('매출액')) * 100)
+            .otherwise(None)
+            .alias('OPM'),
+            # NPM = (당기순이익 / 매출액) * 100
+            pl.when(
+                (pl.col('당기순이익').is_not_null()) &
+                (pl.col('매출액').is_not_null()) &
+                (pl.col('매출액') > 0)
+            )
+            .then((pl.col('당기순이익') / pl.col('매출액')) * 100)
+            .otherwise(None)
+            .alias('NPM')
         ])
 
         # Dictionary로 변환
@@ -1565,50 +1661,259 @@ class BacktestEngine:
                 entry['ROE'] = float(row['ROE'])
             if row['ROA'] is not None:
                 entry['ROA'] = float(row['ROA'])
+            if row['DEBT_RATIO'] is not None:
+                entry['DEBT_RATIO'] = float(row['DEBT_RATIO'])
+            if row['GPM'] is not None:
+                entry['GPM'] = float(row['GPM'])
+            if row['OPM'] is not None:
+                entry['OPM'] = float(row['OPM'])
+            if row['NPM'] is not None:
+                entry['NPM'] = float(row['NPM'])
             if entry:
                 factors[stock] = entry
 
         return factors
 
     def _calculate_growth_factors(self, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
-        """성장성 팩터 계산 (최적화: 사전 색인화된 재무 데이터 사용)"""
+        """🚀 성장성 팩터 계산 (최적화: 사전 색인화된 재무 데이터 사용)"""
         factors: Dict[str, Dict[str, float]] = {}
-        year_ago = calc_date - pd.Timedelta(days=365)
+        year_ago_1 = calc_date - pd.Timedelta(days=365)
+        year_ago_3 = calc_date - pd.Timedelta(days=365 * 3)
 
         # 최적화: 사전 색인화된 데이터 사용
         if financial_dict is not None:
             stocks_to_process = list(financial_dict.keys())
         else:
             current_financial = financial_pl.filter(pl.col('available_date') <= calc_date)
-            past_financial = financial_pl.filter(pl.col('available_date') <= year_ago)
-            if current_financial.is_empty() or past_financial.is_empty():
+            if current_financial.is_empty():
                 return factors
             stocks_to_process = current_financial.select('stock_code').unique().to_pandas()['stock_code'].tolist()
 
         for stock in stocks_to_process:
             if financial_dict is not None:
                 current = financial_dict[stock].filter(pl.col('available_date') <= calc_date).sort('available_date', descending=True).head(1)
-                past = financial_dict[stock].filter(pl.col('available_date') <= year_ago).sort('available_date', descending=True).head(1)
+                past_1y = financial_dict[stock].filter(pl.col('available_date') <= year_ago_1).sort('available_date', descending=True).head(1)
+                past_3y = financial_dict[stock].filter(pl.col('available_date') <= year_ago_3).sort('available_date', descending=True).head(1)
             else:
-                current = current_financial.filter(pl.col('stock_code') == stock).sort('available_date', descending=True).head(1)
-                past = past_financial.filter(pl.col('stock_code') == stock).sort('available_date', descending=True).head(1)
+                current = financial_pl.filter((pl.col('stock_code') == stock) & (pl.col('available_date') <= calc_date)).sort('available_date', descending=True).head(1)
+                past_1y = financial_pl.filter((pl.col('stock_code') == stock) & (pl.col('available_date') <= year_ago_1)).sort('available_date', descending=True).head(1)
+                past_3y = financial_pl.filter((pl.col('stock_code') == stock) & (pl.col('available_date') <= year_ago_3)).sort('available_date', descending=True).head(1)
 
-            if past.is_empty():
+            if current.is_empty():
                 continue
 
             entry = factors.setdefault(stock, {})
 
-            if '매출액' in current.columns and '매출액' in past.columns:
-                current_revenue = current.select('매출액').to_pandas().iloc[0, 0]
-                past_revenue = past.select('매출액').to_pandas().iloc[0, 0]
-                if current_revenue and past_revenue and past_revenue > 0:
-                    entry['REVENUE_GROWTH'] = (float(current_revenue) / float(past_revenue) - 1) * 100
+            # 1년 성장률 계산
+            if not past_1y.is_empty():
+                # REVENUE_GROWTH (매출 성장률 1Y)
+                if '매출액' in current.columns and '매출액' in past_1y.columns:
+                    current_revenue = current.select('매출액').to_pandas().iloc[0, 0]
+                    past_revenue = past_1y.select('매출액').to_pandas().iloc[0, 0]
+                    if current_revenue and past_revenue and past_revenue > 0:
+                        entry['REVENUE_GROWTH'] = (float(current_revenue) / float(past_revenue) - 1) * 100
+                        entry['REVENUE_GROWTH_1Y'] = entry['REVENUE_GROWTH']  # 별칭
 
-            if '당기순이익' in current.columns and '당기순이익' in past.columns:
-                current_income = current.select('당기순이익').to_pandas().iloc[0, 0]
-                past_income = past.select('당기순이익').to_pandas().iloc[0, 0]
-                if current_income and past_income and past_income > 0:
-                    entry['EARNINGS_GROWTH'] = (float(current_income) / float(past_income) - 1) * 100
+                # EARNINGS_GROWTH (순이익 성장률 1Y)
+                if '당기순이익' in current.columns and '당기순이익' in past_1y.columns:
+                    current_income = current.select('당기순이익').to_pandas().iloc[0, 0]
+                    past_income = past_1y.select('당기순이익').to_pandas().iloc[0, 0]
+                    if current_income and past_income and past_income > 0:
+                        entry['EARNINGS_GROWTH'] = (float(current_income) / float(past_income) - 1) * 100
+                        entry['EARNINGS_GROWTH_1Y'] = entry['EARNINGS_GROWTH']  # 별칭
+
+                # OPERATING_INCOME_GROWTH (영업이익 성장률 1Y)
+                if '영업이익' in current.columns and '영업이익' in past_1y.columns:
+                    current_oi = current.select('영업이익').to_pandas().iloc[0, 0]
+                    past_oi = past_1y.select('영업이익').to_pandas().iloc[0, 0]
+                    if current_oi and past_oi and past_oi > 0:
+                        entry['OPERATING_INCOME_GROWTH'] = (float(current_oi) / float(past_oi) - 1) * 100
+
+                # ASSET_GROWTH (자산 성장률 1Y)
+                if '자산총계' in current.columns and '자산총계' in past_1y.columns:
+                    current_asset = current.select('자산총계').to_pandas().iloc[0, 0]
+                    past_asset = past_1y.select('자산총계').to_pandas().iloc[0, 0]
+                    if current_asset and past_asset and past_asset > 0:
+                        entry['ASSET_GROWTH'] = (float(current_asset) / float(past_asset) - 1) * 100
+
+                # EQUITY_GROWTH (자본 성장률 1Y)
+                if '자본총계' in current.columns and '자본총계' in past_1y.columns:
+                    current_equity = current.select('자본총계').to_pandas().iloc[0, 0]
+                    past_equity = past_1y.select('자본총계').to_pandas().iloc[0, 0]
+                    if current_equity and past_equity and past_equity > 0:
+                        entry['EQUITY_GROWTH'] = (float(current_equity) / float(past_equity) - 1) * 100
+
+                # GROSS_PROFIT_GROWTH (매출총이익 성장률 1Y)
+                if '매출액' in current.columns and '매출원가' in current.columns and '매출액' in past_1y.columns and '매출원가' in past_1y.columns:
+                    current_gp = current.select('매출액').to_pandas().iloc[0, 0]
+                    current_cogs = current.select('매출원가').to_pandas().iloc[0, 0]
+                    past_gp = past_1y.select('매출액').to_pandas().iloc[0, 0]
+                    past_cogs = past_1y.select('매출원가').to_pandas().iloc[0, 0]
+                    if current_gp and current_cogs and past_gp and past_cogs:
+                        current_gross = float(current_gp) - float(current_cogs)
+                        past_gross = float(past_gp) - float(past_cogs)
+                        if past_gross > 0:
+                            entry['GROSS_PROFIT_GROWTH'] = (current_gross / past_gross - 1) * 100
+
+            # 3년 성장률 계산 (CAGR)
+            if not past_3y.is_empty():
+                # REVENUE_GROWTH_3Y (매출 CAGR 3Y)
+                if '매출액' in current.columns and '매출액' in past_3y.columns:
+                    current_revenue = current.select('매출액').to_pandas().iloc[0, 0]
+                    past_revenue = past_3y.select('매출액').to_pandas().iloc[0, 0]
+                    if current_revenue and past_revenue and past_revenue > 0:
+                        cagr = (pow(float(current_revenue) / float(past_revenue), 1/3) - 1) * 100
+                        entry['REVENUE_GROWTH_3Y'] = cagr
+
+                # EARNINGS_GROWTH_3Y (순이익 CAGR 3Y)
+                if '당기순이익' in current.columns and '당기순이익' in past_3y.columns:
+                    current_income = current.select('당기순이익').to_pandas().iloc[0, 0]
+                    past_income = past_3y.select('당기순이익').to_pandas().iloc[0, 0]
+                    if current_income and past_income and past_income > 0 and current_income > 0:
+                        cagr = (pow(float(current_income) / float(past_income), 1/3) - 1) * 100
+                        entry['EARNINGS_GROWTH_3Y'] = cagr
+
+                # ASSET_GROWTH_3Y (자산 CAGR 3Y)
+                if '자산총계' in current.columns and '자산총계' in past_3y.columns:
+                    current_asset = current.select('자산총계').to_pandas().iloc[0, 0]
+                    past_asset = past_3y.select('자산총계').to_pandas().iloc[0, 0]
+                    if current_asset and past_asset and past_asset > 0:
+                        cagr = (pow(float(current_asset) / float(past_asset), 1/3) - 1) * 100
+                        entry['ASSET_GROWTH_3Y'] = cagr
+
+        return factors
+
+    def _calculate_stability_factors(self, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
+        """🚀 안정성 팩터 계산 (Polars 벡터화 최적화)"""
+        factors: Dict[str, Dict[str, float]] = {}
+
+        # 🚀 Polars 벡터화: 모든 종목의 최신 재무 데이터 한 번에 추출
+        if financial_dict is not None:
+            # 사전 색인화된 데이터 사용
+            financial_records = []
+            for stock, stock_data in financial_dict.items():
+                stock_financial = stock_data.filter(pl.col('available_date') <= calc_date)
+                if stock_financial.is_empty():
+                    continue
+                latest = stock_financial.sort('available_date', descending=True).head(1)
+                financial_records.append({
+                    'stock_code': stock,
+                    '부채총계': latest.select('부채총계').to_pandas().iloc[0, 0] if '부채총계' in latest.columns else None,
+                    '자본총계': latest.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in latest.columns else None,
+                    '자산총계': latest.select('자산총계').to_pandas().iloc[0, 0] if '자산총계' in latest.columns else None,
+                    '유동자산': latest.select('유동자산').to_pandas().iloc[0, 0] if '유동자산' in latest.columns else None,
+                    '유동부채': latest.select('유동부채').to_pandas().iloc[0, 0] if '유동부채' in latest.columns else None,
+                    '재고자산': latest.select('재고자산').to_pandas().iloc[0, 0] if '재고자산' in latest.columns else None,
+                    '현금및현금성자산': latest.select('현금및현금성자산').to_pandas().iloc[0, 0] if '현금및현금성자산' in latest.columns else None,
+                    '영업이익': latest.select('영업이익').to_pandas().iloc[0, 0] if '영업이익' in latest.columns else None,
+                    '이자비용': latest.select('이자비용').to_pandas().iloc[0, 0] if '이자비용' in latest.columns else None
+                })
+
+            if not financial_records:
+                return factors
+
+            latest_financial = pl.DataFrame(financial_records)
+        else:
+            # 🚀 Polars 벡터화: group_by로 종목별 최신 데이터 추출
+            filtered = financial_pl.filter(pl.col('available_date') <= calc_date)
+            if filtered.is_empty():
+                return factors
+
+            latest_financial = (
+                filtered
+                .sort('available_date', descending=True)
+                .group_by('stock_code')
+                .agg([
+                    pl.col('부채총계').first().alias('부채총계'),
+                    pl.col('자본총계').first().alias('자본총계'),
+                    pl.col('자산총계').first().alias('자산총계'),
+                    pl.col('유동자산').first().alias('유동자산'),
+                    pl.col('유동부채').first().alias('유동부채'),
+                    pl.col('재고자산').first().alias('재고자산'),
+                    pl.col('현금및현금성자산').first().alias('현금및현금성자산'),
+                    pl.col('영업이익').first().alias('영업이익'),
+                    pl.col('이자비용').first().alias('이자비용')
+                ])
+            )
+
+        # 🚀 Polars 벡터화: 안정성 팩터 계산 (벡터 연산)
+        result = latest_financial.select([
+            pl.col('stock_code'),
+            # DEBT_TO_EQUITY = 부채총계 / 자본총계
+            pl.when(
+                (pl.col('부채총계').is_not_null()) &
+                (pl.col('자본총계').is_not_null()) &
+                (pl.col('자본총계') > 0)
+            )
+            .then(pl.col('부채총계') / pl.col('자본총계'))
+            .otherwise(None)
+            .alias('DEBT_TO_EQUITY'),
+            # EQUITY_RATIO = (자본총계 / 자산총계) * 100
+            pl.when(
+                (pl.col('자본총계').is_not_null()) &
+                (pl.col('자산총계').is_not_null()) &
+                (pl.col('자산총계') > 0)
+            )
+            .then((pl.col('자본총계') / pl.col('자산총계')) * 100)
+            .otherwise(None)
+            .alias('EQUITY_RATIO'),
+            # CURRENT_RATIO = 유동자산 / 유동부채
+            pl.when(
+                (pl.col('유동자산').is_not_null()) &
+                (pl.col('유동부채').is_not_null()) &
+                (pl.col('유동부채') > 0)
+            )
+            .then(pl.col('유동자산') / pl.col('유동부채'))
+            .otherwise(None)
+            .alias('CURRENT_RATIO'),
+            # QUICK_RATIO = (유동자산 - 재고자산) / 유동부채
+            pl.when(
+                (pl.col('유동자산').is_not_null()) &
+                (pl.col('재고자산').is_not_null()) &
+                (pl.col('유동부채').is_not_null()) &
+                (pl.col('유동부채') > 0)
+            )
+            .then((pl.col('유동자산') - pl.col('재고자산')) / pl.col('유동부채'))
+            .otherwise(None)
+            .alias('QUICK_RATIO'),
+            # CASH_RATIO = 현금및현금성자산 / 유동부채
+            pl.when(
+                (pl.col('현금및현금성자산').is_not_null()) &
+                (pl.col('유동부채').is_not_null()) &
+                (pl.col('유동부채') > 0)
+            )
+            .then(pl.col('현금및현금성자산') / pl.col('유동부채'))
+            .otherwise(None)
+            .alias('CASH_RATIO'),
+            # INTEREST_COVERAGE = 영업이익 / 이자비용
+            pl.when(
+                (pl.col('영업이익').is_not_null()) &
+                (pl.col('이자비용').is_not_null()) &
+                (pl.col('이자비용') > 0)
+            )
+            .then(pl.col('영업이익') / pl.col('이자비용'))
+            .otherwise(None)
+            .alias('INTEREST_COVERAGE')
+        ])
+
+        # Dictionary로 변환
+        for row in result.iter_rows(named=True):
+            stock = row['stock_code']
+            entry = {}
+            if row['DEBT_TO_EQUITY'] is not None:
+                entry['DEBT_TO_EQUITY'] = float(row['DEBT_TO_EQUITY'])
+            if row['EQUITY_RATIO'] is not None:
+                entry['EQUITY_RATIO'] = float(row['EQUITY_RATIO'])
+            if row['CURRENT_RATIO'] is not None:
+                entry['CURRENT_RATIO'] = float(row['CURRENT_RATIO'])
+            if row['QUICK_RATIO'] is not None:
+                entry['QUICK_RATIO'] = float(row['QUICK_RATIO'])
+            if row['CASH_RATIO'] is not None:
+                entry['CASH_RATIO'] = float(row['CASH_RATIO'])
+            if row['INTEREST_COVERAGE'] is not None:
+                entry['INTEREST_COVERAGE'] = float(row['INTEREST_COVERAGE'])
+            if entry:
+                factors[stock] = entry
 
         return factors
 
@@ -1666,6 +1971,54 @@ class BacktestEngine:
                         if stock not in factors:
                             factors[stock] = {}
                         factors[stock][factor_name] = momentum
+
+        # 52주 최고가/최저가 대비 거리 계산
+        lookback_52w = 252  # 1년 = 약 252 거래일
+        past_52w = calc_date - pd.Timedelta(days=lookback_52w * 1.5)  # 여유 두기
+
+        period_52w = price_pl.filter(
+            (pl.col('date') >= past_52w) &
+            (pl.col('date') <= calc_date)
+        )
+
+        if not period_52w.is_empty():
+            # 종목별 52주 최고가/최저가 계산
+            high_low_52w = period_52w.group_by('stock_code').agg([
+                pl.col('close_price').max().alias('high_52w'),
+                pl.col('close_price').min().alias('low_52w')
+            ])
+
+            high_dict = dict(zip(
+                high_low_52w.select('stock_code').to_pandas()['stock_code'],
+                high_low_52w.select('high_52w').to_pandas()['high_52w']
+            ))
+            low_dict = dict(zip(
+                high_low_52w.select('stock_code').to_pandas()['stock_code'],
+                high_low_52w.select('low_52w').to_pandas()['low_52w']
+            ))
+
+            # DISTANCE_FROM_52W_HIGH, DISTANCE_FROM_52W_LOW 계산
+            for stock, current_price in current_dict.items():
+                if stock in high_dict and stock in low_dict:
+                    high_52w = high_dict[stock]
+                    low_52w = low_dict[stock]
+
+                    if stock not in factors:
+                        factors[stock] = {}
+
+                    # DISTANCE_FROM_52W_HIGH: 52주 최고가 대비 현재가 위치 (음수 = 최고가 아래)
+                    if high_52w and high_52w > 0:
+                        factors[stock]['DISTANCE_FROM_52W_HIGH'] = ((float(current_price) / float(high_52w)) - 1) * 100
+
+                    # DISTANCE_FROM_52W_LOW: 52주 최저가 대비 현재가 위치 (양수 = 최저가 위)
+                    if low_52w and low_52w > 0:
+                        factors[stock]['DISTANCE_FROM_52W_LOW'] = ((float(current_price) / float(low_52w)) - 1) * 100
+
+                    # PRICE_POSITION: 52주 범위 내 현재가 위치 (0~100)
+                    if high_52w and low_52w and high_52w > low_52w:
+                        price_range = float(high_52w) - float(low_52w)
+                        price_from_low = float(current_price) - float(low_52w)
+                        factors[stock]['PRICE_POSITION'] = (price_from_low / price_range) * 100
 
         return factors
 
@@ -1806,9 +2159,205 @@ class BacktestEngine:
                         entry['MACD_SIGNAL'] = float(current_signal)
                         entry['MACD_HISTOGRAM'] = float(current_macd - current_signal)
 
+                # STOCHASTIC (14, 3, 3)
+                if len(stock_pd) >= 14 and 'high_price' in stock_pd.columns and 'low_price' in stock_pd.columns:
+                    highs = stock_pd['high_price'].values
+                    lows = stock_pd['low_price'].values
+
+                    # %K 계산 (Fast Stochastic)
+                    k_values = []
+                    for i in range(13, len(closes)):
+                        period_high = max(highs[i-13:i+1])
+                        period_low = min(lows[i-13:i+1])
+                        if period_high > period_low:
+                            k = ((closes[i] - period_low) / (period_high - period_low)) * 100
+                            k_values.append(k)
+                        else:
+                            k_values.append(50)  # 기본값
+
+                    if len(k_values) >= 3:
+                        # %D 계산 (Slow Stochastic)
+                        d = pd.Series(k_values).rolling(window=3).mean().iloc[-1]
+                        k = k_values[-1]
+
+                        if pd.notna(k) and pd.notna(d):
+                            entry['STOCHASTIC_K'] = float(k)
+                            entry['STOCHASTIC_D'] = float(d)
+                            entry['STOCHASTIC'] = float(k)  # 기본값은 %K
+
+                # VOLUME_ROC (Volume Rate of Change)
+                if 'volume' in stock_pd.columns and len(stock_pd) >= 20:
+                    volumes = stock_pd['volume'].values
+                    current_vol = volumes[-1]
+                    past_vol = volumes[-20]  # 20일 전
+                    if past_vol and past_vol > 0:
+                        vol_roc = ((current_vol / past_vol) - 1) * 100
+                        entry['VOLUME_ROC'] = float(vol_roc)
+
+                    # 평균 거래량 대비 현재 거래량
+                    avg_vol_20 = pd.Series(volumes).rolling(window=20).mean().iloc[-1]
+                    if pd.notna(avg_vol_20) and avg_vol_20 > 0:
+                        entry['VOLUME_RATIO'] = (current_vol / avg_vol_20) * 100
+
             except Exception as e:
                 logger.warning(f"기술적 지표 계산 실패 [{stock}]: {e}")
                 continue
+
+        return factors
+
+    def _calculate_value_factors(self, price_pl: pl.DataFrame, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
+        """🚀 VALUE 팩터 계산 (Polars 벡터화 최적화)"""
+        factors: Dict[str, Dict[str, float]] = {}
+
+        # 현재 주가 데이터 추출
+        current_prices = price_pl.filter(pl.col('date') == calc_date)
+        if current_prices.is_empty():
+            return factors
+
+        # 주가 데이터를 dict로 변환 (빠른 조회)
+        price_data = {}
+        for row in current_prices.iter_rows(named=True):
+            stock = row['stock_code']
+            price_data[stock] = {
+                'close_price': row.get('close_price'),
+                'listed_shares': row.get('listed_shares')
+            }
+
+        # 최신 재무 데이터 추출
+        if financial_dict is not None:
+            financial_records = []
+            for stock, stock_data in financial_dict.items():
+                if stock not in price_data:
+                    continue
+                stock_financial = stock_data.filter(pl.col('available_date') <= calc_date)
+                if stock_financial.is_empty():
+                    continue
+                latest = stock_financial.sort('available_date', descending=True).head(1)
+
+                financial_records.append({
+                    'stock_code': stock,
+                    '매출액': latest.select('매출액').to_pandas().iloc[0, 0] if '매출액' in latest.columns else None,
+                    '당기순이익': latest.select('당기순이익').to_pandas().iloc[0, 0] if '당기순이익' in latest.columns else None,
+                    '영업활동현금흐름': latest.select('영업활동현금흐름').to_pandas().iloc[0, 0] if '영업활동현금흐름' in latest.columns else None,
+                    '자본총계': latest.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in latest.columns else None,
+                    '부채총계': latest.select('부채총계').to_pandas().iloc[0, 0] if '부채총계' in latest.columns else None,
+                    '현금및현금성자산': latest.select('현금및현금성자산').to_pandas().iloc[0, 0] if '현금및현금성자산' in latest.columns else None,
+                    '배당금': latest.select('배당금').to_pandas().iloc[0, 0] if '배당금' in latest.columns else None,
+                    '영업이익': latest.select('영업이익').to_pandas().iloc[0, 0] if '영업이익' in latest.columns else None,
+                    '감가상각비': latest.select('감가상각비').to_pandas().iloc[0, 0] if '감가상각비' in latest.columns else None,
+                    '이자비용': latest.select('이자비용').to_pandas().iloc[0, 0] if '이자비용' in latest.columns else None,
+                    '법인세비용': latest.select('법인세비용').to_pandas().iloc[0, 0] if '법인세비용' in latest.columns else None,
+                })
+
+            if not financial_records:
+                return factors
+
+            latest_financial = pl.DataFrame(financial_records)
+        else:
+            filtered = financial_pl.filter(pl.col('available_date') <= calc_date)
+            if filtered.is_empty():
+                return factors
+
+            latest_financial = (
+                filtered
+                .sort('available_date', descending=True)
+                .group_by('stock_code')
+                .agg([
+                    pl.col('매출액').first(),
+                    pl.col('당기순이익').first(),
+                    pl.col('영업활동현금흐름').first(),
+                    pl.col('자본총계').first(),
+                    pl.col('부채총계').first(),
+                    pl.col('현금및현금성자산').first(),
+                    pl.col('배당금').first(),
+                    pl.col('영업이익').first(),
+                    pl.col('감가상각비').first(),
+                    pl.col('이자비용').first(),
+                    pl.col('법인세비용').first()
+                ])
+            )
+
+        # 팩터 계산
+        for row in latest_financial.iter_rows(named=True):
+            stock = row['stock_code']
+            if stock not in price_data:
+                continue
+
+            price_info = price_data[stock]
+            close_price = price_info.get('close_price')
+            listed_shares = price_info.get('listed_shares')
+
+            if not close_price or not listed_shares or close_price <= 0 or listed_shares <= 0:
+                continue
+
+            # 시가총액 계산 (원)
+            market_cap = float(close_price) * float(listed_shares)
+
+            entry = factors.setdefault(stock, {})
+
+            # PER (Price to Earnings Ratio)
+            net_income = row.get('당기순이익')
+            if net_income and net_income > 0:
+                eps = float(net_income) / float(listed_shares)
+                entry['PER'] = float(close_price) / eps
+
+            # PBR (Price to Book Ratio)
+            equity = row.get('자본총계')
+            if equity and equity > 0:
+                bps = float(equity) / float(listed_shares)
+                entry['PBR'] = float(close_price) / bps
+
+            # PSR (Price to Sales Ratio)
+            revenue = row.get('매출액')
+            if revenue and revenue > 0:
+                entry['PSR'] = market_cap / float(revenue)
+
+            # PCR (Price to Cash Flow Ratio)
+            ocf = row.get('영업활동현금흐름')
+            if ocf and ocf > 0:
+                entry['PCR'] = market_cap / float(ocf)
+
+            # DIVIDEND_YIELD (배당수익률)
+            dividend = row.get('배당금')
+            if dividend and dividend > 0:
+                dividend_per_share = float(dividend) / float(listed_shares)
+                entry['DIVIDEND_YIELD'] = (dividend_per_share / float(close_price)) * 100
+
+            # EARNINGS_YIELD (이익수익률)
+            net_income = row.get('당기순이익')
+            if net_income and net_income > 0:
+                eps = float(net_income) / float(listed_shares)
+                entry['EARNINGS_YIELD'] = (eps / float(close_price)) * 100
+
+            # FCF_YIELD (잉여현금흐름수익률)
+            if ocf and ocf > 0:
+                # FCF = 영업현금흐름 - CAPEX (간단히 영업현금흐름으로 근사)
+                entry['FCF_YIELD'] = (float(ocf) / market_cap) * 100
+
+            # EV/EBITDA, EV/SALES (기업가치 배수)
+            debt = row.get('부채총계')
+            cash = row.get('현금및현금성자산')
+            if debt is not None and cash is not None:
+                net_debt = float(debt) - float(cash)
+                enterprise_value = market_cap + net_debt
+
+                # EV/EBITDA
+                operating_income = row.get('영업이익')
+                depreciation = row.get('감가상각비')
+                if operating_income and depreciation:
+                    ebitda = float(operating_income) + float(depreciation)
+                    if ebitda > 0:
+                        entry['EV_EBITDA'] = enterprise_value / ebitda
+
+                # EV/SALES
+                if revenue and revenue > 0:
+                    entry['EV_SALES'] = enterprise_value / float(revenue)
+
+            # BOOK_TO_MARKET (1 / PBR)
+            equity = row.get('자본총계')
+            if equity and equity > 0:
+                book_value = float(equity)
+                entry['BOOK_TO_MARKET'] = book_value / market_cap
 
         return factors
 

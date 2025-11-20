@@ -91,7 +91,7 @@ export const authApi = {
    */
   getCurrentUserServer: async (token: string): Promise<UserResponse> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
     const response = await axios.get<UserResponse>(
       `${baseURL}/api/v1/auth/me`,
       {

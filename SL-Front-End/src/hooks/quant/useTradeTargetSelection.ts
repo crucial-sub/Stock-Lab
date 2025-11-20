@@ -46,13 +46,21 @@ export function useTradeTargetSelection(
     const themes = Array.from(selectedIndustries);
     const allSelected = industries.every((ind) => selectedIndustries.has(ind));
 
-    setTradeTargets({
-      use_all_stocks: allSelected && individualStocksRef.current.length === 0,
-      selected_universes: [], // 유니버스는 사용하지 않음
-      selected_themes: themes, // 산업을 테마로 전달
-      selected_stocks: individualStocksRef.current, // 개별 선택된 종목
-      selected_stock_count: selectedStockCount, // 선택된 종목 수 (ref 대신 직접 사용)
-      total_stock_count: totalStockCount, // 전체 종목 수 (ref 대신 직접 사용)
+    // 현재 스토어의 값을 가져와서 유니버스 설정은 유지
+    setTradeTargets((prevTargets) => {
+      // 유니버스가 선택되어 있으면 use_all_stocks는 false
+      const hasUniverseSelection = prevTargets.selected_universes && prevTargets.selected_universes.length > 0;
+
+      return {
+        ...prevTargets,
+        use_all_stocks: !hasUniverseSelection && allSelected && individualStocksRef.current.length === 0,
+        selected_themes: themes, // 산업을 테마로 전달
+        selected_stocks: individualStocksRef.current, // 개별 선택된 종목
+        // 유니버스가 선택되어 있으면 종목 수를 덮어쓰지 않음
+        selected_stock_count: hasUniverseSelection ? prevTargets.selected_stock_count : selectedStockCount,
+        total_stock_count: hasUniverseSelection ? prevTargets.total_stock_count : totalStockCount,
+        // selected_universes는 유지 (덮어쓰지 않음)
+      };
     });
   }, [
     selectedIndustries,

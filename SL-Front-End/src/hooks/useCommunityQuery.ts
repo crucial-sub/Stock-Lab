@@ -234,7 +234,16 @@ export function useTogglePostLikeMutation() {
 
   return useMutation<LikeResponse, Error, string>({
     mutationFn: communityApi.togglePostLike,
-    onSuccess: (_, postId) => {
+    onSuccess: (data, postId) => {
+      // 상세 캐시 즉시 갱신 (좋아요 상태/카운트)
+      queryClient.setQueryData<PostDetail | undefined>(
+        communityQueryKey.postDetail(postId),
+        (prev) =>
+          prev
+            ? { ...prev, isLiked: data.isLiked, likeCount: data.likeCount }
+            : prev,
+      );
+
       // 게시글 상세 갱신 (좋아요 수 업데이트)
       queryClient.invalidateQueries({
         queryKey: communityQueryKey.postDetail(postId),

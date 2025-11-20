@@ -5,17 +5,15 @@ import {
   HighlightsSection,
   MarketInsightSection,
   PerformanceChartSection,
-  KiwoomAccountSummary,
   StatsOverviewSection,
 } from "@/components/home/auth";
 import {
-  GuestCommunityPreviewSection,
   GuestMarketInsightSection,
   GuestPortfolioSection,
 } from "@/components/home/guest";
+import { DiscussionPreviewSection } from "@/components/community";
 import { FloatingChatWidget } from "@/components/home/FloatingChatWidget";
 import type {
-  GuestCommunityPost,
   GuestMarketIndex,
   GuestMarketStock,
   HomeCommunityHighlight,
@@ -112,21 +110,6 @@ const marketStocksFallback: MarketStock[] = [
   { id: "guest-4", name: "현대차", tag: "예시", change: "+0.00%", price: "200,000원", volume: "70억" },
   { id: "guest-5", name: "카카오", tag: "예시", change: "+0.00%", price: "60,000원", volume: "65억" },
 ];
-
-const guestCommunityPosts: GuestCommunityPost[] = Array.from({ length: 3 }).map(
-  (_, index) => ({
-    id: `post-${index}`,
-    title: "게시물 이름은 이렇게 들어갑니다.",
-    preview:
-      "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
-    author: "FMJS",
-    date: "2025.12.31 19:00",
-    tag: "태그",
-    views: "999+",
-    likes: "999+",
-    comments: "999+",
-  }),
-);
 
 const buildAuthenticatedStats = (
   dashboardData: DashboardData,
@@ -350,7 +333,7 @@ export function HomePageClient({
               stocks={guestMarketStocks}
               news={marketNews}
             />
-            <GuestCommunityPreviewSection posts={guestCommunityPosts} />
+            <DiscussionPreviewSection limit={3} />
           </div>
         </div>
         <FloatingChatWidget />
@@ -400,6 +383,7 @@ export function HomePageClient({
             portfolios={authPortfolios}
             posts={authCommunityHighlights}
           />
+          <DiscussionPreviewSection limit={3} className="mt-4" />
         </div>
       </div>
       <FloatingChatWidget />

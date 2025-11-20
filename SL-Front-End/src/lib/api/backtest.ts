@@ -156,6 +156,7 @@ export async function getBacktestYieldPoints(
  */
 export interface BacktestStatus {
   status: BacktestResult["status"];
+  strategyName?: string;
   progress?: number;
   currentDate?: string;
   buyCount?: number;

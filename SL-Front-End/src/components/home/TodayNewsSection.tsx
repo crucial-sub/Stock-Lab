@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Title } from "@/components/common/Title";
-import { NewsCard, type NewsItem } from "./NewsCard";
+import { NewsCard } from "./NewsCard";
+import type { NewsItem } from "@/types/news";
 
 interface TodayNewsSectionProps {
   items: NewsItem[];

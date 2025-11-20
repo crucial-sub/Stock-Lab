@@ -212,7 +212,9 @@ export function useChatStream(
       currentMessageRef.current = message;
 
       // SSE 엔드포인트 URL 생성
-      const baseUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL || window.location.origin;
+      const baseUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL ||
+                      process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api/v1', '') ||
+                      window.location.origin.replace(':3000', ':8003');
       const url = new URL("/api/v1/chat/stream", baseUrl);
       url.searchParams.set("sessionId", sessionId);
       url.searchParams.set("message", message);
@@ -235,7 +237,7 @@ export function useChatStream(
         eventSource.onerror = (event) => {
           console.error("[useChatStream] SSE 연결 에러:", event);
           const connectionError = new Error(
-            "서버와의 연결이 끊어졌습니다."
+            "네트워크 연결이 불안정합니다. 인터넷 연결을 확인하고 다시 시도해주세요."
           ) as SSEConnectionError;
           connectionError.retryable = true;
           handleError(connectionError);
@@ -245,14 +247,18 @@ export function useChatStream(
         timeoutIdRef.current = setTimeout(() => {
           console.error("[useChatStream] 타임아웃 발생");
           handleError(
-            new Error(`응답 시간이 초과되었습니다 (${timeout / 1000}초)`),
+            new Error(
+              `AI 응답 시간이 초과되었습니다 (${timeout / 1000}초). 질문이 복잡하거나 서버가 바쁠 수 있습니다. 잠시 후 다시 시도해주세요.`
+            ),
             false
           );
         }, timeout);
       } catch (err) {
         console.error("[useChatStream] EventSource 생성 에러:", err);
         handleError(
-          new Error("서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
+          new Error(
+            "서버와 연결할 수 없습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요."
+          ),
           false
         );
       }

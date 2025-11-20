@@ -15,6 +15,11 @@ export const mockBacktestResult: BacktestResult = {
     winRate: 62.5,
     profitFactor: 1.8,
     volatility: 15.2,
+    totalTrades: 100,
+    winningTrades: 62,
+    losingTrades: 38,
+    initialCapital: 10000000,
+    finalCapital: 12450000,
   },
   trades: [
     {
@@ -28,6 +33,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: 63000,
       weight: 10.5,
       valuation: 1057000,
+      quantity: 14,
     },
     {
       stockCode: "000660",
@@ -40,6 +46,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: 70000,
       weight: 9.8,
       valuation: 966000,
+      quantity: 7,
     },
     {
       stockCode: "035420",
@@ -52,6 +59,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: -60000,
       weight: 8.2,
       valuation: 780000,
+      quantity: 4,
     },
     {
       stockCode: "005380",
@@ -64,6 +72,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: 65000,
       weight: 11.2,
       valuation: 990000,
+      quantity: 5,
     },
     {
       stockCode: "051910",
@@ -76,6 +85,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: 50000,
       weight: 9.5,
       valuation: 890000,
+      quantity: 2,
     },
     {
       stockCode: "006400",
@@ -88,6 +98,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: -50000,
       weight: 8.8,
       valuation: 710000,
+      quantity: 2,
     },
     {
       stockCode: "035720",
@@ -100,6 +111,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: 97500,
       weight: 10.8,
       valuation: 877500,
+      quantity: 15,
     },
     {
       stockCode: "028260",
@@ -112,6 +124,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: 56000,
       weight: 9.2,
       valuation: 976000,
+      quantity: 8,
     },
     {
       stockCode: "017670",
@@ -124,6 +137,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: 63000,
       weight: 10.1,
       valuation: 927000,
+      quantity: 18,
     },
     {
       stockCode: "068270",
@@ -136,6 +150,7 @@ export const mockBacktestResult: BacktestResult = {
       profit: 65000,
       weight: 11.9,
       valuation: 890000,
+      quantity: 5,
     },
   ],
   yieldPoints: [

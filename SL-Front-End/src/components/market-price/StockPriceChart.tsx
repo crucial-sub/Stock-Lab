@@ -205,17 +205,13 @@ export function StockPriceChart({
 
     // 라인 스타일 설정 (부드럽고 연속적인 라인)
     series.strokes.template.setAll({
-<<<<<<< HEAD
-      strokeWidth: 2.5,
       tension: 0.5, // 곡선 부드럽게
-=======
       strokeWidth: 2,
       strokeGradient,
     });
     series.fills.template.setAll({
       visible: true,
       fillGradient: areaGradient,
->>>>>>> f5f9a26 (Refactor: 세부 종목 창 디자인 수정)
     });
 
     // 데이터 포인트 숨김 (깔끔한 라인만)

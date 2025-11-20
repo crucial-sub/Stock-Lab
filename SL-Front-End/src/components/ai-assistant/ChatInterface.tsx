@@ -1,13 +1,9 @@
 "use client";
 
 import { ChatResponse } from "@/lib/api/chatbot";
+import { Message } from "@/types/message";
 import { QuestionnaireView } from "./QuestionnaireView";
 import { RecommendationView } from "./RecommendationView";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
 
 interface ChatInterfaceProps {
   chatResponse: ChatResponse | null;

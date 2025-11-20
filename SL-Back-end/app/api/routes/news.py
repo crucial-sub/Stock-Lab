@@ -200,6 +200,24 @@ async def get_theme_sentiment_summary(
 
 
 @router.get(
+    "/db/latest",
+    response_model=NewsListResponse,
+    summary="DB에서 최신 뉴스 조회 (id DESC)"
+)
+async def get_latest_news(
+    limit: int = Query(5, ge=1, le=100, description="가져올 뉴스 개수"),
+    db: AsyncSession = Depends(get_db),
+):
+    """뉴스 테이블에서 id 기준 내림차순으로 최신 뉴스 조회"""
+    try:
+        items = await NewsRepository.get_latest_news(db, limit)
+        return NewsListResponse(total=len(items), news=items)
+    except Exception as e:
+        logger.error(f"최신 뉴스 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch latest news from DB")
+
+
+@router.get(
     "/health",
     summary="뉴스 서비스 헬스체크"
 )

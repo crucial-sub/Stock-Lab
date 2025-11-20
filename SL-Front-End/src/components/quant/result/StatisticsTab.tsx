@@ -266,7 +266,7 @@ function SuccessRateChart({
       const dataItem = target.dataItem;
       if (dataItem) {
         const index = data.findIndex(
-          (d) => d.name === dataItem.get("categoryX"),
+          (d) => d.name === (dataItem as any).get("categoryX"),
         );
         if (index !== -1) {
           return am5.color(data[index].color);
@@ -318,7 +318,7 @@ function UniversePieChart({
     series.slices.template.adapters.add("fill", (fill, target) => {
       const dataItem = target.dataItem;
       if (dataItem) {
-        const category = dataItem.get("category");
+        const category = (dataItem as any).get("category");
         const item = data.find((d) => d.name === category);
         if (item) {
           return am5.color(item.color);
@@ -376,7 +376,7 @@ function SellConditionPieChart({
     series.slices.template.adapters.add("fill", (fill, target) => {
       const dataItem = target.dataItem;
       if (dataItem) {
-        const category = dataItem.get("category");
+        const category = (dataItem as any).get("category");
         const item = data.find((d) => d.name === category);
         if (item) {
           return am5.color(item.color);

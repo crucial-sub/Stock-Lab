@@ -209,6 +209,18 @@ class NewsRepository:
             logger.error(f"Failed to get available themes: {e}")
             return []
 
+    @staticmethod
+    async def get_latest_news(db: AsyncSession, limit: int = 5) -> List[Dict]:
+        """최신 뉴스 (id 기준 내림차순)"""
+        try:
+          query = select(NewsArticle).order_by(NewsArticle.id.desc()).limit(limit)
+          result = await db.execute(query)
+          articles = result.scalars().all()
+          return [_serialize_news(article) for article in articles]
+        except Exception as e:
+          logger.error(f"Failed to fetch latest news: {e}")
+          return []
+
 
 def _serialize_news(article: NewsArticle) -> Dict:
     """뉴스 기사를 직렬화 - 프론트 스키마에 맞게"""

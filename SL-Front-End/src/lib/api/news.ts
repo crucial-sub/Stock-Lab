@@ -15,6 +15,8 @@ export async function fetchNewsList(
   params?: NewsListParams,
 ): Promise<NewsItem[]> {
   try {
+    const limit = params?.limit ?? 100;
+
     // 테마 필터만 있는 경우
     if (params?.themes?.length && !params.themes.includes("전체")) {
       // 모든 테마에 대해 데이터 수집
@@ -25,7 +27,7 @@ export async function fetchNewsList(
           {
             params: {
               theme,
-              limit: 100,
+              limit,
             },
           },
         );
@@ -41,7 +43,7 @@ export async function fetchNewsList(
         {
           params: {
             keyword: params.keyword,
-            limit: 100,
+            limit,
           },
         },
       );
@@ -66,7 +68,7 @@ export async function fetchNewsList(
       {
         params: {
           keyword: "뉴스",
-          limit: 100,
+          limit,
         },
       },
     );
@@ -74,6 +76,24 @@ export async function fetchNewsList(
     return response.data.news ?? [];
   } catch (error) {
     console.error("Failed to fetch news list:", error);
+    return [];
+  }
+}
+
+/**
+ * 최신 뉴스 조회 (id desc)
+ */
+export async function fetchLatestNews(limit = 5): Promise<NewsItem[]> {
+  try {
+    const response = await axiosInstance.get<NewsListResponse>(
+      "/news/db/latest",
+      {
+        params: { limit },
+      },
+    );
+    return response.data.news ?? [];
+  } catch (error) {
+    console.error("Failed to fetch latest news:", error);
     return [];
   }
 }

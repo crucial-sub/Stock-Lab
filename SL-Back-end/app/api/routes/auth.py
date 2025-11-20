@@ -15,7 +15,7 @@ from app.core.dependencies import get_current_user, get_current_active_user
 from app.core.cache import get_redis
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token, UserDeleteRequest
+from app.schemas.user import UserCreate, UserResponse, Token, UserDeleteRequest, PasswordChangeRequest
 
 router = APIRouter()
 security = HTTPBearer()
@@ -400,6 +400,57 @@ async def update_nickname(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="닉네임 변경에 실패했습니다"
+        )
+
+
+@router.patch("/update-password", status_code=status.HTTP_200_OK)
+async def update_password(
+    password_data: PasswordChangeRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    비밀번호 변경
+
+    Args:
+        password_data: 비밀번호 변경 요청 (current_password, new_password)
+        current_user: 현재 로그인한 유저
+        db: 데이터베이스 세션
+
+    Returns:
+        dict: 비밀번호 변경 성공 메시지
+
+    Raises:
+        HTTPException: 현재 비밀번호가 올바르지 않은 경우
+    """
+    # 현재 비밀번호 확인
+    if not verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="현재 비밀번호가 올바르지 않습니다"
+        )
+
+    # 새 비밀번호와 현재 비밀번호가 같은지 확인
+    if password_data.current_password == password_data.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="새 비밀번호는 현재 비밀번호와 달라야 합니다"
+        )
+
+    # 비밀번호 업데이트
+    current_user.hashed_password = get_password_hash(password_data.new_password)
+
+    try:
+        await db.commit()
+        return {
+            "message": "비밀번호가 성공적으로 변경되었습니다",
+            "email": current_user.email
+        }
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="비밀번호 변경 중 오류가 발생했습니다"
         )
 
 

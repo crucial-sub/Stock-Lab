@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { communityApi, PostSummary } from "@/lib/api/community";
 import { PostCard } from "./PostCard";
@@ -137,91 +138,110 @@ export function MyPostsSection({ userId }: MyPostsSectionProps) {
     new Set(posts.flatMap((post) => post.tags || []))
   );
 
+  const handleClearTags = () => setSelectedTags([]);
+
+  const renderTagButton = (tag: string, isActive: boolean, onClick: () => void) => (
+    <button
+      key={tag}
+      onClick={onClick}
+      className={`rounded-full px-5 py-1.5 text-[0.875rem] font-normal transition ${
+        isActive
+          ? "bg-brand-purple text-white font-semibold"
+          : "border-[1px] border-[#18223414] text-muted font-normal hover:bg-brand-purple/30 hover:text-white hover:border-brand-purple/30"
+      }`}
+    >
+      {tag}
+    </button>
+  );
+
   return (
-    <div className="quant-shell">
-      <h2 className="text-2xl font-bold text-text-body mb-6">내 게시물 모아보기</h2>
+    <section className="rounded-[12px] p-7 shadow-elev-card backdrop-blur bg-[#1822340D]">
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-[0.75rem] font-normal uppercase tracking-widest text-[#646464]">Community</p>
+            <h2 className="text-[1.5rem] font-semibold text-[#000000]">내 게시물 모아보기</h2>
+          </div>
+          <button
+            onClick={handleDeleteSelected}
+            disabled={selectedPostIds.size === 0}
+            className="rounded-full bg-price-up px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#FF6464CC] disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            선택 항목 삭제 ({selectedPostIds.size})
+          </button>
+        </div>
 
-      {/* 검색 및 정렬 */}
-      <div className="flex gap-3 mb-4">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="게시글 검색"
-          className="flex-1 px-4 py-3 bg-surface border border-surface rounded-lg text-text-body focus:border-brand-soft focus:shadow-elev-brand transition-all"
-        />
-        <button
-          onClick={() => setSearchQuery(searchQuery)}
-          className="px-6 py-3 bg-button-primary-soft text-brand rounded-lg hover:bg-brand hover:text-base-0 transition-colors"
-        >
-          검색
-        </button>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as "latest" | "views" | "likes")}
-          className="px-4 py-3 bg-surface border border-surface rounded-lg text-text-body focus:border-brand-soft focus:shadow-elev-brand transition-all"
-        >
-          <option value="latest">최신순</option>
-          <option value="views">조회수순</option>
-          <option value="likes">좋아요순</option>
-        </select>
-      </div>
+        {/* 검색 및 정렬 */}
+        <div className="flex flex-col gap-5 md:flex-row">
+          <div className="flex flex-1 items-center rounded-[12px] border-[0.5px] border-[#C8C8C8] bg-[#FFFFFF33] px-[1rem] py-[0.75rem]">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="게시글 검색"
+              className="flex-1 bg-transparent text-[#000000] placeholder:text-[#C8C8C8] focus:outline-none"
+            />
+          </div>
+          <button
+            onClick={() => setSearchQuery(searchQuery.trim())}
+            className="flex items-center justify-center gap-2 rounded-[12px] bg-brand-purple px-5 py-2 font-normal text-white shadow-elev-card-soft hover:bg-brand-purple/80"
+          >
+            <Image
+              src="/icons/search.svg"
+              alt="검색 아이콘"
+              width={20}
+              height={20}
+              className=""
+            />
+            검색
+          </button>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "latest" | "views" | "likes")}
+            className="rounded-[12px] border-[0.5px] border-[#C8C8C8] bg-white px-5 text-[0.875rem] font-normal text-[#000000] focus:outline-none"
+          >
+            <option value="latest">날짜 순 정렬</option>
+            <option value="views">조회수 순 정렬</option>
+            <option value="likes">좋아요 순 정렬</option>
+          </select>
+        </div>
 
-      {/* 태그 필터 */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
+        {/* 태그 필터 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {renderTagButton("전체", selectedTags.length === 0, handleClearTags)}
           {allTags.length === 0 ? (
-            <span className="text-sm text-text-muted">태그 없음</span>
+            <span className="text-sm text-[#9da5c9]">등록된 태그가 없습니다.</span>
           ) : (
-            <>
-              {allTags.slice(0, 10).map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => handleTagClick(tag)}
-                  className={`px-3 py-1 rounded-sm text-sm transition-colors ${
-                    selectedTags.includes(tag)
-                      ? "bg-brand text-base-0"
-                      : "bg-brand-soft text-brand hover:bg-brand hover:text-base-0"
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </>
+            allTags.slice(0, 8).map((tag, index) =>
+              renderTagButton(tag, selectedTags.includes(tag), () => handleTagClick(tag))
+            )
           )}
         </div>
-        <button
-          onClick={handleDeleteSelected}
-          disabled={selectedPostIds.size === 0}
-          className="px-4 py-2 bg-surface text-price-down rounded-lg hover:bg-price-up transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          선택 항목 삭제하기 ({selectedPostIds.size})
-        </button>
-      </div>
 
       {/* 게시물 리스트 */}
-      {isLoading ? (
-        <div className="py-12 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand mx-auto" />
-          <p className="mt-4 text-text-muted">게시물을 불러오는 중...</p>
-        </div>
-      ) : filteredPosts.length === 0 ? (
-        <div className="py-12 text-center">
-          <p className="text-text-muted text-lg">게시물이 없습니다</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredPosts.map((post) => (
-            <PostCard
-              key={post.postId}
-              post={post}
-              isSelected={selectedPostIds.has(post.postId)}
-              onToggleSelect={() => handleToggleSelect(post.postId)}
-              onDelete={() => handleDeletePost(post.postId)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+        {isLoading ? (
+          <div className="py-12 text-center">
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-[#c4cbff] border-t-[#6f7bff]" />
+            <p className="mt-4 text-sm text-[#6d749b]">게시물을 불러오는 중...</p>
+          </div>
+        ) : filteredPosts.length === 0 ? (
+          <div className="rounded-[12px] border border-dashed border-[#C8C8C8] bg-[#ffffffCC] py-12 text-center text-muted">
+            게시물이 없습니다
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredPosts.map((post) => (
+              <PostCard
+                key={post.postId}
+                post={post}
+                isSelected={selectedPostIds.has(post.postId)}
+                onToggleSelect={() => handleToggleSelect(post.postId)}
+                onDelete={() => handleDeletePost(post.postId)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

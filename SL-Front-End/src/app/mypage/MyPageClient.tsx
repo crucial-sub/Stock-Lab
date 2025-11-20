@@ -33,8 +33,10 @@ export function MyPageClient({ initialUser, formattedCreatedAt }: MyPageClientPr
   };
 
   return (
-    <div className="container mx-auto py-8 px-6">
-      <h1 className="text-3xl font-bold text-text-body mb-8">마이페이지</h1>
+    <div className="mx-auto flex w-full max-w-[1000px] py-[60px] flex-col gap-8">
+      <div className="flex flex-col gap-2">
+        <span className="text-[1.5rem] font-semibold text-[#000000]">마이페이지</span>
+      </div>
 
       {/* 기본 정보 섹션 */}
       <UserInfoSection

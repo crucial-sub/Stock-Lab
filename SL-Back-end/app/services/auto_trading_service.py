@@ -939,52 +939,178 @@ class AutoTradingService:
         positions_result = await db.execute(positions_query)
         positions = positions_result.scalars().all()
 
-        # 실시간 가격 업데이트 (최신 종가 조회)
+        # 실시간 가격 업데이트 (키움 API에서 현재가 조회)
         if positions:
             try:
-                from app.models.stock_price import StockPrice
-                from app.models.company import Company
+                from app.models.user import User
+                from app.services.kiwoom_service import KiwoomService
 
-                logger.info(f"💰 {len(positions)}개 종목 실시간 가격 업데이트 시작")
+                # 사용자의 키움 토큰 조회
+                user_query = select(User).where(User.user_id == strategy.user_id)
+                user_result = await db.execute(user_query)
+                user = user_result.scalar_one_or_none()
 
-                updated_count = 0
-                for position in positions:
+                if user and user.kiwoom_access_token:
+                    logger.info(f"💰 키움 API를 통한 {len(positions)}개 종목 실시간 가격 업데이트 시작")
+
                     try:
-                        # 종목코드로 company_id 조회
-                        company_query = select(Company).where(Company.stock_code == position.stock_code)
-                        company_result = await db.execute(company_query)
-                        company = company_result.scalar_one_or_none()
+                        # 키움 API에서 계좌 평가 잔고 조회
+                        account_data = KiwoomService.get_account_evaluation(
+                            access_token=user.kiwoom_access_token
+                        )
 
-                        if not company:
-                            logger.warning(f"종목 {position.stock_code} 회사 정보 없음")
+                        # API 응답에서 보유 종목 정보 추출
+                        holdings = account_data.get("acnt_evlt_remn_indv_tot", [])
+                        logger.info(f"📊 키움 API에서 {len(holdings)}개 종목 데이터 수신")
+
+                        # 종목코드를 key로 하는 딕셔너리로 변환 (빠른 검색)
+                        # 키움 API는 "A005930" 형식으로 오므로 "A"를 제거하여 "005930" 형식으로 변환
+                        holdings_dict = {}
+                        for holding in holdings:
+                            if holding.get("stk_cd"):
+                                stock_code = holding["stk_cd"].replace("A", "", 1)  # 첫 번째 "A"만 제거
+                                holdings_dict[stock_code] = holding
+
+                        logger.info(f"📋 holdings_dict 종목 코드: {list(holdings_dict.keys())[:5]}...")  # 처음 5개만
+                        logger.info(f"📋 live_positions 종목 코드: {[p.stock_code for p in positions[:5]]}...")  # 처음 5개만
+
+                        updated_count = 0
+                        for position in positions:
+                            try:
+                                # 키움 API에서 해당 종목 정보 찾기
+                                holding_info = holdings_dict.get(position.stock_code)
+
+                                if not holding_info:
+                                    logger.warning(f"⚠️  종목 {position.stock_code} 키움 API 응답에 없음")
+                                    continue
+
+                                cur_prc = holding_info.get("cur_prc")
+                                if not cur_prc:
+                                    logger.warning(f"⚠️  종목 {position.stock_code} cur_prc 없음: {holding_info}")
+                                    continue
+
+                                old_price = position.current_price or position.avg_buy_price
+                                current_price = Decimal(str(int(cur_prc)))  # 문자열 숫자를 int로 변환 후 Decimal로
+
+                                # 키움 API의 실제 평가손익 사용 (수수료, 세금 포함)
+                                evltv_prft = holding_info.get("evltv_prft")  # 평가손익
+                                prft_rt = holding_info.get("prft_rt")  # 수익률
+
+                                position.current_price = current_price
+
+                                if evltv_prft:
+                                    position.unrealized_profit = Decimal(str(int(evltv_prft)))
+                                else:
+                                    # fallback: 수수료 제외하고 계산
+                                    position.unrealized_profit = (position.current_price - position.avg_buy_price) * position.quantity
+
+                                if prft_rt:
+                                    position.unrealized_profit_pct = Decimal(str(float(prft_rt)))
+                                else:
+                                    # fallback: 수수료 제외하고 계산
+                                    position.unrealized_profit_pct = ((position.current_price - position.avg_buy_price) / position.avg_buy_price) * Decimal("100")
+
+                                updated_count += 1
+                                logger.debug(f"  📈 {position.stock_code}: {old_price:,.0f}원 → {position.current_price:,.0f}원 (손익률: {position.unrealized_profit_pct:+.2f}%)")
+
+                            except Exception as price_err:
+                                logger.warning(f"종목 {position.stock_code} 가격 조회 실패: {price_err}")
+                                continue
+
+                        # 키움 API의 총 평가액 정보 추출
+                        kiwoom_total_eval = None
+                        kiwoom_total_profit = None
+                        kiwoom_total_profit_rate = None
+
+                        tot_evlt_amt = account_data.get("tot_evlt_amt")
+                        tot_evlt_pl = account_data.get("tot_evlt_pl")
+                        tot_prft_rt = account_data.get("tot_prft_rt")
+
+                        if tot_evlt_amt:
+                            kiwoom_total_eval = Decimal(str(int(tot_evlt_amt)))
+                        if tot_evlt_pl:
+                            kiwoom_total_profit = Decimal(str(int(tot_evlt_pl)))
+                        if tot_prft_rt:
+                            kiwoom_total_profit_rate = Decimal(str(float(tot_prft_rt)))
+
+                        # 전략 객체에 키움 실제 데이터 추가 (DB에는 저장 안 함, 응답용)
+                        strategy.kiwoom_total_eval = kiwoom_total_eval
+                        strategy.kiwoom_total_profit = kiwoom_total_profit
+                        strategy.kiwoom_total_profit_rate = kiwoom_total_profit_rate
+
+                        # 변경사항 저장
+                        await db.commit()
+                        logger.info(f"✅ 키움 API를 통해 {updated_count}개 종목 가격 업데이트 완료 (총 평가액: {kiwoom_total_eval:,.0f}원)")
+
+                    except Exception as kiwoom_err:
+                        logger.warning(f"키움 API 호출 실패, StockPrice 테이블에서 조회: {kiwoom_err}")
+
+                        # 키움 API 실패 시 StockPrice 테이블에서 조회 (fallback)
+                        from app.models.stock_price import StockPrice
+                        from app.models.company import Company
+
+                        updated_count = 0
+                        for position in positions:
+                            try:
+                                company_query = select(Company).where(Company.stock_code == position.stock_code)
+                                company_result = await db.execute(company_query)
+                                company = company_result.scalar_one_or_none()
+
+                                if not company:
+                                    continue
+
+                                latest_price_query = select(StockPrice).where(
+                                    StockPrice.company_id == company.company_id
+                                ).order_by(StockPrice.trade_date.desc()).limit(1)
+                                latest_price_result = await db.execute(latest_price_query)
+                                latest_price = latest_price_result.scalar_one_or_none()
+
+                                if latest_price and latest_price.close_price:
+                                    old_price = position.current_price or position.avg_buy_price
+                                    position.current_price = Decimal(str(latest_price.close_price))
+                                    position.unrealized_profit = (position.current_price - position.avg_buy_price) * position.quantity
+                                    position.unrealized_profit_pct = ((position.current_price - position.avg_buy_price) / position.avg_buy_price) * Decimal("100")
+                                    updated_count += 1
+
+                            except Exception as price_err:
+                                continue
+
+                        await db.commit()
+                        logger.info(f"✅ StockPrice 테이블에서 {updated_count}개 종목 가격 업데이트 완료")
+
+                else:
+                    logger.warning("키움 토큰이 없어 StockPrice 테이블에서 조회")
+                    # 키움 토큰 없을 경우 기존 로직 사용
+                    from app.models.stock_price import StockPrice
+                    from app.models.company import Company
+
+                    updated_count = 0
+                    for position in positions:
+                        try:
+                            company_query = select(Company).where(Company.stock_code == position.stock_code)
+                            company_result = await db.execute(company_query)
+                            company = company_result.scalar_one_or_none()
+
+                            if not company:
+                                continue
+
+                            latest_price_query = select(StockPrice).where(
+                                StockPrice.company_id == company.company_id
+                            ).order_by(StockPrice.trade_date.desc()).limit(1)
+                            latest_price_result = await db.execute(latest_price_query)
+                            latest_price = latest_price_result.scalar_one_or_none()
+
+                            if latest_price and latest_price.close_price:
+                                position.current_price = Decimal(str(latest_price.close_price))
+                                position.unrealized_profit = (position.current_price - position.avg_buy_price) * position.quantity
+                                position.unrealized_profit_pct = ((position.current_price - position.avg_buy_price) / position.avg_buy_price) * Decimal("100")
+                                updated_count += 1
+
+                        except Exception as price_err:
                             continue
 
-                        # 최신 종가 조회
-                        latest_price_query = select(StockPrice).where(
-                            StockPrice.company_id == company.company_id
-                        ).order_by(StockPrice.trade_date.desc()).limit(1)
-                        latest_price_result = await db.execute(latest_price_query)
-                        latest_price = latest_price_result.scalar_one_or_none()
-
-                        if latest_price and latest_price.close_price:
-                            old_price = position.current_price or position.avg_buy_price
-                            position.current_price = Decimal(str(latest_price.close_price))
-
-                            # 평가손익 계산
-                            position.unrealized_profit = (position.current_price - position.avg_buy_price) * position.quantity
-                            position.unrealized_profit_pct = ((position.current_price - position.avg_buy_price) / position.avg_buy_price) * Decimal("100")
-
-                            updated_count += 1
-                            logger.debug(f"  📈 {position.stock_code}: {old_price:,.0f}원 → {position.current_price:,.0f}원 (손익률: {position.unrealized_profit_pct:+.2f}%)")
-
-                    except Exception as price_err:
-                        logger.warning(f"종목 {position.stock_code} 가격 조회 실패: {price_err}")
-                        # 실패해도 기존 가격 유지
-                        continue
-
-                # 변경사항 저장
-                await db.commit()
-                logger.info(f"✅ {updated_count}개 종목 가격 업데이트 완료")
+                    await db.commit()
+                    logger.info(f"✅ StockPrice 테이블에서 {updated_count}개 종목 가격 업데이트 완료")
 
             except Exception as e:
                 logger.error(f"실시간 가격 업데이트 실패: {e}")
@@ -1078,6 +1204,40 @@ class AutoTradingService:
         total_current_value = Decimal("0")
         total_positions_count = 0
 
+        # 키움 API를 통한 실제 평가액 조회 시도
+        from app.models.user import User
+        from app.services.kiwoom_service import KiwoomService
+
+        user_query = select(User).where(User.user_id == user_id)
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+
+        kiwoom_total_eval = None
+        kiwoom_total_profit = None
+        kiwoom_total_profit_rate = None
+
+        if user and user.kiwoom_access_token:
+            try:
+                account_data = KiwoomService.get_account_evaluation(
+                    access_token=user.kiwoom_access_token
+                )
+
+                tot_evlt_amt = account_data.get("tot_evlt_amt")
+                tot_evlt_pl = account_data.get("tot_evlt_pl")
+                tot_prft_rt = account_data.get("tot_prft_rt")
+
+                if tot_evlt_amt:
+                    kiwoom_total_eval = Decimal(str(int(tot_evlt_amt)))
+                if tot_evlt_pl:
+                    kiwoom_total_profit = Decimal(str(int(tot_evlt_pl)))
+                if tot_prft_rt:
+                    kiwoom_total_profit_rate = Decimal(str(float(tot_prft_rt)))
+
+                logger.info(f"💰 키움 API 대시보드 데이터: 총 평가액={kiwoom_total_eval:,.0f}원, 손익={kiwoom_total_profit:,.0f}원 ({kiwoom_total_profit_rate}%)")
+
+            except Exception as kiwoom_err:
+                logger.warning(f"키움 API 대시보드 데이터 조회 실패: {kiwoom_err}")
+
         for strategy in active_strategies:
             # allocated_capital을 기준으로 계산 (실제 가상매매에 할당된 금액)
             total_allocated_capital += strategy.allocated_capital
@@ -1107,18 +1267,26 @@ class AutoTradingService:
         today_trades_result = await db.execute(today_trades_query)
         total_trades_today = today_trades_result.scalar() or 0
 
-        # 4. 수익률 계산
-        total_profit = total_current_value - total_allocated_capital
-        total_return = (
-            (total_profit / total_allocated_capital * 100)
-            if total_allocated_capital > 0
-            else Decimal("0")
-        )
+        # 4. 수익률 계산 (키움 API 데이터 우선 사용)
+        if kiwoom_total_eval is not None:
+            # 키움 API 데이터 사용
+            final_total_assets = kiwoom_total_eval
+            final_total_profit = kiwoom_total_profit or Decimal("0")
+            final_total_return = kiwoom_total_profit_rate or Decimal("0")
+        else:
+            # DB 계산 데이터 사용 (fallback)
+            final_total_assets = total_current_value
+            final_total_profit = total_current_value - total_allocated_capital
+            final_total_return = (
+                (final_total_profit / total_allocated_capital * 100)
+                if total_allocated_capital > 0
+                else Decimal("0")
+            )
 
         return {
-            "total_assets": total_current_value,
-            "total_return": total_return,
-            "total_profit": total_profit,
+            "total_assets": final_total_assets,
+            "total_return": final_total_return,
+            "total_profit": final_total_profit,
             "active_strategy_count": len(active_strategies),
             "total_positions": total_positions_count,
             "total_trades_today": total_trades_today,

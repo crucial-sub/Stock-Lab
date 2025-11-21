@@ -382,7 +382,7 @@ export function HomePageClient({
           )}
 
           <StatsOverviewSection stats={authenticatedStats} />
-          <PerformanceChartSection performanceData={performanceChartData} />
+          <PerformanceChartSection />
           <MarketInsightSection
             stocks={marketStocks}
             news={marketNews}

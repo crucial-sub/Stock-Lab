@@ -1,6 +1,12 @@
 /**
  * 백테스트 관련 API 함수
  * - 백테스트 실행, 결과 조회 API를 제공합니다
+ *
+ * SSE 스트리밍 백테스트:
+ * - POST /api/v1/backtest/execute-stream
+ * - EventSource를 통한 실시간 진행 상황 수신
+ * - useBacktestStream 훅에서 직접 처리
+ * - 참조: src/hooks/useBacktestStream.ts
  */
 
 import type {
@@ -14,6 +20,7 @@ import type {
   SubFactor,
   Themes,
 } from "@/types/api";
+export type { BacktestRunRequest } from "@/types/api";
 import { axiosInstance, axiosServerInstance } from "../axios";
 
 /**
@@ -196,6 +203,25 @@ export async function getBacktestStatus(
  */
 export async function deleteBacktest(backtestId: string): Promise<void> {
   await axiosInstance.delete(`/backtest/${backtestId}`);
+}
+
+/**
+ * 백테스트 결과를 포트폴리오로 저장
+ * - POST /backtest/{backtestId}/save-portfolio
+ * - 백테스트 결과를 사용자의 포트폴리오로 저장합니다
+ *
+ * @param backtestId - 백테스트 ID
+ * @returns 저장 완료 메시지
+ */
+export async function savePortfolio(
+  backtestId: string,
+  portfolioName?: string
+): Promise<{ message: string; success: boolean; portfolio_id: string | null }> {
+  const response = await axiosInstance.post<{ message: string; success: boolean; portfolio_id: string | null }>(
+    `/backtest/${backtestId}/save-portfolio`,
+    portfolioName ? { name: portfolioName } : {}
+  );
+  return response.data;
 }
 
 /**

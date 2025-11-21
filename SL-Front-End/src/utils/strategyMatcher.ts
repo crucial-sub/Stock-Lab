@@ -27,7 +27,7 @@ export interface InvestmentStrategy {
  */
 export interface StrategyCondition {
   condition: string;
-  conditionInfo: string[];
+  condition_info: string[];
 }
 
 /**

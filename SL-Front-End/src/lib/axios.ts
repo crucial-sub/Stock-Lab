@@ -5,9 +5,9 @@
  * - 요청/응답 인터셉터를 통해 공통 로직을 처리합니다
  */
 
+import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
 import { getAuthTokenFromCookie } from "./auth/token";
-import { useAuthStore } from "@/stores/authStore";
 
 /**
  * Axios 기본 인스턴스
@@ -17,7 +17,7 @@ import { useAuthStore } from "@/stores/authStore";
 export const axiosInstance = axios.create({
   baseURL:
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1",
-  timeout: 30000, // 30초
+  timeout: 180000, // 3분 (백테스트는 시간이 오래 걸림)
   headers: {
     "Content-Type": "application/json",
   },
@@ -112,7 +112,7 @@ export const axiosServerInstance = axios.create({
     process.env.API_BASE_URL ??
     process.env.NEXT_PUBLIC_API_BASE_URL ??
     "http://localhost:8000/api/v1",
-  timeout: 30000,
+  timeout: 180000, // 3분 (백테스트는 시간이 오래 걸림)
   headers: {
     "Content-Type": "application/json",
   },

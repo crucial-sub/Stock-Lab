@@ -20,6 +20,8 @@ import { getTagLabel } from "@/data/assistantQuestionnaire";
 interface StrategyRecommendationRendererProps {
   /** 추천된 전략 매칭 결과 배열 */
   recommendations: StrategyMatch[];
+  /** 전략 선택 시 호출되는 콜백 함수 */
+  onSelectStrategy?: (strategyId: string, strategyName: string) => void;
 }
 
 // ============================================================================
@@ -29,9 +31,10 @@ interface StrategyRecommendationRendererProps {
 interface StrategyCardProps {
   match: StrategyMatch;
   rank: number;
+  onSelect?: (strategyId: string, strategyName: string) => void;
 }
 
-function StrategyCard({ match, rank }: StrategyCardProps) {
+function StrategyCard({ match, rank, onSelect }: StrategyCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedConditions, setExpandedConditions] = useState<Set<number>>(new Set());
 
@@ -177,7 +180,7 @@ function StrategyCard({ match, rank }: StrategyCardProps) {
                       </div>
 
                       {/* 확장/축소 아이콘 */}
-                      {condition.conditionInfo.length > 0 && (
+                      {condition.condition_info.length > 0 && (
                         <svg
                           className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2 ${expandedConditions.has(index) ? "rotate-180" : ""}`}
                           fill="none"
@@ -190,9 +193,9 @@ function StrategyCard({ match, rank }: StrategyCardProps) {
                     </button>
 
                     {/* 조건 설명 (확장 시) */}
-                    {expandedConditions.has(index) && condition.conditionInfo.length > 0 && (
+                    {expandedConditions.has(index) && condition.condition_info.length > 0 && (
                       <div className="px-3 py-2 border-t border-gray-200 bg-gray-50">
-                        {condition.conditionInfo.map((info, infoIndex) => (
+                        {condition.condition_info.map((info, infoIndex) => (
                           <p key={infoIndex} className="text-xs text-gray-600 mb-1 last:mb-0">
                             {info}
                           </p>
@@ -204,6 +207,21 @@ function StrategyCard({ match, rank }: StrategyCardProps) {
               </div>
             </div>
           )}
+
+          {/* 전략 선택 버튼 */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onSelect) {
+                  onSelect(strategy.id, strategy.name);
+                }
+              }}
+              className="w-full py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
+            >
+              이 전략 선택하기
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -221,6 +239,7 @@ function StrategyCard({ match, rank }: StrategyCardProps) {
  */
 export function StrategyRecommendationRenderer({
   recommendations,
+  onSelectStrategy,
 }: StrategyRecommendationRendererProps) {
   if (recommendations.length === 0) {
     return (
@@ -249,6 +268,7 @@ export function StrategyRecommendationRenderer({
             key={match.strategy.id}
             match={match}
             rank={index + 1}
+            onSelect={onSelectStrategy}
           />
         ))}
       </div>

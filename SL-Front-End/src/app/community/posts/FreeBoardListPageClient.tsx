@@ -185,7 +185,7 @@ export function FreeBoardListPageClient({
           </div>
           <button
             type="button"
-            onClick={() => router.push("/community/discussion/new")}
+            onClick={() => router.push("/community/posts/new")}
             className="rounded-full bg-brand-purple px-4 pt-1.5 pb-1 text-[0.875rem] font-semibold text-white hover:bg-brand-purple/80"
           >
             새 글 작성하기

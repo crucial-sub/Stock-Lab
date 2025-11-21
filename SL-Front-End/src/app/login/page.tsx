@@ -82,11 +82,11 @@ export default function LoginPage() {
     : "text-text-strong";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-app px-[2.5rem] py-[3.75rem] text-text-body">
-      <div className="w-full max-w-[520px] rounded-[8px] border border-border-subtle bg-white px-[2.5rem] py-[3.75rem] shadow-card">
+    <div className="flex min-h-screen items-center justify-center px-[2.5rem] py-[3.75rem] text-body">
+      <div className="w-full max-w-[520px] px-[2.5rem] py-[3.75rem]">
         <Link
           href="/"
-          className="flex items-center gap-1 text-[0.75rem] font-normal text-text-body hover:text-brand-primary"
+          className="flex items-center gap-1 text-[0.75rem] font-normal text-muted"
         >
           <Image
             src="/icons/arrow_left.svg"
@@ -98,29 +98,26 @@ export default function LoginPage() {
         </Link>
 
         <div className="flex flex-col">
-          <Link href="/" className="font-circular self-center my-[40px]">
+          <Link href="/" className="self-center my-[40px]">
             <div className="flex h-[4rem] items-start justify-center">
               <span className="text-[2rem] font-sembold text-brand-primary">
-                stock
-              </span>
-              <span className="self-end text-[2rem] font-semibold text-accent-primary">
-                lab
+                Stock Lab
               </span>
             </div>
           </Link>
           <div>
-            <h1 className="text-[1.5rem] font-semibold text-text-strong text-left">
+            <h1 className="text-[1.5rem] font-semibold text-strong text-left">
               로그인
             </h1>
-            <p className="text-text-body text-left">
+            <p className="text-muted text-left">
               서비스 사용을 위해서는 로그인이 필요합니다.
             </p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+        <form onSubmit={handleSubmit} className="mt-10 space-y-6">
           <div>
-            <p className={`mb-2 text-sm font-normal ${emailLabelClass}`}>
+            <p className={`mb-1 text-[0.875rem] font-normal ${emailLabelClass}`}>
               이메일을 입력해주세요.
             </p>
             <Input
@@ -129,16 +126,16 @@ export default function LoginPage() {
               placeholder="이메일"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className={`h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none ${
+              className={`py-[0.75rem] w-full rounded-[12px] px-4 font-normal text-body placeholder:text-muted focus:outline-none shadow-elev-card-soft ${
                 errors.email
-                  ? "border-brand-primary bg-[#FFF6F6]"
-                  : "border-border-default bg-white focus:border-accent-primary"
+                  ? "bg-[#1822340D] border-[0.5px] border-[#FF6464]"
+                  : "bg-[#1822340D] border-[0.5px] border-[#18223433] focus:border-brand-purple"
               }`}
             />
           </div>
 
           <div>
-            <p className={`mb-2 text-sm font-normal ${passwordLabelClass}`}>
+            <p className={`mb-1 text-[0.875rem] font-normal ${passwordLabelClass}`}>
               비밀번호를 입력해주세요.
             </p>
             <Input
@@ -147,10 +144,10 @@ export default function LoginPage() {
               placeholder="********"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className={`h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none ${
+              className={`mb-8 py-[0.75rem] w-full rounded-[12px] px-4 font-normal text-body placeholder:text-muted focus:outline-none shadow-elev-card-soft ${
                 errors.password
-                  ? "border-brand-primary bg-[#FFF6F6]"
-                  : "border-border-default bg-white focus:border-accent-primary"
+                  ? "bg-[#1822340D] border-[0.5px] border-[#FF6464]"
+                  : "bg-[#1822340D] border-[0.5px] border-[#18223433] focus:border-brand-purple"
               }`}
             />
           </div>
@@ -158,16 +155,16 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="h-14 w-full rounded-[8px] border border-brand-primary bg-[#FFD7DB] text-lg font-semibold text-brand-primary transition hover:bg-brand-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="py-2.5 w-full rounded-[12px] bg-brand-purple text-[1.125rem] font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
           >
             {isSubmitting ? "로그인 중..." : "로그인"}
           </button>
         </form>
 
-        <div className="my-8 flex items-center gap-4 text-sm text-text-muted">
-          <span className="flex-1 border-t border-border-subtle" />
+        <div className="my-8 flex items-center gap-4 text-sm text-muted">
+          <span className="flex-1 border-t border-[#646464]" />
           혹은
-          <span className="flex-1 border-t border-border-subtle" />
+          <span className="flex-1 border-t border-[#646464]" />
         </div>
 
         <div className="flex justify-center gap-4">
@@ -176,7 +173,7 @@ export default function LoginPage() {
               key={social.id}
               type="button"
               aria-label={social.label}
-              className="rounded-[8px] hover:-translate-y-0.5"
+              className="rounded-[12px] hover:-translate-y-0.5"
               style={{
                 backgroundColor: social.bg,
                 color: social.text,
@@ -193,11 +190,11 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <p className="mt-10 text-center text-sm text-text-body">
+        <p className="mt-10 text-center text-sm text-muted">
           회원이 아니신가요?{" "}
           <Link
             href="/signup"
-            className="font-semibold text-brand-primary hover:underline"
+            className="font-semibold text-brand-purple hover:underline"
           >
             회원가입하기
           </Link>

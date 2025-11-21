@@ -85,17 +85,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Failed to start scheduler: {e}")
 
-    # 🔥 캐시 워밍 (서버 시작 시 백그라운드에서 실행)
-    try:
-        import asyncio
-        from app.services.cache_warmer import run_cache_warming
+    # 🔥 캐시 워밍 (옵션: 서버 시작 시 백그라운드에서 실행)
+    if settings.ENABLE_CACHE_WARMING:
+        try:
+            import asyncio
+            from app.services.cache_warmer import run_cache_warming
 
-        logger.info("🔥 Starting cache warming in background...")
-        # 백그라운드 태스크로 실행 (서버 시작을 블로킹하지 않음)
-        asyncio.create_task(run_cache_warming())
-        logger.info("✅ Cache warming task created")
-    except Exception as e:
-        logger.error(f"❌ Failed to start cache warming: {e}")
+            logger.info("🔥 Starting cache warming in background...")
+            # 백그라운드 태스크로 실행 (서버 시작을 블로킹하지 않음)
+            asyncio.create_task(run_cache_warming())
+            logger.info("✅ Cache warming task created")
+        except Exception as e:
+            logger.error(f"❌ Failed to start cache warming: {e}")
+    else:
+        logger.info("⚠️ Cache warming disabled via ENABLE_CACHE_WARMING")
 
     yield
 

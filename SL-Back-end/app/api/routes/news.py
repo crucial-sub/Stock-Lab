@@ -26,6 +26,7 @@ class NewsArticleSchema(BaseModel):
     title: str
     subtitle: Optional[str] = None
     summary: str
+    llm_summary: Optional[str] = None  # LLM 생성 요약
     content: str
     tickerLabel: str  # 종목명
     stockCode: Optional[str] = None  # 종목코드

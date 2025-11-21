@@ -30,7 +30,6 @@ export interface Themes {
 /** 백테스트 실행 요청 타입 */
 export interface BacktestRunRequest {
   /* 기본 설정*/
-  user_id: string; // 사용자 식별자
   strategy_name: string; // 전략 이름
   is_day_or_month: string; // 백테스트 데이터 기준 ("일봉" | "월봉")
   start_date: string; // 투자 시작일 YYYYMMDD
@@ -177,6 +176,8 @@ export interface BacktestResult {
   createdAt: string;
   /** 완료 시간 */
   completedAt?: string;
+  /** AI 분석 요약 (마크다운 형식) */
+  summary?: string;
 }
 
 /** 전략 팩터 설정 */

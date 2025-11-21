@@ -12,6 +12,7 @@ import type { StrategyRecommendationMessage } from "@/types/message";
 
 interface StrategyRecommendationRendererProps {
   message: StrategyRecommendationMessage;
+  onSelectStrategy?: (strategyId: string, strategyName: string) => void;
 }
 
 /**
@@ -19,14 +20,18 @@ interface StrategyRecommendationRendererProps {
  */
 export function StrategyRecommendationRenderer({
   message,
+  onSelectStrategy,
 }: StrategyRecommendationRendererProps) {
   const [expandedStrategyId, setExpandedStrategyId] = useState<string | null>(null);
 
-  // 전략 선택 핸들러 (추후 구현)
-  function handleSelectStrategy(strategyId: string) {
-    // TODO: 선택한 전략을 채팅 히스토리에 추가
-    // TODO: 백테스트 설정 단계로 진행
-    console.log("Selected strategy:", strategyId);
+  // 전략 선택 핸들러
+  function handleSelectStrategy(strategyId: string, strategyName: string) {
+    console.log("Selected strategy:", strategyId, strategyName);
+
+    // 상위 컴포넌트의 콜백 호출
+    if (onSelectStrategy) {
+      onSelectStrategy(strategyId, strategyName);
+    }
   }
 
   return (
@@ -50,11 +55,13 @@ export function StrategyRecommendationRenderer({
                     <p className="mt-1 text-sm text-gray-600">
                       {strategy.summary}
                     </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-xs font-medium text-purple-600">
-                        매칭도: {strategy.matchScore}%
-                      </span>
-                    </div>
+                    {strategy.matchScore !== undefined && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-xs font-medium text-purple-600">
+                          매칭도: {strategy.matchScore}%
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -100,7 +107,7 @@ export function StrategyRecommendationRenderer({
               {/* 선택 버튼 */}
               <div className="px-5 pb-4">
                 <button
-                  onClick={() => handleSelectStrategy(strategy.id)}
+                  onClick={() => handleSelectStrategy(strategy.id, strategy.name)}
                   className="w-full py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
                 >
                   이 전략 선택하기

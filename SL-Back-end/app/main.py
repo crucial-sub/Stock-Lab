@@ -13,7 +13,7 @@ import json
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history, universes
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history, investment_strategy, universes
 from app.api.v1 import industries, realtime
 from app.services.auto_trading_scheduler import start_scheduler, stop_scheduler
 
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
     # DB 초기화 (개발 환경에서만)
     if settings.DEBUG:
-        # await init_db()  # 주의: 테이블 재생성
+        await init_db()  # 주의: 테이블 재생성
         logger.info("Database initialized (dev mode)")
 
     # 자동매매 스케줄러 시작
@@ -272,6 +272,12 @@ app.include_router(
     chat_history.router,
     prefix=f"{settings.API_V1_PREFIX}/chat",
     tags=["Chat History"]
+)
+
+app.include_router(
+    investment_strategy.router,
+    prefix=f"{settings.API_V1_PREFIX}/strategies",
+    tags=["Investment Strategy"]
 )
 
 app.include_router(

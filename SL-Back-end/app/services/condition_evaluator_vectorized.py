@@ -83,16 +83,19 @@ class VectorizedConditionEvaluator:
                 return []
 
             # 5. 한 번에 모든 종목 평가!
-            # 🚀 PERFORMANCE: 로깅 제거 (2,922번 호출 → 0번)
-            # self.logger.debug(f"🚀 벡터화 쿼리 실행: {query_str}")
+            # 🔍 임시 디버깅: DEBT_RATIO 확인
+            if 'DEBT_RATIO' in query_str:
+                logger.info(f"🔍 DEBT_RATIO 쿼리 확인:")
+                logger.info(f"  📝 쿼리: {query_str}")
+                logger.info(f"  📊 데이터 컬럼: {list(date_data.columns)}")
+                logger.info(f"  ✅ DEBT_RATIO in columns? {'DEBT_RATIO' in date_data.columns}")
+                if 'DEBT_RATIO' in date_data.columns:
+                    logger.info(f"  📈 DEBT_RATIO 샘플 값: {date_data['DEBT_RATIO'].head(3).tolist()}")
+                    logger.info(f"  📊 DEBT_RATIO < 200 개수: {(date_data['DEBT_RATIO'] < 200).sum()}")
 
             try:
                 selected = date_data.query(query_str)
                 selected_stocks = selected['stock_code'].tolist()
-
-                # 🚀 PERFORMANCE: 로깅 제거 (2,922번 호출 → 0번)
-                # self.logger.info(f"✅ 벡터화 평가 완료: {len(selected_stocks)}/{len(date_data)}개 종목 선택")
-
                 return selected_stocks
 
             except Exception as e:
@@ -137,8 +140,8 @@ class VectorizedConditionEvaluator:
             value = cond.get('value', 0)
 
             # NaN 처리: factor가 NaN이 아닌 경우만
-            condition_str = f"({factor}.notna() and {factor} {operator} {value})"
-
+            # 백틱으로 컬럼명을 감싸서 pandas query가 컬럼으로 인식하도록 함
+            condition_str = f"(`{factor}`.notna() and `{factor}` {operator} {value})"
             condition_map[cond_id] = condition_str
 
         # expression에서 조건 ID를 실제 조건으로 치환
@@ -203,6 +206,9 @@ class VectorizedConditionEvaluator:
                     bool_context[cond_id] = result
                 else:
                     bool_context[cond_id] = False
+
+            # 첫 번째 종목 평가 후 플래그 설정
+            first_stock_logged = True
 
             # expression 평가
             try:

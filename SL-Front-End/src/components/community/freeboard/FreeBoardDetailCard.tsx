@@ -32,34 +32,32 @@ export function FreeBoardDetailCard({
 }: FreeBoardDetailCardProps) {
   const tagStyle = getTagStyle(tag);
   return (
-    <div className="w-full rounded-[12px] border border-[#18223414] bg-[#1822340D] p-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="w-full rounded-[12px] border border-[#18223433] bg-[#1822340D] p-5 shadow-elev-card-soft">
+      <div className="flex items-start justify-between">
         <div>
           <span
             className={`inline-flex items-center rounded-[4px] border px-[10px] pt-0.5 text-[0.75rem] font-normal ${tagStyle.background} ${tagStyle.text} ${tagStyle.border}`}
           >
             {tag}
           </span>
-          <h1 className="mt-2 text-2xl font-semibold text-black">{title}</h1>
-          <p className="mt-1 text-sm text-[#646464]">
-            by. {author} · {date}
+          <h1 className="mt-2 text-[1.5rem] font-semibold text-black">{title}</h1>
+          <p className="text-[0.875rem] text-muted font-normal">
+            by. {author}, {date}
           </p>
         </div>
         <button
           type="button"
-        onClick={onLike}
-        className={`flex h-10 w-10 items-center justify-center rounded-full border ${
-            isLiked ? "border-[#ef4444] bg-[#FFF1F2]" : "border-[#18223414] bg-white"
-          } transition`}
-        aria-label="공감"
-      >
-        <Icon
-          src="/icons/favorite.svg"
-          alt="favorite"
-          size={20}
-          color={isLiked ? "#ef4444" : undefined}
-        />
-      </button>
+          onClick={onLike}
+          className="flex h-10 w-10 items-center justify-center border-[#C8C8C8] transition"
+          aria-label="공감"
+        >
+          <Icon
+            src={isLiked ? "/icons/favorite_fill.svg" : "/icons/favorite.svg"}
+            alt="favorite"
+            size={20}
+            color="#FF6464"
+          />
+        </button>
       </div>
 
       <div className="mt-4 whitespace-pre-line text-base leading-relaxed text-[#000000]">
@@ -69,9 +67,9 @@ export function FreeBoardDetailCard({
       <div className="mt-6 flex items-center gap-5 text-sm text-[#646464]">
         <Metric icon="/icons/visibility.svg" label={formatCount(views)} />
         <Metric
-          icon="/icons/favorite.svg"
+          icon={isLiked ? "/icons/favorite_fill.svg" : "/icons/favorite.svg"}
           label={formatCount(likes)}
-          color={isLiked ? "#ef4444" : undefined}
+          color="#FF6464"
         />
         <Metric icon="/icons/chat-bubble.svg" label={formatCount(comments)} />
       </div>

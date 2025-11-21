@@ -116,14 +116,6 @@ class FactorIntegration:
         if isinstance(buy_conditions, dict) and 'expression' in buy_conditions:
             # 🚀 벡터화 조건 평가기 사용 (500-1000배 빠름!)
             if self.use_vectorized:
-                # 🔍 디버그: 샘플 데이터 확인
-                if stock_codes and not factor_data.empty:
-                    date_mask = (pd.to_datetime(factor_data['date']) == trading_date)
-                    sample_data = factor_data[date_mask].head(3)
-                    if not sample_data.empty:
-                        for idx, row in sample_data.iterrows():
-                            logger.info(f"📊 샘플 종목 {row.get('stock_code')}: ROE={row.get('ROE', 'N/A')}, PBR={row.get('PBR', 'N/A')}")
-
                 selected_stocks = self.condition_evaluator.evaluate_buy_conditions_vectorized(
                     factor_data=factor_data,
                     stock_codes=stock_codes,
@@ -144,17 +136,6 @@ class FactorIntegration:
         # 일반 조건인 경우 (AND 로직)
         selected_stocks = []
 
-        logger.info(f"조건 평가 시작 - 평가 대상 종목: {len(stock_codes)}개, 매수 조건: {buy_conditions}")
-
-        # 디버그: 첫 번째 종목의 팩터 데이터 확인
-        if stock_codes and not factor_data.empty:
-            first_stock = stock_codes[0]
-            stock_mask = (factor_data['stock_code'] == first_stock)
-            date_mask = (pd.to_datetime(factor_data['date']) == trading_date)
-            sample_data = factor_data[stock_mask & date_mask]
-            if not sample_data.empty:
-                logger.info(f"📊 샘플 종목 {first_stock} 팩터 데이터: {sample_data.iloc[0].to_dict()}")
-
         for stock_code in stock_codes:
             # 해당 종목의 팩터 데이터 추출
             stock_mask = (factor_data['stock_code'] == stock_code)
@@ -168,35 +149,42 @@ class FactorIntegration:
             all_conditions_met = True
 
             for condition in buy_conditions:
-                factor_name = condition['factor']
-                operator = condition['operator']
-                threshold = condition['value']
+                # factor 키가 없으면 exp_left_side에서 추출
+                if 'factor' in condition:
+                    factor_name = condition['factor']
+                    operator = condition.get('operator', '>')
+                    threshold = condition.get('value', 0)
+                else:
+                    # exp_left_side에서 팩터명 추출: "기본값({debt_ratio})" → "debt_ratio"
+                    import re
+                    exp_left_side = condition.get('exp_left_side', '')
+                    match = re.search(r'\{([^}]+)\}', exp_left_side)
+                    if not match:
+                        logger.warning(f"조건에서 팩터명 추출 실패: {condition}")
+                        all_conditions_met = False
+                        break
+                    factor_name = match.group(1)
+                    operator = condition.get('inequality', '>')
+                    threshold = condition.get('exp_right_side', 0)
 
                 # 대소문자 구분 없이 팩터 값 가져오기
                 factor_name_upper = factor_name.upper()
 
                 if factor_name_upper in stock_data.columns:
                     factor_value = float(stock_data[factor_name_upper].iloc[0])
-                    logger.debug(f"종목 {stock_code}: {factor_name_upper} = {factor_value} {operator} {threshold}")
                 elif f"{factor_name_upper}_RANK" in stock_data.columns:
                     factor_value = float(stock_data[f"{factor_name_upper}_RANK"].iloc[0])
-                    logger.debug(f"종목 {stock_code}: {factor_name_upper}_RANK = {factor_value} {operator} {threshold}")
                 else:
-                    logger.debug(f"종목 {stock_code}: {factor_name_upper} 팩터 없음 (사용 가능 컬럼: {stock_data.columns.tolist()})")
                     all_conditions_met = False
                     break
 
                 # 조건 평가
                 if not self._evaluate_condition(factor_value, operator, threshold):
-                    logger.debug(f"종목 {stock_code}: 조건 불만족 ({factor_value} {operator} {threshold})")
                     all_conditions_met = False
                     break
 
             if all_conditions_met:
-                logger.info(f"✅ 종목 {stock_code}: 모든 조건 만족")
                 selected_stocks.append(stock_code)
-
-        logger.info(f"조건 만족 종목: {len(selected_stocks)}개 - {selected_stocks[:10]}")
         return selected_stocks
 
     def _evaluate_condition(self, value: float, operator: str, threshold: float) -> bool:

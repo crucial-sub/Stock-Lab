@@ -29,7 +29,7 @@ export function FreeBoardCommentSection({
   };
 
   return (
-    <div className="w-full rounded-[12px] border border-[#18223414] bg-[#1822340D] p-6">
+    <div className="w-full rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] p-5 shadow-elev-card-soft">
       <h2 className="text-lg font-semibold text-black">
         댓글 {formatCount(comments.length)}개
       </h2>
@@ -39,7 +39,7 @@ export function FreeBoardCommentSection({
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="댓글을 입력하세요."
-          className="min-h-[120px] rounded-[12px] border border-[#18223414] bg-white px-4 py-3 text-sm text-black placeholder:text-[#AC64FF80] focus:border-brand-purple focus:outline-none"
+          className="min-h-[2rem] rounded-[12px] border-[0.5px] border-[#18223433] bg-[#FFFFFF80] px-4 py-3 text-sm text-black placeholder:text-muted focus:outline-none"
         />
         <button
           type="button"

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
+import { Icon } from "@/components/common/Icon";
 import { FreeBoardPostForm } from "@/components/community";
 import { useCreatePostMutation } from "@/hooks/useCommunityQuery";
 
@@ -33,18 +34,24 @@ export default function FreeBoardNewPostPage() {
   };
 
   return (
-    <section className="px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 py-10">
-      <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-6">
+    <section className="px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 py-[60px]">
+      <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-[24px]">
         <button
           type="button"
           onClick={() => router.back()}
-          className="text-sm text-[#646464] hover:text-black"
+          className="self-start inline-flex items-center gap-1 text-[0.875rem] text-[#646464] hover:text-black"
         >
-          ← 돌아가기
+          <Icon
+            src="/icons/arrow_left.svg"
+            alt="뒤로가기"
+            size={20}
+            color="#646464"
+          />
+          돌아가기
         </button>
 
         <header className="flex items-center justify-between">
-          <h1 className="text-3xl font-semibold text-black">새 글 작성</h1>
+          <h1 className="py-[20px] text-[1.5rem] font-semibold text-black">새 글 작성</h1>
         </header>
 
         <FreeBoardPostForm

@@ -44,6 +44,91 @@ THEME_MAPPING = {
     "publishing": "출판·매체복제",
 }
 
+# 언론사 코드/도메인 -> 명칭 매핑
+MEDIA_DOMAIN_MAPPING = {
+    "001": "연합뉴스",
+    "002": "프레시안",
+    "003": "뉴시스",
+    "005": "국민일보",
+    "006": "미디어오늘",
+    "007": "일다",
+    "008": "머니투데이",
+    "009": "매일경제",
+    "011": "서울경제",
+    "014": "파이낸셜뉴스",
+    "015": "한국경제",
+    "016": "헤럴드경제",
+    "018": "이데일리",
+    "020": "동아일보",
+    "021": "문화일보",
+    "022": "세계일보",
+    "023": "조선일보",
+    "024": "매경이코노미",
+    "025": "중앙일보",
+    "028": "한겨레",
+    "029": "디지털타임스",
+    "030": "전자신문",
+    "031": "아이뉴스24",
+    "032": "경향신문",
+    "044": "코리아헤럴드",
+    "047": "오마이뉴스",
+    "050": "한경비즈니스",
+    "052": "YTN",
+    "053": "주간조선",
+    "055": "SBS",
+    "056": "KBS",
+    "057": "MBN",
+    "079": "노컷뉴스",
+    "081": "서울신문",
+    "082": "부산일보",
+    "087": "강원일보",
+    "088": "매일신문",
+    "092": "지디넷코리아",
+    "094": "월간 산",
+    "119": "데일리안",
+    "123": "조세일보",
+    "127": "기자협회보",
+    "138": "디지털데일리",
+    "145": "레이디경향",
+    "214": "MBC",
+    "215": "한국경제TV",
+    "243": "이코노미스트",
+    "262": "신동아",
+    "277": "아시아경제",
+    "293": "블로터",
+    "296": "코메디닷컴",
+    "308": "시사IN",
+    "310": "여성신문",
+    "346": "헬스조선",
+    "366": "조선비즈",
+    "374": "SBS Biz",
+    "417": "머니S",
+    "421": "뉴스1",
+    "422": "연합뉴스TV",
+    "437": "JTBC",
+    "448": "TV조선",
+    "449": "채널A",
+    "469": "한국일보",
+    "584": "동아사이언스",
+    "586": "시사저널",
+    "607": "뉴스타파",
+    "629": "더팩트",
+    "648": "비즈워치",
+    "654": "강원도민일보",
+    "655": "CJB청주방송",
+    "656": "대전일보",
+    "657": "대구MBC",
+    "659": "전주MBC",
+    "660": "kbc광주방송",
+    "661": "JIBS",
+    "662": "농민신문",
+    "665": "더스쿠프",
+    "666": "경기일보",
+}
+
+# 역방향 매핑(코드가 문자열이 아닌 도메인 형태로 들어올 때 대비)
+MEDIA_DOMAIN_MAPPING.update({v: v for v in MEDIA_DOMAIN_MAPPING.values()})
+
 #프론트에서 받은 한글 테마명을 영어로 변환
 THEME_MAPPING_REVERSE = {v: k for k, v in THEME_MAPPING.items()}
 
@@ -101,6 +186,7 @@ class NewsRepository:
             query = select(NewsArticle).where(
                 NewsArticle.stock_code == stock_code
             ).order_by(
+                NewsArticle.news_date.desc(),
                 NewsArticle.analyzed_at.desc()
             ).limit(limit)
 
@@ -138,7 +224,8 @@ class NewsRepository:
                     NewsArticle.stock_code.contains(keyword)  # 종목코드로 검색
                 )
             ).order_by(
-                NewsArticle.analyzed_at.desc()  # 분석 완료 시간 기준 정렬
+                NewsArticle.news_date.desc(),
+                NewsArticle.analyzed_at.desc()
             ).limit(limit)
 
             result = await db.execute(query)
@@ -178,6 +265,7 @@ class NewsRepository:
                     NewsArticle.company_name == theme
                 )
             ).order_by(
+                NewsArticle.news_date.desc(),
                 NewsArticle.analyzed_at.desc()
             ).limit(limit)
 
@@ -232,7 +320,11 @@ class NewsRepository:
     async def get_latest_news(db: AsyncSession, limit: int = 5) -> List[Dict]:
         """최신 뉴스 (id 기준 내림차순)"""
         try:
-          query = select(NewsArticle).order_by(NewsArticle.id.desc()).limit(limit)
+          query = select(NewsArticle).order_by(
+              NewsArticle.news_date.desc(),
+              NewsArticle.analyzed_at.desc(),
+              NewsArticle.id.desc()
+          ).limit(limit)
           result = await db.execute(query)
           articles = result.scalars().all()
           return [_serialize_news(article) for article in articles]
@@ -246,7 +338,7 @@ def _serialize_news(article: NewsArticle) -> Dict:
     # 날짜 선택 (우선순위: analyzed_at(분석 완료 시간) > crawled_at > news_date)
     published_at = ""
 
-    date_obj = article.news_date or article.crawled_at or article.analyzed_at
+    date_obj = article.news_date 
 
     if date_obj:
         try:
@@ -289,11 +381,19 @@ def _serialize_news(article: NewsArticle) -> Dict:
     if not ticker_label and article.stock_code:
         ticker_label = STOCK_CODE_MAPPING.get(article.stock_code, "")
 
+    display_source = article.source or ""
+    press_name = None
+    if hasattr(article, "media_domain") and article.media_domain:
+        press_name = MEDIA_DOMAIN_MAPPING.get(article.media_domain, display_source)
+    elif article.source:
+        press_name = MEDIA_DOMAIN_MAPPING.get(article.source, display_source)
+
     return {
         "id": str(article.id) if article.id else None,
         "title": html.unescape(article.title) if article.title else "",
         "subtitle": None,
         "summary": html.unescape(article.content[:200]) if article.content else "",  # 처음 200자를 summary로
+        "llm_summary": html.unescape(article.llm_summary) if getattr(article, "llm_summary", None) else "",
         "content": html.unescape(article.content) if article.content else "",
         "tickerLabel": ticker_label,  # 종목명
         "stockCode": article.stock_code or None,  # 종목코드
@@ -301,7 +401,7 @@ def _serialize_news(article: NewsArticle) -> Dict:
         "themeNameKor": theme_name,  # 테마명 (한글) - 프론트 요청
         "sentiment": sentiment,
         "publishedAt": published_at,  # 분석 완료 시간 (analyzed_at)
-        "source": article.source or "",
+        "source": display_source,
         "link": article.link or "",
-        "pressName": None
+        "pressName": press_name
     }

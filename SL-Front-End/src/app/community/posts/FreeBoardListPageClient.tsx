@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Icon } from "@/components/common/Icon";
 import {
   FreeBoardPostCard,
 } from "@/components/community";
@@ -106,46 +107,53 @@ export function FreeBoardListPageClient({
   };
 
   return (
-    <section className="px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 py-10">
-      <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-6">
+    <section className="px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 py-[60px]">
+      <div className="mx-auto flex w-full max-w-[1000px] flex-col">
         <button
           type="button"
           onClick={() => router.back()}
-          className="text-sm text-[#646464] hover:text-black"
+          className="self-start inline-flex items-center gap-1 text-[0.875rem] text-[#646464]"
         >
-          ← 돌아가기
+          <Icon
+            src="/icons/arrow_left.svg"
+            alt="뒤로가기"
+            size={20}
+            color="#646464"
+          />
+          돌아가기
         </button>
 
         <header className="flex items-center justify-between">
-          <h1 className="text-3xl font-semibold text-black">자유게시판</h1>
-          <button
-            type="button"
-            onClick={() => router.push("/community/discussion/new")}
-            className="rounded-[12px] bg-brand-purple px-4 py-2 text-sm font-semibold text-white hover:bg-brand-purple/90"
-          >
-            새 글 작성하기
-          </button>
+          <span className="my-[40px] text-[1.5rem] font-semibold text-black">
+            자유게시판
+          </span>
         </header>
 
-        <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-[#18223414] bg-[#1822340D] p-4">
+        <div className="flex flex-wrap gap-5">
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="게시글 검색"
-            className="flex-1 rounded-[12px] border border-[#18223414] bg-white px-4 py-3 text-sm text-black placeholder:text-[#AC64FF80] focus:border-brand-purple focus:outline-none"
+            className="flex-1 rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] px-5 py-3 text-[1rem] text-black placeholder:text-muted focus:outline-none"
           />
           <button
             type="button"
             onClick={handleSearch}
-            className="rounded-[12px] bg-brand-purple px-4 py-3 text-sm font-semibold text-white hover:bg-brand-purple/90"
+            className="inline-flex items-center gap-2 rounded-[12px] bg-brand-purple px-5 py-2 text-[0.875rem] font-semibold text-white hover:bg-brand-purple/80"
           >
+            <Icon
+              src="/icons/search.svg"
+              alt="검색"
+              size={20}
+              color="#FFFFFF"
+            />
             검색
           </button>
           <select
             value={sortOption}
             onChange={(e) => handleSortChange(e.target.value)}
-            className="rounded-[12px] border border-[#18223414] bg-white px-3 py-3 text-sm text-[#646464] focus:border-brand-purple focus:outline-none"
+            className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] px-4 py-2 text-[0.875rem] text-[#646464] focus:outline-none"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -155,27 +163,36 @@ export function FreeBoardListPageClient({
           </select>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {tagOptions.map((tag) => {
-            const selected = selectedTags.includes(tag);
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => handleTagToggle(tag)}
-                className={`rounded-full px-4 py-1 text-sm font-semibold ${
-                  selected
-                    ? "bg-brand-purple text-white"
-                    : "bg-[#1822340D] text-[#646464]"
-                }`}
-              >
-                {tag}
-              </button>
-            );
-          })}
+        <div className="my-[20px] flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {tagOptions.map((tag) => {
+              const selected = selectedTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => handleTagToggle(tag)}
+                  className={`rounded-full px-4 pt-1.5 pb-1 text-[0.875rem] ${
+                    selected
+                      ? "bg-brand-purple text-white font-semibold"
+                      : "text-[#646464] font-normal border-[1px] border-[#1822340D]"
+                  }`}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push("/community/posts/new")}
+            className="rounded-full bg-brand-purple px-4 pt-1.5 pb-1 text-[0.875rem] font-semibold text-white hover:bg-brand-purple/80"
+          >
+            새 글 작성하기
+          </button>
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           {isLoading && (
             <p className="py-10 text-center text-[#646464]">로딩 중...</p>
           )}
@@ -212,18 +229,23 @@ export function FreeBoardListPageClient({
         </div>
 
         {data && (
-          <div className="flex items-center justify-between text-sm text-[#646464]">
+          <div className="mt-[20px] flex items-center justify-center gap-6 text-sm text-[#646464]">
             <button
               type="button"
               disabled={page <= 1}
               onClick={() => handlePageChange(page - 1)}
-              className={`rounded-[12px] px-4 py-2 ${
+              className={`flex h-10 w-10 items-center justify-center ${
                 page <= 1
-                  ? "cursor-not-allowed bg-[#AC64FF80] text-white"
-                  : "bg-brand-purple text-white hover:bg-brand-purple/90"
+                  ? "cursor-not-allowed"
+                  : ""
               }`}
             >
-              이전
+              <Icon
+                src="/icons/arrow_left.svg"
+                alt="이전 페이지"
+                size={24}
+                color="#646464"
+              />
             </button>
             <span>
               {page} / {Math.max(1, Math.ceil(data.total / data.limit))}
@@ -232,13 +254,18 @@ export function FreeBoardListPageClient({
               type="button"
               disabled={!data.hasNext}
               onClick={() => handlePageChange(page + 1)}
-              className={`rounded-[12px] px-4 py-2 ${
+              className={`flex h-10 w-10 items-center justify-center ${
                 !data.hasNext
-                  ? "cursor-not-allowed bg-[#AC64FF80] text-white"
-                  : "bg-brand-purple text-white hover:bg-brand-purple/90"
+                  ? "cursor-not-allowed"
+                  : ""
               }`}
             >
-              다음
+              <Icon
+                src="/icons/arrow_right.svg"
+                alt="다음 페이지"
+                size={24}
+                color="#646464"
+              />
             </button>
           </div>
         )}

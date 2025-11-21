@@ -51,7 +51,6 @@ interface BacktestConfigStore extends BacktestRunRequest {
   // API 변환 함수
   syncUIToAPI: () => void;
   // 설정값 업데이트 함수들
-  setUserId: (userId: string) => void;
   setStrategyName: (name: string) => void;
   setIsDayOrMonth: (value: string) => void;
   setStartDate: (date: string) => void;
@@ -98,7 +97,6 @@ interface BacktestConfigStore extends BacktestRunRequest {
  * - 토글 기본값: 목표가/손절가 on, 나머지 off
  */
 const defaultConfig: BacktestRunRequest = {
-  user_id: "default_user", // 실제로는 로그인한 사용자 ID를 사용
   strategy_name: "새 전략", // 기본 전략 이름
   is_day_or_month: "daily", // "일봉"
   start_date: "", // 초기값 공백 (클라이언트에서 설정)
@@ -203,6 +201,11 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
         buyConditionsUI: state.buyConditionsUI.filter((c) => c.id !== id),
       })),
 
+    setBuyConditionsUI: (conditions) =>
+      set(() => ({
+        buyConditionsUI: conditions,
+      })),
+
     // ========================================
     // Sell 조건 관리 함수
     // ========================================
@@ -251,6 +254,11 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
     removeSellConditionUI: (id) =>
       set((state) => ({
         sellConditionsUI: state.sellConditionsUI.filter((c) => c.id !== id),
+      })),
+
+    setSellConditionsUI: (conditions) =>
+      set(() => ({
+        sellConditionsUI: conditions,
       })),
 
     // ========================================
@@ -317,7 +325,6 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
     },
 
     // 기본 설정 업데이트 함수들
-    setUserId: (userId) => set({ user_id: userId }),
     setStrategyName: (name) => set({ strategy_name: name }),
     setIsDayOrMonth: (value) => set({ is_day_or_month: value }),
     setStartDate: (date) => set({ start_date: date }),
@@ -359,7 +366,6 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
 
       const state = get();
       return {
-        user_id: state.user_id,
         strategy_name: state.strategy_name,
         is_day_or_month: state.is_day_or_month,
         start_date: state.start_date,

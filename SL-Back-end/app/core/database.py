@@ -80,7 +80,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_db():
     """데이터베이스 테이블 생성 (개발용)"""
     # 모든 모델 import (테이블 생성을 위해)
-    from app.models import user, strategy, backtest, community, chat, auto_trading
+    from app.models import (
+        user, simulation, backtest, community, auto_trading,
+        company, stock_price, disclosure, financial_statement,
+        balance_sheet, income_statement, cashflow_statement,
+        news, investment_strategy
+    )
 
     async with engine.begin() as conn:
         # await conn.run_sync(Base.metadata.drop_all)  # 주의: 모든 테이블 삭제

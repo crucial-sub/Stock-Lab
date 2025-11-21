@@ -23,13 +23,22 @@ interface ChatHistoryProps {
   messages: Message[];
   /** AI 응답 대기 중 여부 (타이핑 인디케이터 표시) */
   isWaitingForAI?: boolean;
+  /** 백테스트 시작 콜백 */
+  onBacktestStart?: (
+    strategyName: string,
+    config: {
+      investmentAmount: number;
+      startDate: string;
+      endDate: string;
+    }
+  ) => void;
 }
 
 /**
  * 채팅 히스토리를 렌더링하는 컴포넌트
  * (스크롤은 부모 컴포넌트에서 관리)
  */
-export function ChatHistory({ messages, isWaitingForAI = false }: ChatHistoryProps) {
+export function ChatHistory({ messages, isWaitingForAI = false, onBacktestStart }: ChatHistoryProps) {
   /**
    * 메시지가 없을 때 빈 상태 표시
    */
@@ -49,6 +58,7 @@ export function ChatHistory({ messages, isWaitingForAI = false }: ChatHistoryPro
         <MessageRenderer
           key={message.id}
           message={message}
+          onBacktestStart={onBacktestStart}
         />
       ))}
 

@@ -10,6 +10,31 @@
 5. Redis 파이프라인 + Lua 스크립트
 6. DB 커넥션 풀 최적화
 7. Zero-copy 데이터 전송
+
+⚠️ 중요: 새로운 재무 팩터 추가 시 주의사항
+========================================
+이 파일은 성능 최적화를 위해 factor_calculator_complete.py와 별도로 재무 팩터를 계산합니다.
+
+**새로운 재무 팩터를 추가할 때는 반드시 두 곳에 모두 추가해야 합니다:**
+1. factor_calculator_complete.py (표준 경로 - 상세 계산)
+2. backtest_extreme_optimized.py (최적화 경로 - 이 파일의 _calculate_financial_factors_once() 메서드)
+
+**추가 예시:**
+```python
+# _calculate_financial_factors_once() 메서드 내부 (Line 487-502):
+financial_factors[stock_code] = {
+    'PER': per_val,
+    'PBR': pbr_val,
+    'PSR': psr_val,              # ← 추가된 팩터
+    'ROE': roe_val,
+    'ROA': roa_val,
+    'DEBT_RATIO': debt_ratio,    # ← 추가된 팩터
+    'OPERATING_MARGIN': operating_margin,
+    'NET_MARGIN': net_margin,
+}
+```
+
+**참고 문서:** docs/2025-11-21-debt-ratio-root-cause-fix.md
 """
 
 import logging
@@ -428,11 +453,15 @@ class ExtremeOptimizer:
             stock_financial = financial_pl.filter(pl.col('stock_code') == stock_code)
 
             if not stock_financial.is_empty():
-                # 최신 재무 데이터
-                latest = stock_financial.sort(by='fiscal_year', descending=True).limit(1)
+                # 최신 2개 재무 데이터 (성장률 계산용)
+                recent_data = stock_financial.sort(by='fiscal_year', descending=True).limit(2)
 
-                if len(latest) > 0:
-                    row = latest.to_dicts()[0]
+                if len(recent_data) > 0:
+                    # 최신 데이터
+                    row = recent_data.to_dicts()[0]
+
+                    # 이전 연도 데이터 (성장률 계산용)
+                    previous_row = recent_data.to_dicts()[1] if len(recent_data) > 1 else None
 
                     # 재무 데이터 추출 (한글 컬럼명)
                     net_income = row.get('당기순이익')
@@ -440,6 +469,8 @@ class ExtremeOptimizer:
                     operating_income = row.get('영업이익')
                     total_equity = row.get('자본총계')
                     total_assets = row.get('자산총계')
+                    total_debt = row.get('부채총계')
+                    gross_profit = row.get('매출총이익')
 
                     # ROE = 당기순이익 / 자본총계 × 100
                     roe_val = np.nan
@@ -461,6 +492,38 @@ class ExtremeOptimizer:
                     if net_income is not None and revenue is not None and revenue > 0:
                         net_margin = (float(net_income) / float(revenue)) * 100
 
+                    # 부채비율 = 부채총계 / 자본총계 × 100
+                    debt_ratio = np.nan
+                    if total_debt is not None and total_equity is not None and total_equity > 0:
+                        debt_ratio = (float(total_debt) / float(total_equity)) * 100
+
+                    # === 성장률 계산 (이전 연도 데이터 필요) ===
+                    operating_income_growth = np.nan
+                    gross_profit_growth = np.nan
+                    revenue_growth_1y = np.nan
+                    earnings_growth_1y = np.nan
+
+                    if previous_row is not None:
+                        # OPERATING_INCOME_GROWTH: 영업이익 성장률
+                        prev_operating_income = previous_row.get('영업이익')
+                        if operating_income is not None and prev_operating_income is not None and prev_operating_income > 0:
+                            operating_income_growth = ((float(operating_income) - float(prev_operating_income)) / float(prev_operating_income)) * 100
+
+                        # GROSS_PROFIT_GROWTH: 매출총이익 성장률
+                        prev_gross_profit = previous_row.get('매출총이익')
+                        if gross_profit is not None and prev_gross_profit is not None and prev_gross_profit > 0:
+                            gross_profit_growth = ((float(gross_profit) - float(prev_gross_profit)) / float(prev_gross_profit)) * 100
+
+                        # REVENUE_GROWTH_1Y: 매출 성장률 (1년)
+                        prev_revenue = previous_row.get('매출액')
+                        if revenue is not None and prev_revenue is not None and prev_revenue > 0:
+                            revenue_growth_1y = ((float(revenue) - float(prev_revenue)) / float(prev_revenue)) * 100
+
+                        # EARNINGS_GROWTH_1Y: 순이익 성장률 (1년)
+                        prev_net_income = previous_row.get('당기순이익')
+                        if net_income is not None and prev_net_income is not None and prev_net_income > 0:
+                            earnings_growth_1y = ((float(net_income) - float(prev_net_income)) / float(prev_net_income)) * 100
+
                     # PBR, PER 계산 (시가총액 활용)
                     pbr_val = np.nan
                     per_val = np.nan
@@ -478,13 +541,26 @@ class ExtremeOptimizer:
                             if net_income is not None and net_income > 0:
                                 per_val = float(market_cap) / float(net_income)
 
+                    # PSR: Price to Sales Ratio = 시가총액 / 매출액
+                    psr_val = np.nan
+                    revenue = row.get('매출액')
+                    if market_cap is not None and revenue is not None and revenue > 0:
+                        psr_val = float(market_cap) / float(revenue)
+
                     financial_factors[stock_code] = {
                         'PER': per_val,
                         'PBR': pbr_val,
+                        'PSR': psr_val,
                         'ROE': roe_val,
                         'ROA': roa_val,
+                        'DEBT_RATIO': debt_ratio,
                         'OPERATING_MARGIN': operating_margin,
                         'NET_MARGIN': net_margin,
+                        # 성장률 팩터 (Phase 1 완료)
+                        'OPERATING_INCOME_GROWTH': operating_income_growth,
+                        'GROSS_PROFIT_GROWTH': gross_profit_growth,
+                        'REVENUE_GROWTH_1Y': revenue_growth_1y,
+                        'EARNINGS_GROWTH_1Y': earnings_growth_1y,
                     }
                     count += 1
 

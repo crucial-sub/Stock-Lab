@@ -98,6 +98,9 @@ class AutoTradingStrategyResponse(BaseModel):
     activated_at: Optional[datetime]
     deactivated_at: Optional[datetime]
     last_executed_at: Optional[datetime]
+    kiwoom_total_eval: Optional[Decimal] = Field(None, description="키움 API 총 평가액")
+    kiwoom_total_profit: Optional[Decimal] = Field(None, description="키움 API 평가손익")
+    kiwoom_total_profit_rate: Optional[Decimal] = Field(None, description="키움 API 수익률(%)")
 
     class Config:
         from_attributes = True

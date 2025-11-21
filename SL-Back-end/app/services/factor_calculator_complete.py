@@ -379,6 +379,8 @@ class CompleteFactorCalculator:
         merged['ROE'] = merged.apply(lambda row: _safe_ratio(row.get('당기순이익'), row.get('자본총계')) * 100 if _safe_ratio(row.get('당기순이익'), row.get('자본총계')) is not None else None, axis=1)
         merged['ROA'] = merged.apply(lambda row: _safe_ratio(row.get('당기순이익'), row.get('자산총계')) * 100 if _safe_ratio(row.get('당기순이익'), row.get('자산총계')) is not None else None, axis=1)
         merged['DEBT_RATIO'] = merged.apply(lambda row: _safe_ratio(row.get('부채총계'), row.get('자본총계')) * 100 if _safe_ratio(row.get('부채총계'), row.get('자본총계')) is not None else None, axis=1)
+        # PSR: Price to Sales Ratio = 시가총액 / 매출액
+        merged['PSR'] = merged.apply(lambda row: _safe_ratio(row['market_cap'], row.get('매출액')), axis=1)
 
         # 거래량 팩터
         recent_window = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=20)]
@@ -402,6 +404,24 @@ class CompleteFactorCalculator:
         )
         momentum.name = 'MOM_3M'
 
+        # CHANGE_RATE: 일별 변화율 (전일 대비)
+        latest_prices = price_df[price_df['trade_date'] == pd.Timestamp(snapshot_date.date())]
+        prev_date = pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=1)
+        previous_prices = price_df[price_df['trade_date'] <= prev_date].sort_values('trade_date').groupby('stock_code').tail(1)
+
+        change_rate = latest_prices.merge(
+            previous_prices[['stock_code', 'close_price']],
+            on='stock_code',
+            how='left',
+            suffixes=('_curr', '_prev')
+        )
+        change_rate['CHANGE_RATE'] = change_rate.apply(
+            lambda row: ((row['close_price_curr'] - row['close_price_prev']) / row['close_price_prev']) * 100
+            if pd.notna(row.get('close_price_prev')) and row.get('close_price_prev', 0) > 0 else None,
+            axis=1
+        )
+        change_rate_series = change_rate.set_index('stock_code')['CHANGE_RATE']
+
         # 변동성
         pct_returns = price_df.sort_values('trade_date').groupby('stock_code')['close_price'].pct_change()
         price_df = price_df.assign(daily_return=pct_returns)
@@ -412,6 +432,7 @@ class CompleteFactorCalculator:
         merged = merged.merge(avg_trading, left_on='stock_code', right_index=True, how='left')
         merged = merged.merge(turnover, left_on='stock_code', right_index=True, how='left')
         merged = merged.merge(momentum, left_on='stock_code', right_index=True, how='left')
+        merged = merged.merge(change_rate_series, left_on='stock_code', right_index=True, how='left')
         merged = merged.merge(volatility, left_on='stock_code', right_index=True, how='left')
 
         merged['date'] = snapshot_date
@@ -512,6 +533,12 @@ class CompleteFactorCalculator:
                 row['EARNINGS_GROWTH_1Y'] = _calc_growth(latest.get('당기순이익'), previous.get('당기순이익'))
                 row['ASSET_GROWTH_1Y'] = _calc_growth(latest.get('자산총계'), previous.get('자산총계'))
                 row['EQUITY_GROWTH_1Y'] = _calc_growth(latest.get('자본총계'), previous.get('자본총계'))
+                # OPERATING_INCOME_GROWTH: 영업이익 성장률
+                row['OPERATING_INCOME_GROWTH'] = _calc_growth(latest.get('영업이익'), previous.get('영업이익'))
+                # GROSS_PROFIT_GROWTH: 매출총이익 성장률 = (매출액 - 매출원가) 성장률
+                latest_gp = (latest.get('매출액', 0) or 0) - (latest.get('매출원가', 0) or 0)
+                previous_gp = (previous.get('매출액', 0) or 0) - (previous.get('매출원가', 0) or 0)
+                row['GROSS_PROFIT_GROWTH'] = _calc_growth(latest_gp if latest_gp > 0 else None, previous_gp if previous_gp > 0 else None)
 
             # 3년 CAGR (Compound Annual Growth Rate)
             if two_year_ago is not None:
@@ -829,3 +856,43 @@ class CompleteFactorCalculator:
             df['COMPOSITE_RANK'] = df['COMPOSITE_SCORE'].rank(ascending=True, method='dense')
 
         return df
+
+    async def get_factor_data_for_date(
+        self,
+        date: datetime,
+        factor_names: Optional[List[str]] = None
+    ) -> pd.DataFrame:
+        """특정 날짜의 팩터 데이터 조회"""
+
+        # 모든 활성 종목 가져오기
+        stock_codes = await self._get_active_stocks(date)
+
+        # 모든 팩터 계산
+        all_factors = await self.calculate_all_factors(stock_codes, date)
+
+        # 특정 팩터만 필터링 (요청된 경우)
+        if factor_names:
+            columns_to_keep = ['stock_code', 'stock_name'] + factor_names
+            columns_to_keep = [col for col in columns_to_keep if col in all_factors.columns]
+            all_factors = all_factors[columns_to_keep]
+
+        # 날짜 컬럼 추가
+        all_factors['date'] = date
+
+        return all_factors
+
+    async def _get_active_stocks(self, date: datetime) -> List[str]:
+        """활성 종목 리스트 조회"""
+        from sqlalchemy import text
+
+        query = text("""
+        SELECT DISTINCT c.stock_code
+        FROM stock_prices sp
+        JOIN companies c ON sp.company_id = c.company_id
+        WHERE sp.trade_date = :date
+        AND sp.volume > 0
+        AND sp.close_price > 0
+        """)
+
+        result = await self.db.execute(query, {"date": date.date()})
+        return [row[0] for row in result.fetchall()]

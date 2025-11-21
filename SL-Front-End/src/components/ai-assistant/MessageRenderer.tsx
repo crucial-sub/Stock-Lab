@@ -32,7 +32,8 @@ export function MessageRenderer({ message }: MessageRendererProps) {
       return <TextRenderer message={message} />;
 
     case "markdown":
-      return <MarkdownRenderer message={message} />;
+      // compact 모드: 불릿 최대 3개로 제한
+      return <MarkdownRenderer message={message} compactMaxBullets={3} />;
 
     case "question":
       return <QuestionRenderer message={message} />;

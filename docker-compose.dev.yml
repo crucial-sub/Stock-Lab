@@ -116,6 +116,7 @@ services:
       - .env
       - ./SL-ChatBot/.env
     environment:
+      STOCK_LAB_API_URL: http://backend:8000/api/v1
       PYTHONUNBUFFERED: 1
       DEBUG: "true"
     ports:

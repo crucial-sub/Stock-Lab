@@ -10,6 +10,7 @@ from app.models.balance_sheet import BalanceSheet
 from app.models.income_statement import IncomeStatement
 from app.models.cashflow_statement import CashflowStatement
 from app.models.news import NewsArticle, ThemeSentiment
+from app.models.theme import Theme
 from app.models.user import User
 from app.models.auto_trading import (
     AutoTradingStrategy,
@@ -63,6 +64,7 @@ __all__ = [
     # 뉴스 모델
     "NewsArticle",
     "ThemeSentiment",
+    "Theme",
     # 사용자 모델
     "User",
     # 자동매매 모델

@@ -730,6 +730,7 @@ export function AIAssistantPageClient({
                     content={streamContent}
                     isStreaming={isStreaming}
                     role="assistant"
+                    compactMaxBullets={3}
                   />
                 )}
               </div>

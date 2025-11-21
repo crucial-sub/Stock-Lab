@@ -13,23 +13,29 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
-import { normalizeMarkdown } from "@/lib/markdown-utils";
+import { normalizeMarkdown, limitBullets } from "@/lib/markdown-utils";
 import { markdownComponents, markdownProseClasses } from "./shared/MarkdownComponents";
 
 import type { MarkdownMessage } from "@/types/message";
 
 interface MarkdownRendererProps {
   message: MarkdownMessage;
+  /** compact 모드: 불릿 개수 제한 */
+  compactMaxBullets?: number;
 }
 
 /**
  * 마크다운 메시지를 GPT 스타일로 렌더링하는 컴포넌트
  */
-export function MarkdownRenderer({ message }: MarkdownRendererProps) {
+export function MarkdownRenderer({ message, compactMaxBullets }: MarkdownRendererProps) {
   const isUser = message.role === "user";
 
   // 마크다운 정규화: 헤딩과 리스트 앞뒤에 줄바꿈 추가
   const normalizedContent = normalizeMarkdown(message.content);
+  const finalContent =
+    typeof compactMaxBullets === "number"
+      ? limitBullets(normalizedContent, compactMaxBullets)
+      : normalizedContent;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6`}>
@@ -54,7 +60,7 @@ export function MarkdownRenderer({ message }: MarkdownRendererProps) {
               rehypePlugins={[rehypeHighlight, rehypeRaw]}
               components={markdownComponents}
             >
-              {normalizedContent}
+              {finalContent}
             </ReactMarkdown>
           </div>
         )}

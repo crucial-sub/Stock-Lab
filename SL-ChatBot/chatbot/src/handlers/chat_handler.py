@@ -519,7 +519,9 @@ class ChatHandler:
                         tools=tools,
                         verbose=False,
                         return_intermediate_steps=True,
-                        handle_parsing_errors=True
+                        handle_parsing_errors=True,
+                        max_iterations=5,
+                        early_stopping_method="generate"
                     )
                     self.agent_executors[mode] = executor
                     print(f"  - {mode} AgentExecutor 생성 완료")
@@ -553,7 +555,14 @@ class ChatHandler:
         if session_id is None:
             session_id = str(uuid.uuid4())
 
-        client_type = (client_type or "assistant").lower()
+        # client_type이 명시되지 않았거나 "assistant"일 경우 자동 라우팅
+        if not client_type or client_type.lower() == "assistant":
+            client_type = self._route_client_type(message)
+            print(f"[AUTO-ROUTING] '{message[:50]}...' -> {client_type}")
+        else:
+            client_type = client_type.lower()
+
+        # 유효성 검증
         if client_type not in ("assistant", "ai_helper", "home_widget"):
             client_type = "assistant"
 
@@ -645,6 +654,109 @@ class ChatHandler:
         msg = (message or "").lower()
         triggers = ["전략 추천", "추천받고 싶어요", "추천 해줘", "설문", "투자 성향"]
         return any(t in msg for t in triggers) or msg.strip() == ""
+
+    def _route_client_type(self, message: str) -> str:
+        """메시지 내용을 분석하여 적절한 client_type을 자동으로 결정합니다.
+
+        우선순위:
+        1. AI_HELPER - 행동 요청 (조건 만들기, DSL 생성, 전략 적용 등)
+        2. ASSISTANT - 개념 설명 요청 (뭐야, 의미, 차이, 설명 등)
+        3. HOME_WIDGET - 짧은 질문, 요약 요청
+        4. ASSISTANT - 나머지 모든 경우 (기본값)
+
+        Args:
+            message: 사용자 입력 메시지
+
+        Returns:
+            "ai_helper", "home_widget", 또는 "assistant"
+        """
+        if not message:
+            return "assistant"
+
+        text = message.strip()
+
+        # === 1순위: AI HELPER 규칙 (행동 요청) ===
+
+        # 예외: 백테스트 개념 질문은 헬퍼가 아님
+        helper_exception_patterns = [
+            r"백테스트.*(무엇|뭐|왜|어떻게|알아야|필요|의미|설명)",
+        ]
+
+        is_helper_exception = False
+        for pattern in helper_exception_patterns:
+            if re.search(pattern, text):
+                is_helper_exception = True
+                break
+
+        if not is_helper_exception:
+            # AI HELPER로 보내야 하는 패턴들
+            helper_patterns = [
+                r"(매수|매도).*(해줘|만들|설정|적용|생성)",
+                r"(조건|DSL).*(해줘|만들|설정|생성)",
+                r"(전략).*(적용|설정|만들|생성)",
+                r"(룰|규칙).*(만들|설정|생성)",
+                r"(백테스트).*(해줘|만들|설정|조건|생성)",
+                r"(<=|>=|<|>|%|이상|이하).*(매수|매도)",
+                r"(PER|PBR|ROE|RSI|모멘텀|밸류).*(조건)",
+                r"워렌버핏.*전략",
+                r".*로 진행",
+            ]
+
+            for pattern in helper_patterns:
+                if re.search(pattern, text):
+                    return "ai_helper"
+
+        # === 2순위: ASSISTANT 개념 설명 패턴 (짧은 문장이라도 설명 요청이면 assistant) ===
+
+        # 투자 거장/전략명 패턴 (짧아도 assistant로)
+        strategy_investor_patterns = [
+            r"(워렌버핏|워렌|버핏|buffett)",
+            r"(피터린치|피터|린치|lynch)",
+            r"(벤자민그레이엄|벤자민|그레이엄|graham)",
+            r"(레이달리오|레이|달리오|dalio)",
+            r"(필립피셔|필립|피셔|fisher)",
+            r"전략",  # "전략" 키워드
+            r"(가치투자|성장투자|모멘텀투자|배당투자)",
+        ]
+
+        for pattern in strategy_investor_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return "assistant"
+
+        explanation_patterns = [
+            r"(뭐야|뭔데|무엇|뭔지|뭔가요|뭘까)",  # "PER이 뭐야?"
+            r"(의미|뜻|개념|정의)(\?|$)",  # "RSI 의미?"
+            r"(설명|알려|가르쳐|알아야|이해)",  # "쉽게 설명해줘"
+            r"(차이|비교|다른점)",  # "모멘텀과 가치 전략 차이"
+            r"(어떤|무슨).*전략",  # "어떤 전략이 맞아?"
+            r"하기 전에",  # "백테스트 하기 전에"
+            r"(\?|？).*\?",  # 물음표가 2개 이상
+        ]
+
+        for pattern in explanation_patterns:
+            if re.search(pattern, text):
+                return "assistant"
+
+        # === 3순위: HOME WIDGET 규칙 (짧은 질문/요약) ===
+
+        # 20자 이하이면서 간단한 문장 (? 하나만 있거나, 단어 2-3개)
+        if len(text) <= 20:
+            # 단어 개수 확인
+            words = re.findall(r'\S+', text)
+            if len(words) <= 3:
+                return "home_widget"
+
+        # 요약/간단 요청 키워드
+        widget_patterns = [
+            r"(요약|간단히|한줄|짧게|핵심만)",
+        ]
+
+        for pattern in widget_patterns:
+            if re.search(pattern, text):
+                return "home_widget"
+
+        # === 4순위: ASSISTANT (기본값) ===
+        return "assistant"
 
     async def _handle_home_widget_shortcuts(self, message: str) -> Optional[dict]:
         """홈 위젯에서 자주 요청되는 단순 응답 처리."""

@@ -127,6 +127,17 @@ export function normalizeMarkdown(content: string): string {
   // 6. 연속된 줄바꿈 정리 (3개 이상의 줄바꿈은 2개로)
   normalized = normalized.replace(/\n{3,}/g, "\n\n");
 
+  // 6-1. 내용 없는 불릿/번호 줄 제거 (깨진 리스트 정리)
+  normalized = normalized
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (/^[-*]\s*$/.test(trimmed)) return false;
+      if (/^\d+\.\s*$/.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n");
+
   // 7. 맨 앞의 줄바꿈 제거
   normalized = normalized.replace(/^\n+/, "");
 

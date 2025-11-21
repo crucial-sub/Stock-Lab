@@ -2,15 +2,14 @@
 
 llm:
   provider: "bedrock"
-  # Default Mistral on Bedrock (override with BEDROCK_MODEL_ID)
-  model: "mistral.mistral-7b-instruct-v0:2"
+  model: "anthropic.claude-3-sonnet-20240229-v1:0"
   temperature: 0.7
-  max_tokens: 2000
+  max_tokens: 8000
   region: "ap-northeast-2"
 
 rag:
   vectordb_path: "../rag/vectordb/chroma"
-  top_k: 3
+  top_k: 1
   score_threshold: 0.7
   # Default Titan Embeddings on Bedrock (override with BEDROCK_EMBEDDING_MODEL_ID)
   embedding_model_id: "amazon.titan-embed-text-v2:0"

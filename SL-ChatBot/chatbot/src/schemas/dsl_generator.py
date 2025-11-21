@@ -281,7 +281,7 @@ def call_claude_and_get_json(text: str) -> dict:
     """Bedrock 호출 + 간단한 재시도(Throttling 대비)."""
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 800,
+        "max_tokens": 2000,
         "temperature": 0.2,
         "system": CLAUDE_SYSTEM_PROMPT,
         "messages": [

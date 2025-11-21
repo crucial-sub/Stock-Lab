@@ -63,8 +63,10 @@ axiosInstance.interceptors.response.use(
       const { status, data, config } = error.response;
       const requestUrl = config?.url || "";
 
-      // /auth/me 요청의 401/403 에러는 로그 출력 안 함 (정상적인 비로그인 상태)
+      // /auth/me 요청의 401/403 에러는 로그 출력 안 함 (정상 비로그인)
       const isAuthMeRequest = requestUrl.includes("/auth/me");
+      const isAuthLoginRequest =
+        requestUrl.includes("/auth/login") || requestUrl.includes("/login");
       const isAuthError = status === 401 || status === 403;
 
       if (isAuthMeRequest && isAuthError) {
@@ -75,8 +77,16 @@ axiosInstance.interceptors.response.use(
       // 401 에러: 인증 실패 (토큰 만료 또는 유효하지 않음)
       if (status === 401) {
         console.error("인증 실패:", data);
-        // 세션 만료 모달 표시
-        useAuthStore.getState().setSessionExpired(true);
+        const hasToken = !!getAuthTokenFromCookie();
+        if (isAuthLoginRequest) {
+          // 로그인 실패: 세션 만료 모달 대신 메시지 설정
+          useAuthStore.getState().setAuthErrorMessage(
+            data?.detail ?? "이메일 또는 비밀번호가 올바르지 않습니다.",
+          );
+        } else if (hasToken) {
+          // 토큰이 있었는데 실패한 경우에만 세션 만료 처리
+          useAuthStore.getState().setSessionExpired(true);
+        }
       }
 
       // 403 에러: 권한 없음 (토큰은 유효하지만 권한 부족 or 토큰 만료)

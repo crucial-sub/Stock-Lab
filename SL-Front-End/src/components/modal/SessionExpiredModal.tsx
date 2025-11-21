@@ -7,6 +7,7 @@ import { clearAuthTokenCookie } from "@/lib/auth/token";
 
 interface SessionExpiredModalProps {
   isOpen: boolean;
+  message?: string | null;
   onClose: () => void;
 }
 
@@ -18,6 +19,7 @@ interface SessionExpiredModalProps {
  */
 export function SessionExpiredModal({
   isOpen,
+  message,
   onClose,
 }: SessionExpiredModalProps) {
   const router = useRouter();
@@ -85,14 +87,24 @@ export function SessionExpiredModal({
 
         {/* 제목 */}
         <h2 className="mb-2 text-center text-xl font-bold text-gray-900">
-          로그인 세션 만료
+          {message ? "로그인 오류" : "로그인 세션 만료"}
         </h2>
 
         {/* 설명 */}
         <p className="mb-6 text-center text-gray-600">
-          로그인 세션이 만료되었습니다.
-          <br />
-          다시 로그인해 주세요.
+          {message ? (
+            <>
+              {message}
+              <br />
+              다시 시도해주세요.
+            </>
+          ) : (
+            <>
+              로그인 세션이 만료되었습니다.
+              <br />
+              다시 로그인해 주세요.
+            </>
+          )}
         </p>
 
         {/* 버튼 */}

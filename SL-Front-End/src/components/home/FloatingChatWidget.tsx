@@ -168,7 +168,8 @@ export function FloatingChatWidget() {
                     return {
                       id: `${prefix}${id}`,
                       factorName,
-                      subFactorName: null,
+
+                      subFactorName: cond?.subFactorName || "기본값",
                       operator,
                       value,
                       argument,

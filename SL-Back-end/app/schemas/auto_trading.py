@@ -14,11 +14,13 @@ class AutoTradingActivateRequest(BaseModel):
     session_id: str = Field(..., description="백테스트 세션 ID")
     initial_capital: Optional[Decimal] = Field(None, description="초기 자본금 (None이면 키움 계좌 잔고 자동 조회)")
     allocated_capital: Decimal = Field(..., description="전략에 할당할 자본금 (원). 여러 전략에 계좌 잔액을 나누어 배분 가능.", gt=0)
+    strategy_name: Optional[str] = Field(None, description="자동매매 전략 이름 (미입력시 자동 생성)")
 
 
 class AutoTradingDeactivateRequest(BaseModel):
     """자동매매 비활성화 요청"""
     sell_all_positions: bool = Field(True, description="보유 종목 전량 매도 여부")
+    deactivation_mode: Optional[str] = Field(None, description="비활성화 모드: immediate(즉시), sell_and_deactivate(매도 후 비활성화), scheduled_sell(예약 매도)")
 
 
 # Response Schemas
@@ -86,6 +88,7 @@ class AutoTradingStrategyResponse(BaseModel):
     strategy_id: UUID
     user_id: UUID
     simulation_session_id: str
+    strategy_name: Optional[str] = Field(None, description="자동매매 전략 이름")
     is_active: bool
     initial_capital: Decimal
     allocated_capital: Decimal
@@ -98,6 +101,9 @@ class AutoTradingStrategyResponse(BaseModel):
     activated_at: Optional[datetime]
     deactivated_at: Optional[datetime]
     last_executed_at: Optional[datetime]
+    scheduled_deactivation: Optional[bool] = Field(None, description="예약 비활성화 여부")
+    deactivation_mode: Optional[str] = Field(None, description="비활성화 모드")
+    deactivation_requested_at: Optional[datetime] = Field(None, description="비활성화 요청 시각")
     kiwoom_total_eval: Optional[Decimal] = Field(None, description="키움 API 총 평가액")
     kiwoom_total_profit: Optional[Decimal] = Field(None, description="키움 API 평가손익")
     kiwoom_total_profit_rate: Optional[Decimal] = Field(None, description="키움 API 수익률(%)")

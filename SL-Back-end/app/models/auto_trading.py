@@ -18,6 +18,7 @@ class AutoTradingStrategy(Base):
     strategy_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     simulation_session_id = Column(String, ForeignKey("simulation_sessions.session_id", ondelete="CASCADE"), nullable=False)
+    strategy_name = Column(String(200), nullable=True)  # 자동매매 전략 이름
 
     # 활성화 상태
     is_active = Column(Boolean, default=False)
@@ -72,6 +73,11 @@ class AutoTradingStrategy(Base):
     activated_at = Column(TIMESTAMP, nullable=True)
     deactivated_at = Column(TIMESTAMP, nullable=True)
     last_executed_at = Column(TIMESTAMP, nullable=True)
+
+    # 비활성화 스케줄링
+    scheduled_deactivation = Column(Boolean, default=False)  # 예약 비활성화 여부
+    deactivation_mode = Column(String(50), nullable=True)  # immediate, sell_and_deactivate, scheduled_sell
+    deactivation_requested_at = Column(TIMESTAMP, nullable=True)  # 비활성화 요청 시각
 
     # Relationships
     user = relationship("User", back_populates="auto_trading_strategies")

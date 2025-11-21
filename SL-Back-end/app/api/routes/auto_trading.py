@@ -77,7 +77,8 @@ async def activate_auto_trading(
             user_id=current_user.user_id,
             session_id=request.session_id,
             initial_capital=request.initial_capital,
-            allocated_capital=request.allocated_capital
+            allocated_capital=request.allocated_capital,
+            strategy_name=request.strategy_name
         )
 
         return AutoTradingActivateResponse(
@@ -100,6 +101,38 @@ async def activate_auto_trading(
         )
 
 
+@router.get("/strategies/{strategy_id}/deactivation-conditions")
+async def check_deactivation_conditions(
+    strategy_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    비활성화 조건 확인
+    - 보유 종목 수, 장시간 여부 체크
+    - 추천 비활성화 모드 반환
+    """
+    try:
+        conditions = await AutoTradingService.check_deactivation_conditions(
+            db=db,
+            strategy_id=strategy_id,
+            user_id=current_user.user_id
+        )
+        return conditions
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"비활성화 조건 확인 실패: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="비활성화 조건 확인에 실패했습니다."
+        )
+
+
 @router.post("/strategies/{strategy_id}/deactivate", response_model=AutoTradingDeactivateResponse)
 async def deactivate_auto_trading(
     strategy_id: UUID,
@@ -110,20 +143,28 @@ async def deactivate_auto_trading(
     """
     자동매매 비활성화
     - 보유 종목 전량 매도 옵션 제공
+    - 비활성화 모드 지원: immediate, sell_and_deactivate, scheduled_sell
     """
     try:
         strategy, sold_count = await AutoTradingService.deactivate_strategy(
             db=db,
             strategy_id=strategy_id,
             user_id=current_user.user_id,
-            sell_all=request.sell_all_positions
+            sell_all=request.sell_all_positions,
+            deactivation_mode=request.deactivation_mode
         )
 
+        # 메시지 생성
+        if request.deactivation_mode == "scheduled_sell":
+            message = "자동매매 비활성화가 예약되었습니다. 다음 장 시작 시 보유 종목을 매도하고 비활성화됩니다."
+        else:
+            message = f"자동매매가 비활성화되었습니다. (매도: {sold_count}개 종목)"
+
         return AutoTradingDeactivateResponse(
-            message=f"자동매매가 비활성화되었습니다. (매도: {sold_count}개 종목)",
+            message=message,
             strategy_id=strategy.strategy_id,
             is_active=strategy.is_active,
-            deactivated_at=strategy.deactivated_at,
+            deactivated_at=strategy.deactivated_at or datetime.now(),
             positions_sold=sold_count
         )
 
@@ -191,7 +232,9 @@ async def get_my_auto_trading_strategies(
     """
     try:
         from sqlalchemy import select
-        from app.models.auto_trading import AutoTradingStrategy
+        from app.models.auto_trading import AutoTradingStrategy, LivePosition
+        from app.services.kiwoom_service import KiwoomService
+        from decimal import Decimal
 
         query = select(AutoTradingStrategy).where(
             AutoTradingStrategy.user_id == current_user.user_id
@@ -199,6 +242,59 @@ async def get_my_auto_trading_strategies(
 
         result = await db.execute(query)
         strategies = result.scalars().all()
+
+        # 키움 API를 통해 각 전략의 실제 수익률 계산
+        if current_user.kiwoom_access_token:
+            try:
+                account_data = KiwoomService.get_account_evaluation(
+                    access_token=current_user.kiwoom_access_token
+                )
+
+                for strategy in strategies:
+                    if not strategy.is_active:
+                        continue
+
+                    # 이 전략의 보유 종목 조회
+                    positions_query = select(LivePosition).where(
+                        LivePosition.strategy_id == strategy.strategy_id
+                    )
+                    positions_result = await db.execute(positions_query)
+                    positions = positions_result.scalars().all()
+
+                    strategy_stock_codes = {pos.stock_code for pos in positions}
+                    strategy_eval_sum = Decimal("0")
+                    strategy_profit_sum = Decimal("0")
+
+                    # 키움 API 보유 종목 중 이 전략의 종목만 필터링
+                    for holding in account_data.get("acnt_evlt_remn_indv_tot", []):
+                        stock_code = holding.get("stk_cd", "")
+                        if stock_code.startswith("A"):
+                            stock_code = stock_code[1:]
+
+                        if stock_code in strategy_stock_codes:
+                            evltv_amt = holding.get("evlt_amt")
+                            if evltv_amt:
+                                strategy_eval_sum += Decimal(str(int(evltv_amt)))
+
+                            evltv_prft = holding.get("evltv_prft")
+                            if evltv_prft:
+                                strategy_profit_sum += Decimal(str(int(evltv_prft)))
+
+                    # 현금 잔고 추가
+                    strategy_eval_sum += strategy.cash_balance
+
+                    # allocated_capital 기준 수익률 계산
+                    strategy.kiwoom_total_eval = strategy_eval_sum
+                    strategy.kiwoom_total_profit = strategy_profit_sum
+                    strategy.kiwoom_total_profit_rate = Decimal("0")
+
+                    if strategy.allocated_capital > 0:
+                        strategy.kiwoom_total_profit_rate = (strategy_profit_sum / strategy.allocated_capital) * Decimal("100")
+
+                    logger.info(f"📊 전략 {strategy.strategy_id}: 평가액={strategy_eval_sum:,.0f}원, 손익={strategy_profit_sum:,.0f}원, 수익률={strategy.kiwoom_total_profit_rate:.2f}%")
+
+            except Exception as kiwoom_err:
+                logger.warning(f"키움 API 조회 실패: {kiwoom_err}")
 
         return [AutoTradingStrategyResponse.from_orm(s) for s in strategies]
 

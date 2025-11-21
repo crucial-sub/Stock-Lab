@@ -53,7 +53,8 @@ export function TradingHistoryTab({
   // 보유일수 계산
   const calculateHoldingDays = (buyDate: string, sellDate: string) => {
     const buy = new Date(buyDate);
-    const sell = new Date(sellDate);
+    // sellDate가 없으면 현재 날짜 기준으로 계산
+    const sell = sellDate ? new Date(sellDate) : new Date();
     return Math.floor((sell.getTime() - buy.getTime()) / (1000 * 60 * 60 * 24));
   };
 
@@ -294,7 +295,7 @@ export function TradingHistoryTab({
                 </button>
                 <div className="text-text-body text-right">{trade.buyDate}</div>
                 <div className="text-text-body text-right">
-                  {trade.sellDate}
+                  {trade.sellDate || "-"}
                 </div>
                 <div className="text-text-body text-right">
                   {calculateHoldingDays(trade.buyDate, trade.sellDate)}일

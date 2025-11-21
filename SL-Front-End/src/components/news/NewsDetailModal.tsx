@@ -25,14 +25,11 @@ const sentimentBadge: Record<
 };
 
 export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
-  // 상단(링크 위) 요약: content 우선, 없으면 summary
-  const subtitle = news.content || news.summary || news.subtitle || "";
-  // 하단 본문: llm_summary 우선, 없으면 content → summary
-  const bodyContent =
-    (news as any)?.llm_summary ||
-    news.summary ||
-    news.content ||
-    "";
+  // 상단(링크 위) 요약: llm_summary가 있으면 우선 표시
+  const llmSummary = news.llm_summary || (news as any)?.llmSummary || "";
+  const subtitle = news.llm_summary;
+  // 하단 본문: llm_summary 우선, 없으면 원문/summary
+  const bodyContent = llmSummary || news.content || news.summary || "";
   const sentiment = sentimentBadge[news.sentiment] || sentimentBadge.neutral;
   const pressLabel = news.pressName || (news as any)?.media_name || news.source || "";
   const tickerLabel = news.tickerLabel || news.stockCode || "종목 이름";

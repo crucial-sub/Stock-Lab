@@ -199,6 +199,11 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
         buyConditionsUI: state.buyConditionsUI.filter((c) => c.id !== id),
       })),
 
+    setBuyConditionsUI: (conditions) =>
+      set(() => ({
+        buyConditionsUI: conditions,
+      })),
+
     // ========================================
     // Sell 조건 관리 함수
     // ========================================
@@ -247,6 +252,11 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
     removeSellConditionUI: (id) =>
       set((state) => ({
         sellConditionsUI: state.sellConditionsUI.filter((c) => c.id !== id),
+      })),
+
+    setSellConditionsUI: (conditions) =>
+      set(() => ({
+        sellConditionsUI: conditions,
       })),
 
     // ========================================

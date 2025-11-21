@@ -241,3 +241,4 @@ class PortfolioDashboardResponse(BaseModel):
     active_strategy_count: int  # 활성 전략 수
     total_positions: int  # 전체 보유 종목 수
     total_trades_today: int  # 오늘 총 매매 건수
+    total_allocated_capital: Decimal  # 자동매매에 할당된 총 금액

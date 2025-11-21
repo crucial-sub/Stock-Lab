@@ -44,19 +44,25 @@ export async function getUniverseStocks(
 }
 
 /**
- * 선택된 유니버스들의 종목 수 조회
+ * 선택된 유니버스들의 종목 수 조회 (테마 필터 적용 가능)
  * - POST /universes/stock-count
  * - 여러 유니버스에 속한 종목 수를 계산 (중복 제거)
+ * - 테마가 함께 전달되면 교집합 계산
  *
  * @param universeIds - 유니버스 ID 배열
+ * @param themeIds - 테마(업종) ID 배열 (선택)
  * @returns 총 종목 수
  */
 export async function getUniverseStockCount(
   universeIds: string[],
+  themeIds?: string[],
 ): Promise<UniverseStockCountResponse> {
   const response = await axiosInstance.post<UniverseStockCountResponse>(
     "/universes/stock-count",
-    { universeIds },
+    {
+      universeIds,
+      themeIds: themeIds || [],
+    },
   );
   return response.data;
 }

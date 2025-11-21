@@ -1121,5 +1121,6 @@ class AutoTradingService:
             "total_profit": total_profit,
             "active_strategy_count": len(active_strategies),
             "total_positions": total_positions_count,
-            "total_trades_today": total_trades_today
+            "total_trades_today": total_trades_today,
+            "total_allocated_capital": total_allocated_capital  # 자동매매에 할당된 총 금액
         }

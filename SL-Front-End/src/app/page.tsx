@@ -30,6 +30,7 @@ export default async function HomePage() {
     active_strategy_count: 0,
     total_positions: 0,
     total_trades_today: 0,
+    total_allocated_capital: 0,
   };
 
   if (isLoggedIn && token) {

@@ -112,9 +112,16 @@ class FactorIntegration:
             조건을 만족하는 종목 코드 리스트
         """
 
+        # 🔍 디버깅: 받은 데이터 로깅
+        logger.info(f"🔍 evaluate_buy_conditions_with_factors 호출됨")
+        logger.info(f"📦 buy_conditions 타입: {type(buy_conditions)}")
+        logger.info(f"📦 buy_conditions 내용: {buy_conditions}")
+
         # 논리식 조건인 경우
         if isinstance(buy_conditions, dict) and 'expression' in buy_conditions:
             # 🚀 벡터화 조건 평가기 사용 (500-1000배 빠름!)
+            logger.info(f"🔍 self.use_vectorized = {self.use_vectorized}")
+            logger.info(f"🔍 condition_evaluator 타입: {type(self.condition_evaluator).__name__}")
             if self.use_vectorized:
                 # 🔍 디버그: 샘플 데이터 확인
                 if stock_codes and not factor_data.empty:
@@ -168,9 +175,25 @@ class FactorIntegration:
             all_conditions_met = True
 
             for condition in buy_conditions:
-                factor_name = condition['factor']
-                operator = condition['operator']
-                threshold = condition['value']
+                # factor 키가 없으면 exp_left_side에서 추출
+                if 'factor' in condition:
+                    factor_name = condition['factor']
+                    operator = condition.get('operator', '>')
+                    threshold = condition.get('value', 0)
+                else:
+                    # exp_left_side에서 팩터명 추출: "기본값({debt_ratio})" → "debt_ratio"
+                    import re
+                    exp_left_side = condition.get('exp_left_side', '')
+                    match = re.search(r'\{([^}]+)\}', exp_left_side)
+                    if not match:
+                        logger.warning(f"조건에서 팩터명 추출 실패: {condition}")
+                        all_conditions_met = False
+                        break
+                    factor_name = match.group(1)
+                    operator = condition.get('inequality', '>')
+                    threshold = condition.get('exp_right_side', 0)
+
+                logger.debug(f"조건 평가: factor_name={factor_name}, operator={operator}, threshold={threshold}")
 
                 # 대소문자 구분 없이 팩터 값 가져오기
                 factor_name_upper = factor_name.upper()

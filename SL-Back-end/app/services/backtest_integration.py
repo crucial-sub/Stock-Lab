@@ -185,11 +185,12 @@ def integrate_optimizations(backtest_engine):
         required_factors = backtest_engine._extract_required_factors(buy_conditions or [], priority_factor)
         if not required_factors:
             required_factors = {
-                'PER', 'PBR', 'ROE', 'ROA',
+                'PER', 'PBR', 'PSR', 'ROE', 'ROA', 'DEBT_RATIO',
                 'MOMENTUM_1M', 'MOMENTUM_3M', 'MOMENTUM_6M', 'MOMENTUM_12M',
                 'VOLATILITY', 'AVG_TRADING_VALUE', 'TURNOVER_RATE',
                 'BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'RSI', 'MACD',
-                'OPERATING_MARGIN', 'NET_MARGIN'
+                'OPERATING_MARGIN', 'NET_MARGIN', 'CHANGE_RATE',
+                'OPERATING_INCOME_GROWTH', 'GROSS_PROFIT_GROWTH'
             }
 
         logger.debug(f"필요 팩터: {len(required_factors)}개")

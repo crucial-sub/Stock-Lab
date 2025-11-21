@@ -351,6 +351,13 @@ class BacktestEngine:
                         priority_factor = condition.get('priority_factor')
                         break
 
+            # priority_factor 파싱: "{PER}" 또는 "기본값({PER})" → "PER"
+            if priority_factor:
+                import re
+                match = re.search(r'\{([^}]+)\}', priority_factor)
+                if match:
+                    priority_factor = match.group(1).upper()
+
             # SimpleCondition 객체 리스트 생성 (최적화된 팩터 계산을 위해)
             # BacktestCondition 스키마 대신 간단한 객체 사용
             class SimpleCondition:
@@ -374,6 +381,16 @@ class BacktestEngine:
                             exp_left_side = cond.get('exp_left_side', '')
                             inequality = cond.get('inequality', '')
                             exp_right_side = cond.get('exp_right_side', 0)
+
+                            # exp_left_side에서 팩터명 추출하여 factor 필드 추가
+                            import re
+                            match = re.search(r'\{([^}]+)\}', exp_left_side)
+                            if match:
+                                cond['factor'] = match.group(1).upper()
+                            cond['operator'] = inequality
+                            cond['value'] = exp_right_side
+                            if 'name' in cond:
+                                cond['id'] = cond['name']
 
                         backtest_conditions.append(SimpleCondition(
                             exp_left_side=exp_left_side,
@@ -399,6 +416,16 @@ class BacktestEngine:
                             exp_left_side = cond.get('exp_left_side', '')
                             inequality = cond.get('inequality', '')
                             exp_right_side = cond.get('exp_right_side', 0)
+
+                            # exp_left_side에서 팩터명 추출하여 factor 필드 추가
+                            import re
+                            match = re.search(r'\{([^}]+)\}', exp_left_side)
+                            if match:
+                                cond['factor'] = match.group(1).upper()
+                            cond['operator'] = inequality
+                            cond['value'] = exp_right_side
+                            if 'name' in cond:
+                                cond['id'] = cond['name']
 
                         backtest_conditions.append(SimpleCondition(
                             exp_left_side=exp_left_side,

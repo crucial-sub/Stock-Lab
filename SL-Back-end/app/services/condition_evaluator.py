@@ -133,13 +133,17 @@ class ConditionEvaluator:
         Returns:
             ConditionResult
         """
+        # 🔍 디버깅: 받은 조건 로깅
+        self.logger.info(f"🔍 evaluate_factor_condition 호출됨 - 종목: {stock_code}")
+        self.logger.info(f"📦 condition 내용: {condition}")
+
         factor_name = condition.get('factor')
         factor_key = self._normalize_factor_key(factor_name)
         op = condition['operator']
         threshold = condition['value']
         value_type = condition.get('value_type', 'VALUE').upper()
 
-        self.logger.debug(f"🔍 [{stock_code}] 조건 평가 시작: {factor_name}({factor_key}) {op} {threshold}")
+        self.logger.info(f"🔍 [{stock_code}] 조건 평가 시작: {factor_name}({factor_key}) {op} {threshold}")
 
         # 팩터 값 추출
         try:

@@ -37,16 +37,25 @@ export function AutoTradingStatusPageClient({
 
   const { strategy, positions, today_trades, latest_performance } = statusData;
 
-  // 총 자산 계산
+  // 총 평가액 계산 (보유 주식 평가액)
   const stockValue = positions.reduce(
-    (sum, pos) => sum + (pos.current_price || pos.avg_buy_price) * pos.quantity,
+    (sum, pos) => sum + Number(pos.current_price || pos.avg_buy_price) * pos.quantity,
     0
   );
-  const totalValue = strategy.cash_balance + stockValue;
 
-  // 수익률 계산
-  const totalReturn =
-    ((totalValue - strategy.initial_capital) / strategy.initial_capital) * 100;
+  // 총 매수금액 계산 (평단가 기준)
+  const totalBuyValue = positions.reduce(
+    (sum, pos) => sum + Number(pos.avg_buy_price) * pos.quantity,
+    0
+  );
+
+  // 평가손익 계산
+  const totalProfit = stockValue - totalBuyValue;
+
+  // 수익률 계산 (매수금액 기준)
+  const totalReturn = totalBuyValue > 0
+    ? (totalProfit / totalBuyValue) * 100
+    : 0;
 
   return (
     <main className="flex-1 px-[18.75rem] py-[3.75rem] overflow-auto">
@@ -78,15 +87,16 @@ export function AutoTradingStatusPageClient({
       {/* 현재 상태 대시보드 */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500 mb-1">총 자산</p>
+          <p className="text-sm text-gray-500 mb-1">총 평가액</p>
           <p className="text-2xl font-bold">
-            {Math.round(totalValue).toLocaleString()}원
+            {Math.round(stockValue).toLocaleString()}원
           </p>
           <p
-            className={`text-sm ${totalReturn >= 0 ? "text-red-500" : "text-blue-500"}`}
+            className={`text-sm font-semibold ${totalProfit >= 0 ? "text-red-500" : "text-blue-500"}`}
           >
-            {totalReturn >= 0 ? "+" : ""}
-            {totalReturn.toFixed(2)}%
+            {totalProfit >= 0 ? "+" : ""}
+            {Math.round(totalProfit).toLocaleString()}원 ({totalReturn >= 0 ? "+" : ""}
+            {totalReturn.toFixed(2)}%)
           </p>
         </div>
 
@@ -149,7 +159,7 @@ export function AutoTradingStatusPageClient({
                 </tr>
               ) : (
                 positions.map((pos) => {
-                  const profitRate = pos.unrealized_profit_pct || 0;
+                  const profitRate = Number(pos.unrealized_profit_pct || 0);
                   return (
                     <tr key={pos.position_id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm">{pos.stock_code}</td>
@@ -158,11 +168,11 @@ export function AutoTradingStatusPageClient({
                         {pos.quantity.toLocaleString()}주
                       </td>
                       <td className="px-4 py-3 text-sm text-right">
-                        {Math.round(pos.avg_buy_price).toLocaleString()}원
+                        {Math.round(Number(pos.avg_buy_price)).toLocaleString()}원
                       </td>
                       <td className="px-4 py-3 text-sm text-right">
                         {Math.round(
-                          pos.current_price || pos.avg_buy_price
+                          Number(pos.current_price || pos.avg_buy_price)
                         ).toLocaleString()}
                         원
                       </td>

@@ -35,3 +35,18 @@ export interface StockOrderResponse {
   data: any;
   message: string;
 }
+
+export interface PerformanceChartDataPoint {
+  date: string;
+  total_value: string;
+  daily_return: string | null;
+  cumulative_return: string | null;
+}
+
+export interface AccountPerformanceChart {
+  data_points: PerformanceChartDataPoint[];
+  initial_capital: string;
+  current_value: string;
+  total_return: string;
+  days: number;
+}

@@ -125,22 +125,22 @@ export function PasswordChangeModal({
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-price-up rounded-lg">
-            <p className="text-sm text-price-down">{error}</p>
+          <div className="px-1 mb-5">
+            <p className="text-[0.75rem] text-price-up">{error}</p>
           </div>
         )}
 
         <div className="flex gap-3">
           <button
             onClick={handleClose}
-            className="flex-1 px-4 py-3 bg-surface text-text-body rounded-lg hover:bg-sidebar-item-sub-active transition-colors"
+            className="flex-1 px-4 py-3 bg-[#1822340D] text-body rounded-[12px] hover:bg-[#C8C8C8] transition-colors"
           >
             취소
           </button>
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="flex-1 px-4 py-3 bg-button-primary-soft text-brand rounded-lg hover:bg-brand hover:text-base-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-3 bg-brand-purple text-white rounded-[12px] hover:bg-brand-purple/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? "변경 중..." : "변경하기"}
           </button>

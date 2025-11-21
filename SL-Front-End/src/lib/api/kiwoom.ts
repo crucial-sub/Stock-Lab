@@ -4,6 +4,7 @@
 
 import type {
   AccountBalance,
+  AccountPerformanceChart,
   KiwoomCredentials,
   KiwoomCredentialsResponse,
   KiwoomStatusResponse,
@@ -83,7 +84,7 @@ export const kiwoomApi = {
    */
   getStatusServer: async (token: string): Promise<KiwoomStatusResponse> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
     const { data } = await axios.get<KiwoomStatusResponse>(
       `${baseURL}/api/v1/kiwoom/credentials/status`,
       {
@@ -100,9 +101,39 @@ export const kiwoomApi = {
    */
   getAccountBalanceServer: async (token: string): Promise<AccountBalance> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
     const { data } = await axios.get<AccountBalance>(
       `${baseURL}/api/v1/kiwoom/account/balance`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    return data;
+  },
+
+  /**
+   * 계좌 성과 차트 데이터 조회
+   */
+  getPerformanceChart: async (days: number = 30): Promise<AccountPerformanceChart> => {
+    const { data } = await axiosInstance.get<AccountPerformanceChart>(
+      `/kiwoom/account/performance-chart?days=${days}`,
+    );
+    return data;
+  },
+
+  /**
+   * 계좌 성과 차트 데이터 조회 (서버 사이드)
+   */
+  getPerformanceChartServer: async (
+    token: string,
+    days: number = 30
+  ): Promise<AccountPerformanceChart> => {
+    const axios = (await import("axios")).default;
+    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
+    const { data } = await axios.get<AccountPerformanceChart>(
+      `${baseURL}/api/v1/kiwoom/account/performance-chart?days=${days}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

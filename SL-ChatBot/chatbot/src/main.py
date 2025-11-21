@@ -10,7 +10,13 @@ class QuantAdvisorBot:
     def __init__(self, config_path: str = "config.yaml"):
         self.handler = ChatHandler(config_path)
 
-    async def chat(self, message: str, session_id: Optional[str] = None, answer: Optional[dict] = None) -> dict:
+    async def chat(
+        self,
+        message: str,
+        session_id: Optional[str] = None,
+        answer: Optional[dict] = None,
+        client_type: Optional[str] = "assistant"
+    ) -> dict:
         """Process user message and return response.
 
         Args:
@@ -21,7 +27,7 @@ class QuantAdvisorBot:
         Returns:
             Response dictionary with answer and metadata
         """
-        return await self.handler.handle(message, session_id, answer)
+        return await self.handler.handle(message, session_id, answer, client_type)
 
     async def recommend_strategy(self, user_profile: dict) -> dict:
         """Recommend investment strategy based on user profile.

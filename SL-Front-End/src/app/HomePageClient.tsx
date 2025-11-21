@@ -5,16 +5,15 @@ import {
   HighlightsSection,
   MarketInsightSection,
   PerformanceChartSection,
-  KiwoomAccountSummary,
   StatsOverviewSection,
 } from "@/components/home/auth";
 import {
-  GuestCommunityPreviewSection,
   GuestMarketInsightSection,
   GuestPortfolioSection,
 } from "@/components/home/guest";
+import { DiscussionPreviewSection } from "@/components/community";
+import { FloatingChatWidget } from "@/components/home/FloatingChatWidget";
 import type {
-  GuestCommunityPost,
   GuestMarketIndex,
   GuestMarketStock,
   HomeCommunityHighlight,
@@ -23,6 +22,7 @@ import type {
   MarketNews,
   MarketStock,
 } from "@/types";
+import type { AccountPerformanceChart } from "@/types/kiwoom";
 import { marketQuoteApi } from "@/lib/api/market-quote";
 import { fetchLatestNews } from "@/lib/api/news";
 
@@ -40,6 +40,7 @@ interface DashboardData {
   active_strategy_count: number;
   total_positions: number;
   total_trades_today: number;
+  total_allocated_capital: number;  // 자동매매에 할당된 총 금액
 }
 
 interface KiwoomAccountData {
@@ -61,6 +62,7 @@ interface HomePageClientProps {
   isLoggedIn: boolean;
   hasKiwoomAccount: boolean;
   kiwoomAccountData: KiwoomAccountData | null;
+  performanceChartData: AccountPerformanceChart | null;
   dashboardData: DashboardData;
   marketStocksInitial: MarketStock[];
   marketNewsInitial: MarketNews[];
@@ -112,34 +114,23 @@ const marketStocksFallback: MarketStock[] = [
   { id: "guest-5", name: "카카오", tag: "예시", change: "+0.00%", price: "60,000원", volume: "65억" },
 ];
 
-const guestCommunityPosts: GuestCommunityPost[] = Array.from({ length: 3 }).map(
-  (_, index) => ({
-    id: `post-${index}`,
-    title: "게시물 이름은 이렇게 들어갑니다.",
-    preview:
-      "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
-    author: "FMJS",
-    date: "2025.12.31 19:00",
-    tag: "태그",
-    views: "999+",
-    likes: "999+",
-    comments: "999+",
-  }),
-);
-
 const buildAuthenticatedStats = (
   dashboardData: DashboardData,
   kiwoomAccountData: KiwoomAccountData | null
 ): HomeStatCardData[] => {
   // 키움 데이터가 있으면 키움 데이터 사용, 없으면 포트폴리오 데이터 사용
   const activeCount = Number(dashboardData.active_strategy_count) || 0;
-  
+  const allocatedCapital = Number(dashboardData.total_allocated_capital) || 0;
+
   if (kiwoomAccountData?.holdings) {
     const evaluationAmount = parseNumericValue(kiwoomAccountData.holdings.tot_evlt_amt);
     const totalProfit = parseNumericValue(kiwoomAccountData.holdings.tot_evlt_pl);
     const totalReturn = parseNumericValue(kiwoomAccountData.holdings.tot_prft_rt);
     const cashBalance = parseNumericValue(kiwoomAccountData.cash?.balance);
-    const totalAssets = evaluationAmount + cashBalance;
+
+    // 키움 계좌 전체 금액에서 자동매매 할당 금액을 빼서 실제 사용 가능한 자산 계산
+    const totalAssets = evaluationAmount + cashBalance - allocatedCapital;
+    const availableCash = cashBalance - allocatedCapital;
 
     return [
       {
@@ -147,7 +138,7 @@ const buildAuthenticatedStats = (
         title: "총 자산",
         value: `${totalAssets.toLocaleString()}원`,
         change: `평가손익 ${formatCurrencyWithSign(totalProfit)}`,
-        badge: cashBalance ? `예수금 ${cashBalance.toLocaleString()}원` : "연동계좌",
+        badge: availableCash > 0 ? `예수금 ${availableCash.toLocaleString()}원` : "연동계좌",
       },
       {
         id: "return",
@@ -235,6 +226,7 @@ export function HomePageClient({
   isLoggedIn,
   hasKiwoomAccount,
   kiwoomAccountData,
+  performanceChartData,
   dashboardData,
   marketStocksInitial,
   marketNewsInitial,
@@ -340,62 +332,69 @@ export function HomePageClient({
 
   if (!isLoggedIn) {
     return (
-      <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
-        <div className="flex w-full max-w-[1000px] flex-col gap-10">
-          <GuestPortfolioSection />
-          <GuestMarketInsightSection
-            indexes={guestMarketIndexes}
-            stocks={guestMarketStocks}
-            news={marketNews}
-          />
-          <GuestCommunityPreviewSection posts={guestCommunityPosts} />
+      <>
+        <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
+          <div className="flex w-full max-w-[1000px] flex-col gap-10">
+            <GuestPortfolioSection />
+            <GuestMarketInsightSection
+              indexes={guestMarketIndexes}
+              stocks={guestMarketStocks}
+              news={marketNews}
+            />
+            <DiscussionPreviewSection limit={3} />
+          </div>
         </div>
-      </div>
+        <FloatingChatWidget />
+      </>
     );
   }
 
   const authenticatedStats = buildAuthenticatedStats(dashboardData, kiwoomAccountData);
 
   return (
-    <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
-      <div className="flex w-full max-w-[1000px] flex-col gap-10">
-        <div className="text-[2rem] font-semibold text-text-body">
-          안녕하세요, {userName}님
-        </div>
-
-        {/* 계좌 연동 안내 */}
-        {!hasKiwoomAccount && (
-          <div className="bg-bg-surface rounded-lg shadow-card p-6 border-2 border-accent-primary">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-text-title mb-2">
-                  증권사 계좌 연동이 필요합니다
-                </h3>
-                <p className="text-text-body">
-                  자동매매 기능을 사용하려면 키움증권 모의투자 계좌를 연동해주세요.
-                </p>
-              </div>
-              <a
-                href="/mypage"
-                className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/90 transition-colors font-semibold whitespace-nowrap"
-              >
-                증권사 계좌 연동하기
-              </a>
-            </div>
+    <>
+      <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
+        <div className="flex w-full max-w-[1000px] flex-col gap-10">
+          <div className="text-[2rem] font-semibold text-text-body">
+            안녕하세요, {userName}님
           </div>
-        )}
 
-        <StatsOverviewSection stats={authenticatedStats} />
-        <PerformanceChartSection />
-        <MarketInsightSection
-          stocks={marketStocks}
-          news={marketNews}
-        />
-        <HighlightsSection
-          portfolios={authPortfolios}
-          posts={authCommunityHighlights}
-        />
+          {/* 계좌 연동 안내 */}
+          {!hasKiwoomAccount && (
+            <div className="bg-bg-surface rounded-lg shadow-card p-6 border-2 border-accent-primary">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-text-title mb-2">
+                    증권사 계좌 연동이 필요합니다
+                  </h3>
+                  <p className="text-text-body">
+                    자동매매 기능을 사용하려면 키움증권 모의투자 계좌를 연동해주세요.
+                  </p>
+                </div>
+                <a
+                  href="/mypage"
+                  className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/90 transition-colors font-semibold whitespace-nowrap"
+                >
+                  증권사 계좌 연동하기
+                </a>
+              </div>
+            </div>
+          )}
+
+          <StatsOverviewSection stats={authenticatedStats} />
+          <PerformanceChartSection performanceData={performanceChartData} />
+          <MarketInsightSection
+            stocks={marketStocks}
+            news={marketNews}
+          />
+          <HighlightsSection
+            portfolios={authPortfolios}
+            posts={authCommunityHighlights}
+          />
+          <DiscussionPreviewSection limit={3} className="mt-4" />
+        </div>
       </div>
-    </div>
+      <FloatingChatWidget />
+    </>
   );
 }

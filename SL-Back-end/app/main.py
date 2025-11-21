@@ -8,11 +8,12 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 import logging
+import json
 
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history, investment_strategy
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history, investment_strategy, universes
 from app.api.v1 import industries, realtime
 from app.services.auto_trading_scheduler import start_scheduler, stop_scheduler
 
@@ -84,6 +85,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Failed to start scheduler: {e}")
 
+    # 🔥 캐시 워밍 (서버 시작 시 백그라운드에서 실행)
+    try:
+        import asyncio
+        from app.services.cache_warmer import run_cache_warming
+
+        logger.info("🔥 Starting cache warming in background...")
+        # 백그라운드 태스크로 실행 (서버 시작을 블로킹하지 않음)
+        asyncio.create_task(run_cache_warming())
+        logger.info("✅ Cache warming task created")
+    except Exception as e:
+        logger.error(f"❌ Failed to start cache warming: {e}")
+
     yield
 
     # Shutdown
@@ -128,16 +141,25 @@ app = FastAPI(
 )
 
 # CORS 설정
-# validator에서 이미 List[str]로 변환됨
-cors_origins = (
-    settings.BACKEND_CORS_ORIGINS
-    if isinstance(settings.BACKEND_CORS_ORIGINS, list)
-    else (
-        settings.BACKEND_CORS_ORIGINS.split(",")
-        if settings.BACKEND_CORS_ORIGINS != "*"
-        else ["*"]
-    )
-)
+# NOTE: `json` already imported at module level.
+def _parse_cors_origins(value):
+    if value == "*":
+        return ["*"]
+    if isinstance(value, list):
+        return value
+
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+cors_origins = _parse_cors_origins(settings.BACKEND_CORS_ORIGINS)
+logger.info(f"CORS origins configured: {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -145,7 +167,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # 요청 로깅 미들웨어
 @app.middleware("http")
@@ -266,6 +287,12 @@ app.include_router(
     community.router,
     prefix=f"{settings.API_V1_PREFIX}/community",
     tags=["Community"]
+)
+
+app.include_router(
+    universes.router,
+    prefix=f"{settings.API_V1_PREFIX}/universes",
+    tags=["Universes"]
 )
 
 # Root 엔드포인트

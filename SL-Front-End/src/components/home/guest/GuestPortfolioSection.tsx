@@ -1,7 +1,7 @@
 "use client";
 
 import { Title } from "@/components/common/Title";
-import { RankingCard } from "@/components/community";
+import { RankingCard } from "@/components/strategy_portfolio";
 import { useTopRankingsQuery } from "@/hooks/useCommunityQuery";
 
 export function GuestPortfolioSection() {

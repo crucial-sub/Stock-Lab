@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { Icon } from "@/components/common/Icon";
 
 export interface PostDetailCardProps {
   tag: string;
@@ -72,21 +72,24 @@ export function PostDetailCard({
       {/* 통계 정보 */}
       <div className="flex items-center justify-end gap-5 mb-6">
         <div className="flex items-center gap-1">
-          <Image src="/icons/visibility.svg" width={20} height={20} alt="" />
+          <Icon src="/icons/visibility.svg" alt="views" size={20} />
           <span className="text-sm text-body">
             {formatCount(views)}
           </span>
         </div>
 
         <div className="flex items-center gap-1">
-          <Image src="/icons/favorite.svg" width={20} height={20} alt="" />
-          <span className="text-sm text-price-up">
-            {formatCount(likes)}
-          </span>
+          <Icon
+            src="/icons/favorite.svg"
+            alt="likes"
+            size={20}
+            color={isLiked ? "#ef4444" : "#9ca3af"}
+          />
+          <span className="text-sm text-price-up">{formatCount(likes)}</span>
         </div>
 
         <div className="flex items-center gap-1">
-          <Image src="/icons/chat-bubble.svg" width={20} height={20} alt="" />
+          <Icon src="/icons/chat-bubble.svg" alt="comments" size={20} />
           <span className="text-sm text-body">
             {formatCount(comments)}
           </span>
@@ -98,15 +101,15 @@ export function PostDetailCard({
         onClick={onLike}
         className={`inline-flex items-center gap-2 px-6 py-2 rounded-lg border self-start ${
           isLiked
-            ? "bg-[#FFF6F6] border-price-up text-price-up"
+            ? "bg-[#FFF1F2] border-[#ef4444] text-[#ef4444]"
             : "bg-transparent border-price-up text-price-up"
         }`}
       >
-        <Image
+        <Icon
           src="/icons/favorite.svg"
-          width={24}
-          height={24}
-          alt=""
+          alt="like"
+          size={24}
+          color="#ef4444"
           className={isLiked ? "opacity-100" : "opacity-70"}
         />
         <span className="text-xl font-semibold">좋아요</span>

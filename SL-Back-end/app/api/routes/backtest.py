@@ -511,12 +511,35 @@ async def run_backtest(
         logger.info(f"Start date: {start_date}, End date: {end_date}, Initial capital: {initial_capital}")
         logger.info(f"Trade targets: {request.trade_targets.model_dump()}")
 
-        # 매매 대상 결정: use_all_stocks이면 빈 리스트, 아니면 선택된 테마/종목
-        selected_theme_codes = [] if request.trade_targets.use_all_stocks else request.trade_targets.selected_themes
-        target_themes = [
-            THEME_CODE_TO_INDUSTRY.get(code, code) for code in selected_theme_codes
-        ]
-        target_stocks = [] if request.trade_targets.use_all_stocks else request.trade_targets.selected_stocks
+        # 매매 대상 결정:
+        # 1. 유니버스가 선택되어 있으면 유니버스 사용 (use_all_stocks 무시)
+        # 2. 유니버스가 없고 테마/종목이 선택되어 있으면 테마/종목 사용
+        # 3. 아무것도 선택되지 않았거나 use_all_stocks이 true면 전체 종목 사용
+        has_universe_selection = request.trade_targets.selected_universes and len(request.trade_targets.selected_universes) > 0
+        has_theme_selection = request.trade_targets.selected_themes and len(request.trade_targets.selected_themes) > 0
+        has_stock_selection = request.trade_targets.selected_stocks and len(request.trade_targets.selected_stocks) > 0
+
+        if has_universe_selection:
+            # 유니버스 선택이 있으면 유니버스 기반 필터링
+            target_universes = request.trade_targets.selected_universes
+            target_themes = []  # 유니버스 사용 시 테마는 무시
+            target_stocks = request.trade_targets.selected_stocks if has_stock_selection else []
+            logger.info(f"🎯 유니버스 필터링 모드: universes={target_universes}, themes=[], stocks={len(target_stocks)}")
+        elif has_theme_selection or has_stock_selection:
+            # 테마/종목 선택이 있으면 테마/종목 기반 필터링
+            selected_theme_codes = request.trade_targets.selected_themes
+            target_themes = [
+                THEME_CODE_TO_INDUSTRY.get(code, code) for code in selected_theme_codes
+            ]
+            target_stocks = request.trade_targets.selected_stocks
+            target_universes = []
+            logger.info(f"🎯 테마/종목 필터링 모드: themes={len(target_themes)}, stocks={len(target_stocks)}")
+        else:
+            # 아무것도 선택되지 않았으면 전체 종목 사용
+            target_themes = []
+            target_stocks = []
+            target_universes = []
+            logger.info(f"🎯 전체 종목 모드")
 
         asyncio.create_task(
             execute_backtest_wrapper(
@@ -528,6 +551,7 @@ async def run_backtest(
                 "KOSPI",
                 target_themes,  # 선택된 테마(산업) 목록
                 target_stocks,  # 선택된 개별 종목 코드 목록
+                target_universes,  # 선택된 유니버스 목록
                 request.trade_targets.use_all_stocks,  # 전체 종목 사용 여부
                 [c.model_dump() for c in request.buy_conditions],  # 매수 조건
                 request.buy_logic,
@@ -1042,13 +1066,32 @@ async def get_backtest_result(
             # 개별 종목 코드 추출
             selected_stocks = trade_targets.get("selected_stocks", [])
 
+            # 선택된 유니버스 추출
+            selected_universes = trade_targets.get("selected_universes", [])
+
             # 선택된 테마에서 종목 조회
             selected_themes = trade_targets.get("selected_themes", [])
 
             universe_stock_codes.update(selected_stocks)
 
-            # 테마가 선택되었으면 해당 테마의 모든 종목 조회
-            if selected_themes:
+            # 🎯 유니버스가 선택되었으면 유니버스 기반으로만 종목 조회 (테마 무시)
+            if selected_universes:
+                from app.services.universe_service import UniverseService
+                universe_service = UniverseService(db)
+
+                # 백테스트 시작일을 기준으로 유니버스 종목 조회
+                backtest_start_date = session.start_date.strftime("%Y%m%d") if session.start_date else None
+                if backtest_start_date:
+                    universe_stock_codes_list = await universe_service.get_stock_codes_by_universes(
+                        selected_universes,
+                        trade_date=backtest_start_date
+                    )
+                    universe_stock_codes.update(universe_stock_codes_list)
+                    print(f"📊 유니버스 필터링 결과: {len(universe_stock_codes)}개 종목 (유니버스: {selected_universes})")
+                else:
+                    print(f"⚠️  백테스트 시작일이 없어 유니버스 조회 불가")
+            # 테마가 선택되었으면 해당 테마의 모든 종목 조회 (유니버스가 없을 때만)
+            elif selected_themes:
                 print(f"📊 선택된 테마: {selected_themes}")
                 # Company 테이블에서 industry가 선택된 테마에 포함된 종목 조회
                 theme_companies_query = select(Company.stock_code).where(
@@ -1058,15 +1101,15 @@ async def get_backtest_result(
                 theme_stock_codes = [row.stock_code for row in theme_companies_result.all()]
                 print(f"✅ 테마 종목 {len(theme_stock_codes)}개 발견")
                 universe_stock_codes.update(theme_stock_codes)
-
-            # 전체 종목 사용 여부 확인
-            use_all_stocks = trade_targets.get("use_all_stocks", False)
-            if use_all_stocks:
-                print(f"📊 전체 종목 사용 모드")
-                all_companies_query = select(Company.stock_code)
-                all_companies_result = await db.execute(all_companies_query)
-                all_stock_codes = [row.stock_code for row in all_companies_result.all()]
-                universe_stock_codes.update(all_stock_codes)
+            # 전체 종목 사용 여부 확인 (유니버스와 테마가 모두 없을 때만)
+            else:
+                use_all_stocks = trade_targets.get("use_all_stocks", False)
+                if use_all_stocks:
+                    print(f"📊 전체 종목 사용 모드")
+                    all_companies_query = select(Company.stock_code)
+                    all_companies_result = await db.execute(all_companies_query)
+                    all_stock_codes = [row.stock_code for row in all_companies_result.all()]
+                    universe_stock_codes.update(all_stock_codes)
 
         # Fallback: trade_targets가 없는 경우 (기존 백테스트)
         # ⚠️ 주의: 거래가 없으면 유니버스를 표시할 수 없음
@@ -1453,6 +1496,7 @@ async def execute_backtest_wrapper(
     benchmark: str,
     target_themes: List[str],  # 선택된 산업/테마 목록
     target_stocks: List[str],  # 선택된 개별 종목 코드 목록
+    target_universes: List[str] = None,  # 선택된 유니버스 목록
     use_all_stocks: bool = False,  # 전체 종목 사용 여부
     buy_conditions: List[dict] = None,
     buy_logic: str = "AND",
@@ -1484,6 +1528,7 @@ async def execute_backtest_wrapper(
             benchmark,
             target_themes,
             target_stocks,
+            target_universes or [],
             use_all_stocks,
             buy_conditions or [],
             buy_logic,

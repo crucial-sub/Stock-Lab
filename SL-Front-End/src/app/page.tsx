@@ -20,6 +20,7 @@ export default async function HomePage() {
   let userName = "게스트";
   let hasKiwoomAccount = false;
   let kiwoomAccountData = null;
+  let performanceChartData = null;
   let marketStocks: MarketStock[] = [];
   let marketNews: MarketNews[] = [];
   let dashboardData = {
@@ -29,6 +30,7 @@ export default async function HomePage() {
     active_strategy_count: 0,
     total_positions: 0,
     total_trades_today: 0,
+    total_allocated_capital: 0,
   };
 
   if (isLoggedIn && token) {
@@ -58,10 +60,19 @@ export default async function HomePage() {
       } catch (error) {
         console.warn("대시보드 데이터 조회 실패:", error);
       }
+
+      // 3-1. 성과 차트 데이터 가져오기 (계좌 연동된 경우에만)
+      if (hasKiwoomAccount) {
+        try {
+          performanceChartData = await kiwoomApi.getPerformanceChartServer(token, 30);
+        } catch (error) {
+          console.warn("성과 차트 데이터 조회 실패:", error);
+        }
+      }
       // 4. 시황/뉴스 데이터 서버 사이드로 미리 가져오기
       try {
         const axios = (await import("axios")).default;
-        const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000/api/v1";
+        const baseURL = process.env.API_BASE_URL || "http://backend:8000/api/v1";
 
         if (hasKiwoomAccount) {
           // 관심종목 체결량 상위 5
@@ -125,7 +136,7 @@ export default async function HomePage() {
     // 게스트 사용자를 위해 서버에서 기본 시황/뉴스 가져오기
     try {
       const axios = (await import("axios")).default;
-      const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000/api/v1";
+      const baseURL = process.env.API_BASE_URL || "http://backend:8000/api/v1";
       const quotes = await axios.get(`${baseURL}/market/quotes`, {
         params: { sort_by: "volume", sort_order: "desc", page: 1, page_size: 5 },
       });
@@ -157,6 +168,7 @@ export default async function HomePage() {
       isLoggedIn={isLoggedIn}
       hasKiwoomAccount={hasKiwoomAccount}
       kiwoomAccountData={kiwoomAccountData}
+      performanceChartData={performanceChartData}
       dashboardData={dashboardData}
       marketStocksInitial={marketStocks}
       marketNewsInitial={marketNews}

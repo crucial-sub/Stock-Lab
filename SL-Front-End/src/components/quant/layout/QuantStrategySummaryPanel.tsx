@@ -98,6 +98,8 @@ export default function QuantStrategySummaryPanel({
   const setEndDate = useBacktestConfigStore((state) => state.setEndDate);
   const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
   const addSellConditionUIWithData = useBacktestConfigStore((state) => state.addSellConditionUIWithData);
+  const setBuyLogic = useBacktestConfigStore((state) => state.setBuyLogic);
+  const setConditionSell = useBacktestConfigStore((state) => state.setConditionSell);
 
   // 날짜 초기화 (클라이언트 사이드에서만 실행)
   // setter 함수는 안정적이므로 dependency에서 제외 (React Compiler가 자동 처리)
@@ -141,6 +143,20 @@ export default function QuantStrategySummaryPanel({
         });
       }
     });
+
+    // 조건 추가 후 논리식 자동 생성 (2개 이상일 때만)
+    setTimeout(() => {
+      const updatedConditions = useBacktestConfigStore.getState().buyConditionsUI;
+      const validConditions = updatedConditions.filter(c => c.factorName);
+      if (validConditions.length >= 2) {
+        const logic = validConditions.map(c => c.id).join(" and ");
+        setBuyLogic(logic);
+      }
+      if(validConditions.length >=3){
+        const logic = validConditions.map(c => c.id).join(" or ");
+        setBuyLogic(logic);
+      }
+    }, 100);
   };
 
   // AI 헬퍼에서 생성된 조건을 매도 조건에 추가
@@ -165,6 +181,28 @@ export default function QuantStrategySummaryPanel({
         });
       }
     });
+
+    // 조건 추가 후 논리식 자동 생성 (2개 이상일 때만)
+    setTimeout(() => {
+      const state = useBacktestConfigStore.getState();
+      const updatedConditions = state.sellConditionsUI;
+      const validConditions = updatedConditions.filter(c => c.factorName);
+
+      if (validConditions.length >= 2) {
+        const logic = validConditions.map(c => c.id).join(" and ");
+        const currentConditionSell = state.condition_sell || {
+          sell_conditions: [],
+          sell_logic: "",
+          sell_price_basis: "당일 시가",
+          sell_price_offset: 0,
+        };
+
+        setConditionSell({
+          ...currentConditionSell,
+          sell_logic: logic,
+        });
+      }
+    }, 100);
   };
 
   return (
@@ -630,6 +668,47 @@ export default function QuantStrategySummaryPanel({
                           </span>
                         </div>
                       </div>
+                    )}
+                  </div>
+
+                  {/* 선택한 유니버스 */}
+                  <div className="space-y-5">
+                    <FieldTitle tab="target">선택한 유니버스</FieldTitle>
+                    <div className="flex gap-[6.5625rem]">
+                      <div className="flex flex-col gap-1">
+                        <span>선택한 유니버스 수</span>
+                        <span className="font-semibold">
+                          {trade_targets.selected_universes?.length || 0}개
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span>전체 유니버스 수</span>
+                        <span className="font-semibold">8개</span>
+                      </div>
+                    </div>
+                    {trade_targets.selected_universes && trade_targets.selected_universes.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        {trade_targets.selected_universes.map((universeId, index) => {
+                          // 유니버스 ID를 한글 이름으로 매핑
+                          const universeNameMap: Record<string, string> = {
+                            "KOSPI_MEGA": "코스피 초대형",
+                            "KOSPI_LARGE": "코스피 대형",
+                            "KOSPI_MID": "코스피 중형",
+                            "KOSPI_SMALL": "코스피 소형",
+                            "KOSDAQ_MEGA": "코스닥 초대형",
+                            "KOSDAQ_LARGE": "코스닥 대형",
+                            "KOSDAQ_MID": "코스닥 중형",
+                            "KOSDAQ_SMALL": "코스닥 소형",
+                          };
+                          return (
+                            <div key={index} className="text-sm">
+                              {universeNameMap[universeId] || universeId}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-sm">선택 안 함</div>
                     )}
                   </div>
 

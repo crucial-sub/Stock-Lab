@@ -27,12 +27,12 @@ interface Portfolio {
 interface PortfolioPageClientProps {
   /** 총 모의 자산 */
   totalAssets: number;
-  /** 총 자산 수익률 */
-  totalAssetsChange: number;
-  /** 이번주 수익 */
-  weeklyProfit: number;
-  /** 이번주 수익률 */
-  weeklyProfitChange: number;
+  /** 평가손익 */
+  totalProfit: number;
+  /** 수익률 */
+  totalReturn: number;
+  /** 평가금액 */
+  evaluationAmount: number;
   /** 활성 포트폴리오 개수 */
   activePortfolioCount: number;
   /** 포트폴리오 목록 */
@@ -41,9 +41,9 @@ interface PortfolioPageClientProps {
 
 export function PortfolioPageClient({
   totalAssets,
-  totalAssetsChange,
-  weeklyProfit,
-  weeklyProfitChange,
+  totalProfit,
+  totalReturn,
+  evaluationAmount,
   activePortfolioCount,
   portfolios: initialPortfolios,
 }: PortfolioPageClientProps) {
@@ -154,9 +154,9 @@ export function PortfolioPageClient({
       {/* 대시보드 */}
       <PortfolioDashboard
         totalAssets={totalAssets}
-        totalAssetsChange={totalAssetsChange}
-        weeklyProfit={weeklyProfit}
-        weeklyProfitChange={weeklyProfitChange}
+        totalProfit={totalProfit}
+        totalReturn={totalReturn}
+        evaluationAmount={evaluationAmount}
         activePortfolioCount={activePortfolioCount}
       />
       {/* 제거된 커뮤니티 섹션 (랭킹/공유)는 커뮤니티 페이지로 이동 */}

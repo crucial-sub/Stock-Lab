@@ -50,9 +50,14 @@ export function PortfolioCard({
   // 수익률이 양수인지 판단
   const isPositive = profitRate >= 0;
 
+  // 자동매매 카드인지 판단
+  const isAutoTrading = id.startsWith("auto-");
+
   return (
     <div
-      className="bg-surface border border-surface rounded-lg h-[12.5rem] flex flex-col cursor-pointer transition-all duration-200 hover:border-brand-soft hover:shadow-elev-sm p-5"
+      className={`bg-surface border border-surface rounded-lg h-[12.5rem] flex flex-col cursor-pointer transition-all duration-200 hover:border-brand-soft hover:shadow-elev-sm p-5 ${
+        !isActive && isAutoTrading ? "opacity-60" : ""
+      }`}
       onClick={() => onClick(id)}
     >
       {/* 헤더: 제목과 체크박스 */}
@@ -97,7 +102,17 @@ export function PortfolioCard({
 
       {/* 상태 태그 */}
       <div className="mb-auto">
-        {isActive ? (
+        {isAutoTrading ? (
+          isActive ? (
+            <span className="inline-block bg-green-500 font-semibold px-4 py-1 rounded-full text-white">
+              자동매매 중
+            </span>
+          ) : (
+            <span className="inline-block bg-gray-400 font-semibold px-4 py-1 rounded-full text-white">
+              자동매매 종료
+            </span>
+          )
+        ) : isActive ? (
           <span className="inline-block bg-tag-portfolio-active font-semibold px-4 py-1 rounded-full text-white">
             가상 매매
           </span>

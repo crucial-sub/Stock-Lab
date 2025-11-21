@@ -9,6 +9,7 @@ import {
   useTogglePostLikeMutation,
   useCreateCommentMutation,
 } from "@/hooks/useCommunityQuery";
+import { useRouter } from "next/navigation"
 
 /**
  * 게시글 상세 페이지
@@ -20,7 +21,7 @@ export default function PostDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: postId } = use(params);
-
+  const router = useRouter();
   // API 연동
   const { data: post, isLoading: postLoading } = usePostDetailQuery(postId);
   const { data: commentsData, isLoading: commentsLoading } =
@@ -122,6 +123,14 @@ export default function PostDetailPage({
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-[1200px] mx-auto">
+      <button
+          type="button"
+          onClick={() => router.back()}
+          className="text-sm text-[#646464] hover:text-black"
+        >
+          ← 돌아가기
+        </button>
+        
       <PostDetailCard
         tag={post.tags?.[0] || "일반"}
         title={post.title}

@@ -17,6 +17,9 @@ interface QuantResultPageProps {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<{
+    strategyName?: string;
+  }>;
 }
 
 /**
@@ -27,17 +30,25 @@ interface QuantResultPageProps {
  */
 export default async function QuantResultPage({
   params,
+  searchParams,
 }: QuantResultPageProps) {
   // params를 await하여 해결
   const resolvedParams = await params;
   const backtestId = resolvedParams.id;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const strategyName = resolvedSearchParams?.strategyName;
 
   // Mock 모드 체크
   const isMockMode = backtestId.startsWith("mock");
 
   // Mock 모드면 prefetch 스킵
   if (isMockMode) {
-    return <QuantResultPageClient backtestId={backtestId} />;
+    return (
+      <QuantResultPageClient
+        backtestId={backtestId}
+        initialStrategyName={strategyName}
+      />
+    );
   }
 
   // 서버용 QueryClient 생성
@@ -55,7 +66,10 @@ export default async function QuantResultPage({
 
     return (
       <HydrationBoundary state={dehydratedState}>
-        <QuantResultPageClient backtestId={backtestId} />
+        <QuantResultPageClient
+          backtestId={backtestId}
+          initialStrategyName={strategyName}
+        />
       </HydrationBoundary>
     );
   } catch (error) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
 import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
@@ -149,7 +149,6 @@ export function PortfolioPageClient({
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-
   return (
     <main className="flex-1 px-[18.75rem] py-[3.75rem] overflow-auto">
       {/* 대시보드 */}
@@ -160,7 +159,7 @@ export function PortfolioPageClient({
         weeklyProfitChange={weeklyProfitChange}
         activePortfolioCount={activePortfolioCount}
       />
-
+      {/* 제거된 커뮤니티 섹션 (랭킹/공유)는 커뮤니티 페이지로 이동 */}
       {/* 내 포트폴리오 섹션 */}
       <section aria-label="내 포트폴리오">
         {/* 섹션 헤더 */}

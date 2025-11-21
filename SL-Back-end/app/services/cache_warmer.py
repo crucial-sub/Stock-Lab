@@ -118,6 +118,114 @@ async def get_all_active_stocks(db: AsyncSession) -> List[str]:
         return []
 
 
+async def warm_price_data():
+    """
+    가격 데이터를 미리 캐싱 (백테스트 핵심 데이터)
+    - 최근 3년치 전체 종목 가격 데이터 (영구 캐싱)
+    - 백테스트에서 가장 자주 사용하는 데이터
+    """
+    logger.info("🔥 Starting price data warming (3 years, permanent cache)...")
+    cache = get_cache()
+
+    async with AsyncSessionLocal() as db:
+        try:
+            # 최신 날짜 조회
+            latest_date_query = select(func.max(StockPrice.trade_date))
+            latest_date_result = await db.execute(latest_date_query)
+            latest_date = latest_date_result.scalar()
+
+            if not latest_date:
+                logger.warning("No stock price data found")
+                return
+
+            # 최근 3년치 데이터 (백테스트 최대 커버리지)
+            three_years_ago = latest_date - timedelta(days=1095)  # 365 * 3
+
+            logger.info(f"Warming price data from {three_years_ago} to {latest_date}")
+
+            # 전체 종목 가격 데이터 조회 (필터 없음, Company 정보 포함)
+            from app.models.company import Company
+
+            query = select(
+                StockPrice.company_id,
+                Company.stock_code,
+                Company.company_name,
+                Company.industry,
+                Company.market_type,
+                StockPrice.trade_date,
+                StockPrice.open_price,
+                StockPrice.high_price,
+                StockPrice.low_price,
+                StockPrice.close_price,
+                StockPrice.volume,
+                StockPrice.trading_value,
+                StockPrice.market_cap,
+                StockPrice.listed_shares
+            ).join(
+                Company, StockPrice.company_id == Company.company_id
+            ).where(
+                and_(
+                    StockPrice.trade_date >= three_years_ago,
+                    StockPrice.trade_date <= latest_date,
+                    StockPrice.close_price.isnot(None),
+                    StockPrice.volume > 0
+                )
+            ).order_by(
+                StockPrice.trade_date,
+                Company.stock_code
+            )
+
+            result = await db.execute(query)
+            all_prices = result.mappings().all()
+
+            if all_prices:
+                # 전체 가격 데이터를 캐싱 (필터 없는 베이스 데이터)
+                price_data = [
+                    {
+                        "company_id": str(p["company_id"]),
+                        "stock_code": p["stock_code"],
+                        "stock_name": p["company_name"],
+                        "industry": p["industry"],
+                        "market_type": p["market_type"],
+                        "date": p["trade_date"].isoformat(),
+                        "trade_date": p["trade_date"].isoformat(),  # 호환성
+                        "open_price": float(p["open_price"]) if p["open_price"] else None,
+                        "high_price": float(p["high_price"]) if p["high_price"] else None,
+                        "low_price": float(p["low_price"]) if p["low_price"] else None,
+                        "close_price": float(p["close_price"]),
+                        "volume": int(p["volume"]),
+                        "trading_value": float(p["trading_value"]) if p["trading_value"] else None,
+                        "market_cap": float(p["market_cap"]) if p["market_cap"] else None,
+                        "listed_shares": int(p["listed_shares"]) if p["listed_shares"] else None,
+                    }
+                    for p in all_prices
+                ]
+
+                # 날짜 범위별로 캐싱 (일반적인 백테스트 기간)
+                common_periods = [
+                    (365, "1year"),    # 1년
+                    (730, "2years"),   # 2년
+                    (1095, "3years"),  # 3년
+                    (180, "6months"),  # 6개월
+                ]
+
+                for days, label in common_periods:
+                    start_date = latest_date - timedelta(days=days)
+                    filtered_data = [
+                        p for p in price_data
+                        if datetime.fromisoformat(p["trade_date"]).date() >= start_date
+                    ]
+
+                    cache_key = f"price_data:all:{start_date}:{latest_date}"
+                    await cache.set(cache_key, filtered_data, ttl=0)  # 영구 캐싱 (TTL=0)
+                    logger.info(f"✅ Cached {label} price data: {len(filtered_data)} records (permanent)")
+
+            logger.info("✅ Price data warming completed!")
+
+        except Exception as e:
+            logger.error(f"❌ Price data warming failed: {e}")
+
+
 async def warm_factor_calculations():
     """
     팩터 계산 결과를 미리 캐싱
@@ -156,14 +264,13 @@ async def warm_factor_calculations():
             # 팩터 계산기 초기화
             calculator = CompleteFactorCalculator(db)
 
-            # 배치로 처리 (한 번에 100개씩)
-            batch_size = 100
+            # ⚡ 전체 종목을 한 번에 계산 (배치 크기 증가)
+            batch_size = 500  # 100 -> 500으로 증가
             for i in range(0, len(stock_codes), batch_size):
                 batch = stock_codes[i:i + batch_size]
 
                 try:
                     # 모든 팩터 계산
-                    # base_date가 datetime.date 객체이므로 그대로 사용
                     factors_df = await calculator.calculate_all_factors(
                         stock_codes=batch,
                         date=datetime.combine(base_date, datetime.min.time()) if isinstance(base_date, date) else base_date
@@ -175,9 +282,9 @@ async def warm_factor_calculations():
                             if factor_name in factors_df.columns:
                                 cache_key = f"quant:factor:{factor_name}:{base_date}:batch_{i}"
                                 factor_data = factors_df[[factor_name]].to_dict()
-                                await cache.set(cache_key, factor_data, ttl=86400)  # 1일
+                                await cache.set(cache_key, factor_data, ttl=0)  # 영구 캐싱 (TTL=0)
 
-                        logger.info(f"✅ Cached factors for batch {i//batch_size + 1} ({len(batch)} stocks)")
+                        logger.info(f"✅ Cached factors for batch {i//batch_size + 1} ({len(batch)} stocks, permanent)")
 
                 except Exception as e:
                     logger.error(f"❌ Failed to calculate factors for batch {i}: {e}")
@@ -234,8 +341,8 @@ async def warm_stock_rankings():
             ]
 
             cache_key = f"quant:ranking:market_cap:top100:{latest_date}"
-            await cache.set(cache_key, top_market_cap, ttl=86400)  # 1일
-            logger.info(f"📈 Cached market cap top 100")
+            await cache.set(cache_key, top_market_cap, ttl=0)  # 영구 캐싱 (TTL=0)
+            logger.info(f"📈 Cached market cap top 100 (permanent)")
 
             # 거래량 상위 100개 (최근 20일 평균)
             twenty_days_ago = latest_date - timedelta(days=20)
@@ -265,8 +372,8 @@ async def warm_stock_rankings():
             ]
 
             cache_key = f"quant:ranking:volume:top100:{latest_date}"
-            await cache.set(cache_key, top_volume, ttl=86400)  # 1일
-            logger.info(f"📈 Cached volume top 100")
+            await cache.set(cache_key, top_volume, ttl=0)  # 영구 캐싱 (TTL=0)
+            logger.info(f"📈 Cached volume top 100 (permanent)")
 
             logger.info("✅ Ranking warming completed!")
 
@@ -331,6 +438,9 @@ async def run_cache_warming():
     logger.info("=" * 80)
 
     try:
+        # 0단계: 가격 데이터 캐싱 (최우선!) - 백테스트 핵심 데이터
+        await warm_price_data()
+
         # 1단계: 팩터 계산 캐싱 (기본 데이터) - 가장 중요!
         await warm_factor_calculations()
 

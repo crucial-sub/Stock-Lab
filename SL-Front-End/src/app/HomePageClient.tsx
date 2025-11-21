@@ -5,17 +5,15 @@ import {
   HighlightsSection,
   MarketInsightSection,
   PerformanceChartSection,
-  KiwoomAccountSummary,
   StatsOverviewSection,
 } from "@/components/home/auth";
 import {
-  GuestCommunityPreviewSection,
   GuestMarketInsightSection,
   GuestPortfolioSection,
 } from "@/components/home/guest";
+import { DiscussionPreviewSection } from "@/components/community";
 import { FloatingChatWidget } from "@/components/home/FloatingChatWidget";
 import type {
-  GuestCommunityPost,
   GuestMarketIndex,
   GuestMarketStock,
   HomeCommunityHighlight,
@@ -24,6 +22,7 @@ import type {
   MarketNews,
   MarketStock,
 } from "@/types";
+import type { AccountPerformanceChart } from "@/types/kiwoom";
 import { marketQuoteApi } from "@/lib/api/market-quote";
 import { fetchLatestNews } from "@/lib/api/news";
 
@@ -41,6 +40,7 @@ interface DashboardData {
   active_strategy_count: number;
   total_positions: number;
   total_trades_today: number;
+  total_allocated_capital: number;  // 자동매매에 할당된 총 금액
 }
 
 interface KiwoomAccountData {
@@ -62,6 +62,7 @@ interface HomePageClientProps {
   isLoggedIn: boolean;
   hasKiwoomAccount: boolean;
   kiwoomAccountData: KiwoomAccountData | null;
+  performanceChartData: AccountPerformanceChart | null;
   dashboardData: DashboardData;
   marketStocksInitial: MarketStock[];
   marketNewsInitial: MarketNews[];
@@ -113,34 +114,23 @@ const marketStocksFallback: MarketStock[] = [
   { id: "guest-5", name: "카카오", tag: "예시", change: "+0.00%", price: "60,000원", volume: "65억" },
 ];
 
-const guestCommunityPosts: GuestCommunityPost[] = Array.from({ length: 3 }).map(
-  (_, index) => ({
-    id: `post-${index}`,
-    title: "게시물 이름은 이렇게 들어갑니다.",
-    preview:
-      "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
-    author: "FMJS",
-    date: "2025.12.31 19:00",
-    tag: "태그",
-    views: "999+",
-    likes: "999+",
-    comments: "999+",
-  }),
-);
-
 const buildAuthenticatedStats = (
   dashboardData: DashboardData,
   kiwoomAccountData: KiwoomAccountData | null
 ): HomeStatCardData[] => {
   // 키움 데이터가 있으면 키움 데이터 사용, 없으면 포트폴리오 데이터 사용
   const activeCount = Number(dashboardData.active_strategy_count) || 0;
-  
+  const allocatedCapital = Number(dashboardData.total_allocated_capital) || 0;
+
   if (kiwoomAccountData?.holdings) {
     const evaluationAmount = parseNumericValue(kiwoomAccountData.holdings.tot_evlt_amt);
     const totalProfit = parseNumericValue(kiwoomAccountData.holdings.tot_evlt_pl);
     const totalReturn = parseNumericValue(kiwoomAccountData.holdings.tot_prft_rt);
     const cashBalance = parseNumericValue(kiwoomAccountData.cash?.balance);
-    const totalAssets = evaluationAmount + cashBalance;
+
+    // 키움 계좌 전체 금액에서 자동매매 할당 금액을 빼서 실제 사용 가능한 자산 계산
+    const totalAssets = evaluationAmount + cashBalance - allocatedCapital;
+    const availableCash = cashBalance - allocatedCapital;
 
     return [
       {
@@ -148,7 +138,7 @@ const buildAuthenticatedStats = (
         title: "총 자산",
         value: `${totalAssets.toLocaleString()}원`,
         change: `평가손익 ${formatCurrencyWithSign(totalProfit)}`,
-        badge: cashBalance ? `예수금 ${cashBalance.toLocaleString()}원` : "연동계좌",
+        badge: availableCash > 0 ? `예수금 ${availableCash.toLocaleString()}원` : "연동계좌",
       },
       {
         id: "return",
@@ -236,6 +226,7 @@ export function HomePageClient({
   isLoggedIn,
   hasKiwoomAccount,
   kiwoomAccountData,
+  performanceChartData,
   dashboardData,
   marketStocksInitial,
   marketNewsInitial,
@@ -350,7 +341,7 @@ export function HomePageClient({
               stocks={guestMarketStocks}
               news={marketNews}
             />
-            <GuestCommunityPreviewSection posts={guestCommunityPosts} />
+            <DiscussionPreviewSection limit={3} />
           </div>
         </div>
         <FloatingChatWidget />
@@ -391,7 +382,7 @@ export function HomePageClient({
           )}
 
           <StatsOverviewSection stats={authenticatedStats} />
-          <PerformanceChartSection />
+          <PerformanceChartSection performanceData={performanceChartData} />
           <MarketInsightSection
             stocks={marketStocks}
             news={marketNews}
@@ -400,6 +391,7 @@ export function HomePageClient({
             portfolios={authPortfolios}
             posts={authCommunityHighlights}
           />
+          <DiscussionPreviewSection limit={3} className="mt-4" />
         </div>
       </div>
       <FloatingChatWidget />

@@ -26,6 +26,7 @@ class AutoTradingStrategy(Base):
     initial_capital = Column(DECIMAL(20, 2), default=50000000)
     current_capital = Column(DECIMAL(20, 2), default=50000000)
     cash_balance = Column(DECIMAL(20, 2), default=50000000)
+    allocated_capital = Column(DECIMAL(20, 2), nullable=False)  # 전략에 할당된 자본금
 
     per_stock_ratio = Column(DECIMAL(5, 2), default=5.0)
     max_positions = Column(Integer, default=20)

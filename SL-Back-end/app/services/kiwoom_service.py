@@ -10,11 +10,19 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.user import User
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
+import hashlib
 
 logger = logging.getLogger(__name__)
 
 # 키움증권 모의투자 API 호스트
 KIWOOM_MOCK_HOST = "https://mockapi.kiwoom.com"
+
+# 캐시 저장소 (토큰별로 캐시)
+_balance_cache: Dict[str, Dict[str, Any]] = {}
+_cache_timestamps: Dict[str, datetime] = {}
+CACHE_DURATION_SECONDS = 10  # 10초 캐싱
 
 
 class KiwoomService:
@@ -368,9 +376,91 @@ class KiwoomService:
             raise
 
     @staticmethod
+    def _call_api_with_retry(
+        api_func,
+        api_name: str,
+        access_token: str,
+        max_retries: int = 3,
+        initial_delay: float = 1.0
+    ) -> Dict[str, Any]:
+        """
+        Rate Limit을 고려한 API 호출 재시도 로직
+
+        Args:
+            api_func: 호출할 API 함수
+            api_name: API 이름 (로깅용)
+            access_token: 접근 토큰
+            max_retries: 최대 재시도 횟수
+            initial_delay: 초기 대기 시간 (초)
+
+        Returns:
+            API 응답 데이터
+
+        Raises:
+            Exception: 모든 재시도 실패시
+        """
+        delay = initial_delay
+
+        for attempt in range(max_retries):
+            try:
+                result = api_func(access_token)
+                if attempt > 0:
+                    logger.info(f"✅ {api_name} API 재시도 성공 (시도 {attempt + 1}/{max_retries})")
+                return result
+
+            except requests.RequestException as e:
+                # 429 Rate Limit 에러 확인
+                is_rate_limit = False
+                if hasattr(e, 'response') and e.response is not None:
+                    if e.response.status_code == 429:
+                        is_rate_limit = True
+                        logger.warning(f"⚠️ {api_name} API Rate Limit 발생 (시도 {attempt + 1}/{max_retries})")
+
+                # 마지막 시도였다면 예외 발생
+                if attempt == max_retries - 1:
+                    logger.error(f"❌ {api_name} API 호출 최종 실패 ({max_retries}회 시도)")
+                    raise
+
+                # Rate Limit 에러면 더 긴 대기, 아니면 지수 백오프
+                if is_rate_limit:
+                    wait_time = delay * 2  # Rate Limit시 2배 대기
+                else:
+                    wait_time = delay * (2 ** attempt)  # 지수 백오프
+
+                logger.info(f"🔄 {wait_time:.1f}초 후 재시도...")
+                time.sleep(wait_time)
+
+            except Exception as e:
+                logger.error(f"❌ {api_name} API 호출 중 예상치 못한 에러: {e}")
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(delay)
+
+        raise Exception(f"{api_name} API 호출 실패")
+
+    @staticmethod
+    def _get_cache_key(access_token: str) -> str:
+        """토큰으로 캐시 키 생성"""
+        return hashlib.md5(access_token.encode()).hexdigest()
+
+    @staticmethod
+    def _is_cache_valid(cache_key: str) -> bool:
+        """캐시가 유효한지 확인"""
+        if cache_key not in _cache_timestamps:
+            return False
+
+        elapsed = (datetime.now() - _cache_timestamps[cache_key]).total_seconds()
+        return elapsed < CACHE_DURATION_SECONDS
+
+    @staticmethod
     def get_unified_balance(access_token: str) -> Dict[str, Any]:
         """
         통합 잔고 조회 - 여러 API를 조합하여 통합된 잔고 정보 반환
+
+        성능 최적화:
+        1. 5개 API를 병렬로 호출 (ThreadPoolExecutor 사용)
+        2. 10초간 결과 캐싱 (동일 토큰 재요청시 즉시 응답)
+        3. Rate Limit 발생시 자동 재시도
 
         Args:
             access_token: 접근 토큰
@@ -378,27 +468,61 @@ class KiwoomService:
         Returns:
             통합 잔고 정보 (cash, stock, pnl, orders)
         """
+        # 캐시 확인
+        cache_key = KiwoomService._get_cache_key(access_token)
+        if KiwoomService._is_cache_valid(cache_key):
+            logger.info("💾 캐시된 잔고 데이터 반환 (10초 이내)")
+            return _balance_cache[cache_key]
+
         try:
-            # 1. 예수금 조회
-            deposit = KiwoomService.get_deposit_info(access_token)
-            time.sleep(0.3)  # Rate Limit 방지
+            start_time = time.time()
+            logger.info("📊 통합 잔고 조회 시작 (5개 API 병렬 호출)")
 
-            # 2. 계좌 평가/잔고 조회
-            evaluation = KiwoomService.get_account_evaluation(access_token)
-            time.sleep(0.3)  # Rate Limit 방지
+            # 병렬로 호출할 API 함수들 정의
+            api_calls = [
+                ("예수금 조회", KiwoomService.get_deposit_info),
+                ("계좌 평가/잔고", KiwoomService.get_account_evaluation),
+                ("수익률 조회", KiwoomService.get_account_balance),
+                ("미체결 조회", KiwoomService.get_unexecuted_orders),
+                ("체결 조회", KiwoomService.get_executed_orders),
+            ]
 
-            # 3. 수익률 조회
-            profit = KiwoomService.get_account_balance(access_token)
-            time.sleep(0.3)  # Rate Limit 방지
+            results = {}
 
-            # 4. 미체결 조회
-            unexecuted = KiwoomService.get_unexecuted_orders(access_token)
-            time.sleep(0.3)  # Rate Limit 방지
+            # ThreadPoolExecutor로 병렬 호출
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                # 각 API 호출을 스레드로 실행
+                future_to_name = {
+                    executor.submit(
+                        KiwoomService._call_api_with_retry,
+                        api_func,
+                        api_name,
+                        access_token,
+                        3,  # max_retries
+                        0.5  # initial_delay (병렬이므로 짧게)
+                    ): api_name
+                    for api_name, api_func in api_calls
+                }
 
-            # 5. 체결 조회
-            executed = KiwoomService.get_executed_orders(access_token)
+                # 완료된 순서대로 결과 수집
+                for future in as_completed(future_to_name):
+                    api_name = future_to_name[future]
+                    try:
+                        result = future.result()
+                        results[api_name] = result
+                        logger.info(f"✅ {api_name} 완료")
+                    except Exception as e:
+                        logger.error(f"❌ {api_name} 실패: {e}")
+                        # 실패한 API는 빈 딕셔너리로 처리
+                        results[api_name] = {}
 
             # 통합 데이터 구성
+            deposit = results.get("예수금 조회", {})
+            evaluation = results.get("계좌 평가/잔고", {})
+            profit = results.get("수익률 조회", {})
+            unexecuted = results.get("미체결 조회", {})
+            executed = results.get("체결 조회", {})
+
             unified_data = {
                 "cash": {
                     "balance": deposit.get("entr", "0"),  # 예수금
@@ -413,10 +537,17 @@ class KiwoomService:
                 "executed": executed,  # 체결
             }
 
+            # 캐시 저장
+            _balance_cache[cache_key] = unified_data
+            _cache_timestamps[cache_key] = datetime.now()
+
+            elapsed = time.time() - start_time
+            logger.info(f"✅ 통합 잔고 조회 완료 (소요시간: {elapsed:.2f}초)")
+
             return unified_data
 
         except Exception as e:
-            logger.error(f"통합 잔고 조회 실패: {e}")
+            logger.error(f"❌ 통합 잔고 조회 실패: {e}")
             raise
 
     @staticmethod
@@ -465,7 +596,15 @@ class KiwoomService:
         try:
             response = requests.post(url, headers=headers, json=data, timeout=10)
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # 응답 로깅
+            logger.info(f"💰 매수 주문 API 응답 (종목: {stock_code}, 수량: {quantity})")
+            logger.info(f"  - return_code: {result.get('return_code', 'N/A')}")
+            logger.info(f"  - return_msg: {result.get('return_msg', 'N/A')}")
+            logger.info(f"  - 전체 응답: {result}")
+
+            return result
         except requests.RequestException as e:
             logger.error(f"주식 매수 주문 실패: {e}")
             raise
@@ -516,7 +655,15 @@ class KiwoomService:
         try:
             response = requests.post(url, headers=headers, json=data, timeout=10)
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # 응답 로깅
+            logger.info(f"💰 매도 주문 API 응답 (종목: {stock_code}, 수량: {quantity})")
+            logger.info(f"  - return_code: {result.get('return_code', 'N/A')}")
+            logger.info(f"  - return_msg: {result.get('return_msg', 'N/A')}")
+            logger.info(f"  - 전체 응답: {result}")
+
+            return result
         except requests.RequestException as e:
             logger.error(f"주식 매도 주문 실패: {e}")
             raise

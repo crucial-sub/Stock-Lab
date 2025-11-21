@@ -43,17 +43,18 @@ export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
         className="relative w-full max-w-[800px] rounded-[12px] bg-white shadow-[0_30px_80px_rgba(0,0,0,0.25)] max-h-[90vh] overflow-y-auto"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative py-3 text-center text-[1rem] text-[#646464] shadow-elev-card-soft">
-          <span className="font-normal">
+        <div className="relative flex items-center shadow-header bg-white px-[0.5rem] py-[0.75rem] shadow-elev-card-soft">
+          <h2
+            className="absolute left-1/2 -translate-x-1/2 text-[0.875rem] font-normal text-strong"
+          >
             {news.title}
-          </span>
+          </h2>
           <button
             type="button"
             aria-label="닫기"
             onClick={onClose}
-            className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center"
+            className="mr-[0.25rem] ml-auto flex h-3 w-3 rounded-full bg-[#FF6464]"
           >
-            <span className="block h-3 w-3 rounded-full bg-[#FF6464]" />
           </button>
         </div>
 

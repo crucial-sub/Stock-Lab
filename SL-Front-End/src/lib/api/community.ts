@@ -176,21 +176,34 @@ export const communityApi = {
    */
   getPosts: async (params?: {
     postType?: string;
-    tags?: string;
+    tags?: string | string[];
     search?: string;
     userId?: string;
     page?: number;
     limit?: number;
-    orderBy?: string;
   }): Promise<PostListResponse> => {
+    const { postType, userId, tags, search, page, limit } = params || {};
+
+    // API가 기대하는 형태로 매핑
+    const tagsParam =
+      tags === undefined || tags === null || tags === ""
+        ? undefined
+        : Array.isArray(tags)
+          ? tags.join(",")
+          : tags;
+
     const response = await axiosInstance.get<PostListResponse>(
       "/community/posts",
       {
         params: {
-          ...params,
-          user_id: params?.userId, // camelCase를 snake_case로 변환
-        }
-      }
+          post_type: postType,
+          user_id: userId, // camelCase를 snake_case로 변환
+          tags: tagsParam,
+          search,
+          page,
+          limit,
+        },
+      },
     );
     return response.data;
   },

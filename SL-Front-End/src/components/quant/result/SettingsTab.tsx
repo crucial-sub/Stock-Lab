@@ -77,33 +77,99 @@ export function SettingsTab({ settings, isLoading = false }: SettingsTabProps) {
           </SettingSection>
 
           <SettingSection title="매매 대상">
-            {settings.universeType && (
-              <SettingItem
-                label="유니버스"
-                value={formatUniverseType(settings.universeType)}
-              />
-            )}
-            {settings.marketCapFilter && (
-              <SettingItem
-                label="시가총액 필터"
-                value={formatMarketCapFilter(settings.marketCapFilter)}
-              />
-            )}
-            {settings.sectorFilter && settings.sectorFilter.length > 0 && (
-              <div className="text-sm text-text-body">
-                <span className="font-medium">섹터 필터:</span>
-                <ul className="mt-1 pl-6 space-y-1 list-disc">
-                  {settings.sectorFilter.slice(0, 5).map((sector, idx) => (
-                    <li key={idx}>{sector}</li>
-                  ))}
-                  {settings.sectorFilter.length > 5 && (
-                    <li className="text-text-muted">
-                      외 {settings.sectorFilter.length - 5}개
-                    </li>
+            {(() => {
+              // trade_targets 정보 추출
+              const tradeTargets = settings.tradingRules?.[0]?.buyCondition?.trade_targets;
+
+              if (!tradeTargets) {
+                return (
+                  <>
+                    {settings.universeType && (
+                      <SettingItem
+                        label="유니버스"
+                        value={formatUniverseType(settings.universeType)}
+                      />
+                    )}
+                    {settings.sectorFilter && settings.sectorFilter.length > 0 && (
+                      <SettingItem
+                        label="섹터"
+                        value={`${settings.sectorFilter.length}개 선택`}
+                      />
+                    )}
+                  </>
+                );
+              }
+
+              const selectedUniverses = tradeTargets.selected_universes || [];
+              const selectedThemes = tradeTargets.selected_themes || [];
+              const selectedStocks = tradeTargets.selected_stocks || [];
+              const selectedCount = tradeTargets.selected_stock_count || 0;
+              const totalCount = tradeTargets.total_stock_count || 0;
+              const totalThemeCount = tradeTargets.total_theme_count || 0;
+
+              return (
+                <>
+                  <SettingItem
+                    label="선택한 매매 대상 종목"
+                    value={`${selectedCount} 종목`}
+                  />
+                  <SettingItem
+                    label="전체 종목 수"
+                    value={`${totalCount} 종목`}
+                  />
+
+                  {totalThemeCount > 0 && (
+                    <SettingItem
+                      label="전체 테마 수"
+                      value={`${totalThemeCount}개`}
+                    />
                   )}
-                </ul>
-              </div>
-            )}
+
+                  {selectedUniverses.length > 0 && (
+                    <div className="text-sm text-text-body mt-2">
+                      <span className="font-medium">선택한 유니버스:</span>
+                      <ul className="mt-1 pl-6 space-y-1 list-disc">
+                        {selectedUniverses.map((universe: string, idx: number) => (
+                          <li key={idx}>{universe}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {selectedThemes.length > 0 && (
+                    <div className="text-sm text-text-body mt-2">
+                      <span className="font-medium">선택한 테마 (산업):</span>
+                      <ul className="mt-1 pl-6 space-y-1 list-disc">
+                        {selectedThemes.slice(0, 5).map((theme: string, idx: number) => (
+                          <li key={idx}>{theme}</li>
+                        ))}
+                        {selectedThemes.length > 5 && (
+                          <li className="text-text-muted">
+                            외 {selectedThemes.length - 5}개
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  {selectedStocks.length > 0 && (
+                    <div className="text-sm text-text-body mt-2">
+                      <span className="font-medium">선택한 세부 종목:</span>
+                      <ul className="mt-1 pl-6 space-y-1 list-disc">
+                        {selectedStocks.slice(0, 5).map((stock: string, idx: number) => (
+                          <li key={idx}>{stock}</li>
+                        ))}
+                        {selectedStocks.length > 5 && (
+                          <li className="text-text-muted">
+                            외 {selectedStocks.length - 5}개
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </SettingSection>
         </div>
       </div>

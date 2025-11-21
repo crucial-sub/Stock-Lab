@@ -43,19 +43,19 @@ export function FreeBoardDetailCard({
         </div>
         <button
           type="button"
-          onClick={onLike}
-          className={`flex h-10 w-10 items-center justify-center rounded-full border ${
-            isLiked ? "border-brand-purple bg-brand-purple/10" : "border-[#18223414] bg-white"
+        onClick={onLike}
+        className={`flex h-10 w-10 items-center justify-center rounded-full border ${
+            isLiked ? "border-[#ef4444] bg-[#FFF1F2]" : "border-[#18223414] bg-white"
           } transition`}
-          aria-label="공감"
-        >
-          <Icon
-            src="/icons/favorite.svg"
-            alt="favorite"
-            size={20}
-            color={isLiked ? "#AC64FF" : undefined}
-          />
-        </button>
+        aria-label="공감"
+      >
+        <Icon
+          src="/icons/favorite.svg"
+          alt="favorite"
+          size={20}
+          color={isLiked ? "#ef4444" : undefined}
+        />
+      </button>
       </div>
 
       <div className="mt-4 whitespace-pre-line text-base leading-relaxed text-[#000000]">
@@ -64,17 +64,29 @@ export function FreeBoardDetailCard({
 
       <div className="mt-6 flex items-center gap-5 text-sm text-[#646464]">
         <Metric icon="/icons/visibility.svg" label={formatCount(views)} />
-        <Metric icon="/icons/favorite.svg" label={formatCount(likes)} />
+        <Metric
+          icon="/icons/favorite.svg"
+          label={formatCount(likes)}
+          color={isLiked ? "#ef4444" : undefined}
+        />
         <Metric icon="/icons/chat-bubble.svg" label={formatCount(comments)} />
       </div>
     </div>
   );
 }
 
-function Metric({ icon, label }: { icon: string; label: string }) {
+function Metric({
+  icon,
+  label,
+  color,
+}: {
+  icon: string;
+  label: string;
+  color?: string;
+}) {
   return (
     <span className="inline-flex items-center gap-1 text-sm text-[#646464]">
-      <Icon src={icon} alt="stat" size={18} />
+      <Icon src={icon} alt="stat" size={18} color={color} />
       {label}
     </span>
   );

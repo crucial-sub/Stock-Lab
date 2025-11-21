@@ -82,6 +82,7 @@ export interface AutoTradingStrategyResponse {
   initial_capital: number;
   current_capital: number;
   cash_balance: number;
+  allocated_capital: number;
   per_stock_ratio: number;
   max_positions: number;
   rebalance_frequency: string;
@@ -89,6 +90,9 @@ export interface AutoTradingStrategyResponse {
   activated_at?: string;
   deactivated_at?: string;
   last_executed_at?: string;
+  kiwoom_total_eval?: number;
+  kiwoom_total_profit?: number;
+  kiwoom_total_profit_rate?: number;
 }
 
 export interface AutoTradingStatusResponse {

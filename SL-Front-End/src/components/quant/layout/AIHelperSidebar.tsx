@@ -58,14 +58,22 @@ function AIHelperMessage({
 
   const handleAddBuyConditions = () => {
     if (message.backtestConditionsBuy && message.backtestConditionsBuy.length > 0 && onBuyConditionsAdd) {
-      onBuyConditionsAdd(message.backtestConditionsBuy);
+      const normalized = message.backtestConditionsBuy.map((cond) => ({
+        ...cond,
+        subFactorName: cond?.subFactorName || "기본값",
+      }));
+      onBuyConditionsAdd(normalized);
       onBuyApplied?.();
     }
   };
 
   const handleAddSellConditions = () => {
     if (message.backtestConditionsSell && message.backtestConditionsSell.length > 0 && onSellConditionsAdd) {
-      onSellConditionsAdd(message.backtestConditionsSell);
+      const normalized = message.backtestConditionsSell.map((cond) => ({
+        ...cond,
+        subFactorName: cond?.subFactorName || "기본값",
+      }));
+      onSellConditionsAdd(normalized);
       onSellApplied?.();
     }
   };

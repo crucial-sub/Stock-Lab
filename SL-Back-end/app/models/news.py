@@ -24,6 +24,7 @@ class NewsArticle(Base):
     title = Column(Text, nullable=True, comment="뉴스 제목")
     content = Column(Text, nullable=True, comment="뉴스 본문")
     llm_summary = Column(Text, nullable=True, comment="LLM 생성 요약")
+    
     source = Column(String(100), nullable=True, comment="뉴스 출처")
     link = Column(Text, nullable=True, comment="뉴스 원문 링크")
     media_domain = Column(String(50), nullable=True, comment="언론사 도메인/코드")

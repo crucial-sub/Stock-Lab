@@ -9,7 +9,6 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
-import json
 
 _pydantic_v1_module = None
 try:
@@ -33,6 +32,8 @@ except ImportError:
     pass
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock").lower()
+
+# 자연어 → 상위 팩터 카테고리 매핑 (config/nl_category_mapping.json 파일에서 로드)
 
 # LangChain 의존성은 버전에 따라 모듈 경로가 달라지므로 개별적으로 로드한다.
 ChatBedrock = None
@@ -150,11 +151,13 @@ class ChatHandler:
         self.session_state: Dict[str, Dict[str, Any]] = {}
         self.forbidden_patterns: Dict[str, List[str]] = {}
         self.questions: List[Dict[str, Any]] = []
+        self.nl_category_mapping: Dict[str, List[str]] = {}
 
         self._load_config()
         self._load_forbidden_patterns()
         self.questions = self._load_questions()
         self._load_strategies()
+        self._load_nl_category_mapping()
         self._init_components()
 
     def _needs_news_keyword(self, message: str) -> Optional[str]:
@@ -241,6 +244,29 @@ class ChatHandler:
                 ],
             },
         ]
+
+    def _load_nl_category_mapping(self):
+        """자연어 → 상위 팩터 카테고리 매핑 로드."""
+        path = Path("/app/config/nl_category_mapping.json")
+        if not path.exists():
+            path = Path(__file__).parent.parent.parent / "config" / "nl_category_mapping.json"
+
+        if not path.exists():
+            print(f"WARNING: nl_category_mapping.json not found at {path}")
+            self.nl_category_mapping = {}
+            return
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                self.nl_category_mapping = {k.upper(): v for k, v in data.items()}
+                print(f"Loaded nl_category_mapping ({len(self.nl_category_mapping)} categories)")
+            else:
+                print(f"WARNING: nl_category_mapping.json has invalid format")
+                self.nl_category_mapping = {}
+        except Exception as e:
+            print(f"ERROR: Failed to load nl_category_mapping.json: {e}")
+            self.nl_category_mapping = {}
 
     def _load_config(self):
         """Load configuration."""
@@ -579,6 +605,12 @@ class ChatHandler:
                 "sources": []
             }
 
+        # 카테고리 매핑 기반 간단 DSL 생성 (초보자 자연어 → 상위 카테고리)
+        category_response = self._maybe_handle_category_mapping(message)
+        if category_response:
+            category_response["session_id"] = session_id
+            return category_response
+
         # 1. Classify intent
         intent = await self._classify_intent(message)
         if client_type == "ai_helper" and intent not in {"dsl_generation", "backtest_configuration", "explain"}:
@@ -714,11 +746,92 @@ class ChatHandler:
             "sources": []
         }
 
+    def _is_home_widget_screening_request(self, message: str) -> bool:
+        """홈 위젯 스크리닝 요청 여부 판단 (특정 키워드 기반)."""
+        if not message:
+            return False
+        lower = message.lower()
+        # 단순 스크리닝 키워드 (팩터 조합은 category_mapping에서 처리)
+        keywords = ["per", "pbr", "roe", "스크리닝", "조건 찾", "필터링"]
+        return any(kw in lower for kw in keywords)
+
     def _is_home_widget_news_request(self, message: str) -> bool:
         if not message:
             return False
         lower = message.lower()
         return "뉴스" in lower or "동향" in lower or "headline" in lower
+
+    def _detect_nl_categories(self, message: str) -> List[str]:
+        """자연어 문장에서 상위 팩터 카테고리를 추출."""
+        if not message or not self.nl_category_mapping:
+            return []
+        msg_lower = message.lower()
+        detected = []
+        for category, keywords in self.nl_category_mapping.items():
+            for kw in keywords:
+                if kw.lower() in msg_lower:
+                    detected.append(category)
+                    break
+        return detected
+
+    def _build_category_conditions(self, categories: List[str]) -> List[Dict[str, Any]]:
+        """카테고리별 기본 DSL 조건 묶음 생성."""
+        preset: Dict[str, List[Dict[str, Any]]] = {
+            "VALUE": [
+                {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "PBR", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 1.0},
+            ],
+            "QUALITY": [
+                {"factor": "ROE", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 15},
+                {"factor": "OperatingProfitMargin", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 10},
+            ],
+            "GROWTH": [
+                {"factor": "revenue_cagr_3y", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "eps_growth_rate", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+            ],
+            "MOMENTUM": [
+                {"factor": "RET_60D", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 0.05},
+            ],
+            "STABILITY": [
+                {"factor": "VOLATILITY_60D", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 0.2},
+            ],
+            "DIVIDEND": [
+                {"factor": "DividendYield", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 3},
+            ],
+        }
+        conditions: List[Dict[str, Any]] = []
+        for cat in categories:
+            conditions.extend(preset.get(cat, []))
+        return conditions
+
+    def _maybe_handle_category_mapping(self, message: str) -> Optional[dict]:
+        """자연어 카테고리 매핑으로 즉시 DSL 조건을 반환."""
+        categories = self._detect_nl_categories(message)
+        if not categories:
+            return None
+
+        conditions = self._build_category_conditions(categories)
+        if not conditions:
+            return None
+
+        cat_text = ", ".join(categories)
+        lines = [f"- {c['factor']} {c['operator']} {c['value']}" for c in conditions]
+        answer = (
+            "## 요약\n"
+            f"{cat_text} 기준으로 스크리닝 조건을 만들었습니다.\n\n"
+            "### 조건식\n" + "\n".join(lines) + "\n\n"
+            "### 다음 단계\n- 매수/매도 조건에 추가 버튼을 눌러 적용하세요."
+        )
+
+        return {
+            "answer": answer,
+            "intent": "dsl_suggestion",
+            "sources": [],
+            "backtest_conditions": {
+                "buy": conditions,
+                "sell": []
+            }
+        }
 
     async def _handle_questionnaire_flow(self, session_id: str, answer: Optional[dict], message: str) -> dict:
         """5문항 설문 → 전략 추천 UI Language 생성."""
@@ -871,6 +984,9 @@ class ChatHandler:
         ]
         
         if any(k.lower() in msg for k in finance_keywords + strategy_people):
+            return None
+        # 자연어 카테고리 매핑에 걸리면 금융 질문으로 간주
+        if self._detect_nl_categories(message):
             return None
 
         return (

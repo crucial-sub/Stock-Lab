@@ -82,7 +82,7 @@ export default function LoginPage() {
     : "text-text-strong";
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-[2.5rem] py-[3.75rem] text-text-body">
+    <div className="flex min-h-screen items-center justify-center px-[2.5rem] py-[3.75rem] text-body">
       <div className="w-full max-w-[520px] px-[2.5rem] py-[3.75rem]">
         <Link
           href="/"
@@ -106,10 +106,10 @@ export default function LoginPage() {
             </div>
           </Link>
           <div>
-            <h1 className="text-[1.5rem] font-semibold text-text-strong text-left">
+            <h1 className="text-[1.5rem] font-semibold text-strong text-left">
               로그인
             </h1>
-            <p className="text-text-body text-left">
+            <p className="text-muted text-left">
               서비스 사용을 위해서는 로그인이 필요합니다.
             </p>
           </div>
@@ -128,7 +128,7 @@ export default function LoginPage() {
               onChange={(event) => setEmail(event.target.value)}
               className={`py-[0.75rem] w-full rounded-[12px] px-4 font-normal text-body placeholder:text-muted focus:outline-none shadow-elev-card-soft ${
                 errors.email
-                  ? "border-[0.5px] border-[#FF6464]"
+                  ? "bg-[#1822340D] border-[0.5px] border-[#FF6464]"
                   : "bg-[#1822340D] border-[0.5px] border-[#18223433] focus:border-brand-purple"
               }`}
             />
@@ -144,9 +144,9 @@ export default function LoginPage() {
               placeholder="********"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className={`mb-10 py-[0.75rem] w-full rounded-[12px] px-4 font-normal text-body placeholder:text-muted focus:outline-none shadow-elev-card-soft ${
+              className={`mb-8 py-[0.75rem] w-full rounded-[12px] px-4 font-normal text-body placeholder:text-muted focus:outline-none shadow-elev-card-soft ${
                 errors.password
-                  ? "border-[0.5px] border-[#FF6464]"
+                  ? "bg-[#1822340D] border-[0.5px] border-[#FF6464]"
                   : "bg-[#1822340D] border-[0.5px] border-[#18223433] focus:border-brand-purple"
               }`}
             />
@@ -155,7 +155,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="py-2 w-full rounded-[12px] bg-brand-purple text-[1.125rem] font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
+            className="py-2.5 w-full rounded-[12px] bg-brand-purple text-[1.125rem] font-semibold text-white transition hover:opacity-80 disabled:opacity-60"
           >
             {isSubmitting ? "로그인 중..." : "로그인"}
           </button>

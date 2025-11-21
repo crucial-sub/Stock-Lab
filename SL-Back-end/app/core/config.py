@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     CACHE_TTL_SECONDS: int = 3600  # 1 hour default
     CACHE_PREFIX: str = "quant"
     ENABLE_CACHE: bool = True
+    ENABLE_CACHE_WARMING: bool = True
 
     # API
     API_V1_PREFIX: str = "/api/v1"
@@ -151,6 +152,7 @@ class Settings(BaseSettings):
             "redis_host": self.REDIS_HOST,
             "redis_port": self.REDIS_PORT,
             "cache_enabled": self.ENABLE_CACHE,
+            "cache_warming_enabled": self.ENABLE_CACHE_WARMING,
             "debug_mode": self.DEBUG,
             "cors_origins": self.BACKEND_CORS_ORIGINS[:3] if len(self.BACKEND_CORS_ORIGINS) > 3 else self.BACKEND_CORS_ORIGINS,
         }
@@ -180,6 +182,7 @@ def print_startup_info():
     print(f"Database: {info['database']}")
     print(f"Redis: {info['redis_host']}:{info['redis_port']}")
     print(f"Cache: {'Enabled' if info['cache_enabled'] else 'Disabled'}")
+    print(f"Cache Warming: {'Enabled' if info['cache_warming_enabled'] else 'Disabled'}")
     print(f"Debug Mode: {'ON' if info['debug_mode'] else 'OFF'}")
     print(f"CORS Origins: {', '.join(info['cors_origins'])}")
     print("="*60 + "\n")

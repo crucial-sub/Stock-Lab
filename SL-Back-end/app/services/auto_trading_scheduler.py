@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
+from app.core.config import settings
 from app.models.auto_trading import AutoTradingStrategy
 from app.models.user import User
 from app.services.auto_trading_service import AutoTradingService
@@ -223,18 +224,19 @@ def start_scheduler():
         replace_existing=True
     )
 
-    # 새벽 3시: 캐시 워밍 (매일)
-    scheduler.add_job(
-        run_cache_warming_job,
-        trigger=CronTrigger(
-            hour=3,
-            minute=0,
-            timezone="Asia/Seoul"
-        ),
-        id="cache_warming_3am",
-        name="새벽 3시 캐시 워밍",
-        replace_existing=True
-    )
+    if settings.ENABLE_CACHE_WARMING:
+        # 새벽 3시: 캐시 워밍 (매일)
+        scheduler.add_job(
+            run_cache_warming_job,
+            trigger=CronTrigger(
+                hour=3,
+                minute=0,
+                timezone="Asia/Seoul"
+            ),
+            id="cache_warming_3am",
+            name="새벽 3시 캐시 워밍",
+            replace_existing=True
+        )
 
     scheduler.start()
 
@@ -242,7 +244,8 @@ def start_scheduler():
     logger.info("🚀 자동매매 스케줄러 시작")
     logger.info("   - 오전 7시: 종목 선정 (월~금)")
     logger.info("   - 오전 9시: 매수/매도 실행 (월~금)")
-    logger.info("   - 새벽 3시: 캐시 워밍 (매일)")
+    if settings.ENABLE_CACHE_WARMING:
+        logger.info("   - 새벽 3시: 캐시 워밍 (매일)")
     logger.info("=" * 80)
 
 
@@ -286,6 +289,8 @@ async def run_cache_warming_job():
     """
     캐시 워밍 작업 (매일 새벽 3시 실행)
     """
+    if not settings.ENABLE_CACHE_WARMING:
+        logger.info("⏸️  Cache warming job skipped (disabled)")
+        return
     from app.services.cache_warmer import run_cache_warming
     await run_cache_warming()
-

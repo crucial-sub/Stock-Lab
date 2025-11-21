@@ -56,7 +56,7 @@ export function PortfolioCard({
       onClick={() => onClick(id)}
     >
       {/* 헤더: 제목과 체크박스 */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-center justify-between">
         <h3 className="text-[1.25rem] font-semibold text-black">{title}</h3>
         <button
           type="button"
@@ -64,10 +64,10 @@ export function PortfolioCard({
             e.stopPropagation(); // 카드 클릭 이벤트 전파 방지
             onSelect(id);
           }}
-          className="w-5 h-5 shrink-0"
+          className="relative shrink-0 w-10 h-[1.875rem] flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           aria-label={isSelected ? "선택 해제" : "선택"}
         >
-          <div className="relative w-full h-full">
+          <div className="relative w-5 h-5 pointer-events-none">
             <Image
               src={
                 isSelected

@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
 import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
 import { strategyApi } from "@/lib/api/strategy";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 /**
  * 포트폴리오 페이지 클라이언트 컴포넌트
@@ -169,7 +169,7 @@ export function PortfolioPageClient({
             type="button"
             onClick={handleDeleteSelected}
             disabled={isDeleting || selectedIds.size === 0}
-            className="text-[#c8c8c8] hover:text-black transition-colors underline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-[#505050] hover:text-black transition-colors underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isDeleting ? "삭제 중..." : "선택항목 삭제"}
           </button>

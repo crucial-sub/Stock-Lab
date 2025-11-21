@@ -12,7 +12,7 @@ from app.core.dependencies import get_current_user
 from app.services.shared_data import AVAILABLE_THEMES
 from app.core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.repositories.news_repository import NewsRepository, THEME_MAPPING
+from app.repositories.news_repository import NewsRepository, _load_theme_mappings
 from app.models.news import ThemeSentiment
 from loguru import logger
 
@@ -91,17 +91,45 @@ async def search_news(
     summary="DB에서 테마별 뉴스 조회"
 )
 async def search_news_by_theme(
-    theme: str = Query(..., description="Theme name (한글 또는 영어)"),
+    theme: Optional[str] = Query(None, description="Theme name (한글 또는 영어)"),
+    themes: Optional[List[str]] = Query(None, description="복수 테마/회사명 검색"),
     max_results: int = Query(1000, ge=1, le=10000, description="Max results"),
     db: AsyncSession = Depends(get_db),
 ):
     """DB 저장본에서 테마별 뉴스 조회. 한글 또는 영어 테마명 모두 지원."""
     try:
+        if themes:
+            items = await NewsRepository.search_news_by_themes(db, themes, max_results)
+            return NewsListResponse(total=len(items), news=items)
+        if not theme:
+            raise HTTPException(status_code=400, detail="테마 또는 테마 리스트를 제공해주세요.")
         items = await NewsRepository.search_news_by_theme(db, theme, max_results)
         return NewsListResponse(total=len(items), news=items)
     except Exception as e:
-        logger.error(f"DB news theme search failed for '{theme}': {e}")
+        logger.error(f"DB news theme search failed for theme='{theme}', themes='{themes}': {e}")
         raise HTTPException(status_code=500, detail="Failed to search news by theme from DB")
+
+
+@router.get(
+    "/db/detail/{news_id}",
+    response_model=NewsArticleSchema,
+    summary="DB에서 뉴스 상세 조회"
+)
+async def get_news_by_id(
+    news_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """뉴스 ID로 단일 기사 조회"""
+    try:
+        item = await NewsRepository.get_news_by_id(db, news_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="뉴스를 찾을 수 없습니다.")
+        return item
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"DB news detail fetch failed for id {news_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch news detail from DB")
 
 
 @router.get(
@@ -113,9 +141,12 @@ async def get_available_themes(
 ):
     """DB에 실제로 존재하는 테마 목록을 반환합니다 (뉴스가 있는 테마만)."""
     try:
+        # DB에서 테마 매핑 로드
+        theme_mapping, _ = await _load_theme_mappings(db)
+
         themes = await NewsRepository.get_available_themes(db)
         # 영어 테마명을 한글로 변환
-        korean_themes = [THEME_MAPPING.get(theme.lower(), theme) for theme in themes]
+        korean_themes = [theme_mapping.get(theme.lower(), theme) for theme in themes]
         return {
             "themes": korean_themes,
             "count": len(korean_themes),
@@ -156,6 +187,9 @@ async def get_theme_sentiment_summary(
     - 긍정/부정 테마 목록과 관련 정보를 제공합니다.
     """
     try:
+        # DB에서 테마 매핑 로드
+        theme_mapping, _ = await _load_theme_mappings(db)
+
         # 긍정 테마 조회
         positive_themes_query = select(ThemeSentiment).order_by(ThemeSentiment.avg_sentiment_score.desc()).limit(limit)
         positive_result = await db.execute(positive_themes_query)
@@ -174,7 +208,7 @@ async def get_theme_sentiment_summary(
         # Serialize ORM rows to JSON-safe dicts
         def _serialize(ts: ThemeSentiment) -> dict:
             # 한글 테마명 매핑
-            theme_name_kor = THEME_MAPPING.get(ts.theme.lower(), ts.theme) if ts.theme else None
+            theme_name_kor = theme_mapping.get(ts.theme.lower(), ts.theme) if ts.theme else None
             return {
                 "theme_name": ts.theme,
                 "theme_name_kor": theme_name_kor,

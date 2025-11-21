@@ -37,25 +37,31 @@ export function AutoTradingStatusPageClient({
 
   const { strategy, positions, today_trades, latest_performance } = statusData;
 
-  // 총 평가액 계산 (보유 주식 평가액)
-  const stockValue = positions.reduce(
-    (sum, pos) => sum + Number(pos.current_price || pos.avg_buy_price) * pos.quantity,
-    0
-  );
+  // 키움 API 실제 데이터 우선 사용
+  const useKiwoomData = strategy.kiwoom_total_eval != null;
 
-  // 총 매수금액 계산 (평단가 기준)
-  const totalBuyValue = positions.reduce(
-    (sum, pos) => sum + Number(pos.avg_buy_price) * pos.quantity,
-    0
-  );
+  // 총 평가액 (키움 API 데이터 우선, 없으면 계산)
+  const stockValue = useKiwoomData
+    ? Number(strategy.kiwoom_total_eval)
+    : positions.reduce(
+        (sum, pos) => sum + Number(pos.current_price || pos.avg_buy_price) * pos.quantity,
+        0
+      ) + Number(strategy.cash_balance);
 
-  // 평가손익 계산
-  const totalProfit = stockValue - totalBuyValue;
+  // 총 매수금액 계산 (평단가 기준) - 할당 자본 사용
+  const totalBuyValue = Number(strategy.allocated_capital);
 
-  // 수익률 계산 (매수금액 기준)
-  const totalReturn = totalBuyValue > 0
-    ? (totalProfit / totalBuyValue) * 100
-    : 0;
+  // 평가손익 (키움 API 데이터 우선)
+  const totalProfit = useKiwoomData
+    ? Number(strategy.kiwoom_total_profit || 0)
+    : stockValue - totalBuyValue;
+
+  // 수익률 (키움 API 데이터 우선)
+  const totalReturn = useKiwoomData
+    ? Number(strategy.kiwoom_total_profit_rate || 0)
+    : totalBuyValue > 0
+      ? (totalProfit / totalBuyValue) * 100
+      : 0;
 
   return (
     <main className="flex-1 px-[18.75rem] py-[3.75rem] overflow-auto">

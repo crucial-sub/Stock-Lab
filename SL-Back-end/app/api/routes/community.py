@@ -1146,6 +1146,110 @@ async def get_clone_data(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/clone-strategy/{session_id}")
+async def clone_strategy_by_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    세션 ID로 공개 전략 복제 (내 포트폴리오에 추가)
+    - 공개된 전략의 세션 ID를 받아 복제
+    - 전략 설정, 매수/매도 조건, 백테스트 기간 등 모든 설정 복사
+    """
+    try:
+        # 세션, 전략, 트레이딩 룰 조회
+        query = (
+            select(SimulationSession, PortfolioStrategy, TradingRule)
+            .join(
+                PortfolioStrategy,
+                PortfolioStrategy.strategy_id == SimulationSession.strategy_id
+            )
+            .join(
+                TradingRule,
+                TradingRule.strategy_id == PortfolioStrategy.strategy_id
+            )
+            .where(
+                and_(
+                    SimulationSession.session_id == session_id,
+                    PortfolioStrategy.is_public == True  # 공개된 전략만
+                )
+            )
+        )
+
+        result = await db.execute(query)
+        row = result.one_or_none()
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="공개된 전략 세션을 찾을 수 없습니다"
+            )
+
+        session, strategy, trading_rule = row
+
+        # 새로운 전략 생성
+        new_strategy = PortfolioStrategy(
+            strategy_name=f"{strategy.strategy_name} (복제)",
+            strategy_type=strategy.strategy_type,
+            description=f"복제된 전략 (원본: {strategy.strategy_name})",
+            user_id=current_user.user_id,
+            is_public=False,
+            is_anonymous=False,
+            hide_strategy_details=False
+        )
+        db.add(new_strategy)
+        await db.flush()
+
+        # TradingRule 복사
+        new_trading_rule = TradingRule(
+            strategy_id=new_strategy.strategy_id,
+            rule_type=trading_rule.rule_type,
+            rebalance_frequency=trading_rule.rebalance_frequency,
+            max_positions=trading_rule.max_positions,
+            position_sizing=trading_rule.position_sizing,
+            commission_rate=trading_rule.commission_rate,
+            buy_condition=trading_rule.buy_condition,
+            sell_condition=trading_rule.sell_condition
+        )
+        db.add(new_trading_rule)
+
+        # SimulationSession 복사 (내 전략 목록에 표시되려면 필요)
+        new_session = SimulationSession(
+            user_id=current_user.user_id,
+            strategy_id=new_strategy.strategy_id,
+            source_session_id=session_id,  # 원본 세션 ID 추적
+            initial_capital=session.initial_capital,
+            start_date=session.start_date,
+            end_date=session.end_date,
+            status="PENDING",  # 복제된 전략은 아직 실행 안함
+            is_active=False
+        )
+        db.add(new_session)
+
+        await db.commit()
+        await db.refresh(new_strategy)
+        await db.refresh(new_session)
+
+        logger.info(
+            f"✅ 전략 복제 완료: {session_id} -> {new_strategy.strategy_id} "
+            f"(사용자: {current_user.email})"
+        )
+
+        return {
+            "message": "전략이 성공적으로 복제되었습니다",
+            "strategy_id": new_strategy.strategy_id,
+            "strategy_name": new_strategy.strategy_name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"전략 복제 실패: {e}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/strategies/clone/{share_id}")
 async def clone_shared_strategy(
     share_id: str,

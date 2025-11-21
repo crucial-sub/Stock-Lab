@@ -3,13 +3,30 @@
 import { useRouter } from "next/navigation";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { PortfolioShareCard } from "@/components/strategy_portfolio";
-import { communityQueryKey } from "@/hooks/useCommunityQuery";
+import { communityQueryKey, useCloneStrategyMutation } from "@/hooks/useCommunityQuery";
 import { strategyApi, type PublicStrategyListItem } from "@/lib/api/strategy";
 
 const PAGE_SIZE = 12;
 
 export function PublicStrategiesPageClient() {
   const router = useRouter();
+  const cloneStrategyMutation = useCloneStrategyMutation();
+
+  // 전략 복제 핸들러
+  const handleCloneStrategy = (sessionId: string, strategyName: string) => {
+    if (
+      confirm(`"${strategyName}" 전략을 내 포트폴리오에 복제하시겠습니까?`)
+    ) {
+      cloneStrategyMutation.mutate(sessionId, {
+        onSuccess: () => {
+          alert("전략이 성공적으로 복제되었습니다.");
+        },
+        onError: (error) => {
+          alert(`복제 실패: ${error.message}`);
+        },
+      });
+    }
+  };
 
   const {
     data,
@@ -74,6 +91,12 @@ export function PublicStrategiesPageClient() {
                   description={item.description || "설명이 없습니다."}
                   returnRate={returnRate}
                   stocks={[]}
+                  onAdd={
+                    item.sessionId
+                      ? () =>
+                          handleCloneStrategy(item.sessionId!, item.strategyName)
+                      : undefined
+                  }
                 />
               );
             })}

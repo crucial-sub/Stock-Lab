@@ -15,6 +15,7 @@ export interface StrategyListItem {
   isActive: boolean;
   isPublic?: boolean;
   status: string; // PENDING/RUNNING/COMPLETED/FAILED
+  sourceSessionId?: string | null;
   totalReturn?: number | null;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +39,7 @@ export interface PublicStrategyListItem {
   isAnonymous: boolean;
   hideStrategyDetails: boolean;
   ownerName: string | null;
+  sessionId?: string | null;
   totalReturn: number | null;
   annualizedReturn: number | null;
   createdAt: string;

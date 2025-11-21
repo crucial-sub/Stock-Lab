@@ -15,6 +15,8 @@ interface Portfolio {
   title: string;
   profitRate: number;
   isActive: boolean;
+  status: string;
+  sourceSessionId?: string | null;
   lastModified: string;
   createdAt: string;
 }
@@ -57,6 +59,8 @@ export default async function PortfolioPage() {
       title: strategy.strategyName,
       profitRate: strategy.totalReturn ?? 0,
       isActive: strategy.isActive,
+      status: strategy.status,
+      sourceSessionId: strategy.sourceSessionId,
       lastModified: formatDateToCard(strategy.updatedAt),
       createdAt: formatDateToCard(strategy.createdAt),
     }));
@@ -70,6 +74,8 @@ export default async function PortfolioPage() {
         title: `🤖 자동매매 활성화됨`,
         profitRate: 0, // TODO: 실제 수익률 계산 필요
         isActive: true,
+        status: "RUNNING", // 자동매매는 항상 RUNNING 상태
+        sourceSessionId: null,
         lastModified: formatDateToCard(strategy.activated_at || strategy.created_at),
         createdAt: formatDateToCard(strategy.created_at),
       }));

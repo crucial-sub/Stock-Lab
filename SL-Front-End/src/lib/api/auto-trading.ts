@@ -4,6 +4,7 @@ import { axiosInstance } from "../axios";
 export interface AutoTradingActivateRequest {
   session_id: string;
   initial_capital?: number;
+  allocated_capital: number;
 }
 
 export interface AutoTradingDeactivateRequest {

@@ -20,6 +20,7 @@ export default async function HomePage() {
   let userName = "게스트";
   let hasKiwoomAccount = false;
   let kiwoomAccountData = null;
+  let performanceChartData = null;
   let marketStocks: MarketStock[] = [];
   let marketNews: MarketNews[] = [];
   let dashboardData = {
@@ -57,6 +58,15 @@ export default async function HomePage() {
         dashboardData = await autoTradingApi.getPortfolioDashboardServer(token);
       } catch (error) {
         console.warn("대시보드 데이터 조회 실패:", error);
+      }
+
+      // 3-1. 성과 차트 데이터 가져오기 (계좌 연동된 경우에만)
+      if (hasKiwoomAccount) {
+        try {
+          performanceChartData = await kiwoomApi.getPerformanceChartServer(token, 30);
+        } catch (error) {
+          console.warn("성과 차트 데이터 조회 실패:", error);
+        }
       }
       // 4. 시황/뉴스 데이터 서버 사이드로 미리 가져오기
       try {
@@ -157,6 +167,7 @@ export default async function HomePage() {
       isLoggedIn={isLoggedIn}
       hasKiwoomAccount={hasKiwoomAccount}
       kiwoomAccountData={kiwoomAccountData}
+      performanceChartData={performanceChartData}
       dashboardData={dashboardData}
       marketStocksInitial={marketStocks}
       marketNewsInitial={marketNews}

@@ -458,7 +458,7 @@ class AutoTradingExecutor:
             logger.error("키움 토큰이 없습니다")
             return 0
 
-        # 🔄 키움 계좌 실제 잔고 동기화
+        # 🔄 키움 계좌 실제 잔고 동기화 (검증 목적)
         try:
             deposit_info = KiwoomService.get_deposit_info(
                 access_token=user.kiwoom_access_token,
@@ -477,34 +477,42 @@ class AutoTradingExecutor:
             )
             actual_cash = Decimal(str(actual_cash_str))
 
-            logger.info(f"💰 키움 계좌 실제 잔고: {actual_cash:,.0f}원 (전략 내부: {strategy.cash_balance:,.0f}원)")
+            logger.info(f"💰 키움 계좌 실제 잔고: {actual_cash:,.0f}원 (전략 할당 자본: {strategy.allocated_capital:,.0f}원, 전략 내부 잔고: {strategy.cash_balance:,.0f}원)")
 
-            # 전략의 cash_balance를 실제 계좌 잔고로 업데이트
-            if actual_cash > 0:
-                strategy.cash_balance = actual_cash
-                await db.flush()
-
-                await AutoTradingExecutor._log_event(
-                    db=db,
-                    strategy_id=strategy.strategy_id,
-                    event_type="BALANCE_SYNC",
-                    event_level="INFO",
-                    message=f"계좌 잔고 동기화: {actual_cash:,.0f}원",
-                    details={
-                        "actual_cash": float(actual_cash),
-                        "api_response": deposit_info
-                    }
-                )
-            else:
-                logger.warning(f"⚠️  계좌 잔고가 0원입니다. 매수 불가")
+            # 잔고 검증: 할당된 자본보다 적으면 경고
+            if actual_cash < strategy.allocated_capital:
+                logger.warning(f"⚠️  계좌 잔고({actual_cash:,.0f}원)가 할당 자본({strategy.allocated_capital:,.0f}원)보다 적습니다.")
                 await AutoTradingExecutor._log_event(
                     db=db,
                     strategy_id=strategy.strategy_id,
                     event_type="BALANCE_SYNC",
                     event_level="WARNING",
-                    message="계좌 잔고 부족 (0원)",
-                    details={"api_response": deposit_info}
+                    message=f"계좌 잔고 부족: {actual_cash:,.0f}원 < 할당 자본 {strategy.allocated_capital:,.0f}원",
+                    details={
+                        "actual_cash": float(actual_cash),
+                        "allocated_capital": float(strategy.allocated_capital),
+                        "api_response": deposit_info
+                    }
                 )
+
+            # ✅ 중요: cash_balance는 allocated_capital을 절대 초과할 수 없음
+            # 키움 계좌 잔고는 참고만 하고, cash_balance는 전략 내부에서만 관리
+            await AutoTradingExecutor._log_event(
+                db=db,
+                strategy_id=strategy.strategy_id,
+                event_type="BALANCE_SYNC",
+                event_level="INFO",
+                message=f"계좌 잔고 확인: {actual_cash:,.0f}원 (전략 사용 가능 잔고: {strategy.cash_balance:,.0f}원)",
+                details={
+                    "actual_account_cash": float(actual_cash),
+                    "strategy_cash_balance": float(strategy.cash_balance),
+                    "allocated_capital": float(strategy.allocated_capital),
+                    "api_response": deposit_info
+                }
+            )
+
+            if actual_cash == 0:
+                logger.warning(f"⚠️  계좌 잔고가 0원입니다. 매수 불가")
                 return 0
 
         except Exception as e:
@@ -520,7 +528,8 @@ class AutoTradingExecutor:
             # 잔고 조회 실패 시 내부 cash_balance 사용 (기존 로직 유지)
             logger.warning(f"⚠️  계좌 잔고 조회 실패로 전략 내부 잔고 사용: {strategy.cash_balance:,.0f}원")
 
-        # 종목당 투자금액 계산
+        # ✅ 종목당 투자금액 계산: allocated_capital 범위 내에서만 동작
+        # cash_balance는 항상 allocated_capital 이하여야 함
         per_stock_amount = strategy.cash_balance * (strategy.per_stock_ratio / Decimal("100"))
 
         for stock in selected_stocks:
@@ -560,8 +569,8 @@ class AutoTradingExecutor:
                             stock_code=stock_code,
                             quantity=str(quantity),
                             price="",
-                            trade_type="03",  # 시장가
-                            dmst_stex_tp="1"
+                            trade_type="3",  # 시장가
+                            dmst_stex_tp="KRX"
                         )
                         break
                     except requests.RequestException as req_err:
@@ -654,6 +663,113 @@ class AutoTradingExecutor:
                 continue
 
         await db.commit()
+
+        # 실패한 주문 재시도 (1회)
+        if failed_orders:
+            logger.info(f"🔄 실패한 주문 {len(failed_orders)}개 재시도 중...")
+            await AutoTradingExecutor._log_event(
+                db=db,
+                strategy_id=strategy.strategy_id,
+                event_type="RETRY_FAILED_ORDERS",
+                event_level="INFO",
+                message=f"실패한 매수 주문 {len(failed_orders)}개 재시도",
+                details={"failed_stock_codes": failed_orders}
+            )
+
+            # 실패한 종목들만 다시 시도
+            failed_stocks = [s for s in selected_stocks if s.get('stock_code') in failed_orders]
+            retry_success = 0
+
+            for stock in failed_stocks:
+                try:
+                    stock_code = stock['stock_code']
+                    current_price = Decimal(str(stock['current_price']))
+                    quantity = int(per_stock_amount / current_price)
+
+                    if quantity == 0:
+                        continue
+
+                    # 재시도 대기
+                    time.sleep(2)
+
+                    # 키움 API 매수 주문 재시도
+                    order_result = KiwoomService.buy_stock(
+                        access_token=user.kiwoom_access_token,
+                        stock_code=stock_code,
+                        quantity=str(quantity),
+                        price="",
+                        trade_type="3",
+                        dmst_stex_tp="KRX"
+                    )
+
+                    # 성공 시 DB 저장
+                    total_amount = current_price * quantity
+                    commission = total_amount * Decimal("0.00015")
+
+                    trade = LiveTrade(
+                        strategy_id=strategy.strategy_id,
+                        trade_date=date.today(),
+                        trade_type="BUY",
+                        stock_code=stock_code,
+                        stock_name=stock.get('company_name'),
+                        quantity=quantity,
+                        price=current_price,
+                        amount=total_amount,
+                        commission=commission,
+                        tax=Decimal("0"),
+                        selection_reason=f"자동선정 (재시도)",
+                        factors=stock,
+                        order_number=order_result.get("order_no"),
+                        order_status="FILLED"
+                    )
+                    db.add(trade)
+
+                    position = LivePosition(
+                        strategy_id=strategy.strategy_id,
+                        stock_code=stock_code,
+                        stock_name=stock.get('company_name'),
+                        quantity=quantity,
+                        avg_buy_price=current_price,
+                        current_price=current_price,
+                        buy_date=date.today(),
+                        hold_days=0,
+                        buy_factors=stock,
+                        selection_reason="자동선정 (재시도)"
+                    )
+                    db.add(position)
+
+                    strategy.cash_balance -= (total_amount + commission)
+
+                    retry_success += 1
+                    success_count += 1
+
+                    logger.info(f"✅ 재시도 성공: {stock_code}")
+                    await AutoTradingExecutor._log_event(
+                        db=db,
+                        strategy_id=strategy.strategy_id,
+                        event_type="RETRY_SUCCESS",
+                        event_level="INFO",
+                        message=f"{stock_code} 재시도 매수 성공",
+                        details={"stock_code": stock_code, "quantity": int(quantity)}
+                    )
+
+                    time.sleep(1)
+
+                except Exception as e:
+                    logger.error(f"재시도 실패: {stock.get('stock_code')}, {e}")
+                    await AutoTradingExecutor._log_event(
+                        db=db,
+                        strategy_id=strategy.strategy_id,
+                        event_type="RETRY_FAILED",
+                        event_level="ERROR",
+                        message=f"{stock.get('stock_code')} 재시도 매수 실패",
+                        details={"stock_code": stock.get('stock_code'), "error": str(e)}
+                    )
+
+            await db.commit()
+
+            if retry_success > 0:
+                logger.info(f"✅ 재시도 결과: {retry_success}/{len(failed_orders)}개 성공")
 
         # 로그 기록
         await AutoTradingExecutor._log_event(

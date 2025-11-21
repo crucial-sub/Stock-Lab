@@ -143,28 +143,60 @@ async def warm_price_data():
 
             logger.info(f"Warming price data from {three_years_ago} to {latest_date}")
 
-            # 전체 종목 가격 데이터 조회 (필터 없음)
-            query = select(StockPrice).where(
+            # 전체 종목 가격 데이터 조회 (필터 없음, Company 정보 포함)
+            from app.models.company import Company
+
+            query = select(
+                StockPrice.company_id,
+                Company.stock_code,
+                Company.company_name,
+                Company.industry,
+                Company.market_type,
+                StockPrice.trade_date,
+                StockPrice.open_price,
+                StockPrice.high_price,
+                StockPrice.low_price,
+                StockPrice.close_price,
+                StockPrice.volume,
+                StockPrice.trading_value,
+                StockPrice.market_cap,
+                StockPrice.listed_shares
+            ).join(
+                Company, StockPrice.company_id == Company.company_id
+            ).where(
                 and_(
                     StockPrice.trade_date >= three_years_ago,
                     StockPrice.trade_date <= latest_date,
                     StockPrice.close_price.isnot(None),
                     StockPrice.volume > 0
                 )
-            ).order_by(StockPrice.trade_date)
+            ).order_by(
+                StockPrice.trade_date,
+                Company.stock_code
+            )
 
             result = await db.execute(query)
-            all_prices = result.scalars().all()
+            all_prices = result.mappings().all()
 
             if all_prices:
                 # 전체 가격 데이터를 캐싱 (필터 없는 베이스 데이터)
                 price_data = [
                     {
-                        "company_id": p.company_id,
-                        "trade_date": p.trade_date.isoformat(),
-                        "close_price": float(p.close_price),
-                        "volume": int(p.volume),
-                        "market_cap": float(p.market_cap) if p.market_cap else None,
+                        "company_id": str(p["company_id"]),
+                        "stock_code": p["stock_code"],
+                        "stock_name": p["company_name"],
+                        "industry": p["industry"],
+                        "market_type": p["market_type"],
+                        "date": p["trade_date"].isoformat(),
+                        "trade_date": p["trade_date"].isoformat(),  # 호환성
+                        "open_price": float(p["open_price"]) if p["open_price"] else None,
+                        "high_price": float(p["high_price"]) if p["high_price"] else None,
+                        "low_price": float(p["low_price"]) if p["low_price"] else None,
+                        "close_price": float(p["close_price"]),
+                        "volume": int(p["volume"]),
+                        "trading_value": float(p["trading_value"]) if p["trading_value"] else None,
+                        "market_cap": float(p["market_cap"]) if p["market_cap"] else None,
+                        "listed_shares": int(p["listed_shares"]) if p["listed_shares"] else None,
                     }
                     for p in all_prices
                 ]

@@ -13,6 +13,7 @@ class AutoTradingActivateRequest(BaseModel):
     """자동매매 활성화 요청"""
     session_id: str = Field(..., description="백테스트 세션 ID")
     initial_capital: Optional[Decimal] = Field(None, description="초기 자본금 (None이면 키움 계좌 잔고 자동 조회)")
+    allocated_capital: Decimal = Field(..., description="전략에 할당할 자본금 (원). 여러 전략에 계좌 잔액을 나누어 배분 가능.", gt=0)
 
 
 class AutoTradingDeactivateRequest(BaseModel):
@@ -87,6 +88,7 @@ class AutoTradingStrategyResponse(BaseModel):
     simulation_session_id: str
     is_active: bool
     initial_capital: Decimal
+    allocated_capital: Decimal
     current_capital: Decimal
     cash_balance: Decimal
     per_stock_ratio: Decimal

@@ -22,6 +22,7 @@ import type {
   MarketNews,
   MarketStock,
 } from "@/types";
+import type { AccountPerformanceChart } from "@/types/kiwoom";
 import { marketQuoteApi } from "@/lib/api/market-quote";
 import { fetchLatestNews } from "@/lib/api/news";
 
@@ -60,6 +61,7 @@ interface HomePageClientProps {
   isLoggedIn: boolean;
   hasKiwoomAccount: boolean;
   kiwoomAccountData: KiwoomAccountData | null;
+  performanceChartData: AccountPerformanceChart | null;
   dashboardData: DashboardData;
   marketStocksInitial: MarketStock[];
   marketNewsInitial: MarketNews[];
@@ -219,6 +221,7 @@ export function HomePageClient({
   isLoggedIn,
   hasKiwoomAccount,
   kiwoomAccountData,
+  performanceChartData,
   dashboardData,
   marketStocksInitial,
   marketNewsInitial,
@@ -374,7 +377,7 @@ export function HomePageClient({
           )}
 
           <StatsOverviewSection stats={authenticatedStats} />
-          <PerformanceChartSection />
+          <PerformanceChartSection performanceData={performanceChartData} />
           <MarketInsightSection
             stocks={marketStocks}
             news={marketNews}

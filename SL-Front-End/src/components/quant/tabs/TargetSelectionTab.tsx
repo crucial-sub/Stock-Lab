@@ -161,25 +161,8 @@ export default function TargetSelectionTab() {
   const [selectedIndustryStockCount, setSelectedIndustryStockCount] =
     useState(0);
 
-  // 최종 선택된 종목 수 계산
-  // 1. 유니버스가 선택되어 있고 유효한 종목 수가 있으면 유니버스 기반 사용
-  // 2. 유니버스가 선택되어 있지만 종목 수가 0이면 산업 기반으로 폴백
-  // 3. 유니버스가 없으면 산업 기반 종목 수 사용
-  // 4. 개별 선택 종목 추가
-  const finalSelectedCount =
-    selectedUniverses.size > 0 && universeBasedStockCount > 0
-      ? universeBasedStockCount + selectedStocks.size
-      : selectedIndustryStockCount + selectedStocks.size;
-
-  // 최종 전체 종목 수 계산
-  // 유니버스가 선택되어 있고 유효한 값이 있으면 유니버스 전체 수 사용
-  // 그렇지 않으면 산업 기반 전체 수 사용
-  const finalTotalCount =
-    selectedUniverses.size > 0 && universeTotalStockCount > 0
-      ? universeTotalStockCount
-      : totalStockCount;
-
   // 커스텀 훅으로 매매 대상 선택 로직 관리
+  // 임시로 0을 전달하고, 나중에 실제 값으로 계산
   const {
     selectedIndustries,
     isAllIndustriesSelected,
@@ -189,9 +172,23 @@ export default function TargetSelectionTab() {
     industries,
     [],
     Array.from(selectedStocks),
-    finalSelectedCount, // 유니버스 또는 산업 기반 종목 수
-    finalTotalCount,    // 유니버스 또는 산업 기반 전체 수
+    0, // 임시값
+    totalStockCount,
   );
+
+  // 최종 선택된 종목 수 계산
+  // 중요: 업종(테마)을 선택하지 않으면 0개!
+  // 유니버스는 업종 내에서의 필터이므로, 업종이 없으면 의미 없음
+  const finalSelectedCount = selectedIndustries.size === 0 && selectedStocks.size === 0
+    ? 0  // 업종도 개별 종목도 선택 안 함 -> 0개
+    : selectedIndustries.size > 0
+      ? selectedIndustryStockCount + selectedStocks.size  // 업종 기반 (유니버스는 백테스트 실행 시 적용)
+      : selectedUniverses.size > 0 && universeBasedStockCount > 0
+        ? universeBasedStockCount + selectedStocks.size  // 유니버스만 선택
+        : selectedStocks.size;  // 개별 종목만 선택
+
+  // 최종 전체 종목 수 계산
+  const finalTotalCount = totalStockCount;
 
   // 유니버스 선택 변경 시 스토어 업데이트 및 종목 수 계산
   const { trade_targets, setTradeTargets } = useBacktestConfigStore();
@@ -202,17 +199,12 @@ export default function TargetSelectionTab() {
     });
   }, [selectedUniverses]);
 
-  // 선택된 유니버스의 종목 수 계산
+  // 선택된 유니버스의 종목 수 계산 (참고용)
   useEffect(() => {
     async function fetchUniverseStockCount() {
       if (selectedUniverses.size === 0) {
         setUniverseBasedStockCount(0);
         setUniverseTotalStockCount(0);
-        // 유니버스가 없을 때는 스토어도 업데이트
-        setTradeTargets((prev) => ({
-          ...prev,
-          total_stock_count: totalStockCount,
-        }));
         return;
       }
 
@@ -223,13 +215,6 @@ export default function TargetSelectionTab() {
         setUniverseBasedStockCount(response.stockCount);
         setUniverseTotalStockCount(response.stockCount);
         console.log("🔢 유니버스 기반 종목 수:", response.stockCount);
-
-        // 유니버스 종목 수를 스토어에 직접 업데이트
-        setTradeTargets((prev) => ({
-          ...prev,
-          total_stock_count: response.stockCount,
-          selected_stock_count: response.stockCount,
-        }));
       } catch (err) {
         console.error("유니버스 종목 수 조회 실패:", err);
         setUniverseBasedStockCount(0);
@@ -238,7 +223,7 @@ export default function TargetSelectionTab() {
     }
 
     fetchUniverseStockCount();
-  }, [selectedUniverses, setTradeTargets, totalStockCount]);
+  }, [selectedUniverses]);
 
   // 종목 검색 핸들러
   const handleSearch = async (query: string) => {
@@ -332,9 +317,23 @@ export default function TargetSelectionTab() {
 
       const finalStrategyName = strategyName || defaultStrategyName;
 
+      // 최종 종목 수를 스토어에 업데이트
+      setTradeTargets({
+        ...trade_targets,
+        selected_stock_count: finalSelectedCount,
+        total_stock_count: finalTotalCount,
+        total_theme_count: industries.length,  // 전체 테마 수 추가
+      });
+
       const request = {
         ...getBacktestRequest(),
         strategy_name: finalStrategyName,
+        trade_targets: {
+          ...getBacktestRequest().trade_targets,
+          selected_stock_count: finalSelectedCount,
+          total_stock_count: finalTotalCount,
+          total_theme_count: industries.length,  // 전체 테마 수 추가
+        },
       };
 
       console.log("=== 백테스트 요청 데이터 ===");
@@ -401,6 +400,7 @@ export default function TargetSelectionTab() {
         <StockCount
           selectedCount={finalSelectedCount}
           totalCount={finalTotalCount}
+          hasUniverseFilter={selectedUniverses.size > 0 && selectedIndustries.size > 0}
         />
 
         {/* 주식 유니버스 및 테마 선택 (DB 산업 데이터) */}

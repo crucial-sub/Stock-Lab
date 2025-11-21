@@ -43,7 +43,8 @@ class AutoTradingService:
         db: AsyncSession,
         user_id: UUID,
         session_id: str,
-        initial_capital: Decimal = None
+        initial_capital: Decimal = None,
+        allocated_capital: Decimal = None
     ) -> AutoTradingStrategy:
         """
         자동매매 전략 활성화
@@ -53,6 +54,7 @@ class AutoTradingService:
             user_id: 사용자 ID
             session_id: 백테스트 세션 ID
             initial_capital: 초기 자본금
+            allocated_capital: 전략에 할당할 자본금 (여러 전략에 나누어 배분 가능)
 
         Returns:
             생성된 자동매매 전략
@@ -72,7 +74,7 @@ class AutoTradingService:
             if not session:
                 raise ValueError("완료된 백테스트 세션을 찾을 수 없습니다.")
 
-            # 2. 기존 활성화된 전략이 있는지 확인
+            # 2. 기존 활성화된 전략 조회 (여러 전략 동시 활성화 가능)
             active_query = select(AutoTradingStrategy).where(
                 and_(
                     AutoTradingStrategy.user_id == user_id,
@@ -80,10 +82,11 @@ class AutoTradingService:
                 )
             )
             active_result = await db.execute(active_query)
-            active_strategy = active_result.scalar_one_or_none()
+            active_strategies = active_result.scalars().all()
 
-            if active_strategy:
-                raise ValueError("이미 활성화된 자동매매 전략이 있습니다. 먼저 비활성화 해주세요.")
+            # 2-1. allocated_capital 검증: 총 할당 금액이 계좌 잔고를 초과하지 않는지 확인
+            if allocated_capital is None:
+                raise ValueError("allocated_capital은 필수 항목입니다.")
 
             # 3. 백테스트 전략의 매매 조건 조회
             trading_rule_query = select(TradingRule).where(
@@ -164,14 +167,32 @@ class AutoTradingService:
             if initial_capital is None:
                 initial_capital = Decimal("50000000")
 
+            # 5-1. 총 할당 금액 검증
+            total_allocated = sum(s.allocated_capital for s in active_strategies)
+            total_allocated_after = total_allocated + allocated_capital
+
+            if total_allocated_after > initial_capital:
+                raise ValueError(
+                    f"할당 금액 초과: 계좌 잔고 {initial_capital:,}원, "
+                    f"기존 할당 {total_allocated:,}원, 신규 할당 {allocated_capital:,}원, "
+                    f"총 {total_allocated_after:,}원. 계좌 잔고를 초과할 수 없습니다."
+                )
+
+            logger.info(
+                f"💰 자본 할당 현황: 계좌 잔고 {initial_capital:,}원, "
+                f"기존 전략 {len(active_strategies)}개에 {total_allocated:,}원 할당, "
+                f"신규 할당 {allocated_capital:,}원, 남은 금액: {initial_capital - total_allocated_after:,}원"
+            )
+
             # 6. 새로운 자동매매 전략 생성 (백테스트 조건 전부 복사)
             strategy = AutoTradingStrategy(
                 user_id=user_id,
                 simulation_session_id=session_id,
                 is_active=True,
                 initial_capital=initial_capital,
-                current_capital=initial_capital,
-                cash_balance=initial_capital,
+                current_capital=allocated_capital,  # 할당된 자본으로 시작
+                cash_balance=allocated_capital,  # 할당된 자본만 사용
+                allocated_capital=allocated_capital,  # 전략에 할당된 자본
                 activated_at=datetime.now(),
                 # 기본 설정
                 per_stock_ratio=Decimal(str(buy_condition.get('per_stock_ratio', 5.0))),
@@ -215,13 +236,22 @@ class AutoTradingService:
                 strategy_id=strategy.strategy_id,
                 event_type="ACTIVATED",
                 event_level="INFO",
-                message=f"자동매매 전략 활성화 - 초기 자본금: {initial_capital:,}원",
-                details={"session_id": session_id, "initial_capital": float(initial_capital)}
+                message=f"자동매매 전략 활성화 - 할당 자본: {allocated_capital:,}원 (계좌 잔고: {initial_capital:,}원)",
+                details={
+                    "session_id": session_id,
+                    "initial_capital": float(initial_capital),
+                    "allocated_capital": float(allocated_capital),
+                    "total_active_strategies": len(active_strategies) + 1,
+                    "total_allocated": float(total_allocated_after)
+                }
             )
             db.add(log)
             await db.commit()
 
-            logger.info(f"✅ 자동매매 활성화: strategy_id={strategy.strategy_id}, user_id={user_id}")
+            logger.info(
+                f"✅ 자동매매 활성화: strategy_id={strategy.strategy_id}, user_id={user_id}, "
+                f"할당 자본: {allocated_capital:,}원"
+            )
 
             return strategy
 
@@ -351,12 +381,26 @@ class AutoTradingService:
     ) -> List[Dict[str, Any]]:
         """즉시 리밸런싱 프리뷰 생성"""
         from app.services.auto_trading_executor import AutoTradingExecutor
+        from app.models.auto_trading import AutoTradingLog
+        from datetime import datetime
 
         strategy = await AutoTradingService._get_strategy(db, strategy_id, user_id)
         if not strategy.is_active:
             raise ValueError("비활성화된 전략입니다.")
 
         stocks = await AutoTradingExecutor.select_stocks_for_strategy(db, strategy)
+
+        # 🔥 리밸런싱 프리뷰 로그 저장 (9시 매매 실행 시 필요)
+        log_entry = AutoTradingLog(
+            strategy_id=strategy_id,
+            event_type='REBALANCE_PREVIEW',
+            event_level='INFO',
+            message=f"리밸런싱 프리뷰: {len(stocks)}개 종목 선정",
+            details={"stocks": stocks}
+        )
+        db.add(log_entry)
+        await db.commit()
+
         return stocks
 
     @staticmethod
@@ -650,8 +694,8 @@ class AutoTradingService:
                         stock_code=position.stock_code,
                         quantity=str(position.quantity),
                         price="",
-                        trade_type="03",  # 시장가
-                        dmst_stex_tp="1"  # 국내주식
+                        trade_type="3",  # 시장가
+                        dmst_stex_tp="KRX"  # 국내주식
                     )
                     break
                 except requests.RequestException as req_err:
@@ -712,7 +756,7 @@ class AutoTradingService:
 
             logger.info(f"✅ 매도 완료: {position.stock_code}, 수량={position.quantity}, 손익={net_profit:,.0f}원")
 
-            # 🔄 매도 후 실제 계좌 잔고 동기화
+            # 🔄 매도 후 실제 계좌 잔고 확인 (검증 목적)
             try:
                 deposit_info = KiwoomService.get_deposit_info(
                     access_token=user.kiwoom_access_token,
@@ -730,13 +774,11 @@ class AutoTradingService:
                 )
                 actual_cash = Decimal(str(actual_cash_str))
 
-                if actual_cash > 0:
-                    strategy.cash_balance = actual_cash
-                    await db.commit()
-                    logger.info(f"💰 매도 후 계좌 잔고 동기화: {actual_cash:,.0f}원")
+                # ✅ 중요: cash_balance는 전략 내부에서만 관리, 키움 잔고는 검증만
+                logger.info(f"💰 매도 후 계좌 잔고 확인: {actual_cash:,.0f}원 (전략 내부 잔고: {strategy.cash_balance:,.0f}원)")
 
             except Exception as sync_err:
-                logger.warning(f"⚠️  매도 후 잔고 동기화 실패 (무시): {sync_err}")
+                logger.warning(f"⚠️  매도 후 잔고 확인 실패 (무시): {sync_err}")
 
             return True
 
@@ -771,6 +813,7 @@ class AutoTradingService:
             return 0
 
         sold_count = 0
+        failed_positions: List[Tuple[LivePosition, str]] = []  # (position, reason)
 
         for position in positions:
             try:
@@ -820,9 +863,41 @@ class AutoTradingService:
                     )
                     if success:
                         sold_count += 1
+                    else:
+                        # 실패한 포지션 기록
+                        failed_positions.append((position, sell_reason))
 
             except Exception as e:
                 logger.error(f"   매도 체크 실패: {position.stock_code}, {e}")
+
+        # 실패한 매도 주문 재시도 (1회)
+        if failed_positions:
+            logger.info(f"🔄 실패한 매도 주문 {len(failed_positions)}개 재시도 중...")
+            retry_success = 0
+
+            for position, sell_reason in failed_positions:
+                try:
+                    # 재시도 대기
+                    time.sleep(2)
+
+                    logger.info(f"   재시도 매도: {position.stock_code} - {sell_reason}")
+                    success = await AutoTradingService._execute_sell_order(
+                        db=db,
+                        strategy=strategy,
+                        position=position,
+                        reason=f"{sell_reason} (재시도)"
+                    )
+
+                    if success:
+                        retry_success += 1
+                        sold_count += 1
+                        logger.info(f"✅ 재시도 성공: {position.stock_code}")
+
+                except Exception as e:
+                    logger.error(f"재시도 매도 실패: {position.stock_code}, {e}")
+
+            if retry_success > 0:
+                logger.info(f"✅ 매도 재시도 결과: {retry_success}/{len(failed_positions)}개 성공")
 
         logger.info(f"전략 {strategy.strategy_id}: {sold_count}개 종목 매도")
         return sold_count
@@ -863,6 +938,57 @@ class AutoTradingService:
         )
         positions_result = await db.execute(positions_query)
         positions = positions_result.scalars().all()
+
+        # 실시간 가격 업데이트 (최신 종가 조회)
+        if positions:
+            try:
+                from app.models.stock_price import StockPrice
+                from app.models.company import Company
+
+                logger.info(f"💰 {len(positions)}개 종목 실시간 가격 업데이트 시작")
+
+                updated_count = 0
+                for position in positions:
+                    try:
+                        # 종목코드로 company_id 조회
+                        company_query = select(Company).where(Company.stock_code == position.stock_code)
+                        company_result = await db.execute(company_query)
+                        company = company_result.scalar_one_or_none()
+
+                        if not company:
+                            logger.warning(f"종목 {position.stock_code} 회사 정보 없음")
+                            continue
+
+                        # 최신 종가 조회
+                        latest_price_query = select(StockPrice).where(
+                            StockPrice.company_id == company.company_id
+                        ).order_by(StockPrice.trade_date.desc()).limit(1)
+                        latest_price_result = await db.execute(latest_price_query)
+                        latest_price = latest_price_result.scalar_one_or_none()
+
+                        if latest_price and latest_price.close_price:
+                            old_price = position.current_price or position.avg_buy_price
+                            position.current_price = Decimal(str(latest_price.close_price))
+
+                            # 평가손익 계산
+                            position.unrealized_profit = (position.current_price - position.avg_buy_price) * position.quantity
+                            position.unrealized_profit_pct = ((position.current_price - position.avg_buy_price) / position.avg_buy_price) * Decimal("100")
+
+                            updated_count += 1
+                            logger.debug(f"  📈 {position.stock_code}: {old_price:,.0f}원 → {position.current_price:,.0f}원 (손익률: {position.unrealized_profit_pct:+.2f}%)")
+
+                    except Exception as price_err:
+                        logger.warning(f"종목 {position.stock_code} 가격 조회 실패: {price_err}")
+                        # 실패해도 기존 가격 유지
+                        continue
+
+                # 변경사항 저장
+                await db.commit()
+                logger.info(f"✅ {updated_count}개 종목 가격 업데이트 완료")
+
+            except Exception as e:
+                logger.error(f"실시간 가격 업데이트 실패: {e}")
+                # 실패해도 기존 데이터 반환
 
         # 오늘 매매 내역 조회
         today_trades_query = select(LiveTrade).where(
@@ -948,12 +1074,13 @@ class AutoTradingService:
             }
 
         # 2. 전체 통계 계산
-        total_initial_capital = Decimal("0")
+        total_allocated_capital = Decimal("0")
         total_current_value = Decimal("0")
         total_positions_count = 0
 
         for strategy in active_strategies:
-            total_initial_capital += strategy.initial_capital
+            # allocated_capital을 기준으로 계산 (실제 가상매매에 할당된 금액)
+            total_allocated_capital += strategy.allocated_capital
 
             # 현재 가치 계산 (현금 + 보유 주식 평가액)
             positions_query = select(LivePosition).where(
@@ -981,10 +1108,10 @@ class AutoTradingService:
         total_trades_today = today_trades_result.scalar() or 0
 
         # 4. 수익률 계산
-        total_profit = total_current_value - total_initial_capital
+        total_profit = total_current_value - total_allocated_capital
         total_return = (
-            (total_profit / total_initial_capital * 100)
-            if total_initial_capital > 0
+            (total_profit / total_allocated_capital * 100)
+            if total_allocated_capital > 0
             else Decimal("0")
         )
 
@@ -994,5 +1121,6 @@ class AutoTradingService:
             "total_profit": total_profit,
             "active_strategy_count": len(active_strategies),
             "total_positions": total_positions_count,
-            "total_trades_today": total_trades_today
+            "total_trades_today": total_trades_today,
+            "total_allocated_capital": total_allocated_capital  # 자동매매에 할당된 총 금액
         }

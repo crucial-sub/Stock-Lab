@@ -14,7 +14,9 @@ from app.schemas.kiwoom import (
     KiwoomCredentialsResponse,
     AccountBalanceResponse,
     StockOrderRequest,
-    StockOrderResponse
+    StockOrderResponse,
+    AccountPerformanceChartResponse,
+    PerformanceChartDataPoint
 )
 from app.services.kiwoom_service import KiwoomService
 
@@ -198,6 +200,146 @@ async def get_account_balance(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"통합 계좌 잔고 조회에 실패했습니다: {str(e)}"
+        )
+
+
+@router.get("/account/performance-chart", response_model=AccountPerformanceChartResponse)
+async def get_account_performance_chart(
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    계좌 성과 차트 데이터 조회
+
+    - 활성화된 모든 자동매매 전략의 일일 성과를 집계
+    - 총 자산 가치와 수익률 추이를 시계열로 제공
+    - days: 조회할 최근 일수 (기본 30일)
+    """
+    try:
+        from sqlalchemy import select, and_, func
+        from app.models.auto_trading import AutoTradingStrategy, LiveDailyPerformance
+        from decimal import Decimal
+        from collections import defaultdict
+
+        # 1. 사용자의 활성 전략 조회
+        strategies_query = select(AutoTradingStrategy).where(
+            AutoTradingStrategy.user_id == current_user.user_id
+        )
+        strategies_result = await db.execute(strategies_query)
+        strategies = strategies_result.scalars().all()
+
+        if not strategies:
+            # 전략이 없는 경우 빈 데이터 반환
+            return AccountPerformanceChartResponse(
+                data_points=[],
+                initial_capital="0",
+                current_value="0",
+                total_return="0",
+                days=0
+            )
+
+        strategy_ids = [s.strategy_id for s in strategies]
+
+        # 2. 최근 N일의 일일 성과 데이터 조회
+        from datetime import date, timedelta
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        performances_query = select(LiveDailyPerformance).where(
+            and_(
+                LiveDailyPerformance.strategy_id.in_(strategy_ids),
+                LiveDailyPerformance.date >= start_date,
+                LiveDailyPerformance.date <= end_date
+            )
+        ).order_by(LiveDailyPerformance.date.asc())
+
+        performances_result = await db.execute(performances_query)
+        performances = performances_result.scalars().all()
+
+        if not performances:
+            # 성과 데이터가 없는 경우
+            total_initial = sum(s.initial_capital for s in strategies)
+            total_current = sum(s.current_capital for s in strategies)
+
+            return AccountPerformanceChartResponse(
+                data_points=[],
+                initial_capital=str(total_initial),
+                current_value=str(total_current),
+                total_return="0",
+                days=0
+            )
+
+        # 3. 날짜별로 전략들의 성과 집계
+        daily_aggregated = defaultdict(lambda: {
+            'total_value': Decimal("0"),
+            'count': 0
+        })
+
+        for perf in performances:
+            daily_aggregated[perf.date]['total_value'] += perf.total_value
+            daily_aggregated[perf.date]['count'] += 1
+
+        # 4. 초기 자본 계산 (모든 전략의 초기 자본 합계)
+        total_initial_capital = sum(s.initial_capital for s in strategies)
+
+        # 5. 데이터 포인트 생성
+        data_points = []
+        sorted_dates = sorted(daily_aggregated.keys())
+
+        for i, current_date in enumerate(sorted_dates):
+            total_value = daily_aggregated[current_date]['total_value']
+
+            # 일일 수익률 계산 (전일 대비)
+            if i > 0:
+                prev_date = sorted_dates[i - 1]
+                prev_value = daily_aggregated[prev_date]['total_value']
+                if prev_value > 0:
+                    daily_return = ((total_value - prev_value) / prev_value) * 100
+                else:
+                    daily_return = Decimal("0")
+            else:
+                daily_return = None
+
+            # 누적 수익률 계산 (초기 자본 대비)
+            if total_initial_capital > 0:
+                cumulative_return = ((total_value - total_initial_capital) / total_initial_capital) * 100
+            else:
+                cumulative_return = Decimal("0")
+
+            data_points.append(
+                PerformanceChartDataPoint(
+                    date=str(current_date),
+                    total_value=str(total_value),
+                    daily_return=str(daily_return) if daily_return is not None else None,
+                    cumulative_return=str(cumulative_return)
+                )
+            )
+
+        # 6. 현재 총 자산 및 총 수익률 계산
+        if data_points:
+            current_value_decimal = daily_aggregated[sorted_dates[-1]]['total_value']
+            if total_initial_capital > 0:
+                total_return_decimal = ((current_value_decimal - total_initial_capital) / total_initial_capital) * 100
+            else:
+                total_return_decimal = Decimal("0")
+        else:
+            current_value_decimal = total_initial_capital
+            total_return_decimal = Decimal("0")
+
+        return AccountPerformanceChartResponse(
+            data_points=data_points,
+            initial_capital=str(total_initial_capital),
+            current_value=str(current_value_decimal),
+            total_return=str(total_return_decimal),
+            days=len(data_points)
+        )
+
+    except Exception as e:
+        logger.error(f"계좌 성과 차트 조회 실패: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"계좌 성과 차트 조회에 실패했습니다: {str(e)}"
         )
 
 

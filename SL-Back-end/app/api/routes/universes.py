@@ -61,6 +61,7 @@ class UniverseStocksResponse(BaseModel):
 class UniverseStockCountRequest(BaseModel):
     """선택된 유니버스의 종목 수 조회 요청"""
     universe_ids: List[str] = Field(..., description="조회할 유니버스 ID 리스트", alias="universeIds")
+    theme_ids: List[str] = Field(default=[], description="조회할 테마(업종) 리스트", alias="themeIds")
 
     class Config:
         populate_by_name = True
@@ -169,28 +170,53 @@ async def get_universe_stock_count(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    선택된 유니버스들의 종목 수 조회
+    선택된 유니버스들의 종목 수 조회 (테마 필터 적용 가능)
 
     Parameters:
     - universe_ids: 유니버스 ID 리스트
+    - theme_ids: 테마(업종) 리스트 (선택)
 
     Returns:
-    - stock_count: 총 종목 수 (중복 제거)
+    - stock_count: 총 종목 수 (중복 제거, 테마 필터 적용 시 교집합)
     - universe_ids: 조회한 유니버스 ID 리스트
     """
-    service = UniverseService(db)
+    from app.models.company import Company
+    from sqlalchemy import select, and_
 
     # 빈 리스트인 경우 0 반환
-    if not request.universe_ids:
+    if not request.universe_ids and not request.theme_ids:
         return UniverseStockCountResponse(
             stock_count=0,
             universe_ids=[]
         )
 
-    # 선택된 유니버스의 종목 코드 가져오기 (중복 제거됨)
-    stock_codes = await service.get_stock_codes_by_universes(request.universe_ids)
+    # 1. 유니버스 필터가 있으면 유니버스 종목 가져오기
+    universe_stock_codes = set()
+    if request.universe_ids:
+        service = UniverseService(db)
+        universe_stock_codes = set(await service.get_stock_codes_by_universes(request.universe_ids))
+
+    # 2. 테마(업종) 필터가 있으면 테마 종목 가져오기
+    theme_stock_codes = set()
+    if request.theme_ids:
+        theme_query = select(Company.stock_code).where(
+            Company.industry.in_(request.theme_ids)
+        )
+        theme_result = await db.execute(theme_query)
+        theme_stock_codes = set([row[0] for row in theme_result.fetchall()])
+
+    # 3. 교집합 계산
+    if request.universe_ids and request.theme_ids:
+        # 유니버스와 테마 모두 선택 -> 교집합
+        final_stock_codes = universe_stock_codes & theme_stock_codes
+    elif request.universe_ids:
+        # 유니버스만 선택
+        final_stock_codes = universe_stock_codes
+    else:
+        # 테마만 선택
+        final_stock_codes = theme_stock_codes
 
     return UniverseStockCountResponse(
-        stock_count=len(stock_codes),
+        stock_count=len(final_stock_codes),
         universe_ids=request.universe_ids
     )

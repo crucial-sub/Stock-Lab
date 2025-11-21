@@ -479,21 +479,51 @@ class BacktestEngine:
 
         logger.info(f"📊 가격 데이터 로드 - target_themes: {target_themes}, target_stocks: {target_stocks}, target_universes: {target_universes}")
 
-        # 🚀 Redis 캐시 키 생성
+        # 🚀 Redis 캐시 조회 (필터 없는 기본 캐시 사용)
         from app.core.cache import get_cache
         cache = get_cache()
 
-        themes_key = ','.join(sorted(target_themes)) if target_themes else 'all'
-        stocks_key = ','.join(sorted(target_stocks)) if target_stocks else 'all'
-        universes_key = ','.join(sorted(target_universes)) if target_universes else 'all'
-        cache_key = f"price_data:{start_date}:{end_date}:{themes_key}:{stocks_key}:{universes_key}"
+        # 기본 캐시 키 (필터 없음 - 모든 사용자가 같은 캐시 공유)
+        base_cache_key = f"price_data:all:{start_date}:{end_date}"
 
         # 🚀 캐시 조회
+        cached_data = None
         try:
-            cached_data = await cache.get(cache_key)
+            cached_data = await cache.get(base_cache_key)
             if cached_data:
-                logger.info(f"💾 시세 데이터 캐시 히트: {len(cached_data)}개 레코드")
-                return pd.DataFrame(cached_data)
+                logger.info(f"💾 시세 데이터 캐시 히트: {len(cached_data)}개 레코드 (기본 캐시)")
+
+                # 캐시 데이터를 DataFrame으로 변환
+                df = pd.DataFrame(cached_data)
+
+                # 메모리에서 필터링 적용
+                if target_themes or target_stocks or target_universes:
+                    filter_mask = pd.Series([False] * len(df))
+
+                    if target_themes and 'industry' in df.columns:
+                        filter_mask |= df['industry'].isin(target_themes)
+                        logger.info(f"🎯 테마 필터 (메모리): {len(target_themes)}개 산업")
+
+                    if target_stocks and 'stock_code' in df.columns:
+                        filter_mask |= df['stock_code'].isin(target_stocks)
+                        logger.info(f"🎯 개별 종목 필터 (메모리): {len(target_stocks)}개")
+
+                    if target_universes:
+                        # 유니버스 종목 코드 조회
+                        from app.services.universe_service import UniverseService
+                        universe_service = UniverseService(self.db)
+                        universe_stock_codes = await universe_service.get_stock_codes_by_universes(
+                            target_universes,
+                            trade_date=start_date.strftime("%Y%m%d")
+                        )
+                        if universe_stock_codes and 'stock_code' in df.columns:
+                            filter_mask |= df['stock_code'].isin(universe_stock_codes)
+                            logger.info(f"🎯 유니버스 필터 (메모리): {len(universe_stock_codes)}개 종목")
+
+                    df = df[filter_mask]
+                    logger.info(f"✅ 필터링 후: {len(df)}개 레코드")
+
+                return df
         except Exception as e:
             logger.debug(f"시세 캐시 조회 실패: {e}")
 
@@ -588,12 +618,8 @@ class BacktestEngine:
         logger.info(f"📊 시세 데이터 로드 완료: {len(df):,}개 레코드, {df['stock_code'].nunique()}개 종목")
         logger.info(f"📅 시세 데이터 날짜 범위: {df['date'].min().date()} ~ {df['date'].max().date()}")
 
-        # 🚀 캐시 저장 (영구 - 과거 데이터는 불변)
-        try:
-            await cache.set(cache_key, df.to_dict('records'), ttl=0)
-            logger.info(f"💾 시세 데이터 캐시 저장 완료")
-        except Exception as e:
-            logger.debug(f"시세 캐시 저장 실패: {e}")
+        # 캐시는 cache_warmer가 주기적으로 갱신하므로 여기서는 저장하지 않음
+        # (필터링된 데이터를 저장하면 캐시 키가 너무 많아짐)
 
         return df
 

@@ -76,7 +76,8 @@ async def activate_auto_trading(
             db=db,
             user_id=current_user.user_id,
             session_id=request.session_id,
-            initial_capital=request.initial_capital
+            initial_capital=request.initial_capital,
+            allocated_capital=request.allocated_capital
         )
 
         return AutoTradingActivateResponse(

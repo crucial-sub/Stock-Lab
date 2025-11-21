@@ -29,7 +29,7 @@ export function NewsDetailModal({ news, onClose }: NewsDetailModalProps) {
   const llmSummary = news.llm_summary || (news as any)?.llmSummary || "";
   const subtitle = news.llm_summary;
   // 하단 본문: llm_summary 우선, 없으면 원문/summary
-  const bodyContent = llmSummary || news.content || news.summary || "";
+  const bodyContent = news.content 
   const sentiment = sentimentBadge[news.sentiment] || sentimentBadge.neutral;
   const pressLabel = news.pressName || (news as any)?.media_name || news.source || "";
   const tickerLabel = news.tickerLabel || news.stockCode || "종목 이름";

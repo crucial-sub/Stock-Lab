@@ -1070,7 +1070,8 @@ class AutoTradingService:
                 "total_profit": Decimal("0"),
                 "active_strategy_count": 0,
                 "total_positions": 0,
-                "total_trades_today": 0
+                "total_trades_today": 0,
+                "total_allocated_capital": Decimal("0")
             }
 
         # 2. 전체 통계 계산

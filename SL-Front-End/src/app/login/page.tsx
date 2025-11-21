@@ -132,6 +132,11 @@ export default function LoginPage() {
                   : "bg-[#1822340D] border-[0.5px] border-[#18223433] focus:border-brand-purple"
               }`}
             />
+            {errors.email ? (
+              <p className="mt-1 text-sm text-brand-primary">
+                {errors.email}
+              </p>
+            ) : null}
           </div>
 
           <div>
@@ -150,6 +155,11 @@ export default function LoginPage() {
                   : "bg-[#1822340D] border-[0.5px] border-[#18223433] focus:border-brand-purple"
               }`}
             />
+            {errors.password ? (
+              <p className="mt-1 text-sm text-brand-primary">
+                {errors.password}
+              </p>
+            ) : null}
           </div>
 
           <button

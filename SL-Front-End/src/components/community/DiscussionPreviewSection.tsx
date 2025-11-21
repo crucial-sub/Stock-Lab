@@ -19,7 +19,7 @@ interface DiscussionPreviewSectionProps {
 export function DiscussionPreviewSection({
   title = "자유게시판",
   limit,
-  showMoreHref = "/community/discussion",
+  showMoreHref = "/community/posts",
   className = "",
 }: DiscussionPreviewSectionProps) {
   const router = useRouter();

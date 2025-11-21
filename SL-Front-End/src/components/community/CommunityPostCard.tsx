@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { getTagStyle } from "./tagStyles";
 
 export interface CommunityPostCardProps {
   tag: string;
@@ -31,6 +32,7 @@ export function CommunityPostCard({
   onClick,
   className = "",
 }: CommunityPostCardProps) {
+  const tagStyle = getTagStyle(tag);
   // 숫자 포맷팅 (999+ 처리)
   const formatCount = (count: number): string => {
     return count > 999 ? "999+" : count.toString();
@@ -43,7 +45,9 @@ export function CommunityPostCard({
     >
       {/* 태그, 제목, 작성자, 날짜 - 한 줄 */}
       <div className="flex items-center gap-3 mb-3">
-        <span className="px-3 py-1 text-xs font-medium text-blue-500 bg-[#EAF5FF] border border-blue-500 rounded">
+        <span
+          className={`px-[10px] pt-0.5 text-[0.75rem] font-normal border rounded ${tagStyle.background} ${tagStyle.text} ${tagStyle.border}`}
+        >
           {tag}
         </span>
 

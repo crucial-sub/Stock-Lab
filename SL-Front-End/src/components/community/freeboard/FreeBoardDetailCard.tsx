@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@/components/common/Icon";
+import { getTagStyle } from "@/components/community/tagStyles";
 
 interface FreeBoardDetailCardProps {
   tag: string;
@@ -29,11 +30,14 @@ export function FreeBoardDetailCard({
   isLiked = false,
   onLike,
 }: FreeBoardDetailCardProps) {
+  const tagStyle = getTagStyle(tag);
   return (
     <div className="w-full rounded-[12px] border border-[#18223414] bg-[#1822340D] p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <span className="inline-flex items-center rounded-[4px] bg-white/40 px-2 py-0.5 text-xs font-semibold text-[#646464]">
+          <span
+            className={`inline-flex items-center rounded-[4px] border px-[10px] pt-0.5 text-[0.75rem] font-normal ${tagStyle.background} ${tagStyle.text} ${tagStyle.border}`}
+          >
             {tag}
           </span>
           <h1 className="mt-2 text-2xl font-semibold text-black">{title}</h1>

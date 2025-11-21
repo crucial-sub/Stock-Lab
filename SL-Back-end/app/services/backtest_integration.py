@@ -190,7 +190,9 @@ def integrate_optimizations(backtest_engine):
                 'VOLATILITY', 'AVG_TRADING_VALUE', 'TURNOVER_RATE',
                 'BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'RSI', 'MACD',
                 'OPERATING_MARGIN', 'NET_MARGIN', 'CHANGE_RATE',
-                'OPERATING_INCOME_GROWTH', 'GROSS_PROFIT_GROWTH'
+                'OPERATING_INCOME_GROWTH', 'GROSS_PROFIT_GROWTH',
+                'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y',
+                'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y'
             }
 
         logger.debug(f"필요 팩터: {len(required_factors)}개")

@@ -96,11 +96,6 @@ class VectorizedConditionEvaluator:
             try:
                 selected = date_data.query(query_str)
                 selected_stocks = selected['stock_code'].tolist()
-
-                # 🔍 임시 디버깅: 결과 확인
-                if 'DEBT_RATIO' in query_str:
-                    logger.info(f"✅ 벡터화 평가 완료: {len(selected_stocks)}/{len(date_data)}개 종목 선택")
-
                 return selected_stocks
 
             except Exception as e:
@@ -138,25 +133,15 @@ class VectorizedConditionEvaluator:
         # 조건 ID → 실제 조건 변환
         condition_map = {}
 
-        # 🔍 디버깅: 받은 조건 로깅
-        logger.info(f"🔍 _build_vectorized_query 호출됨")
-        logger.info(f"📦 expression: {expression}")
-        logger.info(f"📦 conditions: {conditions}")
-
         for cond in conditions:
             cond_id = cond.get('id', '')
             factor = cond.get('factor', '').upper()
             operator = cond.get('operator', '>')
             value = cond.get('value', 0)
 
-            logger.info(f"🔍 조건 변환: id={cond_id}, factor={factor}, operator={operator}, value={value}")
-
             # NaN 처리: factor가 NaN이 아닌 경우만
             # 백틱으로 컬럼명을 감싸서 pandas query가 컬럼으로 인식하도록 함
             condition_str = f"(`{factor}`.notna() and `{factor}` {operator} {value})"
-
-            logger.info(f"📝 생성된 조건 문자열: {cond_id} → {condition_str}")
-
             condition_map[cond_id] = condition_str
 
         # expression에서 조건 ID를 실제 조건으로 치환
@@ -166,9 +151,6 @@ class VectorizedConditionEvaluator:
             # 단어 경계를 고려하여 치환
             import re
             query_str = re.sub(r'\b' + cond_id + r'\b', condition_str, query_str)
-
-        # 🔍 최종 생성된 쿼리 로깅
-        logger.info(f"✅ 최종 생성된 query: {query_str}")
 
         # 캐시 저장
         self._condition_cache[cache_key] = query_str
@@ -184,17 +166,9 @@ class VectorizedConditionEvaluator:
         """
         폴백: for loop로 개별 평가 (쿼리 실패 시만 사용)
         """
-        # 🔍 디버깅: 첫 번째 행의 컬럼 확인
-        if not date_data.empty:
-            first_row = date_data.iloc[0]
-            logger.info(f"🔍 폴백 함수 실행 - 사용 가능한 컬럼 (전체): {list(first_row.index)}")  # 전체 컬럼
-            logger.info(f"🔍 평가할 조건들: {conditions}")
-
         selected_stocks = []
 
         condition_map = {c['id']: c for c in conditions}
-
-        first_stock_logged = False
 
         for _, row in date_data.iterrows():
             stock_code = row['stock_code']
@@ -205,11 +179,6 @@ class VectorizedConditionEvaluator:
                 factor = cond.get('factor', '').upper()
                 operator = cond.get('operator', '>')
                 threshold = cond.get('value', 0)
-
-                # 첫 번째 종목만 로깅
-                if not first_stock_logged:
-                    logger.info(f"🔍 [{stock_code}] 폴백 평가: factor={factor}, operator={operator}, threshold={threshold}")
-                    logger.info(f"🔍 [{stock_code}] factor가 row에 있는가? {factor in row.index}")
 
                 # 팩터 값 가져오기
                 if factor in row.index:

@@ -144,7 +144,6 @@ async def _run_backtest_async(
             logger.info(f"선택된 테마: {target_themes}")
             logger.info(f"선택된 유니버스: {target_universes}")
             logger.info(f"선택된 종목: {target_stocks}")
-            logger.info(f"매수 조건: {buy_conditions}")
             logger.info(f"리밸런싱 주기: {rebalance_frequency}")
 
             # 세션 상태 업데이트 (RUNNING)
@@ -214,9 +213,6 @@ async def _run_backtest_async(
                     # 기본값은 AND
                     expression_text = " and ".join([c["id"] for c in parsed_conditions])
 
-            logger.info(f"📊 파싱된 조건: {parsed_conditions}")
-            logger.info(f"📊 생성된 expression: {expression_text}")
-
             # 우선순위 팩터 정규화
             normalized_priority_factor = _extract_factor(priority_factor)
 
@@ -228,7 +224,6 @@ async def _run_backtest_async(
                     "priority_factor": normalized_priority_factor,
                     "priority_order": priority_order or "desc"
                 }
-                logger.info(f"📊 최종 buy_condition_payload: {buy_condition_payload}")
 
             # 기능상 SELL condition 리스트는 STOP/TAKE/HOLD 로직에 의해 관리하므로
             # condition_sell 의 factor 조건만 전달 (없으면 빈 리스트)

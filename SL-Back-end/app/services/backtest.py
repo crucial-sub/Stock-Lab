@@ -903,36 +903,27 @@ class BacktestEngine:
         """매수 조건에서 필요한 팩터만 추출"""
         required_factors = set()
 
-        logger.info(f"팩터 추출 시작 - buy_conditions 타입: {type(buy_conditions)}, 개수: {len(buy_conditions) if buy_conditions else 0}")
-
         # 매수 조건에서 팩터 추출
         if buy_conditions:
             # buy_conditions가 딕셔너리일 경우 (새로운 형식)
             if isinstance(buy_conditions, dict):
                 conditions_list = buy_conditions.get('conditions', [])
-                logger.info(f"딕셔너리 형식 감지 - conditions: {conditions_list}")
 
-                for idx, condition in enumerate(conditions_list):
-                    logger.info(f"조건 {idx+1}: {condition}")
-
+                for condition in conditions_list:
                     # 'factor' 필드에서 직접 팩터 추출
                     if isinstance(condition, dict) and 'factor' in condition:
                         factor_code = condition['factor'].upper()
                         required_factors.add(factor_code)
-                        logger.info(f"  추출된 팩터: {factor_code}")
 
             # buy_conditions가 리스트일 경우 (기존 형식)
             elif isinstance(buy_conditions, list):
-                for idx, condition in enumerate(buy_conditions):
-                    logger.info(f"조건 {idx+1}: 타입={type(condition)}, 내용={condition}")
-
+                for condition in buy_conditions:
                     # 딕셔너리 또는 객체 둘 다 지원
                     if isinstance(condition, dict):
                         # 새로운 형식: 'factor' 필드 확인
                         if 'factor' in condition:
                             factor_code = condition['factor'].upper()
                             required_factors.add(factor_code)
-                            logger.info(f"  추출된 팩터 (factor 필드): {factor_code}")
                         else:
                             # 기존 형식: exp_left_side, exp_right_side
                             exp_left = condition.get('exp_left_side', '')
@@ -1340,10 +1331,6 @@ class BacktestEngine:
     ) -> pd.DataFrame:
         """최적화된 팩터 계산 (병렬처리 + 선택적 계산 + Redis 캐싱)"""
 
-        logger.info("최적화된 팩터 계산 시작")
-        logger.info(f"받은 buy_conditions: {buy_conditions}, 타입: {type(buy_conditions)}, 길이: {len(buy_conditions) if buy_conditions else 0}")
-        logger.info(f"받은 priority_factor: {priority_factor}")
-
         if price_data.empty:
             logger.warning("No price data available for factor calculation")
             return pd.DataFrame()
@@ -1351,13 +1338,16 @@ class BacktestEngine:
         # 1. 필요한 팩터만 추출
         required_factors = self._extract_required_factors(buy_conditions or [], priority_factor)
         if not required_factors:
-            logger.info("모든 팩터 계산 (조건 없음)")
             required_factors = {'PER', 'PBR', 'PSR', 'PCR', 'DIVIDEND_YIELD', 'EARNINGS_YIELD', 'FCF_YIELD', 'EV_EBITDA', 'EV_SALES', 'BOOK_TO_MARKET',
                               'ROE', 'ROA', 'DEBT_RATIO', 'GPM', 'OPM', 'NPM',
                               'DEBT_TO_EQUITY', 'CURRENT_RATIO', 'QUICK_RATIO', 'INTEREST_COVERAGE',
                               'MOMENTUM_1M', 'MOMENTUM_3M', 'MOMENTUM_6M', 'MOMENTUM_12M',
                               'VOLATILITY_20D', 'VOLATILITY_60D', 'VOLUME_RATIO_20D', 'TURNOVER_RATE_20D',
-                              'BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'RSI', 'MACD'}
+                              'BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'RSI', 'MACD',
+                              'OPERATING_MARGIN', 'NET_MARGIN', 'CHANGE_RATE',
+                              'OPERATING_INCOME_GROWTH', 'GROSS_PROFIT_GROWTH',
+                              'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y',
+                              'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y'}
 
         # Polars DataFrame으로 변환
         price_pl = pl.from_pandas(price_data)
@@ -3367,16 +3357,12 @@ class BacktestEngine:
         # 포지션 사이징에서 available_slots로 신규 매수 수량 제한
 
         # 통합 모듈로 매수 조건 평가 (54개 팩터 사용)
-        logger.debug(f"🔍 조건 평가: {len(tradeable_stocks)}개 종목")
-
         selected_stocks = factor_integrator.evaluate_buy_conditions_with_factors(
             factor_data=factor_data,
             stock_codes=tradeable_stocks,
             buy_conditions=buy_conditions,
             trading_date=trading_ts
         )
-
-        logger.debug(f"✅ 조건 만족: {len(selected_stocks)}개")
 
         # 팩터 가중치가 있는 경우 스코어링
         if isinstance(buy_conditions, dict) and 'factor_weights' in buy_conditions:

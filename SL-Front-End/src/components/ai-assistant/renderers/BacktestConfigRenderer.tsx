@@ -7,10 +7,10 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
-import type { BacktestConfigMessage, BacktestConfig } from "@/types/message";
-import { getStrategyDetail } from "@/lib/api/investment-strategy";
 import { authApi } from "@/lib/api/auth";
+import { getStrategyDetail } from "@/lib/api/investment-strategy";
+import type { BacktestConfig, BacktestConfigMessage } from "@/types/message";
+import { useEffect, useState } from "react";
 
 interface BacktestConfigRendererProps {
   message: BacktestConfigMessage;
@@ -44,15 +44,14 @@ export function BacktestConfigRenderer({
 }: BacktestConfigRendererProps) {
   // 기본값: 투자 금액 5,000만원, 시작일 1년 1일 전, 종료일 1일 전
   const today = new Date().toISOString().split("T")[0];
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const oneYearAndOneDayAgo = new Date(
-    Date.now() - (365 + 1) * 24 * 60 * 60 * 1000
+  const oneYearAgo = new Date(
+    Date.now() - (365 * 24 * 60 * 60 * 1000)
   ).toISOString().split("T")[0];
 
   const [config, setConfig] = useState<BacktestConfig>({
     investmentAmount: 5000,
-    startDate: oneYearAndOneDayAgo,
-    endDate: yesterday,
+    startDate: oneYearAgo,
+    endDate: today,
   });
 
   const [errors, setErrors] = useState<ValidationError>({});
@@ -259,11 +258,10 @@ export function BacktestConfigRenderer({
               onChange={(e) => handleAmountChange(e.target.value)}
               min={100}
               max={100000}
-              className={`mt-1 block w-full rounded-lg border ${
-                errors.investmentAmount
-                  ? "border-red-500"
-                  : "border-gray-300"
-              } px-3 py-2 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500`}
+              className={`mt-1 block w-full rounded-lg border ${errors.investmentAmount
+                ? "border-red-500"
+                : "border-gray-300"
+                } px-3 py-2 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500`}
               placeholder="예: 5000"
             />
             {errors.investmentAmount && (
@@ -294,9 +292,8 @@ export function BacktestConfigRenderer({
               onChange={(e) => handleStartDateChange(e.target.value)}
               min="2020-01-01"
               max={today}
-              className={`mt-1 block w-full rounded-lg border ${
-                errors.startDate ? "border-red-500" : "border-gray-300"
-              } px-3 py-2 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500`}
+              className={`mt-1 block w-full rounded-lg border ${errors.startDate ? "border-red-500" : "border-gray-300"
+                } px-3 py-2 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500`}
             />
             {errors.startDate && (
               <p className="mt-1 text-xs text-red-600">{errors.startDate}</p>
@@ -318,9 +315,8 @@ export function BacktestConfigRenderer({
               onChange={(e) => handleEndDateChange(e.target.value)}
               min={config.startDate}
               max={today}
-              className={`mt-1 block w-full rounded-lg border ${
-                errors.endDate ? "border-red-500" : "border-gray-300"
-              } px-3 py-2 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-1 focus:ring-purple-500`}
+              className={`mt-1 block w-full rounded-lg border ${errors.endDate ? "border-red-500" : "border-gray-300"
+                } px-3 py-2 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-1 focus:ring-purple-500`}
             />
             {errors.endDate && (
               <p className="mt-1 text-xs text-red-600">{errors.endDate}</p>
@@ -333,11 +329,10 @@ export function BacktestConfigRenderer({
           <button
             onClick={handleStartBacktest}
             disabled={!isFormValid || isSubmitting}
-            className={`w-full py-3 rounded-lg font-medium transition-colors ${
-              isFormValid && !isSubmitting
-                ? "bg-purple-600 text-white hover:bg-purple-700"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-            }`}
+            className={`w-full py-3 rounded-lg font-medium transition-colors ${isFormValid && !isSubmitting
+              ? "bg-purple-600 text-white hover:bg-purple-700"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center gap-2">

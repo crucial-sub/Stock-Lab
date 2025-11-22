@@ -5,10 +5,12 @@ export interface AutoTradingActivateRequest {
   session_id: string;
   initial_capital?: number;
   allocated_capital: number;
+  strategy_name?: string;
 }
 
 export interface AutoTradingDeactivateRequest {
   sell_all_positions: boolean;
+  deactivation_mode?: string; // immediate, sell_and_deactivate, scheduled_sell
 }
 
 // Response Types
@@ -78,6 +80,7 @@ export interface AutoTradingStrategyResponse {
   strategy_id: string;
   user_id: string;
   simulation_session_id: string;
+  strategy_name?: string;
   is_active: boolean;
   initial_capital: number;
   current_capital: number;
@@ -90,6 +93,9 @@ export interface AutoTradingStrategyResponse {
   activated_at?: string;
   deactivated_at?: string;
   last_executed_at?: string;
+  scheduled_deactivation?: boolean;
+  deactivation_mode?: string;
+  deactivation_requested_at?: string;
   kiwoom_total_eval?: number;
   kiwoom_total_profit?: number;
   kiwoom_total_profit_rate?: number;
@@ -202,6 +208,15 @@ export interface AutoTradingExecutionReportResponse {
   summary: ExecutionReportSummary;
 }
 
+export interface DeactivationConditions {
+  can_deactivate_immediately: boolean;
+  can_sell_and_deactivate: boolean;
+  needs_scheduled_sell: boolean;
+  position_count: number;
+  is_market_hours: boolean;
+  recommended_mode: string;
+}
+
 export const autoTradingApi = {
   /**
    * 자동매매 활성화
@@ -212,6 +227,18 @@ export const autoTradingApi = {
     const response = await axiosInstance.post<AutoTradingActivateResponse>(
       "/auto-trading/activate",
       request,
+    );
+    return response.data;
+  },
+
+  /**
+   * 비활성화 조건 확인
+   */
+  checkDeactivationConditions: async (
+    strategyId: string,
+  ): Promise<DeactivationConditions> => {
+    const response = await axiosInstance.get<DeactivationConditions>(
+      `/auto-trading/strategies/${strategyId}/deactivation-conditions`,
     );
     return response.data;
   },

@@ -31,6 +31,7 @@ from app.models.simulation import (
 )
 from app.models.user import User
 from app.services.kiwoom_service import KiwoomService
+from app.utils.market_utils import is_market_hours
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,8 @@ class AutoTradingService:
         user_id: UUID,
         session_id: str,
         initial_capital: Decimal = None,
-        allocated_capital: Decimal = None
+        allocated_capital: Decimal = None,
+        strategy_name: Optional[str] = None
     ) -> AutoTradingStrategy:
         """
         자동매매 전략 활성화
@@ -55,6 +57,7 @@ class AutoTradingService:
             session_id: 백테스트 세션 ID
             initial_capital: 초기 자본금
             allocated_capital: 전략에 할당할 자본금 (여러 전략에 나누어 배분 가능)
+            strategy_name: 자동매매 전략 이름 (미입력시 자동 생성)
 
         Returns:
             생성된 자동매매 전략
@@ -184,10 +187,24 @@ class AutoTradingService:
                 f"신규 할당 {allocated_capital:,}원, 남은 금액: {initial_capital - total_allocated_after:,}원"
             )
 
+            # 5-1. strategy_name 생성 (미입력시 자동 생성)
+            if not strategy_name:
+                # 백테스트 전략 이름 조회
+                portfolio_query = select(PortfolioStrategy).where(
+                    PortfolioStrategy.strategy_id == session.strategy_id
+                )
+                portfolio_result = await db.execute(portfolio_query)
+                portfolio_strategy = portfolio_result.scalar_one_or_none()
+
+                base_name = portfolio_strategy.strategy_name if portfolio_strategy else "전략"
+                timestamp = datetime.now().strftime("%m%d%H%M")
+                strategy_name = f"{base_name}-{timestamp}"
+
             # 6. 새로운 자동매매 전략 생성 (백테스트 조건 전부 복사)
             strategy = AutoTradingStrategy(
                 user_id=user_id,
                 simulation_session_id=session_id,
+                strategy_name=strategy_name,
                 is_active=True,
                 initial_capital=initial_capital,
                 current_capital=allocated_capital,  # 할당된 자본으로 시작
@@ -261,11 +278,86 @@ class AutoTradingService:
             raise
 
     @staticmethod
+    async def check_deactivation_conditions(
+        db: AsyncSession,
+        strategy_id: UUID,
+        user_id: UUID
+    ) -> Dict[str, Any]:
+        """
+        비활성화 조건 검증
+
+        Args:
+            db: 데이터베이스 세션
+            strategy_id: 전략 ID
+            user_id: 사용자 ID
+
+        Returns:
+            {
+                "can_deactivate_immediately": bool,  # 즉시 비활성화 가능 (보유 종목 0개)
+                "can_sell_and_deactivate": bool,     # 매도 후 비활성화 가능 (장시간 + 보유종목 있음)
+                "needs_scheduled_sell": bool,         # 예약 매도 필요 (장시간 외 + 보유종목 있음)
+                "position_count": int,                # 보유 종목 수
+                "is_market_hours": bool,              # 현재 장시간 여부
+                "recommended_mode": str               # 추천 모드
+            }
+        """
+        try:
+            # 1. 전략 조회
+            query = select(AutoTradingStrategy).where(
+                and_(
+                    AutoTradingStrategy.strategy_id == strategy_id,
+                    AutoTradingStrategy.user_id == user_id
+                )
+            )
+            result = await db.execute(query)
+            strategy = result.scalar_one_or_none()
+
+            if not strategy:
+                raise ValueError("자동매매 전략을 찾을 수 없습니다.")
+
+            # 2. 보유 종목 수 조회
+            position_query = select(func.count(LivePosition.position_id)).where(
+                LivePosition.strategy_id == strategy_id
+            )
+            position_result = await db.execute(position_query)
+            position_count = position_result.scalar() or 0
+
+            # 3. 현재 시각이 장시간인지 확인
+            market_hours = is_market_hours()
+
+            # 4. 조건 판단
+            can_immediate = position_count == 0  # 보유 종목 0개면 즉시 비활성화
+            can_sell = position_count > 0 and market_hours  # 보유 종목 있고 장시간이면 매도 후 비활성화
+            needs_scheduled = position_count > 0 and not market_hours  # 보유 종목 있고 장시간 외면 예약 매도
+
+            # 5. 추천 모드 결정
+            if can_immediate:
+                recommended_mode = "immediate"
+            elif can_sell:
+                recommended_mode = "sell_and_deactivate"
+            else:
+                recommended_mode = "scheduled_sell"
+
+            return {
+                "can_deactivate_immediately": can_immediate,
+                "can_sell_and_deactivate": can_sell,
+                "needs_scheduled_sell": needs_scheduled,
+                "position_count": position_count,
+                "is_market_hours": market_hours,
+                "recommended_mode": recommended_mode
+            }
+
+        except Exception as e:
+            logger.error(f"비활성화 조건 검증 실패: {e}", exc_info=True)
+            raise
+
+    @staticmethod
     async def deactivate_strategy(
         db: AsyncSession,
         strategy_id: UUID,
         user_id: UUID,
-        sell_all: bool = True
+        sell_all: bool = True,
+        deactivation_mode: Optional[str] = None
     ) -> Tuple[AutoTradingStrategy, int]:
         """
         자동매매 전략 비활성화
@@ -275,6 +367,7 @@ class AutoTradingService:
             strategy_id: 전략 ID
             user_id: 사용자 ID
             sell_all: 보유 종목 전량 매도 여부
+            deactivation_mode: 비활성화 모드 (immediate, sell_and_deactivate, scheduled_sell)
 
         Returns:
             (비활성화된 전략, 매도한 종목 수)
@@ -295,16 +388,36 @@ class AutoTradingService:
 
             sold_count = 0
 
-            # 2. 보유 종목 전량 매도 (선택)
-            if sell_all:
+            # 2. 비활성화 모드에 따른 처리
+            if deactivation_mode == "immediate":
+                # 즉시 비활성화 (보유 종목 없을 때)
+                strategy.is_active = False
+                strategy.deactivated_at = datetime.now()
+                strategy.deactivation_mode = "immediate"
+
+            elif deactivation_mode == "sell_and_deactivate":
+                # 매도 후 비활성화 (장시간)
                 sold_count = await AutoTradingService._sell_all_positions(db, strategy)
+                strategy.is_active = False
+                strategy.deactivated_at = datetime.now()
+                strategy.deactivation_mode = "sell_and_deactivate"
 
-            # 3. 전략 비활성화
-            strategy.is_active = False
-            strategy.deactivated_at = datetime.now()
+            elif deactivation_mode == "scheduled_sell":
+                # 예약 매도 (장시간 외)
+                strategy.scheduled_deactivation = True
+                strategy.deactivation_mode = "scheduled_sell"
+                strategy.deactivation_requested_at = datetime.now()
+                # is_active는 유지 (스케줄러가 처리할 때까지)
 
-            # 3-1. 연결된 SimulationSession도 비활성화
-            if strategy.simulation_session_id:
+            else:
+                # 기존 방식 호환 (sell_all 파라미터 사용)
+                if sell_all:
+                    sold_count = await AutoTradingService._sell_all_positions(db, strategy)
+                strategy.is_active = False
+                strategy.deactivated_at = datetime.now()
+
+            # 3. 연결된 SimulationSession 비활성화 (즉시 비활성화일 때만)
+            if not strategy.is_active and strategy.simulation_session_id:
                 session_query = select(SimulationSession).where(
                     SimulationSession.session_id == strategy.simulation_session_id
                 )
@@ -317,17 +430,26 @@ class AutoTradingService:
             await db.refresh(strategy)
 
             # 4. 로그 기록
+            log_message = f"자동매매 비활성화 요청 - 모드: {deactivation_mode or 'legacy'}, 매도: {sold_count}개"
+            if deactivation_mode == "scheduled_sell":
+                log_message = f"자동매매 예약 비활성화 - 다음 장 시작 시 매도 예정"
+
             log = AutoTradingLog(
                 strategy_id=strategy.strategy_id,
-                event_type="DEACTIVATED",
+                event_type="DEACTIVATED" if not strategy.is_active else "SCHEDULED_DEACTIVATION",
                 event_level="INFO",
-                message=f"자동매매 전략 비활성화 - 매도 종목: {sold_count}개",
-                details={"sold_count": sold_count, "sell_all": sell_all}
+                message=log_message,
+                details={
+                    "sold_count": sold_count,
+                    "sell_all": sell_all,
+                    "deactivation_mode": deactivation_mode,
+                    "scheduled": deactivation_mode == "scheduled_sell"
+                }
             )
             db.add(log)
             await db.commit()
 
-            logger.info(f"✅ 자동매매 비활성화: strategy_id={strategy_id}, 매도={sold_count}개")
+            logger.info(f"✅ 자동매매 비활성화: strategy_id={strategy_id}, 모드={deactivation_mode}, 매도={sold_count}개")
 
             return strategy, sold_count
 
@@ -1017,21 +1139,38 @@ class AutoTradingService:
                                 logger.warning(f"종목 {position.stock_code} 가격 조회 실패: {price_err}")
                                 continue
 
-                        # 키움 API의 총 평가액 정보 추출
-                        kiwoom_total_eval = None
-                        kiwoom_total_profit = None
-                        kiwoom_total_profit_rate = None
+                        # 키움 API의 이 전략 종목들의 평가액/손익 계산
+                        strategy_stock_codes = {pos.stock_code for pos in positions}
+                        strategy_eval_sum = Decimal("0")
+                        strategy_profit_sum = Decimal("0")
 
-                        tot_evlt_amt = account_data.get("tot_evlt_amt")
-                        tot_evlt_pl = account_data.get("tot_evlt_pl")
-                        tot_prft_rt = account_data.get("tot_prft_rt")
+                        for holding in account_data.get("acnt_evlt_remn_indv_tot", []):
+                            stock_code = holding.get("stk_cd", "")
+                            # 'A'로 시작하는 경우 제거 (예: A005930 -> 005930)
+                            if stock_code.startswith("A"):
+                                stock_code = stock_code[1:]
 
-                        if tot_evlt_amt:
-                            kiwoom_total_eval = Decimal(str(int(tot_evlt_amt)))
-                        if tot_evlt_pl:
-                            kiwoom_total_profit = Decimal(str(int(tot_evlt_pl)))
-                        if tot_prft_rt:
-                            kiwoom_total_profit_rate = Decimal(str(float(tot_prft_rt)))
+                            if stock_code in strategy_stock_codes:
+                                # 평가금액 (보유수량 * 현재가)
+                                evltv_amt = holding.get("evlt_amt")
+                                if evltv_amt:
+                                    strategy_eval_sum += Decimal(str(int(evltv_amt)))
+
+                                # 평가손익 (수수료 포함)
+                                evltv_prft = holding.get("evltv_prft")
+                                if evltv_prft:
+                                    strategy_profit_sum += Decimal(str(int(evltv_prft)))
+
+                        # 현금 잔고 추가
+                        strategy_eval_sum += strategy.cash_balance
+
+                        # allocated_capital 기준 수익률 계산
+                        kiwoom_total_eval = strategy_eval_sum
+                        kiwoom_total_profit = strategy_profit_sum
+                        kiwoom_total_profit_rate = Decimal("0")
+
+                        if strategy.allocated_capital > 0:
+                            kiwoom_total_profit_rate = (strategy_profit_sum / strategy.allocated_capital) * Decimal("100")
 
                         # 전략 객체에 키움 실제 데이터 추가 (DB에는 저장 안 함, 응답용)
                         strategy.kiwoom_total_eval = kiwoom_total_eval
@@ -1040,7 +1179,7 @@ class AutoTradingService:
 
                         # 변경사항 저장
                         await db.commit()
-                        logger.info(f"✅ 키움 API를 통해 {updated_count}개 종목 가격 업데이트 완료 (총 평가액: {kiwoom_total_eval:,.0f}원)")
+                        logger.info(f"✅ 키움 API를 통해 {updated_count}개 종목 가격 업데이트 완료 (평가액: {kiwoom_total_eval:,.0f}원, 손익: {kiwoom_total_profit:,.0f}원, 수익률: {kiwoom_total_profit_rate:.2f}%)")
 
                     except Exception as kiwoom_err:
                         logger.warning(f"키움 API 호출 실패, StockPrice 테이블에서 조회: {kiwoom_err}")
@@ -1199,12 +1338,12 @@ class AutoTradingService:
                 "total_trades_today": 0
             }
 
-        # 2. 전체 통계 계산
-        total_allocated_capital = Decimal("0")
+        # 2. 전체 통계 계산 - 먼저 할당 자본 계산
+        total_allocated_capital = sum(s.allocated_capital for s in active_strategies)
         total_current_value = Decimal("0")
         total_positions_count = 0
 
-        # 키움 API를 통한 실제 평가액 조회 시도
+        # 키움 API를 통한 실제 평가액 조회 시도 (전체 계좌 정보)
         from app.models.user import User
         from app.services.kiwoom_service import KiwoomService
 
@@ -1218,6 +1357,7 @@ class AutoTradingService:
 
         if user and user.kiwoom_access_token:
             try:
+                # 키움 API에서 전체 계좌 평가 조회
                 account_data = KiwoomService.get_account_evaluation(
                     access_token=user.kiwoom_access_token
                 )
@@ -1233,14 +1373,12 @@ class AutoTradingService:
                 if tot_prft_rt:
                     kiwoom_total_profit_rate = Decimal(str(float(tot_prft_rt)))
 
-                logger.info(f"💰 키움 API 대시보드 데이터: 총 평가액={kiwoom_total_eval:,.0f}원, 손익={kiwoom_total_profit:,.0f}원 ({kiwoom_total_profit_rate}%)")
+                logger.info(f"💰 키움 API 전체 계좌 대시보드: 평가액={kiwoom_total_eval:,.0f}원, 손익={kiwoom_total_profit:,.0f}원, 수익률={kiwoom_total_profit_rate:.2f}%")
 
             except Exception as kiwoom_err:
                 logger.warning(f"키움 API 대시보드 데이터 조회 실패: {kiwoom_err}")
 
         for strategy in active_strategies:
-            # allocated_capital을 기준으로 계산 (실제 가상매매에 할당된 금액)
-            total_allocated_capital += strategy.allocated_capital
 
             # 현재 가치 계산 (현금 + 보유 주식 평가액)
             positions_query = select(LivePosition).where(
@@ -1267,9 +1405,9 @@ class AutoTradingService:
         today_trades_result = await db.execute(today_trades_query)
         total_trades_today = today_trades_result.scalar() or 0
 
-        # 4. 수익률 계산 (키움 API 데이터 우선 사용)
+        # 4. 수익률 계산 (키움 API 전체 계좌 데이터 우선 사용)
         if kiwoom_total_eval is not None:
-            # 키움 API 데이터 사용
+            # 키움 API 전체 계좌 데이터 사용
             final_total_assets = kiwoom_total_eval
             final_total_profit = kiwoom_total_profit or Decimal("0")
             final_total_return = kiwoom_total_profit_rate or Decimal("0")

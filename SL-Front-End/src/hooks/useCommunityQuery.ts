@@ -5,6 +5,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { communityApi } from "@/lib/api/community";
+import { strategyApi } from "@/lib/api/strategy";
 import type {
   PostListResponse,
   PostDetail,
@@ -19,6 +20,7 @@ import type {
   CommentUpdate,
   CloneStrategyData,
 } from "@/lib/api/community";
+import type { PublicStrategiesResponse } from "@/lib/api/strategy";
 
 /**
  * 커뮤니티 쿼리 키
@@ -52,6 +54,10 @@ export const communityQueryKey = {
   // 전략 복제
   cloneStrategy: (sessionId: string) =>
     [...communityQueryKey.all, "clone-strategy", sessionId] as const,
+
+  // 공개 전략
+  publicStrategies: (params?: { page?: number; limit?: number }) =>
+    [...communityQueryKey.all, "public-strategies", params] as const,
 };
 
 // ============================================================
@@ -325,5 +331,20 @@ export function useCloneStrategyMutation() {
       // 전략 목록 갱신 (복제된 전략 반영)
       queryClient.invalidateQueries({ queryKey: ["strategies"] });
     },
+  });
+}
+
+// ============================================================
+// 공개 전략 목록
+// ============================================================
+
+export function usePublicStrategiesQuery(params?: {
+  page?: number;
+  limit?: number;
+}) {
+  return useQuery<PublicStrategiesResponse, Error>({
+    queryKey: communityQueryKey.publicStrategies(params),
+    queryFn: () => strategyApi.getPublicStrategies(params),
+    staleTime: 1000 * 60 * 5,
   });
 }

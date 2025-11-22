@@ -1347,7 +1347,42 @@ class BacktestEngine:
                               'OPERATING_MARGIN', 'NET_MARGIN', 'CHANGE_RATE',
                               'OPERATING_INCOME_GROWTH', 'GROSS_PROFIT_GROWTH',
                               'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y',
-                              'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y'}
+                              'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y',
+                              # Phase 2-B: 부분 구현 팩터 추가 (19개)
+                              'ASSET_TURNOVER', 'QUALITY_SCORE', 'ACCRUALS_RATIO', 'ASSET_GROWTH_1Y',
+                              'ALTMAN_Z_SCORE', 'EARNINGS_QUALITY',
+                              'DISTANCE_FROM_52W_HIGH', 'DISTANCE_FROM_52W_LOW',
+                              'RSI_14', 'MACD_SIGNAL', 'STOCHASTIC_14', 'VOLUME_ROC', 'PRICE_POSITION',
+                              # NEW: 15 Missing Factors
+                              'PEG', 'EV_FCF', 'DIVIDEND_YIELD', 'CAPE_RATIO', 'PTBV',
+                              'ROIC', 'INVENTORY_TURNOVER',
+                              'OCF_GROWTH_1Y', 'BOOK_VALUE_GROWTH_1Y', 'SUSTAINABLE_GROWTH_RATE',
+                              'RELATIVE_STRENGTH', 'VOLUME_MOMENTUM', 'BETA',
+                              # 22 Technical Indicators
+                              'MA_5', 'MA_20', 'MA_60', 'MA_120', 'MA_250',  # Moving Averages (5)
+                              'ADX', 'AROON_UP', 'AROON_DOWN', 'ATR', 'MACD_HISTOGRAM', 'PRICE_VS_MA20',  # Trend (6)
+                              'CCI', 'MFI', 'ULTIMATE_OSCILLATOR', 'WILLIAMS_R', 'TRIX',  # Oscillators (5, RSI already exists)
+                              'CMF', 'OBV', 'VWAP',  # Volume-based (3)
+                              # === NEW: 40 Additional Factors ===
+                              # Valuation (5)
+                              'GRAHAM_NUMBER', 'GREENBLATT_RANK', 'MAGIC_FORMULA', 'PRICE_TO_FCF', 'PS_RATIO',
+                              # Momentum (9)
+                              'RETURN_1M', 'RETURN_3M', 'RETURN_6M', 'RETURN_12M', 'RET_3D', 'RET_8D',
+                              'DAYS_FROM_52W_HIGH', 'DAYS_FROM_52W_LOW', 'WEEK_52_POSITION',
+                              # Risk (4)
+                              'DOWNSIDE_VOLATILITY', 'MAX_DRAWDOWN', 'SHARPE_RATIO', 'SORTINO_RATIO',
+                              # Volatility (3)
+                              'HISTORICAL_VOLATILITY_20', 'HISTORICAL_VOLATILITY_60', 'PARKINSON_VOLATILITY',
+                              # Composite (3)
+                              'ENTERPRISE_YIELD', 'PIOTROSKI_F_SCORE', 'SHAREHOLDER_YIELD',
+                              # Microstructure (5)
+                              'AMIHUD_ILLIQUIDITY', 'EASE_OF_MOVEMENT', 'FORCE_INDEX', 'INTRADAY_VOLATILITY', 'VOLUME_PRICE_TREND',
+                              # Duplicate/Alias (7)
+                              'DEBTRATIO', 'DIVIDENDYIELD', 'EARNINGS_GROWTH', 'OPERATING_INCOME_GROWTH_YOY',
+                              'PEG_RATIO', 'REVENUE_GROWTH', 'SMA',
+                              # Dividend (2)
+                              'DIVIDEND_GROWTH_3Y', 'DIVIDEND_GROWTH_YOY'
+                              }
 
         # Polars DataFrame으로 변환
         price_pl = pl.from_pandas(price_data)

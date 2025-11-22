@@ -124,24 +124,18 @@ export default function QuantStrategySummaryPanel({
   // AI 헬퍼에서 생성된 조건을 매수 조건에 추가
   const handleBuyConditionsAdd = (conditions: any[]) => {
     conditions.forEach((dslCondition) => {
-      const { factor, params, operator, value } = dslCondition;
+      const { factor, params, operator, value, subFactorName } = dslCondition;
+      const factorName = factor;
+      const sfName = subFactorName || "기본값";
+      const arg = params && params.length > 0 ? String(params[0]) : undefined;
 
-      if (params && params.length > 0) {
-        addBuyConditionUIWithData({
-          factorName: factor,
-          subFactorName: null,
-          operator: operator,
-          value: value !== null ? String(value) : "",
-          argument: String(params[0]),
-        });
-      } else {
-        addBuyConditionUIWithData({
-          factorName: factor,
-          subFactorName: null,
-          operator: operator,
-          value: value !== null ? String(value) : "",
-        });
-      }
+      addBuyConditionUIWithData({
+        factorName,
+        subFactorName: sfName,
+        operator: operator,
+        value: value !== null ? String(value) : "",
+        argument: arg,
+      });
     });
 
     // 조건 추가 후 논리식 자동 생성 (2개 이상일 때만)
@@ -162,24 +156,18 @@ export default function QuantStrategySummaryPanel({
   // AI 헬퍼에서 생성된 조건을 매도 조건에 추가
   const handleSellConditionsAdd = (conditions: any[]) => {
     conditions.forEach((dslCondition) => {
-      const { factor, params, operator, value } = dslCondition;
+      const { factor, params, operator, value, subFactorName } = dslCondition;
+      const factorName = factor;
+      const sfName = subFactorName || "기본값";
+      const arg = params && params.length > 0 ? String(params[0]) : undefined;
 
-      if (params && params.length > 0) {
-        addSellConditionUIWithData({
-          factorName: factor,
-          subFactorName: null,
-          operator: operator,
-          value: value !== null ? String(value) : "",
-          argument: String(params[0]),
-        });
-      } else {
-        addSellConditionUIWithData({
-          factorName: factor,
-          subFactorName: null,
-          operator: operator,
-          value: value !== null ? String(value) : "",
-        });
-      }
+      addSellConditionUIWithData({
+        factorName,
+        subFactorName: sfName,
+        operator: operator,
+        value: value !== null ? String(value) : "",
+        argument: arg,
+      });
     });
 
     // 조건 추가 후 논리식 자동 생성 (2개 이상일 때만)

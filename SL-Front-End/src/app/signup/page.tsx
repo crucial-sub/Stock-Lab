@@ -34,16 +34,16 @@ export default function SignUpPage() {
 
   const handleChange =
     (field: keyof typeof form) =>
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const value = event.target.value;
-      setForm((prev) => ({ ...prev, [field]: value }));
-      if (field === "email") {
-        setIsEmailVerified(false);
-      }
-      if (field === "nickname") {
-        setIsNicknameChecked(false);
-      }
-    };
+      (event: React.ChangeEvent<HTMLInputElement>) => {
+        const value = event.target.value;
+        setForm((prev) => ({ ...prev, [field]: value }));
+        if (field === "email") {
+          setIsEmailVerified(false);
+        }
+        if (field === "nickname") {
+          setIsNicknameChecked(false);
+        }
+      };
 
   const validate = () => {
     const nextErrors: SignUpErrors = {};
@@ -93,6 +93,12 @@ export default function SignUpPage() {
   const labelClass = (hasError?: string) =>
     hasError ? "text-brand-primary" : "text-text-strong";
 
+  const inputClass = (hasError?: string) =>
+    `py-[0.75rem] w-full rounded-[12px] px-4 font-normal text-body placeholder:text-muted focus:outline-none shadow-elev-card-soft ${hasError
+      ? "bg-[#1822340D] border-[0.5px] border-[#FF6464]"
+      : "bg-[#1822340D] border-[0.5px] border-[#18223433] focus:border-brand-purple"
+    }`;
+
   const handleEmailVerify = () => {
     if (!form.email.trim()) {
       setErrors((prev) => ({ ...prev, email: "이메일을 입력해주세요." }));
@@ -130,11 +136,11 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-app px-[2.5rem] py-[3.75rem] text-text-body">
-      <div className="w-full max-w-[520px] rounded-[8px] border border-border-subtle bg-white px-[2.5rem] py-[3.75rem] shadow-card">
+    <div className="flex min-h-screen items-center justify-center px-[2.5rem] py-[3.75rem] text-body">
+      <div className="w-full max-w-[520px] px-[2.5rem] py-[3.75rem]">
         <Link
           href="/login"
-          className="flex items-center gap-1 text-[0.75rem] font-normal text-text-body hover:text-brand-primary"
+          className="flex items-center gap-1 text-[0.75rem] font-normal text-muted"
         >
           <Image
             src="/icons/arrow_left.svg"
@@ -146,19 +152,17 @@ export default function SignUpPage() {
         </Link>
 
         <div>
-          <h1 className="mt-[1.75rem] text-[1.5rem] font-semibold text-text-strong text-left">
+          <h1 className="mt-[1.75rem] text-[1.5rem] font-semibold text-body text-left">
             회원가입
           </h1>
-          <p className="text-text-body text-left">
+          <p className="text-muted text-left">
             원활한 서비스 사용을 위해 회원가입을 진행해주세요.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+        <form onSubmit={handleSubmit} className="mt-10 space-y-6">
           <div>
-            <p
-              className={`mb-2 text-sm font-normal ${labelClass(errors.name)}`}
-            >
+            <p className={`mb-1 text-[0.875rem] font-normal ${labelClass(errors.name)}`}>
               이름을 입력해주세요.
             </p>
             <Input
@@ -166,16 +170,12 @@ export default function SignUpPage() {
               placeholder="이름"
               value={form.name}
               onChange={handleChange("name")}
-              className={`h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none ${
-                errors.name
-                  ? "border-brand-primary bg-[#FFF6F6]"
-                  : "border-border-default bg-white focus:border-accent-primary"
-              }`}
+              className={inputClass(errors.name)}
             />
           </div>
           <div>
             <p
-              className={`mb-2 text-sm font-normal ${labelClass(errors.nickname)}`}
+              className={`mb-1 text-[0.875rem] font-normal ${labelClass(errors.nickname)}`}
             >
               닉네임을 입력해주세요.
             </p>
@@ -186,17 +186,12 @@ export default function SignUpPage() {
                 value={form.nickname}
                 onChange={handleChange("nickname")}
                 maxLength={8}
-                className={
-                  "h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none " +
-                  (errors.nickname
-                    ? "border-brand-primary bg-[#FFF6F6]"
-                    : "border-border-default bg-white focus:border-accent-primary")
-                }
+                className={inputClass(errors.nickname)}
               />
               <button
                 type="button"
                 onClick={handleNicknameCheck}
-                className={`h-14 w-[6.5rem] rounded-[8px] border border-border-subtle bg-[#F5F5F5] text-sm font-semibold text-text-muted `}
+                className={`px-5 rounded-[12px] bg-brand-purple text-[0.875rem] font-semibold text-white hover:opacity-80 disabled:opacity-60 whitespace-nowrap`}
               >
                 중복 확인
               </button>
@@ -214,7 +209,7 @@ export default function SignUpPage() {
           </div>
           <div>
             <p
-              className={`mb-2 text-sm font-normal ${labelClass(errors.phone)}`}
+              className={`mb-1 text-[0.875rem] font-normal ${labelClass(errors.phone)}`}
             >
               전화번호를 입력해주세요.
             </p>
@@ -224,16 +219,12 @@ export default function SignUpPage() {
               placeholder="01012345678 (- 없이)"
               value={form.phone}
               onChange={handleChange("phone")}
-              className={`h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none ${
-                errors.phone
-                  ? "border-brand-primary bg-[#FFF6F6]"
-                  : "border-border-default bg-white focus:border-accent-primary"
-              }`}
+              className={inputClass(errors.phone)}
             />
           </div>
           <div>
             <p
-              className={`mb-2 text-sm font-normal ${labelClass(errors.email)}`}
+              className={`mb-1 text-[0.875rem] font-normal ${labelClass(errors.email)}`}
             >
               이메일을 입력해주세요.
             </p>
@@ -244,18 +235,12 @@ export default function SignUpPage() {
                 placeholder="example@stocklab.com"
                 value={form.email}
                 onChange={handleChange("email")}
-                className={
-                  "h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none " +
-                  (errors.email
-                    ? "border-brand-primary bg-[#FFF6F6]"
-                    : "border-border-default bg-white focus:border-accent-primary")
-                }
+                className={inputClass(errors.email)}
               />
               <button
                 type="button"
                 onClick={handleEmailVerify}
-                className={`h-14 w-[6.5rem] rounded-[8px] border border-border-subtle bg-[#F5F5F5] text-sm font-semibold text-text-muted `}
-              >
+                className={`px-5 rounded-[12px] bg-brand-purple text-[0.875rem] font-semibold text-white hover:opacity-80 disabled:opacity-60 whitespace-nowrap`}              >
                 인증하기
               </button>
             </div>
@@ -267,7 +252,7 @@ export default function SignUpPage() {
           </div>
           <div>
             <p
-              className={`mb-2 text-sm font-normal ${labelClass(errors.password)}`}
+              className={`mb-1 text-[0.875rem] font-normal ${labelClass(errors.password)}`}
             >
               비밀번호를 입력해주세요.
             </p>
@@ -277,17 +262,12 @@ export default function SignUpPage() {
               placeholder="********"
               value={form.password}
               onChange={handleChange("password")}
-              className={
-                "h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none " +
-                (errors.password
-                  ? "border-brand-primary bg-[#FFF6F6]"
-                  : "border-border-default bg-white focus:border-accent-primary")
-              }
+              className={inputClass(errors.password)}
             />
           </div>
           <div>
             <p
-              className={`mb-2 text-sm font-normal ${labelClass(
+              className={`mb-1 text-[0.875rem] font-normal ${labelClass(
                 errors.passwordConfirm,
               )}`}
             >
@@ -299,29 +279,23 @@ export default function SignUpPage() {
               placeholder="********"
               value={form.passwordConfirm}
               onChange={handleChange("passwordConfirm")}
-              className={
-                "h-14 w-full rounded-[8px] border px-5 text-base font-normal text-text-body placeholder:text-text-muted focus:outline-none " +
-                (errors.passwordConfirm
-                  ? "border-brand-primary bg-[#FFF6F6]"
-                  : "border-border-default bg-white focus:border-accent-primary")
-              }
+              className={`${inputClass(errors.passwordConfirm)} mb-5`}
             />
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="h-14 w-full rounded-[8px] border border-brand-primary bg-[#FFD7DB] text-lg font-semibold text-brand-primary transition hover:bg-brand-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-60 "
-          >
+            className="py-2.5 w-full rounded-[12px] bg-brand-purple text-[1.125rem] font-semibold text-white transition hover:opacity-80 disabled:opacity-60"          >
             {isSubmitting ? "가입 중..." : "회원가입"}
           </button>
         </form>
 
-        <p className={`mt-10 text-center text-sm text-text-body `}>
+        <p className={`mt-10 text-center text-sm text-muted `}>
           이미 계정이 있으신가요?{" "}
           <Link
             href="/login"
-            className="font-semibold text-brand-primary hover:underline"
+            className="font-semibold text-brand-purple hover:underline"
           >
             로그인하기
           </Link>

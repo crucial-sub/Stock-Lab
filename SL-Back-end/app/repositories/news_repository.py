@@ -6,43 +6,35 @@ from typing import List, Dict, Optional, Tuple
 from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.news import NewsArticle, ThemeSentiment
+from app.repositories.theme_repository import ThemeRepository
 from loguru import logger
 import html
 from datetime import datetime
 from pytz import UTC, timezone
 
-# Theme mapping: English (DB) <-> Korean (Frontend)
-THEME_MAPPING = {
-    "other": "기타",
-    "chemical": "화학",
-    "other_finance": "기타금융",
-    "electronics": "전기·전자",
-    "distribution": "유통",
-    "transport_equipment": "운송장비·부품",
-    "metal": "금속",
-    "pharma": "제약",
-    "food": "음식료·담배",
-    "construction": "건설",
-    "service": "일반서비스",
-    "machinery": "기계·장비",
-    "textile": "섬유·의류",
-    "securities": "증권",
-    "transport": "운송·창고",
-    "it_service": "IT 서비스",
-    "real_estate": "부동산",
-    "non_metal": "비금속",
-    "paper": "종이·목재",
-    "insurance": "보험",
-    "entertainment": "오락·문화",
-    "utility": "전기·가스·수도",
-    "other_manufacturing": "기타제조",
-    "medical": "의료·정밀기기",
-    "telecom": "통신",
-    "bank": "은행",
-    "agriculture": "농업, 임업 및 어업",
-    "finance": "금융",
-    "publishing": "출판·매체복제",
-}
+# 테마 매핑 캐시 (DB에서 동적으로 로드)
+_THEME_MAPPING_CACHE: Optional[Dict[str, str]] = None
+_THEME_MAPPING_REVERSE_CACHE: Optional[Dict[str, str]] = None
+
+
+async def _load_theme_mappings(db: AsyncSession) -> Tuple[Dict[str, str], Dict[str, str]]:
+    """
+    DB에서 테마 매핑 로드 (영문 ↔ 한글)
+
+    Returns:
+        (영문→한글 매핑, 한글→영문 매핑)
+    """
+    global _THEME_MAPPING_CACHE, _THEME_MAPPING_REVERSE_CACHE
+
+    if _THEME_MAPPING_CACHE is not None and _THEME_MAPPING_REVERSE_CACHE is not None:
+        return _THEME_MAPPING_CACHE, _THEME_MAPPING_REVERSE_CACHE
+
+    theme_repo = ThemeRepository(db)
+    _THEME_MAPPING_CACHE = await theme_repo.get_theme_mapping()
+    _THEME_MAPPING_REVERSE_CACHE = {v: k for k, v in _THEME_MAPPING_CACHE.items()}
+
+    logger.info(f"Loaded {len(_THEME_MAPPING_CACHE)} themes from database")
+    return _THEME_MAPPING_CACHE, _THEME_MAPPING_REVERSE_CACHE
 
 # 언론사 코드/도메인 -> 명칭 매핑
 MEDIA_DOMAIN_MAPPING = {
@@ -129,9 +121,6 @@ MEDIA_DOMAIN_MAPPING = {
 # 역방향 매핑(코드가 문자열이 아닌 도메인 형태로 들어올 때 대비)
 MEDIA_DOMAIN_MAPPING.update({v: v for v in MEDIA_DOMAIN_MAPPING.values()})
 
-#프론트에서 받은 한글 테마명을 영어로 변환
-THEME_MAPPING_REVERSE = {v: k for k, v in THEME_MAPPING.items()}
-
 
 STOCK_CODE_MAPPING = {
     "005930": "삼성전자",
@@ -183,6 +172,9 @@ class NewsRepository:
             뉴스 리스트
         """
         try:
+            # DB에서 테마 매핑 로드
+            theme_mapping, _ = await _load_theme_mappings(db)
+
             query = select(NewsArticle).where(
                 NewsArticle.stock_code == stock_code
             ).order_by(
@@ -193,7 +185,7 @@ class NewsRepository:
             result = await db.execute(query)
             articles = result.scalars().all()
 
-            return [_serialize_news(article) for article in articles]
+            return [_serialize_news(article, theme_mapping) for article in articles]
         except Exception as e:
             logger.error(f"Failed to get news for {stock_code}: {e}")
             return []
@@ -216,6 +208,9 @@ class NewsRepository:
             뉴스 리스트
         """
         try:
+            # DB에서 테마 매핑 로드
+            theme_mapping, _ = await _load_theme_mappings(db)
+
             query = select(NewsArticle).where(
                 or_(
                     NewsArticle.title.contains(keyword),
@@ -231,7 +226,7 @@ class NewsRepository:
             result = await db.execute(query)
             articles = result.scalars().all()
 
-            return [_serialize_news(article) for article in articles]
+            return [_serialize_news(article, theme_mapping) for article in articles]
         except Exception as e:
             logger.error(f"Failed to search news for '{keyword}': {e}")
             return []
@@ -254,9 +249,12 @@ class NewsRepository:
             뉴스 리스트
         """
         try:
+            # DB에서 테마 매핑 로드
+            theme_mapping, theme_mapping_reverse = await _load_theme_mappings(db)
+
             # 프론트에서 받은 값이 테마인지 회사명인지 판단
             # 테마일 경우 영어 코드로 변환, 회사명일 경우 그대로 사용
-            search_theme = THEME_MAPPING_REVERSE.get(theme, theme)
+            search_theme = theme_mapping_reverse.get(theme, theme)
 
             # 회사명(종목명)으로도 검색 가능하도록 OR 조건 추가
             query = select(NewsArticle).where(
@@ -272,10 +270,79 @@ class NewsRepository:
             result = await db.execute(query)
             articles = result.scalars().all()
 
-            return [_serialize_news(article) for article in articles]
+            return [_serialize_news(article, theme_mapping) for article in articles]
         except Exception as e:
             logger.error(f"Failed to search news by theme '{theme}': {e}")
             return []
+
+    @staticmethod
+    async def search_news_by_themes(
+        db: AsyncSession,
+        themes: List[str],
+        limit: int = 1000
+    ) -> List[Dict]:
+        """
+        여러 테마 또는 회사명을 동시에 조회
+
+        Args:
+            db: 데이터베이스 세션
+            themes: 테마명 또는 회사명 리스트
+            limit: 조회 제한 수
+
+        Returns:
+            뉴스 리스트
+        """
+        try:
+            theme_mapping, theme_mapping_reverse = await _load_theme_mappings(db)
+
+            normalized_themes = []
+            for theme in themes:
+                normalized_themes.append(theme_mapping_reverse.get(theme, theme))
+
+            conditions = []
+            for normalized in normalized_themes:
+                conditions.append(NewsArticle.theme == normalized)
+                conditions.append(NewsArticle.company_name == normalized)
+
+            if not conditions:
+                return []
+
+            query = select(NewsArticle).where(
+                or_(*conditions)
+            ).order_by(
+                NewsArticle.news_date.desc(),
+                NewsArticle.analyzed_at.desc()
+            ).limit(limit)
+
+            result = await db.execute(query)
+            articles = result.scalars().all()
+
+            return [_serialize_news(article, theme_mapping) for article in articles]
+        except Exception as e:
+            logger.error(f"Failed to search news by themes '{themes}': {e}")
+            return []
+
+    @staticmethod
+    async def get_news_by_id(
+        db: AsyncSession,
+        news_id: int
+    ) -> Optional[Dict]:
+        """
+        ID로 뉴스 기사 단건 조회
+        """
+        try:
+            theme_mapping, _ = await _load_theme_mappings(db)
+
+            query = select(NewsArticle).where(NewsArticle.id == news_id)
+            result = await db.execute(query)
+            article = result.scalar_one_or_none()
+            if not article:
+                return None
+
+            return _serialize_news(article, theme_mapping)
+        except Exception as e:
+            logger.error(f"Failed to fetch news by id '{news_id}': {e}")
+            return None
 
     @staticmethod
     async def get_available_themes(db: AsyncSession) -> List[str]:
@@ -320,6 +387,9 @@ class NewsRepository:
     async def get_latest_news(db: AsyncSession, limit: int = 5) -> List[Dict]:
         """최신 뉴스 (id 기준 내림차순)"""
         try:
+          # DB에서 테마 매핑 로드
+          theme_mapping, _ = await _load_theme_mappings(db)
+
           query = select(NewsArticle).order_by(
               NewsArticle.news_date.desc(),
               NewsArticle.analyzed_at.desc(),
@@ -327,13 +397,13 @@ class NewsRepository:
           ).limit(limit)
           result = await db.execute(query)
           articles = result.scalars().all()
-          return [_serialize_news(article) for article in articles]
+          return [_serialize_news(article, theme_mapping) for article in articles]
         except Exception as e:
           logger.error(f"Failed to fetch latest news: {e}")
           return []
 
 
-def _serialize_news(article: NewsArticle) -> Dict:
+def _serialize_news(article: NewsArticle, theme_mapping: Optional[Dict[str, str]] = None) -> Dict:
     """뉴스 기사를 직렬화 - 프론트 스키마에 맞게"""
     # 날짜 선택 (우선순위: analyzed_at(분석 완료 시간) > crawled_at > news_date)
     published_at = ""
@@ -371,10 +441,13 @@ def _serialize_news(article: NewsArticle) -> Dict:
     }
     sentiment = sentiment_map.get(article.sentiment_label, "neutral")
 
-    # 카테고리는 기본적으로 회사명(종목명)으로 표기, 없으면 테마명 매핑
-    theme_name = article.company_name or None
-    if not theme_name and article.theme:
-        theme_name = THEME_MAPPING.get(article.theme.lower(), article.theme)
+    # 테마명 매핑 (theme만 사용, company_name은 tickerLabel로 처리)
+    theme_name = None
+    if article.theme:
+        if theme_mapping:
+            theme_name = theme_mapping.get(article.theme.lower(), article.theme)
+        else:
+            theme_name = article.theme
 
     # 종목명 결정: company_name > stock_code 매핑 > 빈 문자열
     ticker_label = article.company_name or ""

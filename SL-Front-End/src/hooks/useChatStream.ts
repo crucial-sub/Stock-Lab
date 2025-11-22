@@ -109,7 +109,7 @@ export function useChatStream(
     autoReconnect = true,
     maxReconnectAttempts = 3,
     reconnectInterval = 1000,
-    timeout = 60000, // 60초
+    timeout = 120000, // 60초
   } = options;
 
   // 상태 관리

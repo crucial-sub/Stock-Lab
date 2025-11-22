@@ -66,10 +66,12 @@ class SentimentInsightService:
         }
 
     def _interpret_theme_entry(self, entry: Dict, polarity: str) -> Dict:
-        score = entry.get("sentiment_score", 0)
-        positive = entry.get("positive_news_count", 0) or 0
-        negative = entry.get("negative_news_count", 0) or 0
-        intensity = abs(score)
+        score = entry.get("sentiment_score", 0) or 0
+        # 백엔드에서는 positive_count/negative_count로 내려오므로 두 키 모두 허용
+        positive = entry.get("positive_news_count", entry.get("positive_count", 0)) or 0
+        negative = entry.get("negative_news_count", entry.get("negative_count", 0)) or 0
+        total = entry.get("total_count") or (positive + negative + (entry.get("neutral_count") or 0))
+        intensity = abs(float(score))
 
         if intensity >= 0.7:
             note = "강한 매수 심리" if polarity == "positive" else "강한 경계 심리"
@@ -92,6 +94,7 @@ class SentimentInsightService:
             "summary": entry.get("summary"),
             "positive_news_count": positive,
             "negative_news_count": negative,
+            "total_count": total,
             "interpretation": explanation,
             "confidence": min(1.0, (positive + negative) / 50),
         }

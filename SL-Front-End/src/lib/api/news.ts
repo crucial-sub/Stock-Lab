@@ -17,23 +17,21 @@ export async function fetchNewsList(
   try {
     const limit = params?.limit ?? 100;
 
-    // 테마 필터만 있는 경우
+    // 테마 필터만 있는 경우 (리스트로 한번에 요청)
     if (params?.themes?.length && !params.themes.includes("전체")) {
-      // 모든 테마에 대해 데이터 수집
-      const allNews: NewsItem[] = [];
-      for (const theme of params.themes) {
-        const response = await axiosInstance.get<NewsListResponse>(
-          "/news/db/theme",
-          {
-            params: {
-              theme,
-              limit,
-            },
+      const response = await axiosInstance.get<NewsListResponse>(
+        "/news/db/theme",
+        {
+          params: {
+            themes: params.themes,
+            limit,
           },
-        );
-        allNews.push(...(response.data.news ?? []));
-      }
-      return allNews;
+          paramsSerializer: {
+            indexes: null, // themes=val1&themes=val2 형식으로 직렬화
+          },
+        },
+      );
+      return response.data.news ?? [];
     }
 
     // 키워드가 있으면 검색 API 사용
@@ -103,19 +101,8 @@ export async function fetchLatestNews(limit = 5): Promise<NewsItem[]> {
  */
 export async function fetchNewsById(id: string): Promise<NewsItem | undefined> {
   try {
-    const response = await axiosInstance.get<NewsListResponse>(
-      "/news/db/search",
-      {
-        params: {
-          keyword: "",
-          limit: 1,
-        },
-      },
-    );
-
-    // ID로 필터링 (실제로는 상세 조회 엔드포인트가 있으면 그걸 사용)
-    const news = response.data.news?.find((item: NewsItem) => item.id === id);
-    return news;
+    const response = await axiosInstance.get<NewsItem>(`/news/db/detail/${id}`);
+    return response.data;
   } catch (error) {
     console.error("Failed to fetch news detail:", error);
     return undefined;

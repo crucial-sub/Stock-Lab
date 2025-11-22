@@ -6,10 +6,16 @@ import sys
 import uuid
 import json
 import traceback
+import logging
+import hashlib
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
+try:
+    import redis  # type: ignore
+except ImportError:
+    redis = None
 
 _pydantic_v1_module = None
 try:
@@ -92,20 +98,19 @@ except ImportError as e:
     BaseMessage = None
 
 try:
-    from langchain.memory import ConversationBufferWindowMemory  # type: ignore
+    from langchain.memory import ChatMessageHistory  # type: ignore
 except ImportError:
     try:
-        # LangChain 0.3+는 메모리 API가 classic 패키지로 이동했다.
-        from langchain_classic.memory import ConversationBufferWindowMemory  # type: ignore
-        print('정보: langchain.memory 대신 langchain_classic.memory에서 ConversationBufferWindowMemory를 로드했습니다.')
+        # LangChain 0.3+는 메모리 API가 classic/community 패키지로 이동했다.
+        from langchain_community.chat_message_histories import ChatMessageHistory  # type: ignore
+        print('정보: ChatMessageHistory를 langchain_community에서 로드했습니다.')
     except ImportError as e:
-        print(f"경고: ConversationBufferWindowMemory를 불러오지 못했습니다. pip install langchain-classic 실행 필요. 오류: {e}")
-        ConversationBufferWindowMemory = None
+        print(f"경고: ChatMessageHistory를 불러오지 못했습니다. pip install langchain-community 실행 필요. 오류: {e}")
+        ChatMessageHistory = None
 
 # Load environment variables
 env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(env_path)
-import asyncio
 try:
     from factor_sync import FactorSync
 except ImportError:
@@ -138,8 +143,12 @@ class ChatHandler:
 
     GREETING_KEYWORDS = {"안녕", "안녕하세요", "hi", "hello", "하이", "헬로"}
     DEFAULT_GREETING_RESPONSE = "안녕하세요! AI assistent 입니다 :) 어떤 도움이 필요하신가요?"
+    DSL_CACHE_VERSION = "v1"
 
     def __init__(self, config_path: str = "config.yaml"):
+        if not logging.getLogger().handlers:
+            logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
         self.config_path = config_path
         self.llm_client = None
         self.rag_retriever = None
@@ -148,6 +157,7 @@ class ChatHandler:
         self.agent_executors: Dict[str, Any] = {}
         self.system_prompts: Dict[str, str] = {}
         self.conversation_history = {}
+        self.cache_client = None
         # 설문/추천 상태
         self.session_state: Dict[str, Dict[str, Any]] = {}
         self.forbidden_patterns: Dict[str, List[str]] = {}
@@ -164,6 +174,7 @@ class ChatHandler:
         self.questions = self._load_questions()
         self._load_strategies()
         self._load_nl_category_mapping()
+        self._init_cache_client()
         self._init_components()
         self._ensure_news_retriever()
 
@@ -181,6 +192,18 @@ class ChatHandler:
             if len(cleaned) < 2:
                 return "어떤 종목/테마 뉴스가 궁금한지 알려주세요. 예) '삼성전자 뉴스 알려줘', '반도체 테마 뉴스 요약해줘'"
         return None
+
+    def _init_cache_client(self):
+        """Redis 캐시 클라이언트 초기화."""
+        redis_url = os.getenv("REDIS_URL")
+        if not redis_url or not redis:
+            return
+        try:
+            self.cache_client = redis.from_url(redis_url, decode_responses=True)
+            self.logger.info(f"Redis cache enabled ({redis_url})")
+        except Exception as e:
+            self.logger.warning(f"Redis 초기화 실패: {e}")
+            self.cache_client = None
 
     def _load_questions(self):
         """설문 질문을 외부 파일에서 로드하고, 실패하면 기본값 사용."""
@@ -372,6 +395,12 @@ class ChatHandler:
                 r"(당신|너|니|저는|우리는|우리)\s*(경우|상황|환경).*?(전략|투자|추천|사는|사세요)",
                 r"(월|분기|년)\s*(\d+)\s*(만원|천원|원).*?(투자|사세요|해야)",
                 r"(특별히|맞춤|특화|개인|따라).*?(투자|전략|추천)",
+            ],
+            "비속어": [
+                r"(씨발|시발|좆|병신|개새끼|ㅅㅂ|ㅈㄴ|fuck|shit|bitch)",
+            ],
+            "도박": [
+                r"(도박|카지노|토토|바카라|룰렛|베팅|배팅)",
             ],
         }
 
@@ -651,7 +680,7 @@ class ChatHandler:
             }
 
         # 0. 정책 검사 (투자 조언 금지 정책)
-        policy_violation = self._check_investment_advisory_policy(message)
+        policy_violation = self._check_investment_advisory_policy(message, session_id=session_id)
         if policy_violation:
             return {
                 "answer": policy_violation,
@@ -1133,7 +1162,7 @@ class ChatHandler:
             "## 요약\n"
             f"{cat_text} 기준으로 스크리닝 조건을 만들었습니다.\n\n"
             "### 조건식\n" + "\n".join(lines) + "\n\n"
-            "### 다음 단계\n- 매수/매도 조건에 추가 버튼을 눌러 적용하세요."
+            "### 다음 단계\n- 매수/매도 조건에 추가 버튼을 눌러 적용하세요. \n"
         )
 
         return {
@@ -1255,9 +1284,9 @@ class ChatHandler:
 
     # def _check_domain_restriction(self, message: str) -> Optional[str]:
     #     """금융/투자 관련 키워드가 없으면 차단 응답을 반환."""
-    #     msg = message.lower()
+    #     msg = (message or "").lower()
     #     finance_keywords = [
-            
+
     #     # 투자/주식 일반
     #     "주식", "종목", "투자", "전략", "시장", "백테스트", "포트폴리오", "퀀트",
     #     "재무", "재무제표", "리스크", "수익률", "매수", "매도",
@@ -1269,9 +1298,9 @@ class ChatHandler:
     #     "rsi", "macd", "sma", "ema", "볼린저", "stochastic",
 
     #     # 백테스트 주요 지표
-    #     "cagr", "연환산", "연평균", 
-    #     "mdd", "max drawdown", "낙폭", 
-    #     "샤프", "sharpe", 
+    #     "cagr", "연환산", "연평균",
+    #     "mdd", "max drawdown", "낙폭",
+    #     "샤프", "sharpe",
     #     "소티노", "sortino",
     #     "승률", "win rate",
     #     "손익비", "profit factor", "pf",
@@ -1295,7 +1324,7 @@ class ChatHandler:
     #         "찰리 멍거", "멍거",
     #         "조엘 그린블라트", "그린블라트",
     #     ]
-        
+
     #     if any(k.lower() in msg for k in finance_keywords + strategy_people):
     #         return None
     #     # 자연어 카테고리 매핑에 걸리면 금융 질문으로 간주
@@ -1713,6 +1742,206 @@ class ChatHandler:
         """소문자 + 공백 제거로 간단히 정규화."""
         return re.sub(r"\s+", "", text.lower())
 
+    def _normalize_cache_text(self, text: str) -> str:
+        """캐시 키용 정규화 (소문자 + 공백 축소)."""
+        return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+    def _fallback_parse_simple_conditions(self, message: str) -> List[dict]:
+        """LLM DSL 파싱 실패 시 간단한 규칙으로 조건 추출."""
+        text = self._normalize_condition_separators(message.lower())
+        # 문장 분할: 줄바꿈, 쉼표, 그리고/및
+        chunks = re.split(r"[\n,]+|\s+그리고\s+|\s+및\s+", text)
+        conditions: List[dict] = []
+
+        op_map = {
+            "이하": "<=",
+            "미만": "<",
+            "이상": ">=",
+            "초과": ">",
+        }
+
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+
+            # 패턴: [팩터] [숫자][%옵션] [비교어]
+            match = re.search(r"([a-zA-Z가-힣_]+)\s*([\d\.]+)\s*(%|퍼센트)?\s*(이상|초과|이하|미만)", chunk)
+            if not match:
+                # 패턴이 반대 순서인 경우 (예: 30 이하면 RSI)
+                match_alt = re.search(r"([\d\.]+)\s*(%|퍼센트)?\s*(이상|초과|이하|미만)\s*([a-zA-Z가-힣_]+)", chunk)
+                if not match_alt:
+                    continue
+                factor_raw = match_alt.group(4)
+                value_raw = match_alt.group(1)
+                pct = match_alt.group(2) or ""
+                op_kr = match_alt.group(3)
+            else:
+                factor_raw = match.group(1)
+                value_raw = match.group(2)
+                pct = match.group(3) or ""
+                op_kr = match.group(4)
+
+            operator = op_map.get(op_kr)
+            if not operator:
+                continue
+
+            try:
+                value = float(value_raw)
+            except ValueError:
+                continue
+
+            conditions.append({
+                "factor": factor_raw.upper(),
+                "params": [],
+                "operator": operator,
+                "right_factor": None,
+                "right_params": [],
+                "value": value,
+            })
+
+        if conditions:
+            print(f"[DSL Fallback] {len(conditions)}개 조건을 규칙 기반으로 파싱")
+        return conditions
+
+    def _merge_text_extracted_conditions(self, conditions: List[dict], message: str) -> List[dict]:
+        """텍스트에서 직접 감지한 조건을 추가로 병합."""
+        existing_factors = {str(c.get("factor") or "").upper() for c in conditions}
+        extracted = self._extract_conditions_from_text(message)
+
+        for cond in extracted:
+            factor = str(cond.get("factor") or "").upper()
+            if not factor:
+                continue
+            if factor in existing_factors:
+                continue
+            conditions.append(cond)
+            existing_factors.add(factor)
+
+        return conditions
+
+    def _extract_conditions_from_text(self, message: str) -> List[dict]:
+        """자연어에서 직접 조건을 추출 (LLM 누락 대비)."""
+        text = self._normalize_condition_separators((message or "").lower())
+        chunks = re.split(r"[\n,]+|\s+그리고\s+|\s+및\s+", text)
+        conditions: List[dict] = []
+
+        op_map = {
+            "이하": "<=",
+            "미만": "<",
+            "이상": ">=",
+            "초과": ">",
+        }
+
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+
+            m = re.search(r"([a-zA-Z가-힣_]+)\s*([\d\.]+)\s*(%|퍼센트)?\s*(이상|초과|이하|미만)", chunk)
+            if not m:
+                m = re.search(r"([\d\.]+)\s*(%|퍼센트)?\s*(이상|초과|이하|미만)\s*([a-zA-Z가-힣_]+)", chunk)
+                if not m:
+                    continue
+                factor = m.group(4)
+                value_raw = m.group(1)
+                op_kr = m.group(3)
+            else:
+                factor = m.group(1)
+                value_raw = m.group(2)
+                op_kr = m.group(4)
+
+            operator = op_map.get(op_kr)
+            if not operator:
+                continue
+
+            try:
+                value = float(value_raw)
+            except ValueError:
+                continue
+
+            conditions.append({
+                "factor": factor.upper(),
+                "params": [],
+                "operator": operator,
+                "right_factor": None,
+                "right_params": [],
+                "value": value,
+            })
+
+        return conditions
+
+    def _normalize_condition_separators(self, text: str) -> str:
+        """조건 연결어를 표준화 (이하이고, 이상이고 등)."""
+        if not text:
+            return text
+        # "이하이고" → "이하 그리고", 등 비교어 뒤에 붙은 '이고'를 분리
+        text = re.sub(r"(이하|이상|미만|초과)\s*이고", r"\1 그리고", text)
+        # 숫자/퍼센트 뒤에 바로 '이고'가 붙은 경우 분리
+        text = re.sub(r"(\d+(?:\.\d+)?\s*%?)\s*이고", r"\1 그리고", text)
+        return text
+
+    def _make_dsl_cache_key(self, message: str) -> Optional[str]:
+        """DSL 캐시 키 생성."""
+        if not message:
+            return None
+        norm = self._normalize_cache_text(message)
+        digest = hashlib.sha256(norm.encode("utf-8")).hexdigest()
+        return f"dsl:{self.DSL_CACHE_VERSION}:{digest}"
+
+    def _get_cache(self, key: Optional[str]) -> Optional[dict]:
+        if not key or not self.cache_client:
+            return None
+        try:
+            raw = self.cache_client.get(key)
+            if raw:
+                return json.loads(raw)
+        except Exception as e:
+            self.logger.warning(f"Redis 캐시 조회 실패: {e}")
+        return None
+
+    def _set_cache(self, key: Optional[str], value: dict, ttl: int = 600):
+        if not key or not self.cache_client:
+            return
+        try:
+            self.cache_client.setex(key, ttl, json.dumps(value, ensure_ascii=False))
+        except Exception as e:
+            self.logger.warning(f"Redis 캐시 저장 실패: {e}")
+
+    def _postprocess_condition_values(self, conditions: List[dict], message: str) -> List[dict]:
+        """자연어 숫자/스케일을 문맥 기반으로 보정."""
+        if not conditions:
+            return conditions
+
+        message_lower = (message or "").lower()
+        raw_scale_factors = {"per", "pbr", "psr", "peg"}
+
+        def _value_from_text(factor_token: str) -> Optional[float]:
+            pattern = rf"{re.escape(factor_token)}\s*([0-9]+(?:\.[0-9]+)?)"
+            m = re.search(pattern, message_lower)
+            if m:
+                try:
+                    return float(m.group(1))
+                except ValueError:
+                    return None
+            return None
+
+        for cond in conditions:
+            factor = str(cond.get("factor") or "").lower()
+            value = cond.get("value")
+            if not factor or value is None:
+                continue
+
+            text_value = _value_from_text(factor)
+            if text_value is not None:
+                cond["value"] = text_value
+                continue
+
+            if factor in raw_scale_factors and isinstance(value, (int, float)) and 0 < abs(value) < 1:
+                cond["value"] = round(value * 100, 4)
+
+        return conditions
+
     def _build_strategy_aliases(self, strategy_id: str, name: Optional[str], aliases: Optional[List[str]]) -> List[str]:
         """전략 이름/별칭을 정규화된 토큰 리스트로 생성."""
         tokens: set[str] = set()
@@ -1826,18 +2055,13 @@ class ChatHandler:
         # Get or create conversation memory for the session
         memory_key = f"{client_type}:{session_id}"
         if memory_key not in self.conversation_history:
-            self.conversation_history[memory_key] = ConversationBufferWindowMemory(
-                k=5, memory_key="chat_history", return_messages=True
-            )
+            self.conversation_history[memory_key] = ChatMessageHistory()
         memory = self.conversation_history[memory_key]
 
         try:
             # Use asyncio.to_thread to run the synchronous invoke method in a separate thread
             # Pass inputs in a structured dictionary, not a single message list
-            chat_history = memory.load_memory_variables({})["chat_history"]
-            # Ensure chat_history is a list of BaseMessage objects
-            if isinstance(chat_history, str):
-                chat_history = []
+            chat_history = getattr(memory, "messages", []) if memory else []
 
             # Prepare invoke input
             # Note: agent_scratchpad is required for both tool-calling and ReAct agents
@@ -1882,7 +2106,9 @@ class ChatHandler:
             answer = self._clean_tool_calls_from_response(answer)
 
             # Manually save conversation history to the session's memory
-            memory.save_context({"input": message}, {"output": answer})
+            if memory:
+                memory.add_user_message(message)
+                memory.add_ai_message(answer)
 
             # Extract backtest conditions from intermediate steps if build_backtest_conditions was called
             backtest_conditions = None
@@ -2013,6 +2239,11 @@ class ChatHandler:
         - build_backtest_conditions 도구 호출하여 JSON 생성
         - backtest_conditions 필드로 분리하여 반환
         """
+        cache_key = self._make_dsl_cache_key(message)
+        cached = self._get_cache(cache_key)
+        if cached:
+            return cached
+
         # system.txt에서 DSL 템플릿 영역을 추출해 dsl_generator에 적용
         dsl_system_prompt = self._load_dsl_system_prompt()
 
@@ -2048,6 +2279,16 @@ class ChatHandler:
             conditions = [condition.dict() for condition in result.conditions]
             # 필수 필드 누락 조건은 제거
             conditions = self._filter_valid_conditions(conditions)
+
+            # 기본 DSL 파싱이 실패하면 단순 규칙 기반 파서로 재시도
+            if not conditions:
+                conditions = self._fallback_parse_simple_conditions(message)
+
+            # 텍스트에서 추가로 감지되는 조건을 병합 (LLM 누락 방지)
+            conditions = self._merge_text_extracted_conditions(conditions, message)
+
+            # 자연어 숫자와 스케일이 어긋나면 문장 기반으로 보정
+            conditions = self._postprocess_condition_values(conditions, message)
 
             if not conditions:
                 return {
@@ -2161,30 +2402,44 @@ class ChatHandler:
                 else:
                     buy_conditions.append(cond)
 
-            # 조건들을 자연어로 포맷팅
-            all_condition_lines = []
-            for cond in conditions:
+            # 조건 포맷팅 (요약형)
+            def _fmt_value(val: Any) -> str:
+                if isinstance(val, (int, float)):
+                    if float(val).is_integer():
+                        return str(int(val))
+                    return str(round(val, 6)).rstrip("0").rstrip(".")
+                return str(val)
+
+            def _fmt(cond: Dict[str, Any]) -> str:
                 factor = cond['factor']
                 operator = cond['operator']
                 value = cond.get('value')
                 params = cond.get('params', [])
-
-                # params가 있으면 함수 형태로 표시 (예: SMA(20))
                 if params:
                     factor_str = f"{factor}({', '.join(map(str, params))})"
                 else:
                     factor_str = factor
+                return f"{factor_str} {operator} {_fmt_value(value)}" if value is not None else factor_str
 
-                # value가 있으면 비교 조건
-                if value is not None:
-                    all_condition_lines.append(f"• {factor_str} {operator} {value}")
-                else:
-                    all_condition_lines.append(f"• {factor_str}")
+            buy_summary = ", ".join([_fmt(c) for c in buy_conditions]) if buy_conditions else ""
+            sell_summary = ", ".join([_fmt(c) for c in sell_conditions]) if sell_conditions else ""
 
-            conditions_text = "\n".join(all_condition_lines)
-            answer_text = f"다음 조건이 생성되었습니다:\n{conditions_text}"
+            summary_lines = []
+            if buy_summary:
+                summary_lines.append(f"매수: {buy_summary}")
+            if sell_summary:
+                summary_lines.append(f"매도: {sell_summary}")
+            summary_text = "\n".join(summary_lines) if summary_lines else "조건을 버튼으로 추가할 수 있습니다."
 
-            return {
+            answer_text = (
+                "## 요약\n"
+                f"{summary_text}\n\n"
+                "### 다음 단계\n"
+                "- 매수/매도 조건 버튼으로 바로 적용\n"
+                "- 수치 조정이 필요하면 말씀해 주세요"
+            )
+
+            response_payload = {
                 "answer": answer_text,
                 "intent": "dsl_generation",
                 "backtest_conditions": {
@@ -2192,6 +2447,9 @@ class ChatHandler:
                     "sell": sell_conditions
                 }
             }
+
+            self._set_cache(cache_key, response_payload)
+            return response_payload
         except Exception as e:
             print(f"DSL 생성 오류: {e}")
             import traceback
@@ -2236,7 +2494,7 @@ class ChatHandler:
             message, 'explain', context, session_id, client_type
         )
 
-    def _check_investment_advisory_policy(self, message: str) -> Optional[str]:
+    def _check_investment_advisory_policy(self, message: str, session_id: Optional[str] = None) -> Optional[str]:
         """투자 조언 정책 위반 확인.
 
         Returns:
@@ -2254,7 +2512,9 @@ class ChatHandler:
                     break
 
         if violations_found:
-            return self._get_policy_violation_response(violations_found[0])
+            violation_type = violations_found[0]
+            self._log_policy_block(violation_type, session_id or "", message)
+            return self._get_policy_violation_response(violation_type)
 
         return None
 
@@ -2306,5 +2566,34 @@ class ChatHandler:
                 "- 투자 목표 설정 방법\n\n"
                 "본인의 상황과 목표에 맞는 투자 계획을 세우시기 바랍니다."
             )
+        elif violation_type == "비속어":
+            return (
+                "서비스 품질 유지를 위해 비속어·욕설은 차단하고 있습니다.\n"
+                "궁금한 점을 정중한 표현으로 말씀해주시면 빠르게 도와드릴게요."
+            )
+        elif violation_type == "도박":
+            return (
+                "도박·베팅 관련 내용은 지원하지 않습니다. 투자·금융 관련 질문만 받아요.\n"
+                "주식 시장, 전략, 지표 등에 대해 물어봐주세요."
+            )
 
         return base_response
+
+    def _log_policy_block(self, violation_type: str, session_id: str, message: str):
+        """감사 추적용 정책 차단 로그."""
+        try:
+            snippet = (message or "").strip()
+            if len(snippet) > 200:
+                snippet = snippet[:200] + "...(truncated)"
+            log_payload = {
+                "event": "policy_block",
+                "violation_type": violation_type,
+                "session_id": session_id,
+                "message": snippet,
+            }
+            if self.logger:
+                self.logger.info(json.dumps(log_payload, ensure_ascii=False))
+            else:
+                print(json.dumps(log_payload, ensure_ascii=False))
+        except Exception as e:
+            print(f"Failed to log policy block: {e}")

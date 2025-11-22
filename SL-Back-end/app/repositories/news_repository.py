@@ -158,7 +158,8 @@ class NewsRepository:
     async def get_latest_news_by_stock(
         db: AsyncSession,
         stock_code: str,
-        limit: int = 1000
+        limit: int = 1000,
+        filter_type: Optional[str] = None
     ) -> List[Dict]:
         """
         특정 종목의 최신 뉴스 조회
@@ -167,11 +168,16 @@ class NewsRepository:
             db: 데이터베이스 세션
             stock_code: 종목코드
             limit: 조회 제한 수
+            filter_type: 정렬 타입 ("all", "latest", "popular")
 
         Returns:
             뉴스 리스트
         """
         try:
+            # 인기순은 아직 구현 안 함
+            if filter_type == "popular":
+                return []
+
             # DB에서 테마 매핑 로드
             theme_mapping, _ = await _load_theme_mappings(db)
 
@@ -194,7 +200,8 @@ class NewsRepository:
     async def search_news_in_db(
         db: AsyncSession,
         keyword: str,
-        limit: int = 1000
+        limit: int = 1000,
+        filter_type: Optional[str] = None
     ) -> List[Dict]:
         """
         키워드로 뉴스 검색 (제목, 내용, 회사명, 종목코드)
@@ -203,11 +210,16 @@ class NewsRepository:
             db: 데이터베이스 세션
             keyword: 검색 키워드 (회사명, 종목코드, 제목, 내용)
             limit: 조회 제한 수
+            filter_type: 정렬 타입 ("all", "latest", "popular")
 
         Returns:
             뉴스 리스트
         """
         try:
+            # 인기순은 아직 구현 안 함
+            if filter_type == "popular":
+                return []
+
             # DB에서 테마 매핑 로드
             theme_mapping, _ = await _load_theme_mappings(db)
 
@@ -235,7 +247,8 @@ class NewsRepository:
     async def search_news_by_theme(
         db: AsyncSession,
         theme: str,
-        limit: int = 1000
+        limit: int = 1000,
+        filter_type: Optional[str] = None
     ) -> List[Dict]:
         """
         테마별 뉴스 조회
@@ -244,11 +257,16 @@ class NewsRepository:
             db: 데이터베이스 세션
             theme: 테마명 (한글 또는 영어)
             limit: 조회 제한 수
+            filter_type: 정렬 타입 ("all", "latest", "popular")
 
         Returns:
             뉴스 리스트
         """
         try:
+            # 인기순은 아직 구현 안 함
+            if filter_type == "popular":
+                return []
+
             # DB에서 테마 매핑 로드
             theme_mapping, theme_mapping_reverse = await _load_theme_mappings(db)
 
@@ -279,7 +297,8 @@ class NewsRepository:
     async def search_news_by_themes(
         db: AsyncSession,
         themes: List[str],
-        limit: int = 1000
+        limit: int = 1000,
+        filter_type: Optional[str] = None
     ) -> List[Dict]:
         """
         여러 테마 또는 회사명을 동시에 조회
@@ -288,11 +307,16 @@ class NewsRepository:
             db: 데이터베이스 세션
             themes: 테마명 또는 회사명 리스트
             limit: 조회 제한 수
+            filter_type: 정렬 타입 ("all", "latest", "popular")
 
         Returns:
             뉴스 리스트
         """
         try:
+            # 인기순은 아직 구현 안 함
+            if filter_type == "popular":
+                return []
+
             theme_mapping, theme_mapping_reverse = await _load_theme_mappings(db)
 
             normalized_themes = []
@@ -384,9 +408,13 @@ class NewsRepository:
             return []
 
     @staticmethod
-    async def get_latest_news(db: AsyncSession, limit: int = 5) -> List[Dict]:
+    async def get_latest_news(db: AsyncSession, limit: int = 5, filter_type: Optional[str] = None) -> List[Dict]:
         """최신 뉴스 (id 기준 내림차순)"""
         try:
+          # 인기순은 아직 구현 안 함
+          if filter_type == "popular":
+              return []
+
           # DB에서 테마 매핑 로드
           theme_mapping, _ = await _load_theme_mappings(db)
 

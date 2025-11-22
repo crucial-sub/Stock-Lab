@@ -87,7 +87,7 @@ export default async function HomePage() {
             marketStocks = sorted.map((item: any) => ({
               id: item.stockCode,
               name: item.stockName,
-              tag: item.stockCode,
+              tag: item.theme ?? item.stockCode,
               change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
               price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
               volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
@@ -111,7 +111,7 @@ export default async function HomePage() {
           marketStocks = (quotes.data?.items || []).map((item: any) => ({
             id: item.code,
             name: item.name,
-            tag: item.code,
+            tag: item.theme ?? item.code,
             change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
             price: item.price ? `${item.price.toLocaleString()}원` : "-",
             volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
@@ -143,7 +143,7 @@ export default async function HomePage() {
       marketStocks = (quotes.data?.items || []).map((item: any) => ({
         id: item.code,
         name: item.name,
-        tag: item.code,
+        tag: item.theme ?? item.code,
         change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
         price: item.price ? `${item.price.toLocaleString()}원` : "-",
         volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",

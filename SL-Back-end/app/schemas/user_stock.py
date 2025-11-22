@@ -21,6 +21,7 @@ class FavoriteStockItem(BaseModel):
 
     stock_code: str = Field(..., serialization_alias="stockCode", description="종목 코드")
     stock_name: str = Field(..., serialization_alias="stockName", description="종목명")
+    theme: Optional[str] = Field(None, description="테마/업종")
     current_price: Optional[int] = Field(None, serialization_alias="currentPrice", description="현재가")
     change_rate: Optional[float] = Field(None, serialization_alias="changeRate", description="등락률(%)")
     previous_close: Optional[int] = Field(None, serialization_alias="previousClose", description="전일 종가")

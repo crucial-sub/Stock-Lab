@@ -47,7 +47,7 @@ export function DiscussionPreviewSection({
   return (
     <section className={`flex flex-col gap-5 ${className}`}>
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-body">{title}</h2>
+        <h2 className="text-[1.5rem] font-semibold text-body">{title}</h2>
         {showMoreHref && (
           <button
             onClick={() => router.push(showMoreHref)}

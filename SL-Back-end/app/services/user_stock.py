@@ -125,12 +125,18 @@ class UserStockService:
                 StockPrice.trade_date == latest_trade_date
             )
 
-        query = select(
-            UserFavoriteStock.stock_code,
-            UserFavoriteStock.stock_name,
-            UserFavoriteStock.created_at,
-            *price_columns
-        ).where(UserFavoriteStock.user_id == user_id).order_by(desc(UserFavoriteStock.favorite_id))
+        query = (
+            select(
+                UserFavoriteStock.stock_code,
+                UserFavoriteStock.stock_name,
+                Company.industry,
+                UserFavoriteStock.created_at,
+                *price_columns
+            )
+            .join(Company, Company.company_id == UserFavoriteStock.company_id)
+            .where(UserFavoriteStock.user_id == user_id)
+            .order_by(desc(UserFavoriteStock.favorite_id))
+        )
 
         if join_condition is not None:
             query = query.outerjoin(StockPrice, join_condition)
@@ -142,6 +148,7 @@ class UserStockService:
             {
                 "stock_code": row.stock_code,
                 "stock_name": row.stock_name,
+                "theme": getattr(row, "industry", None),
                 "current_price": getattr(row, "close_price", None),
                 "change_rate": getattr(row, "fluctuation_rate", None),
                 "previous_close": self._calculate_previous_close_value(

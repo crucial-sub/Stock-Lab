@@ -31,6 +31,7 @@ class MarketQuoteItem(BaseModel):
     rank: int = Field(..., description="순위 (정렬 기준에 따라 변동)")
     name: str = Field(..., description="종목명")
     code: str = Field(..., description="종목 코드")
+    theme: Optional[str] = Field(None, description="테마/업종")
     price: int = Field(..., description="현재가 (종가)")
     change_amount: int = Field(..., serialization_alias="changeAmount", description="전일 대비 가격 차이 (원)")
     change_rate: float = Field(..., serialization_alias="changeRate", description="전일 대비 등락률 (%)")

@@ -24,7 +24,7 @@ export function HighlightsSection({ portfolios, posts }: HighlightsSectionProps)
       <div className="flex flex-col gap-5">
         {pairs.map(({ portfolio, post }) => (
           <div key={portfolio.rank} className="grid gap-5 md:grid-cols-2">
-            <article className="flex items-center justify-between rounded-[12px] border-[0.5px] border-[#18223433] p-5 bg-[#18223405] shadow-elev-card">
+            <article className="flex items-center justify-between rounded-[12px] border-[0.5px] border-[#18223433] p-5 bg-[#1822340D] shadow-elev-card">
               <div className="flex items-center gap-3">
                 <div className="flex h-14 w-14 items-center justify-center rounded-[12px] bg-[#182234] text-[1.25rem] font-semibold text-white">
                   #{portfolio.rank}
@@ -44,7 +44,7 @@ export function HighlightsSection({ portfolios, posts }: HighlightsSectionProps)
               </div>
             </article>
             {post ? (
-              <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#18223405] p-5 shadow-elev-card">
+              <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] p-5 shadow-elev-card">
                 <div className="flex items-center gap-2">
                   <span className="inline-flex h-6 items-center justify-center rounded-[4px] border border-[#007DFC] bg-[#E8F1FF] px-2 pt-1 text-[0.75rem] font-semibold text-[#007DFC]">
                     {post.tag}

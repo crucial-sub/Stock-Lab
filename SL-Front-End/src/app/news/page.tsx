@@ -2,6 +2,7 @@
 
 import type { NextPage } from "next";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
@@ -19,6 +20,7 @@ const NewsPage: NextPage = () => {
   const [filter, setFilter] = useState<string>("all");
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
   const [displayThemes, setDisplayThemes] = useState<string[]>([]);
+  const searchParams = useSearchParams();
 
   const debouncedKeyword = useDebounce(keyword, 300);
 
@@ -49,6 +51,13 @@ const NewsPage: NextPage = () => {
   const selectedNews: NewsItem | undefined = selectedNewsId
     ? newsList.find((item: NewsItem) => item.id === selectedNewsId)
     : undefined;
+
+  useEffect(() => {
+    const newsIdParam = searchParams.get("newsId");
+    if (newsIdParam) {
+      setSelectedNewsId(newsIdParam);
+    }
+  }, [searchParams]);
 
   const handleToggleTheme = (theme: string) => {
     if (theme === "전체") {

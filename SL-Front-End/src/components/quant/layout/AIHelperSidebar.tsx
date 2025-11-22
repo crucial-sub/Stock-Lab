@@ -78,6 +78,11 @@ function AIHelperMessage({
     }
   };
 
+  const handleApplyBoth = () => {
+    handleAddBuyConditions();
+    handleAddSellConditions();
+  };
+
   // 간단한 마크다운 변환 함수
   const formatContent = (content: string) => {
     return content
@@ -115,31 +120,56 @@ function AIHelperMessage({
         </div>
 
         {/* 조건 추가 버튼 - 매수/매도 분리 */}
-        {!isUser && (message.backtestConditionsBuy?.length || message.backtestConditionsSell?.length) ? (
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={handleAddBuyConditions}
-              disabled={message.appliedBuy || !message.backtestConditionsBuy?.length}
-              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-                message.appliedBuy
-                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  : "bg-red-500 hover:bg-red-600 text-white"
-              }`}
-            >
-              {message.appliedBuy ? "매수 적용됨" : "매수 조건에 추가"}
-            </button>
-            <button
-              onClick={handleAddSellConditions}
-              disabled={message.appliedSell || !message.backtestConditionsSell?.length}
-              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-                message.appliedSell
-                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 text-white"
-              }`}
-            >
-              {message.appliedSell ? "매도 적용됨" : "매도 조건에 추가"}
-            </button>
-          </div>
+        {!isUser ? (
+          (() => {
+            const hasBuy = Array.isArray(message.backtestConditionsBuy) && message.backtestConditionsBuy.length > 0;
+            const hasSell = Array.isArray(message.backtestConditionsSell) && message.backtestConditionsSell.length > 0;
+            if (!hasBuy && !hasSell) return null;
+            const bothApplied = message.appliedBuy && message.appliedSell;
+            return (
+              <div className="mt-3 flex gap-2">
+                {hasBuy && (
+                  <button
+                    onClick={handleAddBuyConditions}
+                    disabled={message.appliedBuy}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      message.appliedBuy
+                        ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                        : "bg-red-500 hover:bg-red-600 text-white"
+                    }`}
+                  >
+                    {message.appliedBuy ? "매수 적용됨" : "매수 조건에 추가"}
+                  </button>
+                )}
+                {hasSell && (
+                  <button
+                    onClick={handleAddSellConditions}
+                    disabled={message.appliedSell}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      message.appliedSell
+                        ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                        : "bg-blue-500 hover:bg-blue-600 text-white"
+                    }`}
+                  >
+                    {message.appliedSell ? "매도 적용됨" : "매도 조건에 추가"}
+                  </button>
+                )}
+                {hasBuy && hasSell && (
+                  <button
+                    onClick={handleApplyBoth}
+                    disabled={bothApplied}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      bothApplied
+                        ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                        : "bg-green-600 hover:bg-green-700 text-white"
+                    }`}
+                  >
+                    {bothApplied ? "매수·매도 적용됨" : "매수·매도 한번에 적용"}
+                  </button>
+                )}
+              </div>
+            );
+          })()
         ) : null}
       </div>
     </div>

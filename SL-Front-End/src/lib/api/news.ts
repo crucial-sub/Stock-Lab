@@ -25,6 +25,7 @@ export async function fetchNewsList(
           params: {
             themes: params.themes,
             limit,
+            filter: params.filter,
           },
           paramsSerializer: {
             indexes: null, // themes=val1&themes=val2 형식으로 직렬화
@@ -61,17 +62,7 @@ export async function fetchNewsList(
     }
 
     // 기본: 모든 뉴스 조회 (최근 뉴스부터)
-    const response = await axiosInstance.get<NewsListResponse>(
-      "/news/db/search",
-      {
-        params: {
-          keyword: "뉴스",
-          limit,
-        },
-      },
-    );
-
-    return response.data.news ?? [];
+    return fetchLatestNews(limit, params?.filter);
   } catch (error) {
     console.error("Failed to fetch news list:", error);
     return [];
@@ -81,12 +72,15 @@ export async function fetchNewsList(
 /**
  * 최신 뉴스 조회 (id desc)
  */
-export async function fetchLatestNews(limit = 5): Promise<NewsItem[]> {
+export async function fetchLatestNews(
+  limit = 5,
+  filter?: string,
+): Promise<NewsItem[]> {
   try {
     const response = await axiosInstance.get<NewsListResponse>(
       "/news/db/latest",
       {
-        params: { limit },
+        params: { limit, filter },
       },
     );
     return response.data.news ?? [];

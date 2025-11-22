@@ -98,6 +98,7 @@ export default function QuantStrategySummaryPanel({
   const setEndDate = useBacktestConfigStore((state) => state.setEndDate);
   const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
   const addSellConditionUIWithData = useBacktestConfigStore((state) => state.addSellConditionUIWithData);
+  const setBuyConditionsUI = useBacktestConfigStore((state) => state.setBuyConditionsUI);
   const setBuyLogic = useBacktestConfigStore((state) => state.setBuyLogic);
   const setConditionSell = useBacktestConfigStore((state) => state.setConditionSell);
 
@@ -123,6 +124,15 @@ export default function QuantStrategySummaryPanel({
 
   // AI 헬퍼에서 생성된 조건을 매수 조건에 추가
   const handleBuyConditionsAdd = (conditions: any[]) => {
+    const hasExisting = useBacktestConfigStore
+      .getState()
+      .buyConditionsUI.some((c) => c.factorName);
+
+    if (hasExisting) {
+      setBuyConditionsUI([]);
+      setBuyLogic("");
+    }
+
     conditions.forEach((dslCondition) => {
       const { factor, params, operator, value, subFactorName } = dslCondition;
       const factorName = factor;

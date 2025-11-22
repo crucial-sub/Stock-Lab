@@ -14,7 +14,30 @@
 export function normalizeMarkdown(content: string): string {
   if (!content) return content;
 
-  let normalized = content;
+  // 0. 우선 백엔드에서 이스케이프된 줄바꿈/불릿을 원상복구
+  let normalized = content
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\([*_\\-])/g, "$1"); // \*, \_, \- → 원문
+
+  // 0-1. 굵은 제목(**제목**) 다음에 오는 불릿/내용이 한 줄에 붙어 있을 때 개행 추가
+  normalized = normalized.replace(/(\*\*[^*\n]+?\*\*)\s*-\s*/g, "$1\n- ");
+  normalized = normalized.replace(/([^\n])(\*\*[^*\n]+?\*\*)/g, "$1\n\n$2");
+
+  // 0-2. 단일 별표로 시작하는 불릿(* )을 대시 불릿(- )으로 정규화 (헤딩이나 굵게(**)는 제외)
+  normalized = normalized.replace(/^[ \t]*\*(\s+)/gm, "-$1");
+  // 0-3. 도트/중괄호 불릿도 대시로 변환
+  normalized = normalized.replace(/^[ \t]*[•·](\s+)/gm, "-$1");
+
+  // 0-4. 섹션 제목을 단일 별표로 감싼 경우(*제목*) 또는 끝에만 별표가 붙은 경우(제목*)를 굵게 헤더로 변환
+  normalized = normalized.replace(/^[ \t]*\*([^*\n]+)\*[ \t]*$/gm, "**$1**");
+  normalized = normalized.replace(/^[ \t]*([^*\n]+)\*[ \t]*$/gm, "**$1**");
+  // 제목 앞뒤로 빈 줄 추가 (이미 있는 경우 중복 제거)
+  normalized = normalized.replace(/([^\n])(\n\*\*[^\n]+\*\*\n)/g, "$1\n\n$2");
+  normalized = normalized.replace(/(\n\*\*[^\n]+\*\*\n)([^\n])/g, "$1\n$2");
+
+  // 0-5. "성장성: ..." 같이 콜론으로 시작하는 설명을 불릿 + 굵게 구간으로 변환
+  normalized = normalized.replace(/^[ \t]*([A-Za-z가-힣0-9][^:\n]{0,40}):\s+/gm, "- **$1** ");
 
   // 1. 헤딩(## ) 앞에 줄바꿈 2개 추가 (단, 맨 앞은 제외)
   normalized = normalized.replace(/([^\n])(\s*)(#{1,6}\s+)/g, "$1\n\n$3");
@@ -104,10 +127,46 @@ export function normalizeMarkdown(content: string): string {
   // 6. 연속된 줄바꿈 정리 (3개 이상의 줄바꿈은 2개로)
   normalized = normalized.replace(/\n{3,}/g, "\n\n");
 
+  // 6-1. 내용 없는 불릿/번호 줄 제거 (깨진 리스트 정리)
+  normalized = normalized
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (/^[-*]\s*$/.test(trimmed)) return false;
+      if (/^\d+\.\s*$/.test(trimmed)) return false;
+      return true;
+    })
+    .join("\n");
+
   // 7. 맨 앞의 줄바꿈 제거
   normalized = normalized.replace(/^\n+/, "");
 
   return normalized;
+}
+
+/**
+ * 불릿 개수를 제한하는 유틸리티 (compact 모드용)
+ * - 헤더/다음 단계 등 불릿이 아닌 줄은 유지
+ */
+export function limitBullets(content: string, maxBullets: number = 3): string {
+  if (!content) return content;
+
+  const lines = content.split("\n");
+  let bulletCount = 0;
+  const kept: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith("- ")) {
+      bulletCount += 1;
+      if (bulletCount > maxBullets) {
+        continue;
+      }
+    }
+    kept.push(line);
+  }
+
+  return kept.join("\n");
 }
 
 /**

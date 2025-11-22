@@ -1,11 +1,13 @@
 "use client";
 
+import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
 import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
 import { strategyApi } from "@/lib/api/strategy";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Portfolio } from "./page";
 
 /**
  * 포트폴리오 페이지 클라이언트 컴포넌트
@@ -14,25 +16,15 @@ import { useState } from "react";
  * 인터랙션과 상태 관리를 담당합니다.
  */
 
-interface Portfolio {
-  id: string;
-  strategyId: string;
-  title: string;
-  profitRate: number;
-  isActive: boolean;
-  lastModified: string;
-  createdAt: string;
-}
-
 interface PortfolioPageClientProps {
   /** 총 모의 자산 */
   totalAssets: number;
-  /** 총 자산 수익률 */
-  totalAssetsChange: number;
-  /** 이번주 수익 */
-  weeklyProfit: number;
-  /** 이번주 수익률 */
-  weeklyProfitChange: number;
+  /** 평가손익 */
+  totalProfit: number;
+  /** 수익률 */
+  totalReturn: number;
+  /** 평가금액 */
+  evaluationAmount: number;
   /** 활성 포트폴리오 개수 */
   activePortfolioCount: number;
   /** 포트폴리오 목록 */
@@ -41,9 +33,9 @@ interface PortfolioPageClientProps {
 
 export function PortfolioPageClient({
   totalAssets,
-  totalAssetsChange,
-  weeklyProfit,
-  weeklyProfitChange,
+  totalProfit,
+  totalReturn,
+  evaluationAmount,
   activePortfolioCount,
   portfolios: initialPortfolios,
 }: PortfolioPageClientProps) {
@@ -58,6 +50,16 @@ export function PortfolioPageClient({
   // 삭제 진행 중 상태
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 공유 모달 상태
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState<
+    Pick<Portfolio, "id" | "strategyId" | "title"> | null
+  >(null);
+  // 이름 수정 상태
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState<string>("");
+  const [isRenaming, setIsRenaming] = useState(false);
+
   // 포트폴리오 선택/해제 핸들러
   const handleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -71,16 +73,32 @@ export function PortfolioPageClient({
     });
   };
 
-  // 포트폴리오 클릭 핸들러 - 백테스트 결과 상세 페이지로 이동
+  // 포트폴리오 클릭 핸들러 - 상태에 따라 다른 페이지로 이동
   const handlePortfolioClick = (id: string) => {
+    const portfolio = portfolios.find((p) => p.id === id);
+    if (!portfolio) return;
+
     // 자동매매 전략 카드인 경우 자동매매 상태 페이지로 이동
     if (id.startsWith("auto-")) {
-      const portfolio = portfolios.find((p) => p.id === id);
-      if (portfolio?.strategyId) {
+      if (portfolio.strategyId) {
         router.push(`/quant/auto-trading/${portfolio.strategyId}`);
-        return;
       }
+      return;
     }
+
+    // PENDING 상태 - 백테스트 설정 화면으로 이동
+    if (portfolio.status === "PENDING") {
+      if (portfolio.sourceSessionId) {
+        // 복제된 전략 - 조건 자동 채움
+        router.push(`/quant/new?clone=${portfolio.sourceSessionId}`);
+      } else {
+        // 새로 만든 전략 - 빈 화면 (현재는 사용 안함)
+        router.push(`/quant/new`);
+      }
+      return;
+    }
+
+    // RUNNING, COMPLETED 등 - 결과 화면으로 이동
     router.push(`/quant/result/${id}`);
   };
 
@@ -140,6 +158,117 @@ export function PortfolioPageClient({
     }
   };
 
+  // 공유 모달 오픈
+  const handleOpenShare = (
+    portfolio: Pick<Portfolio, "id" | "strategyId" | "title">,
+  ) => {
+    if (!portfolio.strategyId) {
+      alert("공유할 전략 정보를 찾을 수 없습니다.");
+      return;
+    }
+    setShareTarget(portfolio);
+    setIsShareModalOpen(true);
+  };
+
+  // 공유 설정 저장
+  const handleShareConfirm = async ({
+    description,
+    isAnonymous,
+  }: {
+    description: string;
+    isAnonymous: boolean;
+  }) => {
+    if (!shareTarget?.strategyId) {
+      throw new Error("공유할 전략 정보를 찾을 수 없습니다.");
+    }
+
+    try {
+      await Promise.all([
+        strategyApi.updateStrategy(shareTarget.strategyId, { description }),
+        strategyApi.updateSharingSettings(shareTarget.strategyId, {
+          isPublic: true,
+          isAnonymous,
+        }),
+      ]);
+
+      alert("포트폴리오가 공유 설정되었습니다.");
+      setIsShareModalOpen(false);
+      setShareTarget(null);
+    } catch (error: unknown) {
+      console.error("포트폴리오 공유 설정 실패:", error);
+      const errorMessage =
+        (
+          error as {
+            response?: { data?: { detail?: string } };
+            message?: string;
+          }
+        )?.response?.data?.detail ||
+        (error as { message?: string })?.message ||
+        "공유 설정에 실패했습니다. 잠시 후 다시 시도해주세요.";
+      throw new Error(errorMessage);
+    }
+  };
+
+  // 전략 이름 수정
+  // 이름 수정 시작
+  const handleStartRename = (
+    portfolio: Pick<Portfolio, "id" | "strategyId" | "title">,
+  ) => {
+    setEditingId(portfolio.id);
+    setEditingValue(portfolio.title);
+  };
+
+  // 이름 수정 취소
+  const handleCancelRename = () => {
+    setEditingId(null);
+    setEditingValue("");
+  };
+
+  // 이름 수정 저장
+  const handleRenameSubmit = async () => {
+    if (!editingId) return;
+    const portfolio = portfolios.find((p) => p.id === editingId);
+    if (!portfolio) return;
+
+    const trimmedName = editingValue.trim();
+    if (!trimmedName) {
+      alert("전략 이름을 입력해주세요.");
+      return;
+    }
+    if (trimmedName === portfolio.title) {
+      handleCancelRename();
+      return;
+    }
+
+    try {
+      setIsRenaming(true);
+      await strategyApi.updateStrategy(portfolio.strategyId, {
+        strategyName: trimmedName,
+      });
+
+      setPortfolios((prev) =>
+        prev.map((item) =>
+          item.id === portfolio.id ? { ...item, title: trimmedName } : item,
+        ),
+      );
+      handleCancelRename();
+    } catch (error: unknown) {
+      console.error("전략 이름 수정 실패:", error);
+      const errorMessage =
+        (
+          error as {
+            response?: { data?: { detail?: string } };
+            message?: string;
+          }
+        )?.response?.data?.detail ||
+        (error as { message?: string })?.message ||
+        "전략 이름 수정 중 문제가 발생했습니다.";
+      alert(errorMessage);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
   // 활성 포트폴리오를 맨 앞으로, 나머지는 최신순으로 정렬
   const sortedPortfolios = [...portfolios].sort((a, b) => {
     // 1. 활성 상태 우선
@@ -154,9 +283,9 @@ export function PortfolioPageClient({
       {/* 대시보드 */}
       <PortfolioDashboard
         totalAssets={totalAssets}
-        totalAssetsChange={totalAssetsChange}
-        weeklyProfit={weeklyProfit}
-        weeklyProfitChange={weeklyProfitChange}
+        totalProfit={totalProfit}
+        totalReturn={totalReturn}
+        evaluationAmount={evaluationAmount}
         activePortfolioCount={activePortfolioCount}
       />
       {/* 제거된 커뮤니티 섹션 (랭킹/공유)는 커뮤니티 페이지로 이동 */}
@@ -188,10 +317,28 @@ export function PortfolioPageClient({
               isSelected={selectedIds.has(portfolio.id)}
               onSelect={handleSelect}
               onClick={handlePortfolioClick}
+              onShare={handleOpenShare}
+              onRename={handleStartRename}
+              isEditing={editingId === portfolio.id}
+              editValue={editingId === portfolio.id ? editingValue : undefined}
+              onEditChange={setEditingValue}
+              onEditSubmit={handleRenameSubmit}
+              onEditCancel={handleCancelRename}
+              isRenaming={isRenaming}
             />
           ))}
         </div>
       </section>
+
+      <PortfolioShareModal
+        isOpen={isShareModalOpen}
+        portfolioName={shareTarget?.title}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setShareTarget(null);
+        }}
+        onConfirm={handleShareConfirm}
+      />
     </main>
   );
 }

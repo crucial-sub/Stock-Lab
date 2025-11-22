@@ -32,6 +32,8 @@ from app.schemas.strategy import (
     StrategyStatisticsSummary,
     BacktestDeleteRequest,
     StrategyUpdate,
+    PublicStrategiesResponse,
+    PublicStrategyListItem,
 )
 from app.schemas.community import CloneStrategyData
 
@@ -82,6 +84,7 @@ async def get_my_strategies(
                 is_active=session.is_active if hasattr(session, 'is_active') else False,
                 is_public=strategy.is_public if hasattr(strategy, 'is_public') else False,
                 status=session.status,
+                source_session_id=session.source_session_id if hasattr(session, 'source_session_id') else None,
                 total_return=float(stats.total_return) if stats and stats.total_return else None,
                 created_at=session.created_at,
                 updated_at=session.updated_at
@@ -231,6 +234,112 @@ async def get_public_Strategies_ranking(
 
     except Exception as e:
         logger.error(f"공개 투자전략 랭킹 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/strategies/public", response_model=PublicStrategiesResponse)
+async def get_public_strategies(
+    page: int = Query(default=1, ge=1, description="페이지 번호"),
+    limit: int = Query(default=20, ge=1, le=100, description="페이지당 항목 수"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    공개 투자전략 목록 조회 (최신순)
+    - is_public=True 전략만 대상으로 created_at 기준 내림차순 정렬
+    - 익명 설정 및 전략 내용 숨김 설정 반영
+    """
+    try:
+        offset = (page - 1) * limit
+
+        # 최근 완료된 세션 기준 통계 조인 (없어도 통과하도록 OUTER JOIN)
+        latest_sessions_subquery = (
+            select(
+                SimulationSession.strategy_id,
+                func.max(SimulationSession.completed_at).label("max_completed_at"),
+            )
+            .where(SimulationSession.status == "COMPLETED")
+            .group_by(SimulationSession.strategy_id)
+            .subquery()
+        )
+
+        query = (
+            select(PortfolioStrategy, User, SimulationStatistics, SimulationSession)
+            .join(User, User.user_id == PortfolioStrategy.user_id, isouter=True)
+            .join(
+                latest_sessions_subquery,
+                PortfolioStrategy.strategy_id == latest_sessions_subquery.c.strategy_id,
+                isouter=True,
+            )
+            .join(
+                SimulationSession,
+                and_(
+                    SimulationSession.strategy_id
+                    == latest_sessions_subquery.c.strategy_id,
+                    SimulationSession.completed_at
+                    == latest_sessions_subquery.c.max_completed_at,
+                    SimulationSession.status == "COMPLETED",
+                ),
+                isouter=True,
+            )
+            .join(
+                SimulationStatistics,
+                SimulationStatistics.session_id == SimulationSession.session_id,
+                isouter=True,
+            )
+            .where(PortfolioStrategy.is_public == True)  # noqa: E712
+            .order_by(PortfolioStrategy.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        # 전체 개수
+        count_query = (
+            select(func.count())
+            .select_from(PortfolioStrategy)
+            .where(PortfolioStrategy.is_public == True)  # noqa: E712
+        )
+        total = (await db.execute(count_query)).scalar() or 0
+
+        strategies: List[PublicStrategyListItem] = []
+        for strategy, user, stats, session in rows:
+            owner_name = None if strategy.is_anonymous else (user.name if user else None)
+            description = None if strategy.hide_strategy_details else strategy.description
+
+            strategies.append(
+                PublicStrategyListItem(
+                    strategy_id=strategy.strategy_id,
+                    strategy_name=strategy.strategy_name,
+                    description=description,
+                    is_anonymous=strategy.is_anonymous,
+                    hide_strategy_details=strategy.hide_strategy_details,
+                    owner_name=owner_name,
+                    session_id=session.session_id if session else None,
+                    total_return=float(stats.total_return)
+                    if stats and stats.total_return is not None
+                    else None,
+                    annualized_return=float(stats.annualized_return)
+                    if stats and stats.annualized_return is not None
+                    else None,
+                    created_at=strategy.created_at,
+                    updated_at=strategy.updated_at,
+                )
+            )
+
+        has_next = (page * limit) < total
+
+        return PublicStrategiesResponse(
+            strategies=strategies,
+            total=total,
+            page=page,
+            limit=limit,
+            has_next=has_next,
+        )
+
+    except Exception as e:
+        logger.error(f"공개 투자전략 목록 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -466,7 +575,7 @@ async def get_session_clone_data(
 ):
     """
     백테스트 세션 복제 데이터 조회 (백테스트 창으로 전달)
-    - 본인이 소유한 세션만 조회 가능
+    - 본인 소유 세션 또는 공개된 전략의 세션만 조회 가능
     - 매수/매도 조건, 기간, 종목 등 모든 설정을 포함
     """
     try:
@@ -486,7 +595,11 @@ async def get_session_clone_data(
             .where(
                 and_(
                     SimulationSession.session_id == session_id,
-                    SimulationSession.user_id == user_id  # 본인 세션만
+                    # 본인 세션이거나 공개된 전략인 경우
+                    or_(
+                        SimulationSession.user_id == user_id,
+                        PortfolioStrategy.is_public == True
+                    )
                 )
             )
         )

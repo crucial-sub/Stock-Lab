@@ -21,14 +21,22 @@ export function Providers({ children }: { children: ReactNode }) {
   // 세션 만료 상태 구독
   const isSessionExpired = useAuthStore((state) => state.isSessionExpired);
   const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
+  const authErrorMessage = useAuthStore((state) => state.authErrorMessage);
+  const setAuthErrorMessage = useAuthStore(
+    (state) => state.setAuthErrorMessage,
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
       {children}
       {/* 세션 만료 모달 */}
       <SessionExpiredModal
-        isOpen={isSessionExpired}
-        onClose={() => setSessionExpired(false)}
+        isOpen={isSessionExpired || !!authErrorMessage}
+        message={authErrorMessage}
+        onClose={() => {
+          setSessionExpired(false);
+          setAuthErrorMessage(null);
+        }}
       />
       {/* 전역 플로팅 챗봇 (시세/뉴스/커뮤니티/퀀트 탭에서도 노출) */}
       <FloatingChatWidget />

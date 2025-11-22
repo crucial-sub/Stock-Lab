@@ -40,9 +40,10 @@ const SAMPLE_QUESTION = {
 export default async function AIAssistantPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const autoStart = searchParams?.autoStart === "questionnaire";
+  const resolvedParams = await searchParams;
+  const autoStart = resolvedParams?.autoStart === "questionnaire";
   // TODO: API에서 전략 데이터 가져오기
   // const strategies = await fetchStrategies();
 

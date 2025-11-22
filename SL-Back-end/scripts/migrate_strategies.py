@@ -37,7 +37,7 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
     # ✅ 프론트엔드 양식과 일치하도록 수정 (2025-11-21)
     base_config = {
         "strategy_name": strategy_id,
-        "is_day_or_month": "daily",  # "D" → "daily" (프론트엔드 양식)
+        "is_day_or_month": "daily",  # "daily" (프론트엔드 양식)
         "commission_rate": 0.1,  # 0.1% 수수료
         "slippage": 0,  # 0% 슬리피지
         "buy_logic": "and",  # 매수 조건 AND 결합
@@ -47,23 +47,16 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
         "max_holdings": 10,  # 최대 10개 종목 보유
         "max_buy_value": None,
         "max_daily_stock": None,
-        "buy_price_basis": "전일 종가",  # "close" → "전일 종가" (프론트엔드 양식)
+        "buy_price_basis": "전일 종가",  # "전일 종가" (프론트엔드 양식)
         "buy_price_offset": 0,
         "trade_targets": {
             "use_all_stocks": False,  # 전체 종목 사용 안 함
             "selected_universes": [], # 현재 안쓰는 속성이므로 건들지 말것.
             "selected_themes": [
                 "전기 / 전자",
-                "화학",
-                "은행",
-                "증권",
-                "통신",
                 "IT서비스",
-                "음식료 / 담배",
-                "제약",
-                "건설",
                 "유통"
-            ],  # 주요 테마 10개 선택 (약 300-400 종목)
+            ],  # 주요 테마 3개 선택 (약 800 종목)
             "selected_stocks": [],
             "selected_stock_count": None,  # 런타임에 계산됨
             "total_stock_count": 2645,      # 전체 종목 수

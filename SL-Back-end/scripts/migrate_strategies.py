@@ -137,11 +137,10 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
                 {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 15},
                 # 장기부채비율 제외 (계산 불가)
                 {"name": "B", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5},
-                {"name": "C", "exp_left_side": "기본값({FCF_YIELD})", "inequality": ">", "exp_right_side": 0},  # FCF > 0 대체
-                {"name": "D", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 17},
-                {"name": "E", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5},
-                {"name": "F", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150},
-                {"name": "G", "exp_left_side": "기본값({EARNINGS_GROWTH})", "inequality": ">", "exp_right_side": 10}
+                {"name": "C", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 17},
+                {"name": "D", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5},
+                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150},
+                {"name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH})", "inequality": ">", "exp_right_side": 10}
             ],
             "priority_factor": "기본값({PBR})",
             "priority_order": "asc",

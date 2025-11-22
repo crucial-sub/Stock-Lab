@@ -55,11 +55,12 @@ class NewsListResponse(BaseModel):
 async def get_stock_news(
     stock_code: str,
     max_results: int = Query(1000, ge=1, le=10000, description="Max results"),
+    filter: Optional[str] = Query(None, description="Filter type (all, latest, popular)"),
     db: AsyncSession = Depends(get_db),
 ):
     """DB 저장본에서 특정 종목 뉴스 조회."""
     try:
-        items = await NewsRepository.get_latest_news_by_stock(db, stock_code, max_results)
+        items = await NewsRepository.get_latest_news_by_stock(db, stock_code, max_results, filter)
         return NewsListResponse(total=len(items), news=items)
     except Exception as e:
         logger.error(f"DB news fetch failed for {stock_code}: {e}")
@@ -74,11 +75,12 @@ async def get_stock_news(
 async def search_news(
     keyword: str = Query(..., description="Search keyword"),
     max_results: int = Query(1000, ge=1, le=10000, description="Max results"),
+    filter: Optional[str] = Query(None, description="Filter type (all, latest, popular)"),
     db: AsyncSession = Depends(get_db),
 ):
     """DB 저장본에서 키워드 검색."""
     try:
-        items = await NewsRepository.search_news_in_db(db, keyword, max_results)
+        items = await NewsRepository.search_news_in_db(db, keyword, max_results, filter)
         return NewsListResponse(total=len(items), news=items)
     except Exception as e:
         logger.error(f"DB news search failed for '{keyword}': {e}")
@@ -94,16 +96,17 @@ async def search_news_by_theme(
     theme: Optional[str] = Query(None, description="Theme name (한글 또는 영어)"),
     themes: Optional[List[str]] = Query(None, description="복수 테마/회사명 검색"),
     max_results: int = Query(1000, ge=1, le=10000, description="Max results"),
+    filter: Optional[str] = Query(None, description="Filter type (all, latest, popular)"),
     db: AsyncSession = Depends(get_db),
 ):
     """DB 저장본에서 테마별 뉴스 조회. 한글 또는 영어 테마명 모두 지원."""
     try:
         if themes:
-            items = await NewsRepository.search_news_by_themes(db, themes, max_results)
+            items = await NewsRepository.search_news_by_themes(db, themes, max_results, filter)
             return NewsListResponse(total=len(items), news=items)
         if not theme:
             raise HTTPException(status_code=400, detail="테마 또는 테마 리스트를 제공해주세요.")
-        items = await NewsRepository.search_news_by_theme(db, theme, max_results)
+        items = await NewsRepository.search_news_by_theme(db, theme, max_results, filter)
         return NewsListResponse(total=len(items), news=items)
     except Exception as e:
         logger.error(f"DB news theme search failed for theme='{theme}', themes='{themes}': {e}")
@@ -241,11 +244,12 @@ async def get_theme_sentiment_summary(
 )
 async def get_latest_news(
     limit: int = Query(5, ge=1, le=100, description="가져올 뉴스 개수"),
+    filter: Optional[str] = Query(None, description="Filter type (all, latest, popular)"),
     db: AsyncSession = Depends(get_db),
 ):
     """뉴스 테이블에서 id 기준 내림차순으로 최신 뉴스 조회"""
     try:
-        items = await NewsRepository.get_latest_news(db, limit)
+        items = await NewsRepository.get_latest_news(db, limit, filter)
         return NewsListResponse(total=len(items), news=items)
     except Exception as e:
         logger.error(f"최신 뉴스 조회 실패: {e}")

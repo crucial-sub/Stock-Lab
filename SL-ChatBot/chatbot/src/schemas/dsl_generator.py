@@ -22,7 +22,15 @@ logging.basicConfig(level="INFO")
 # AWS Bedrock 설정
 # ==============================
 BEDROCK_REGION = os.getenv("BEDROCK_REGION", "ap-northeast-2")
-BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+BEDROCK_MODEL_ID = os.getenv(
+    "BEDROCK_MODEL_ID",
+    "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+)
+BEDROCK_INFERENCE_PROFILE_ID = (
+    os.getenv("BEDROCK_INFERENCE_PROFILE_ID")
+    or os.getenv("BEDROCK_INFERENCE_PROFILE_ARN")
+    or "arn:aws:bedrock:ap-northeast-2:749559064959:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+)
 
 # ==============================
 # Claude 시스템 프롬프트 (한국어)
@@ -298,12 +306,17 @@ def call_claude_and_get_json(text: str) -> dict:
         if wait:
             time.sleep(wait)
         try:
-            response = client.invoke_model(
-                modelId=BEDROCK_MODEL_ID,
-                contentType="application/json",
-                accept="application/json",
-                body=json.dumps(payload),
-            )
+            invoke_kwargs = {
+                "contentType": "application/json",
+                "accept": "application/json",
+                "body": json.dumps(payload),
+            }
+            if BEDROCK_INFERENCE_PROFILE_ID:
+                invoke_kwargs["inferenceProfileId"] = BEDROCK_INFERENCE_PROFILE_ID
+            else:
+                invoke_kwargs["modelId"] = BEDROCK_MODEL_ID
+
+            response = client.invoke_model(**invoke_kwargs)
 
             body = json.loads(response["body"].read())
             completion = body["content"][0]["text"]

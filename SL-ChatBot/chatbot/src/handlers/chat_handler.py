@@ -5,6 +5,7 @@ import types
 import sys
 import uuid
 import json
+import traceback
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
@@ -152,6 +153,11 @@ class ChatHandler:
         self.forbidden_patterns: Dict[str, List[str]] = {}
         self.questions: List[Dict[str, Any]] = []
         self.nl_category_mapping: Dict[str, List[str]] = {}
+        # LLM 메타 데이터 (에러 로깅용)
+        self.llm_region: Optional[str] = None
+        self.llm_model_id: Optional[str] = None
+        self.llm_inference_profile_id: Optional[str] = None
+        self.llm_target_id: Optional[str] = None
 
         self._load_config()
         self._load_forbidden_patterns()
@@ -456,16 +462,61 @@ class ChatHandler:
                     config=retry_config
                 )
 
-                self.llm_client = ChatBedrock(
-                    client=bedrock_client,
-                    model_id=os.getenv("BEDROCK_MODEL_ID", self.config["llm"]["model"]),
-                    model_kwargs={
-                        "temperature": self.config["llm"]["temperature"],
-                        "max_tokens": self.config["llm"]["max_tokens"],
-                    },
-                    streaming=False
+                model_id = os.getenv("BEDROCK_MODEL_ID", self.config["llm"]["model"])
+                inference_profile_id = (
+                    os.getenv("BEDROCK_INFERENCE_PROFILE_ID")
+                    or os.getenv("BEDROCK_INFERENCE_PROFILE_ARN")
+                    or self.config["llm"].get("inference_profile_id")
                 )
-                print(f"Step 1 OK: AWS Bedrock 사용 - 리전: {aws_region}, 모델: {self.llm_client.model_id}")
+                model_kwargs = {
+                    "temperature": self.config["llm"]["temperature"],
+                    "max_tokens": self.config["llm"]["max_tokens"],
+                }
+                chatbedrock_kwargs = {
+                    "client": bedrock_client,
+                    "model_kwargs": model_kwargs,
+                    "streaming": False,
+                }
+                # inference_profile_id를 사용하면 provider 지정이 필요하다.
+                if inference_profile_id:
+                    chatbedrock_kwargs["provider"] = "anthropic"
+                if inference_profile_id:
+                    # For provisioned throughput deployments
+                    chatbedrock_kwargs["inference_profile_id"] = inference_profile_id
+                else:
+                    chatbedrock_kwargs["model_id"] = model_id
+
+                try:
+                    self.llm_client = ChatBedrock(**chatbedrock_kwargs)
+                except Exception as e:
+                    # ValidationError (Pydantic) or TypeError (old langchain-aws versions)
+                    error_msg = str(e)
+                    if inference_profile_id and ("inference_profile_id" in error_msg or "extra fields not permitted" in error_msg):
+                        # Older langchain-aws versions don't expose inference_profile_id;
+                        # fall back to passing it as model_id so the client can still route.
+                        print(f"⚠️  inference_profile_id 미지원 감지 ({type(e).__name__}), model_id로 fallback...")
+                        chatbedrock_kwargs.pop("inference_profile_id", None)
+                        chatbedrock_kwargs["model_id"] = inference_profile_id
+                        chatbedrock_kwargs.setdefault("provider", "anthropic")
+                        self.llm_client = ChatBedrock(**chatbedrock_kwargs)
+                        print("✅ ChatBedrock을 inference_profile_id 대신 model_id로 초기화했습니다.")
+                    else:
+                        # 다른 에러는 재발생
+                        raise
+
+                target_id = inference_profile_id or model_id
+                # 에러 로깅을 위해 메타 데이터 저장
+                self.llm_region = aws_region
+                self.llm_model_id = model_id
+                self.llm_inference_profile_id = inference_profile_id
+                self.llm_target_id = target_id
+
+                print(
+                    "Step 1 OK: AWS Bedrock 사용 - "
+                    f"리전: {aws_region}, 대상: {target_id}, "
+                    f"env_model: {os.getenv('BEDROCK_MODEL_ID')}, "
+                    f"env_profile: {os.getenv('BEDROCK_INFERENCE_PROFILE_ID') or os.getenv('BEDROCK_INFERENCE_PROFILE_ARN')}"
+                )
 
                 # 2. 도구 초기화
                 print("Step 2: 도구 초기화 중...")
@@ -1869,7 +1920,13 @@ class ChatHandler:
             return result_dict
         except Exception as e:
             error_str = str(e)
-            print(f"LangChain Agent execution error: {e}")
+            self._log_agent_error(
+                error=e,
+                intent=intent,
+                client_type=client_type,
+                message=message,
+                context=context
+            )
 
             # Throttling 에러인 경우 친절한 메시지
             if "ThrottlingException" in error_str or "Too many requests" in error_str:
@@ -1881,6 +1938,49 @@ class ChatHandler:
                 "answer": user_message,
                 "intent": intent
             }
+
+    def _log_agent_error(
+        self,
+        error: Exception,
+        intent: str,
+        client_type: str,
+        message: str,
+        context: str
+    ) -> None:
+        """에이전트 실패 시 디버깅 정보를 구조화해 로깅."""
+        bedrock_info = None
+        if self.provider == "bedrock":
+            bedrock_info = {
+                "region": self.llm_region,
+                "model_id": self.llm_model_id,
+                "inference_profile_id": self.llm_inference_profile_id,
+                "target_id": self.llm_target_id,
+                "env_model_id": os.getenv("BEDROCK_MODEL_ID"),
+                "env_inference_profile_id": os.getenv("BEDROCK_INFERENCE_PROFILE_ID") or os.getenv("BEDROCK_INFERENCE_PROFILE_ARN"),
+            }
+
+        error_log = {
+            "event": "langchain_agent_error",
+            "intent": intent,
+            "client_type": client_type,
+            "provider": self.provider,
+            "error": str(error),
+            "traceback": traceback.format_exc(),
+            "context_chars": len(context or ""),
+            "message_chars": len(message or ""),
+            "bedrock": bedrock_info,
+            "message_ko": "LangChain 에이전트 실행 중 오류가 발생했습니다.",
+        }
+        try:
+            # 한국어 요약 + JSON 상세 모두 출력
+            print(
+                "ERROR: LangChain 에이전트 오류 발생 | "
+                f"의도={intent}, 클라이언트={client_type}, 제공자={self.provider}, "
+                f"Bedrock대상={self.llm_target_id or self.llm_model_id}"
+            )
+            print(f"ERROR: {json.dumps(error_log, ensure_ascii=False)}")
+        except Exception:
+            print(f"ERROR: langchain_agent_error (fallback print) {error_log}")
 
     def _clean_tool_calls_from_response(self, response: str) -> str:
         """LangChain의 내부 도구 호출 형식(<function_calls>, <invoke> 등)을 제거합니다."""

@@ -2,17 +2,12 @@
 
 llm:
   provider: "bedrock"
-  model: "anthropic.claude-3-sonnet-20240229-v1:0"
+  model: "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  # Optional: set an inference profile ARN/ID when the model requires provisioned throughput
+  inference_profile_id: "arn:aws:bedrock:ap-northeast-2:749559064959:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0"
   temperature: 0.7
   max_tokens: 8000
   region: "ap-northeast-2"
-
-rag:
-  vectordb_path: "../rag/vectordb/chroma"
-  top_k: 1
-  score_threshold: 0.7
-  # Default Titan Embeddings on Bedrock (override with BEDROCK_EMBEDDING_MODEL_ID)
-  embedding_model_id: "amazon.titan-embed-text-v2:0"
 
 conversation:
   max_history: 10

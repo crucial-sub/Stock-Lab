@@ -22,7 +22,7 @@ export function GuestMarketInsightSection({
     <section className="flex w-full flex-col gap-5">
       <div className="flex flex-col gap-1">
         <div className="flex items-baseline gap-3">
-          <Title>주요 시황</Title>
+          <span className="text-[1.5rem] font-semibold">주요 시황</span>
           <span className="text-[0.75rem] font-normal text-muted">
             {new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}, 체결량 순
           </span>
@@ -30,7 +30,7 @@ export function GuestMarketInsightSection({
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#18223405] shadow-elev-card p-5">
+        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5">
           <div className="grid md:grid-cols-2">
             {indexes.map((item) => (
               <div key={item.label} className="flex flex-col gap-4">
@@ -71,7 +71,7 @@ export function GuestMarketInsightSection({
           </div>
         </article>
 
-        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#18223405] shadow-elev-card p-5">
+        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5">
           <div className="flex flex-col">
             {news.map((item) => (
               <div

@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, type FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { sendChatMessage } from "@/lib/api/chatbot";
+import { markdownComponents, markdownProseClasses } from "@/components/ai-assistant/renderers/shared/MarkdownComponents";
+import { normalizeMarkdown } from "@/lib/markdown-utils";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 
 type MessageRole = "assistant" | "user" | "system";
@@ -191,6 +196,24 @@ export function FloatingChatWidget() {
                 const hasBuyConditions = buyConditions.length > 0;
                 const hasSellConditions = sellConditions.length > 0;
 
+                const renderContent = () => {
+                  if (isUser || isSystem) {
+                    return <div className="whitespace-pre-wrap">{message.content}</div>;
+                  }
+                  const markdown = normalizeMarkdown(message.content);
+                  return (
+                    <div className={markdownProseClasses}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
+                        components={markdownComponents}
+                      >
+                        {markdown}
+                      </ReactMarkdown>
+                    </div>
+                  );
+                };
+
                 return (
                   <div
                     key={message.id}
@@ -209,7 +232,7 @@ export function FloatingChatWidget() {
                             : "bg-slate-100 text-slate-900",
                       ].join(" ")}
                     >
-                      {message.content}
+                      {renderContent()}
                       {!isUser && (hasBuyConditions || hasSellConditions) && (
                         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                           {hasBuyConditions && (
@@ -240,7 +263,7 @@ export function FloatingChatWidget() {
               <div className="flex gap-2">
                 <textarea
                   className="h-16 flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="예: 쿼트투자가 뭐야?"
+                  placeholder="예: 퀀트투자가 뭐야?"
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
                   disabled={isSending}

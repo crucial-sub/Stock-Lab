@@ -38,6 +38,7 @@ class StrategyListItem(BaseModel):
     is_active: bool = Field(default=True, serialization_alias="isActive")
     is_public: bool = Field(default=False, serialization_alias="isPublic", description="공개 여부")
     status: str = Field(..., description="상태 (PENDING/RUNNING/COMPLETED/FAILED)")
+    source_session_id: Optional[str] = Field(None, serialization_alias="sourceSessionId", description="원본 세션 ID (복제된 경우)")
     total_return: Optional[float] = Field(None, serialization_alias="totalReturn", description="누적 수익률 (%)")
     created_at: datetime = Field(..., serialization_alias="createdAt")
     updated_at: datetime = Field(..., serialization_alias="updatedAt")
@@ -160,6 +161,9 @@ class PublicStrategyListItem(BaseModel):
 
     # 작성자
     owner_name: Optional[str] = Field(None, serialization_alias="ownerName")
+
+    # 최근 백테스트 세션 ID (복제용)
+    session_id: Optional[str] = Field(None, serialization_alias="sessionId")
 
     # 최근 백테스트 통계 (없을 수도 있음)
     total_return: Optional[float] = Field(

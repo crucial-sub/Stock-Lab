@@ -8,14 +8,17 @@ import { autoTradingApi } from "@/lib/api/auto-trading";
 import { kiwoomApi } from "@/lib/api/kiwoom";
 import { formatDateToCard } from "@/lib/date-utils";
 import { PortfolioPageClient } from "./PortfolioPageClient";
+import { KiwoomAccountData } from "../HomePageClient";
 
-// 포트폴리오 타입 정의 (PortfolioPageClient의 Portfolio 타입과 동일)
-interface Portfolio {
+// 포트폴리오 타입 정의
+export interface Portfolio {
   id: string;
   strategyId: string;
   title: string;
   profitRate: number;
   isActive: boolean;
+  status?: string;
+  sourceSessionId?: string | null;
   lastModified: string;
   createdAt: string;
 }
@@ -58,6 +61,8 @@ export default async function PortfolioPage() {
       title: strategy.strategyName,
       profitRate: strategy.totalReturn ?? 0,
       isActive: strategy.isActive,
+      status: strategy.status,
+      sourceSessionId: strategy.sourceSessionId,
       lastModified: formatDateToCard(strategy.updatedAt),
       createdAt: formatDateToCard(strategy.createdAt),
     }));
@@ -96,7 +101,7 @@ export default async function PortfolioPage() {
     const portfolios: Portfolio[] = [...backtestPortfolios, ...autoTradingPortfolios];
 
     // 3. 키움 계좌 잔고 조회 (메인 페이지와 동일)
-    let kiwoomAccountData = null;
+    let kiwoomAccountData: KiwoomAccountData | null = null;
     try {
       const kiwoomStatus = await kiwoomApi.getStatusServer(token);
       if (kiwoomStatus.is_connected) {
@@ -139,8 +144,8 @@ export default async function PortfolioPage() {
     let evaluationAmount = 0;  // 평가금액 (자동매매 종목 평가액 + 현금)
 
     if (kiwoomAccountData?.holdings) {
-      const evalAmount = parseNumericValue((kiwoomAccountData as any).holdings.tot_evlt_amt);
-      const cashBalance = parseNumericValue((kiwoomAccountData as any).cash?.balance);
+      const evalAmount = parseNumericValue((kiwoomAccountData).holdings.tot_evlt_amt);
+      const cashBalance = parseNumericValue((kiwoomAccountData).cash?.balance);
       const allocatedCapital = Number(dashboardData.total_allocated_capital) || 0;
 
       // 키움 계좌 전체 금액에서 자동매매 할당 금액을 빼서 실제 사용 가능한 자산 계산
@@ -159,8 +164,8 @@ export default async function PortfolioPage() {
         evaluationAmount = strategyEval;
       } else {
         // fallback: 전체 계좌 데이터
-        const profit = parseNumericValue((kiwoomAccountData as any).holdings.tot_evlt_pl);
-        const returnRate = parseNumericValue((kiwoomAccountData as any).holdings.tot_prft_rt);
+        const profit = parseNumericValue((kiwoomAccountData).holdings.tot_evlt_pl);
+        const returnRate = parseNumericValue((kiwoomAccountData).holdings.tot_prft_rt);
         totalProfit = profit;
         totalReturn = returnRate;
         evaluationAmount = evalAmount;

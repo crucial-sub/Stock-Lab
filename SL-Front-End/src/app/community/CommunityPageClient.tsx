@@ -138,6 +138,12 @@ export default function CommunityPageClient() {
                   description={item.description || "설명이 없습니다."}
                   returnRate={returnRate}
                   stocks={[]}
+                  onAdd={
+                    item.sessionId
+                      ? () =>
+                          handleCloneStrategy(item.sessionId!, item.strategyName)
+                      : undefined
+                  }
                 />
               );
             })

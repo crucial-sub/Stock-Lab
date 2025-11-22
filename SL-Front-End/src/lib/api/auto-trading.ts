@@ -393,6 +393,7 @@ export const autoTradingApi = {
     active_strategy_count: number;
     total_positions: number;
     total_trades_today: number;
+    total_allocated_capital: number;
   }> => {
     const axios = (await import("axios")).default;
     const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Title } from "@/components/common/Title";
 import type {
   MarketNews,
@@ -15,6 +16,21 @@ export function MarketInsightSection({
   stocks,
   news,
 }: MarketInsightSectionProps) {
+  const router = useRouter();
+
+  const handleStockClick = (stock: MarketStock) => {
+    const params = new URLSearchParams({
+      tab: "volume",
+      stockCode: stock.id,
+      stockName: stock.name,
+    });
+    router.push(`/market-price?${params.toString()}`);
+  };
+
+  const handleNewsClick = (item: MarketNews) => {
+    router.push(`/news?newsId=${item.id}`);
+  };
+
   return (
     <section className="flex w-full flex-col gap-5">
       <div className="flex flex-col gap-1">
@@ -32,7 +48,16 @@ export function MarketInsightSection({
             {stocks.map((stock) => (
               <div
                 key={stock.id}
-                className="flex items-center justify-between border-t border-[#18223433] px-1 py-3 first:border-t-0"
+                role="button"
+                tabIndex={0}
+                className="flex cursor-pointer items-center justify-between border-t border-[#18223433] px-1 py-3 first:border-t-0 hover:bg-white/5"
+                onClick={() => handleStockClick(stock)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleStockClick(stock);
+                  }
+                }}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-[1rem] font-semibold text-text-body">
@@ -57,7 +82,16 @@ export function MarketInsightSection({
             {news.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between border-t border-[#18223433] py-3 first:border-t-0"
+                role="button"
+                tabIndex={0}
+                className="flex cursor-pointer items-center justify-between border-t border-[#18223433] py-3 first:border-t-0 hover:bg-white/5"
+                onClick={() => handleNewsClick(item)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleNewsClick(item);
+                  }
+                }}
               >
                 <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-base font-normal text-text-body">
                   {item.title}

@@ -37,7 +37,12 @@ const SAMPLE_QUESTION = {
   ],
 };
 
-export default async function AIAssistantPage() {
+export default async function AIAssistantPage({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
+  const autoStart = searchParams?.autoStart === "questionnaire";
   // TODO: API에서 전략 데이터 가져오기
   // const strategies = await fetchStrategies();
 
@@ -45,6 +50,7 @@ export default async function AIAssistantPage() {
     <AIAssistantPageClient
       largeSample={SAMPLE_QUESTION.large}
       smallSample={SAMPLE_QUESTION.small}
+      autoStartQuestionnaire={autoStart}
     />
   );
 }

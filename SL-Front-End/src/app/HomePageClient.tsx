@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DiscussionPreviewSection } from "@/components/community";
 import {
   HighlightsSection,
@@ -13,6 +14,7 @@ import {
   GuestMarketInsightSection,
   GuestPortfolioSection,
 } from "@/components/home/guest";
+import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { marketQuoteApi } from "@/lib/api/market-quote";
 import { fetchLatestNews } from "@/lib/api/news";
 import type {
@@ -263,6 +265,8 @@ export function HomePageClient({
   marketStocksInitial,
   marketNewsInitial,
 }: HomePageClientProps) {
+  const router = useRouter();
+  const [isAssistantCtaDismissed, setIsAssistantCtaDismissed] = useState(false);
   const normalizeStock = useCallback(
     (item: MarketStock): MarketStock => ({
       ...item,
@@ -380,6 +384,22 @@ export function HomePageClient({
     }
   }, [marketNews.length]);
 
+  const authenticatedStats = buildAuthenticatedStats(
+    dashboardData,
+    kiwoomAccountData,
+  );
+  const portfolioHighlights: HomePortfolioHighlight[] = [];
+  const communityHighlights: HomeCommunityHighlight[] = [];
+  const hasHighlights =
+    portfolioHighlights.length > 0 && communityHighlights.length > 0;
+  const hasPerformanceChartData = Boolean(performanceChartData);
+  const handleAssistantCtaClick = useCallback(() => {
+    router.push("/ai-assistant?autoStart=questionnaire");
+  }, [router]);
+  const handleAssistantCtaDismiss = useCallback(() => {
+    setIsAssistantCtaDismissed(true);
+  }, []);
+
   if (!isLoggedIn) {
     return (
       <>
@@ -400,16 +420,6 @@ export function HomePageClient({
     );
   }
 
-  const authenticatedStats = buildAuthenticatedStats(
-    dashboardData,
-    kiwoomAccountData,
-  );
-  const portfolioHighlights: HomePortfolioHighlight[] = [];
-  const communityHighlights: HomeCommunityHighlight[] = [];
-  const hasHighlights =
-    portfolioHighlights.length > 0 && communityHighlights.length > 0;
-  const hasPerformanceChartData = Boolean(performanceChartData);
-
   return (
     <>
       <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
@@ -417,6 +427,29 @@ export function HomePageClient({
           <div className="text-[2rem] font-semibold text-text-body">
             안녕하세요, {userName}님
           </div>
+
+          {isLoggedIn && !isAssistantCtaDismissed && (
+            <div className="mt-[-20px] flex w-full flex-col">
+              <StrategyCard
+                question="퀀트 투자나 주식 투자가 처음이신가요?"
+                description={`처음이시라면, 성향을 파악하고 AI 추천 전략으로 시작해보세요!`}
+                size="large"
+                onClick={handleAssistantCtaClick}
+              />
+              <div className="mt-[0.25rem] flex justify-end">
+                <span className="mr-[0.25rem] text-[0.75rem] font-normal text-muted">
+                  필요가 없으시다면,
+                </span>
+                <button
+                  type="button"
+                  className="text-[0.75rem] font-semibold text-brand-purple hover:underline"
+                  onClick={handleAssistantCtaDismiss}
+                >
+                  다시 보지 않기
+                </button>
+              </div>
+            </div>
+          )}
 
           <StatsOverviewSection stats={authenticatedStats} />
           {!hasKiwoomAccount && (

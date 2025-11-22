@@ -1,13 +1,13 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChatHistory } from "@/components/ai-assistant/ChatHistory";
-import { ChatInterface } from "@/components/ai-assistant/ChatInterface";
 import { SecondarySidebar } from "@/components/ai-assistant/SecondarySidebar";
 import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { StreamingMarkdownRenderer } from "@/components/ai-assistant/StreamingMarkdownRenderer";
 import { QuestionnaireFlow } from "@/components/ai-assistant/QuestionnaireFlow";
 import { StrategyRecommendationRenderer } from "@/components/ai-assistant/StrategyRecommendationRenderer";
-import { BacktestConfigRenderer } from "@/components/ai-assistant/renderers/BacktestConfigRenderer";
 import { AISearchInput } from "@/components/home/ui";
 import { useChatStream } from "@/hooks/useChatStream";
 import { chatHistoryApi } from "@/lib/api/chat-history";
@@ -15,12 +15,17 @@ import { sendChatMessage, type ChatResponse } from "@/lib/api/chatbot";
 import { runBacktest, type BacktestRunRequest } from "@/lib/api/backtest";
 import { getStrategyDetail } from "@/lib/api/investment-strategy";
 import { getAuthTokenFromCookie } from "@/lib/auth/token";
-import { useCallback, useEffect, useState, useRef } from "react";
-import type { Message, TextMessage, MarkdownMessage, BacktestConfigMessage, BacktestExecutionMessage } from "@/types/message";
-import type { QuestionnaireAnswer } from "@/data/assistantQuestionnaire";
-import { QUESTIONNAIRE_CTA, QUESTIONNAIRE_START_BUTTON, createAnswer } from "@/data/assistantQuestionnaire";
-import { getTopRecommendations, type StrategyMatch } from "@/utils/strategyMatcher";
+import type { QuestionnaireAnswer, Question } from "@/data/assistantQuestionnaire";
+import { createAnswer } from "@/data/assistantQuestionnaire";
 import type { StrategyDetail } from "@/types/investment-strategy";
+import type {
+  BacktestConfigMessage,
+  BacktestExecutionMessage,
+  MarkdownMessage,
+  Message,
+  TextMessage,
+} from "@/types/message";
+import { getTopRecommendations, type StrategyMatch } from "@/utils/strategyMatcher";
 
 // crypto.randomUUID polyfill (HTTP 환경 지원)
 function generateUUID(): string {
@@ -28,7 +33,7 @@ function generateUUID(): string {
     return crypto.randomUUID();
   }
   // Fallback: 간단한 UUID v4 생성
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
@@ -67,7 +72,7 @@ interface ChatSession {
   questionHistory?: Array<{
     questionId: string;
     selectedOptionId: string;
-    question: any;
+    question: string;
   }>;
   // 새로운 설문 시스템용
   questionnaireAnswers?: QuestionnaireAnswer[];
@@ -94,22 +99,28 @@ interface AIAssistantPageClientProps {
     id: string;
     question: string;
   }[];
+  autoStartQuestionnaire?: boolean;
 }
 
 export function AIAssistantPageClient({
   largeSample,
   smallSample,
+  autoStartQuestionnaire = false,
 }: AIAssistantPageClientProps) {
+  const searchParams = useSearchParams();
   const [sessionId, setSessionId] = useState<string>("");
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [_isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [questionHistory, setQuestionHistory] = useState<Array<{
     questionId: string;
     selectedOptionId: string;
-    question: any;
+    question: string;
   }>>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const hasAutoStartedRef = useRef(false);
+  const shouldAutoStart =
+    autoStartQuestionnaire || searchParams.get("autoStart") === "questionnaire";
   const [currentMode, setCurrentMode] = useState<"initial" | "chat" | "questionnaire">("initial");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const MIN_REQUEST_INTERVAL = 2000; // 최소 2초 간격
@@ -120,8 +131,7 @@ export function AIAssistantPageClient({
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyDetail | null>(null);
 
   // SSE 스트리밍 상태
-  const [streamingMessage, setStreamingMessage] = useState<string>("");
-  const [shouldStartStream, setShouldStartStream] = useState(false);
+  const [, setStreamingMessage] = useState<string>("");
 
   // 스크롤 컨테이너 ref (직접 제어용)
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -133,7 +143,6 @@ export function AIAssistantPageClient({
     connectionState,
     error: streamError,
     sendMessage: sendStreamMessage,
-    retry: retryStream,
   } = useChatStream(sessionId || "temp_session");
 
   // 세션 중복 제거 유틸리티 함수
@@ -151,7 +160,10 @@ export function AIAssistantPageClient({
   const saveChatSession = (sessionId: string, firstMessage: string) => {
     const newSession: ChatSession = {
       id: sessionId,
-      title: firstMessage.length > 20 ? firstMessage.substring(0, 20) + "..." : firstMessage,
+      title:
+        firstMessage.length > 20
+          ? `${firstMessage.substring(0, 20)}...`
+          : firstMessage,
       lastMessage: firstMessage,
       timestamp: Date.now(),
       messages: messages,
@@ -301,7 +313,7 @@ export function AIAssistantPageClient({
     setStrategyRecommendations(session.strategyRecommendations || []);
   };
 
-  const handleLargeCardClick = () => {
+  const handleLargeCardClick = useCallback(() => {
     // 전략 추천 플로우 시작 (새로운 설문 시스템)
     // 세션 ID 생성
     const newSessionId = generateUUID();
@@ -324,7 +336,14 @@ export function AIAssistantPageClient({
 
     // 채팅 세션 저장
     saveChatSession(newSessionId, userMessage);
-  };
+  }, [saveChatSession]);
+
+  useEffect(() => {
+    if (shouldAutoStart && !hasAutoStartedRef.current) {
+      hasAutoStartedRef.current = true;
+      handleLargeCardClick();
+    }
+  }, [shouldAutoStart, handleLargeCardClick]);
 
   const handleSampleClick = async (strategyId: string) => {
     // small sample 카드 클릭 시 해당 전략에 대해 질문 - 채팅 모드로 전환
@@ -643,7 +662,7 @@ export function AIAssistantPageClient({
     setQuestionHistory([]);
   };
 
-  const handleAnswerSelect = async (questionId: string, optionId: string, answerText: string) => {
+  const _handleAnswerSelect = async (questionId: string, optionId: string, answerText: string) => {
     // 현재 질문을 히스토리에 저장 (다음 질문으로 넘어가기 전에)
     if (chatResponse?.ui_language?.type?.startsWith("questionnaire") && "question" in chatResponse.ui_language) {
       const question = chatResponse.ui_language.question;
@@ -681,7 +700,11 @@ export function AIAssistantPageClient({
   };
 
   // 새로운 설문 시스템용 핸들러
-  const handleQuestionnaireAnswerSelect = (questionId: string, optionId: string, answerText: string) => {
+  const handleQuestionnaireAnswerSelect = (
+    questionId: string,
+    optionId: string,
+    _answerText: string,
+  ) => {
     // 답변을 상태에 저장
     const answer = createAnswer(questionId, optionId);
     if (answer) {
@@ -861,7 +884,6 @@ export function AIAssistantPageClient({
                   <StreamingMarkdownRenderer
                     content={streamContent}
                     isStreaming={isStreaming}
-                    role="assistant"
                     compactMaxBullets={3}
                   />
                 )}

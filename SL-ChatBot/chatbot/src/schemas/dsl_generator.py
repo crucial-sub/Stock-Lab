@@ -22,7 +22,15 @@ logging.basicConfig(level="INFO")
 # AWS Bedrock 설정
 # ==============================
 BEDROCK_REGION = os.getenv("BEDROCK_REGION", "ap-northeast-2")
-BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+BEDROCK_MODEL_ID = os.getenv(
+    "BEDROCK_MODEL_ID",
+    "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+)
+BEDROCK_INFERENCE_PROFILE_ID = (
+    os.getenv("BEDROCK_INFERENCE_PROFILE_ID")
+    or os.getenv("BEDROCK_INFERENCE_PROFILE_ARN")
+    or "arn:aws:bedrock:ap-northeast-2:749559064959:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+)
 
 # ==============================
 # Claude 시스템 프롬프트 (한국어)
@@ -124,6 +132,7 @@ _bedrock_client = None
 _factor_alias_map: Dict[str, str] = {}
 _operator_map: Dict[str, str] = {}
 _known_factors: set[str] = set()
+_factor_units: Dict[str, str] = {}  # factor -> unit(raw|percent|ratio)
 
 def get_bedrock_client():
     global _bedrock_client
@@ -137,8 +146,8 @@ def _normalize_factor_key(value: str) -> str:
 
 
 def _load_alias_and_operator_maps():
-    """Load factor alias and operator map from config files (with safe fallback)."""
-    global _factor_alias_map, _operator_map
+    """Load factor alias, operator map, and factor units from config files (with safe fallback)."""
+    global _factor_alias_map, _operator_map, _factor_units
     # factor alias
     factor_path = Path("/app/config/factor_alias.json")
     if not factor_path.exists():
@@ -157,6 +166,7 @@ def _load_alias_and_operator_maps():
             import yaml  # local import to avoid hard dependency elsewhere
             data = yaml.safe_load(op_path.read_text(encoding="utf-8")) or {}
             _operator_map = data.get("operator_map", {})
+            _factor_units = data.get("factor_units", {})
     except Exception as exc:
         logger.warning("operator_rules.yaml 로드 실패: %s", exc)
 
@@ -199,6 +209,10 @@ def _load_known_factors():
     ]
     for token in defaults:
         _known_factors.add(_normalize_factor_key(token))
+
+    # factor_units.yaml에 정의된 팩터도 알 수 있도록 추가
+    for key in _factor_units.keys():
+        _known_factors.add(_normalize_factor_key(key))
 
 # ======================================
 # DSL 스키마 모델
@@ -265,14 +279,32 @@ def _normalize_condition(cond: Dict[str, Any]) -> Dict[str, Any]:
             {**{k: v for k, v in cond.items() if k != "value"}, "operator": "<", "value": high},
         ]
 
-    # 퍼센트 계산
-    factor_upper = str(cond.get("factor", "")).upper()
-    if factor_upper.startswith(("RET_", "PRICE_CHANGE_")):
-        val = cond.get("value")
-        if isinstance(val, (int, float)) and val >= 1:
-            cond["value"] = val / 100.0
+    # 단위 방어: 팩터별 스케일 가드
+    val = cond.get("value")
+    unit = _factor_units.get(normalized_factor_key or "", "")
+    if isinstance(val, (int, float)):
+        cond["value"] = _guard_value_by_unit(unit, cond.get("factor"), val)
 
     return cond
+
+
+def _guard_value_by_unit(unit: str, factor: Any, value: float) -> float:
+    """팩터 단위 기반 스케일 보정."""
+    factor_upper = str(factor or "").upper()
+
+    # 수익률/가격 변화 계열: 퍼센트 입력(>=1)만 소수로 변환
+    if factor_upper.startswith(("RET_", "PRICE_CHANGE_")):
+        return value if abs(value) < 1 else value / 100.0
+
+    # percent 단위: 0<x<1이면 축소되었을 가능성 → 100배
+    if unit == "percent" and 0 < abs(value) < 1:
+        return round(value * 100, 6)
+
+    # raw 단위: 0<x<1이면 잘못 스케일된 값일 가능성 → 100배 (PER/PBR 등)
+    if unit == "raw" and 0 < abs(value) < 1:
+        return round(value * 100, 6)
+
+    return value
 
 # ======================================
 # Claude 호출
@@ -281,7 +313,7 @@ def call_claude_and_get_json(text: str) -> dict:
     """Bedrock 호출 + 간단한 재시도(Throttling 대비)."""
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 800,
+        "max_tokens": 2000,
         "temperature": 0.2,
         "system": CLAUDE_SYSTEM_PROMPT,
         "messages": [
@@ -298,12 +330,17 @@ def call_claude_and_get_json(text: str) -> dict:
         if wait:
             time.sleep(wait)
         try:
-            response = client.invoke_model(
-                modelId=BEDROCK_MODEL_ID,
-                contentType="application/json",
-                accept="application/json",
-                body=json.dumps(payload),
-            )
+            invoke_kwargs = {
+                "contentType": "application/json",
+                "accept": "application/json",
+                "body": json.dumps(payload),
+            }
+            if BEDROCK_INFERENCE_PROFILE_ID:
+                invoke_kwargs["inferenceProfileId"] = BEDROCK_INFERENCE_PROFILE_ID
+            else:
+                invoke_kwargs["modelId"] = BEDROCK_MODEL_ID
+
+            response = client.invoke_model(**invoke_kwargs)
 
             body = json.loads(response["body"].read())
             completion = body["content"][0]["text"]

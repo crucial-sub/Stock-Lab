@@ -45,7 +45,7 @@ interface DashboardData {
   total_allocated_capital: number; // 자동매매에 할당된 총 금액
 }
 
-interface KiwoomAccountData {
+export interface KiwoomAccountData {
   cash?: {
     balance?: string | number;
     withdrawable?: string | number;

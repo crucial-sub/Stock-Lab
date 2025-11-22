@@ -1,5 +1,6 @@
 {
   "strategies": [
+    /*migrate_strategies.py warren_buffett 팩터 참고*/
     {
       "id": "warren_buffett",
       "name": "워렌버핏 가치투자 전략",
@@ -18,6 +19,7 @@
         { "factor": "ROE", "operator": "<", "value": 5.0 }
       ]
     },
+    /*migrate_strategies.py peter_lynch 팩터 참고*/
     {
       "id": "peter_lynch",
       "name": "피터 린치 전략",
@@ -36,24 +38,7 @@
         { "factor": "PEG", "operator": ">", "value": 2.5 }
       ]
     },
-    {
-      "id": "value_income",
-      "name": "저평가 배당주",
-      "summary": "저평가와 안정적 배당을 동시에 추구",
-      "tags": ["long_term", "style_dividend", "risk_low"],
-      "conditions_preview": [
-        { "condition": "PBR < 1.0" },
-        { "condition": "배당수익률 > 3%" }
-      ],
-      "buy_conditions": [
-        { "factor": "PBR", "operator": "<", "value": 1.0 },
-        { "factor": "DividendYield", "operator": ">", "value": 3.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "PBR", "operator": ">", "value": 2.5 },
-        { "factor": "DividendYield", "operator": "<", "value": 2.0 }
-      ]
-    },
+    /*migrate_strategies.py cathie_wood 팩터 참고*/
     {
       "id": "cathy_wood",
       "name": "캐시 우드 혁신 전략",
@@ -69,7 +54,7 @@
       ],
       "sell_conditions": [
         { "factor": "SalesGrowth", "operator": "<", "value": 10.0 },
-        { "factor": "Volatility", "operator": ">", "value": 50.0 }
+        { "factor": "volatility", "operator": ">", "value": 50.0 }
       ]
     },
     {
@@ -91,42 +76,6 @@
       ]
     },
     {
-      "id": "strategy_growth",
-      "name": "성장투자 전략",
-      "summary": "고성장 기업에 중장기 투자",
-      "tags": ["medium_term", "style_growth", "risk_high"],
-      "conditions_preview": [
-        { "condition": "EPS 성장률 > 20%" },
-        { "condition": "매출 성장률 > 20%" }
-      ],
-      "buy_conditions": [
-        { "factor": "EPSGrowth", "operator": ">", "value": 20.0 },
-        { "factor": "SalesGrowth", "operator": ">", "value": 20.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "EPSGrowth", "operator": "<", "value": 10.0 },
-        { "factor": "PER", "operator": ">", "value": 50.0 }
-      ]
-    },
-    {
-      "id": "strategy_dividend",
-      "name": "배당투자 전략",
-      "summary": "안정적 배당 흐름을 노리는 전략",
-      "tags": ["long_term", "style_dividend", "risk_low"],
-      "conditions_preview": [
-        { "condition": "배당수익률 > 3%" },
-        { "condition": "부채비율 < 100%" }
-      ],
-      "buy_conditions": [
-        { "factor": "DividendYield", "operator": ">", "value": 3.0 },
-        { "factor": "DebtRatio", "operator": "<", "value": 100.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "DividendYield", "operator": "<", "value": 2.0 },
-        { "factor": "PayoutRatio", "operator": ">", "value": 80.0 }
-      ]
-    },
-    {
       "id": "strategy_quality",
       "name": "퀄리티 투자 전략",
       "summary": "재무 건전성이 높은 우량주 선별",
@@ -137,32 +86,14 @@
       ],
       "buy_conditions": [
         { "factor": "ROE", "operator": ">", "value": 12.0 },
-        { "factor": "DebtRatio", "operator": "<", "value": 80.0 }
+        { "factor": "debt_ratio", "operator": "<", "value": 80.0 }
       ],
       "sell_conditions": [
         { "factor": "ROE", "operator": "<", "value": 8.0 },
-        { "factor": "DebtRatio", "operator": ">", "value": 120.0 }
+        { "factor": "debt_ratio", "operator": ">", "value": 120.0 }
       ]
     },
-    {
-      "id": "strategy_momentum",
-      "name": "모멘텀 투자 전략",
-      "aliases": ["모멘텀 전략","momentum"],
-      "summary": "가격 추세를 추종하는 단기 전략",
-      "tags": ["short_term", "style_momentum", "risk_high"],
-      "conditions_preview": [
-        { "condition": "6M 모멘텀 상위 20%" },
-        { "condition": "RSI(14) < 70" }
-      ],
-      "buy_conditions": [
-        { "factor": "MOMENTUM_6M", "operator": ">", "value": 80.0 },
-        { "factor": "RSI", "params": [14], "operator": "<", "value": 70.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "MOMENTUM_6M", "operator": "<", "value": 50.0 },
-        { "factor": "RSI", "params": [14], "operator": ">", "value": 80.0 }
-      ]
-    },
+    /*migrate_strategies.py william_oneil 팩터 참고*/
     {
       "id": "strategy_william_oneil",
       "name": "윌리엄 오닐 전략",
@@ -240,58 +171,10 @@
         { "condition": "배당수익률 < 3% 시 매도" }
       ],
       "buy_conditions": [
-        { "factor": "DividendYield", "operator": ">=", "value": 4.0 }
+        { "factor": "dividend_yield", "operator": ">=", "value": 4.0 }
       ],
       "sell_conditions": [
-        { "factor": "DividendYield", "operator": "<", "value": 3.0 }
-      ]
-    },
-    {
-      "id": "growth_sales_acceleration",
-      "name": "매출 성장주 전략",
-      "summary": "매출이 빠르게 성장하는 기업을 선별해 성장 모멘텀을 추종",
-      "tags": ["medium_term", "style_growth", "risk_medium"],
-      "conditions_preview": [
-        { "condition": "매출 성장률 >= 20%" },
-        { "condition": "매출 성장률 < 10% 시 매도" }
-      ],
-      "buy_conditions": [
-        { "factor": "SalesGrowth", "operator": ">=", "value": 20.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "SalesGrowth", "operator": "<", "value": 10.0 }
-      ]
-    },
-    {
-      "id": "growth_eps_acceleration",
-      "name": "EPS 성장주 전략",
-      "summary": "이익이 지속적으로 증가하는 기업을 추종하는 성장 전략",
-      "tags": ["medium_term", "style_growth", "risk_medium"],
-      "conditions_preview": [
-        { "condition": "EPS 성장률 >= 10%" },
-        { "condition": "EPS 성장률 <= 0% 시 매도" }
-      ],
-      "buy_conditions": [
-        { "factor": "EPSGrowth", "operator": ">=", "value": 10.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "EPSGrowth", "operator": "<=", "value": 0.0 }
-      ]
-    },
-    {
-      "id": "growth_rnd_innovation",
-      "name": "R&D 혁신 기업",
-      "summary": "연구개발 비중이 높은 혁신 기업을 선별하는 성장 전략",
-      "tags": ["long_term", "style_growth", "risk_high"],
-      "conditions_preview": [
-        { "condition": "R&D 비중 >= 5%" },
-        { "condition": "R&D 비중 < 3% 시 매도" }
-      ],
-      "buy_conditions": [
-        { "factor": "RNDExpenseRatio", "operator": ">=", "value": 5.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "RNDExpenseRatio", "operator": "<", "value": 3.0 }
+        { "factor": "dividend_yield", "operator": "<", "value": 3.0 }
       ]
     },
     {
@@ -320,10 +203,10 @@
         { "condition": "부채비율 > 150% 시 매도" }
       ],
       "buy_conditions": [
-        { "factor": "DebtRatio", "operator": "<=", "value": 100.0 }
+        { "factor": "debt_ratio", "operator": "<=", "value": 100.0 }
       ],
       "sell_conditions": [
-        { "factor": "DebtRatio", "operator": ">", "value": 150.0 }
+        { "factor": "debt_ratio", "operator": ">", "value": 150.0 }
       ]
     },
     {
@@ -336,31 +219,12 @@
         { "condition": "영업이익률 < 10% 시 매도" }
       ],
       "buy_conditions": [
-        { "factor": "OperatingProfitMargin", "operator": ">=", "value": 15.0 }
+        { "factor": "opm", "operator": ">=", "value": 15.0 }
       ],
       "sell_conditions": [
-        { "factor": "OperatingProfitMargin", "operator": "<", "value": 10.0 }
-      ]
-    },
-    {
-      "id": "quality_magic_formula",
-      "name": "마법공식 전략",
-      "summary": "ROE와 수익성을 기반으로 상위 기업을 선별하는 조엘 그린블라트 전략",
-      "tags": ["medium_term", "style_value", "style_quality", "risk_medium"],
-      "screening_conditions": [
-        { "factor": "EBITDA", "operator": ">=", "value": 0.0 },
-        { "factor": "ROE", "operator": ">=", "value": 10.0 }
-      ],
-      "conditions_preview": [
-        { "condition": "ROE >= 12%" },
-        { "condition": "ROE < 8% 시 매도" }
-      ],
-      "buy_conditions": [
-        { "factor": "ROE", "operator": ">=", "value": 12.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "ROE", "operator": "<", "value": 8.0 }
+        { "factor": "opm", "operator": "<", "value": 10.0 }
       ]
     }
+    
   ]
 }

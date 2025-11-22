@@ -66,9 +66,7 @@ export default function LoginPage() {
         // 페이지 전체 새로고침으로 서버 컴포넌트 확실히 재실행
         window.location.href = "/";
       } catch (_error) {
-        setErrors({
-          email: "이메일 또는 비밀번호가 올바르지 않습니다.",
-        });
+        // axios 인터셉터에서 이미 setAuthErrorMessage로 모달 표시 처리됨
         setIsSubmitting(false);
       }
     }

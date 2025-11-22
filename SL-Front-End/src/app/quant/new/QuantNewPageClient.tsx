@@ -19,6 +19,7 @@ import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useQuantTabStore } from "@/stores";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 import { useRef } from "react";
+import { communityApi } from "@/lib/api/community";
 
 /**
  * 탭 컴포넌트들을 동적으로 로드 (코드 스플리팅)
@@ -50,6 +51,8 @@ export function QuantNewPageClient() {
   // 요약 패널 열림/닫힘 상태
   const [isSummaryPanelOpen, setIsSummaryPanelOpen] = useState(true);
   const conditionsAppliedRef = useRef(false);
+  const cloneAppliedRef = useRef(false);
+  const [isLoadingClone, setIsLoadingClone] = useState(false);
 
   // React Query로 데이터 fetch (클라이언트 사이드)
   // 데이터는 하위 컴포넌트에서 사용하므로 여기서는 캐싱 목적으로만 fetch
@@ -60,6 +63,28 @@ export function QuantNewPageClient() {
   // Query parameter로 전달된 조건 처리 (추천 전략에서 백테스트 실행 시)
   const searchParams = useSearchParams();
   const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
+  const {
+    setStrategyName,
+    setIsDayOrMonth,
+    setStartDate,
+    setEndDate,
+    setInitialInvestment,
+    setCommissionRate,
+    setSlippage,
+    setBuyLogic,
+    setPriorityFactor,
+    setPriorityOrder,
+    setPerStockRatio,
+    setMaxHoldings,
+    setMaxBuyValue,
+    setMaxDailyStock,
+    setBuyPriceBasis,
+    setBuyPriceOffset,
+    setTargetAndLoss,
+    setHoldDays,
+    setConditionSell,
+    setTradeTargets,
+  } = useBacktestConfigStore();
 
   useEffect(() => {
     if (conditionsAppliedRef.current) return;
@@ -103,11 +128,84 @@ export function QuantNewPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 마운트 시 한 번만 실행
 
+  // Clone parameter 처리 (복제된 전략)
+  useEffect(() => {
+    if (cloneAppliedRef.current) return;
+    const cloneParam = searchParams.get("clone");
+    if (!cloneParam) return;
+
+    const loadCloneData = async () => {
+      try {
+        setIsLoadingClone(true);
+        cloneAppliedRef.current = true;
+
+        // 원본 전략 데이터 가져오기
+        const cloneData = await communityApi.getCloneStrategyData(cloneParam);
+
+        // 기본 설정
+        setStrategyName(cloneData.strategyName);
+        setIsDayOrMonth(cloneData.isDayOrMonth);
+        setStartDate(cloneData.startDate);
+        setEndDate(cloneData.endDate);
+        setInitialInvestment(cloneData.initialInvestment);
+        setCommissionRate(cloneData.commissionRate);
+        setSlippage(cloneData.slippage);
+
+        // 매수 조건
+        setBuyLogic(cloneData.buyLogic);
+        if (cloneData.priorityFactor) setPriorityFactor(cloneData.priorityFactor);
+        setPriorityOrder(cloneData.priorityOrder);
+        setPerStockRatio(cloneData.perStockRatio);
+        setMaxHoldings(cloneData.maxHoldings);
+        if (cloneData.maxBuyValue) setMaxBuyValue(cloneData.maxBuyValue);
+        if (cloneData.maxDailyStock) setMaxDailyStock(cloneData.maxDailyStock);
+        setBuyPriceBasis(cloneData.buyPriceBasis);
+        setBuyPriceOffset(cloneData.buyPriceOffset);
+
+        // 매수 조건 UI
+        if (cloneData.buyConditions && Array.isArray(cloneData.buyConditions)) {
+          cloneData.buyConditions.forEach((condition: any) => {
+            addBuyConditionUIWithData({
+              factorName: condition.factor || "",
+              subFactorName: condition.sub_factor || null,
+              operator: condition.operator || "GT",
+              value: condition.value !== null ? String(condition.value) : "",
+              argument: condition.argument ? String(condition.argument) : undefined,
+            });
+          });
+        }
+
+        // 매도 조건
+        if (cloneData.targetAndLoss) setTargetAndLoss(cloneData.targetAndLoss);
+        if (cloneData.holdDays) setHoldDays(cloneData.holdDays);
+        if (cloneData.conditionSell) setConditionSell(cloneData.conditionSell);
+
+        // 종목 선택
+        setTradeTargets(cloneData.tradeTargets);
+
+        // URL에서 clone 파라미터 제거
+        const url = new URL(window.location.href);
+        url.searchParams.delete("clone");
+        window.history.replaceState({}, "", url.toString());
+      } catch (error) {
+        console.error("복제 데이터 로드 실패:", error);
+        alert("전략 복제에 실패했습니다. 다시 시도해주세요.");
+      } finally {
+        setIsLoadingClone(false);
+      }
+    };
+
+    loadCloneData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 마운트 시 한 번만 실행
+
   // 로딩 상태 표시
-  if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes) {
+  if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes || isLoadingClone) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-text-body">데이터를 불러오는 중...</div>
+        <div className="text-text-body">
+          {isLoadingClone ? "전략을 불러오는 중..." : "데이터를 불러오는 중..."}
+        </div>
       </div>
     );
   }

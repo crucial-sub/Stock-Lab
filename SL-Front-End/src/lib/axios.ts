@@ -63,13 +63,17 @@ axiosInstance.interceptors.response.use(
       const { status, data, config } = error.response;
       const requestUrl = config?.url || "";
 
-      // /auth/me 요청의 401/403 에러는 로그 출력 안 함 (정상 비로그인)
+      // 비로그인 상태에서도 접근 가능한 public API들의 401/403 에러는 무시
       const isAuthMeRequest = requestUrl.includes("/auth/me");
       const isAuthLoginRequest =
         requestUrl.includes("/auth/login") || requestUrl.includes("/login");
+      const isPublicApiRequest =
+        requestUrl.includes("/community/posts") ||
+        requestUrl.includes("/community/rankings") ||
+        requestUrl.includes("/strategies/public");
       const isAuthError = status === 401 || status === 403;
 
-      if (isAuthMeRequest && isAuthError) {
+      if ((isAuthMeRequest || isPublicApiRequest) && isAuthError) {
         // 로그인하지 않은 상태에서의 정상적인 에러이므로 무시
         return Promise.reject(error);
       }

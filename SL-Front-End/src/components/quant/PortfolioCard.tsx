@@ -84,11 +84,48 @@ export function PortfolioCard({
   // 자동매매 카드인지 판단
   const isAutoTrading = id.startsWith("auto-");
 
+  // 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const handleClickOutside = (event: Event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    const handleEscKey = (event: Event) => {
+      const keyboardEvent = event as KeyboardEvent;
+      if (keyboardEvent.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscKey);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscKey);
+    };
+  }, [isMenuOpen]);
+
+  const handleShare = (event: MouseEvent) => {
+    event.stopPropagation();
+    onShare({ id, strategyId, title });
+    setIsMenuOpen(false);
+  };
+
+  const handleRename = (event: MouseEvent) => {
+    event.stopPropagation();
+    onRename({ id, strategyId, title });
+    setIsMenuOpen(false);
+  };
+
   return (
     <div
-      className={`bg-surface border border-surface rounded-lg h-[12.5rem] flex flex-col cursor-pointer transition-all duration-200 hover:border-brand-soft hover:shadow-elev-sm p-5 ${
-        !isActive && isAutoTrading ? "opacity-60" : ""
-      }`}
+      className={`bg-surface border border-surface rounded-lg h-[12.5rem] flex flex-col cursor-pointer transition-all duration-200 hover:border-brand-soft hover:shadow-elev-sm p-5 ${!isActive && isAutoTrading ? "opacity-60" : ""
+        }`}
       onClick={() => onClick(id)}
     >
       {/* 헤더: 제목과 체크박스 */}

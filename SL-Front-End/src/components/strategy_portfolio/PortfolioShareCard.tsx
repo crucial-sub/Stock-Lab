@@ -67,10 +67,17 @@ export function PortfolioShareCard({
 
       {/* 포트폴리오 추가하기 버튼 */}
       <button
-        onClick={onAdd}
-        className="w-full px-4 py-2 rounded-[6.25rem] bg-brand-purple text-white"
+        onClick={() => {
+          console.log("PortfolioShareCard: Add button clicked", { portfolioName, hasOnAdd: !!onAdd });
+          if (onAdd) onAdd();
+        }}
+        disabled={!onAdd}
+        className={`w-full px-4 py-2 rounded-[6.25rem] text-white transition-colors ${onAdd
+            ? "bg-brand-purple hover:bg-brand-purple-dark"
+            : "bg-gray-300 cursor-not-allowed"
+          }`}
       >
-        포트폴리오 추가하기
+        {onAdd ? "포트폴리오 추가하기" : "추가 불가 (세션 없음)"}
       </button>
     </article>
   );

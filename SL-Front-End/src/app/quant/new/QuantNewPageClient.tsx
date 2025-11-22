@@ -128,6 +128,32 @@ export function QuantNewPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 마운트 시 한 번만 실행
 
+  // 조건식 파싱 헬퍼 함수
+  const parseConditionString = (expression: string): { factorName: string | null; subFactorName: string | null; argument?: string } => {
+    // Case 1: SubFactor({Factor},{Arg}) or SubFactor({Factor})
+    // 예: "이동평균({PER},{20일})" -> subFactor: "이동평균", factor: "PER", arg: "20일"
+    const subFactorMatch = expression.match(/^([^(]+)\(\{([^}]+)\}(?:,\{([^}]+)\})?\)$/);
+    if (subFactorMatch) {
+      return {
+        subFactorName: subFactorMatch[1],
+        factorName: subFactorMatch[2],
+        argument: subFactorMatch[3]
+      };
+    }
+
+    // Case 2: {Factor}
+    // 예: "{PER}" -> factor: "PER"
+    const factorMatch = expression.match(/^\{([^}]+)\}$/);
+    if (factorMatch) {
+      return {
+        factorName: factorMatch[1],
+        subFactorName: null
+      };
+    }
+
+    return { factorName: null, subFactorName: null };
+  };
+
   // Clone parameter 처리 (복제된 전략)
   useEffect(() => {
     if (cloneAppliedRef.current) return;
@@ -165,23 +191,53 @@ export function QuantNewPageClient() {
         // 매수 조건 UI
         if (cloneData.buyConditions && Array.isArray(cloneData.buyConditions)) {
           cloneData.buyConditions.forEach((condition: any) => {
+            // API의 exp_left_side를 파싱하여 UI 상태로 변환
+            const parsed = parseConditionString(condition.exp_left_side || "");
+
             addBuyConditionUIWithData({
-              factorName: condition.factor || "",
-              subFactorName: condition.sub_factor || null,
-              operator: condition.operator || "GT",
-              value: condition.value !== null ? String(condition.value) : "",
-              argument: condition.argument ? String(condition.argument) : undefined,
+              factorName: parsed.factorName,
+              subFactorName: parsed.subFactorName,
+              operator: condition.inequality || "GT",
+              value: condition.exp_right_side !== null ? String(condition.exp_right_side) : "",
+              argument: parsed.argument,
             });
           });
         }
 
         // 매도 조건
-        if (cloneData.targetAndLoss) setTargetAndLoss(cloneData.targetAndLoss);
-        if (cloneData.holdDays) setHoldDays(cloneData.holdDays);
-        if (cloneData.conditionSell) setConditionSell(cloneData.conditionSell);
+        if (cloneData.targetAndLoss) setTargetAndLoss(cloneData.targetAndLoss as any);
+        if (cloneData.holdDays) setHoldDays(cloneData.holdDays as any);
+
+        // 조건 매도 (condition_sell) 처리
+        if (cloneData.conditionSell) {
+          setConditionSell(cloneData.conditionSell as any);
+
+          // 매도 조건 UI 복원
+          if (cloneData.conditionSell.sell_conditions && Array.isArray((cloneData.conditionSell as any).sell_conditions)) {
+            // 기존 매도 조건 UI 초기화 (필요시)
+            // setSellConditionsUI([]); // store에 이 함수가 있다면 사용, 없으면 생략
+
+            (cloneData.conditionSell as any).sell_conditions.forEach((condition: any) => {
+              const parsed = parseConditionString(condition.exp_left_side || "");
+
+              // addSellConditionUIWithData는 store에 정의되어 있어야 함
+              // useBacktestConfigStore에 addSellConditionUIWithData가 있는지 확인 필요
+              // 확인 결과: 있음
+              const { addSellConditionUIWithData } = useBacktestConfigStore.getState();
+
+              addSellConditionUIWithData({
+                factorName: parsed.factorName,
+                subFactorName: parsed.subFactorName,
+                operator: condition.inequality || "GT",
+                value: condition.exp_right_side !== null ? String(condition.exp_right_side) : "",
+                argument: parsed.argument,
+              });
+            });
+          }
+        }
 
         // 종목 선택
-        setTradeTargets(cloneData.tradeTargets);
+        setTradeTargets(cloneData.tradeTargets as any);
 
         // URL에서 clone 파라미터 제거
         const url = new URL(window.location.href);

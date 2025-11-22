@@ -20,8 +20,6 @@ class PostCreate(BaseModel):
     post_type: str = Field("DISCUSSION", description="게시글 유형 (STRATEGY_SHARE/DISCUSSION/QUESTION)")
 
     # 전략 공유인 경우
-    strategy_id: Optional[str] = Field(None, description="공유할 전략 ID")
-    session_id: Optional[str] = Field(None, description="공유할 백테스트 세션 ID")
     is_anonymous: bool = Field(False, description="익명 여부")
 
 
@@ -42,9 +40,6 @@ class PostSummary(BaseModel):
     is_anonymous: bool = Field(..., serialization_alias="isAnonymous")
     tags: Optional[List[str]] = None
     post_type: str = Field(..., serialization_alias="postType")
-    session_snapshot: Optional['SessionSnapshot'] = Field(
-        None, serialization_alias="sessionSnapshot"
-    )
 
     # 통계
     view_count: int = Field(..., serialization_alias="viewCount")
@@ -59,36 +54,7 @@ class PostSummary(BaseModel):
         populate_by_name = True
 
 
-class StrategySnapshot(BaseModel):
-    """전략 스냅샷 (공유용)"""
-    strategy_name: str = Field(..., serialization_alias="strategyName")
-    strategy_type: Optional[str] = Field(None, serialization_alias="strategyType")
-    description: Optional[str] = None
-    buy_conditions: List[dict] = Field(..., serialization_alias="buyConditions")
-    sell_conditions: dict = Field(..., serialization_alias="sellConditions")
-    trade_targets: dict = Field(..., serialization_alias="tradeTargets")
 
-    class Config:
-        populate_by_name = True
-
-
-class SessionSnapshot(BaseModel):
-    """백테스트 세션 스냅샷 (공유용)"""
-    initial_capital: Decimal = Field(..., serialization_alias="initialCapital")
-    start_date: str = Field(..., serialization_alias="startDate")
-    end_date: str = Field(..., serialization_alias="endDate")
-    total_return: Decimal = Field(..., serialization_alias="totalReturn")
-    annualized_return: Optional[Decimal] = Field(None, serialization_alias="annualizedReturn")
-    max_drawdown: Optional[Decimal] = Field(None, serialization_alias="maxDrawdown")
-    sharpe_ratio: Optional[Decimal] = Field(None, serialization_alias="sharpeRatio")
-    win_rate: Optional[Decimal] = Field(None, serialization_alias="winRate")
-
-    @field_serializer('initial_capital', 'total_return', 'annualized_return', 'max_drawdown', 'sharpe_ratio', 'win_rate')
-    def serialize_decimal(self, value: Optional[Decimal]) -> Optional[float]:
-        return float(value) if value is not None else None
-
-    class Config:
-        populate_by_name = True
 
 
 class PostDetail(BaseModel):
@@ -101,10 +67,6 @@ class PostDetail(BaseModel):
     is_anonymous: bool = Field(..., serialization_alias="isAnonymous")
     tags: Optional[List[str]] = None
     post_type: str = Field(..., serialization_alias="postType")
-
-    # 전략 공유 정보
-    strategy_snapshot: Optional[StrategySnapshot] = Field(None, serialization_alias="strategySnapshot")
-    session_snapshot: Optional[SessionSnapshot] = Field(None, serialization_alias="sessionSnapshot")
 
     # 통계
     view_count: int = Field(..., serialization_alias="viewCount")

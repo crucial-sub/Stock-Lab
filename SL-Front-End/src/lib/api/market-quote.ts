@@ -4,6 +4,7 @@ export interface MarketQuoteItem {
   rank: number;
   name: string;
   code: string;
+  theme?: string | null;
   price: number;
   changeAmount: number;
   changeRate: number;
@@ -34,6 +35,7 @@ export type SortOrder = "asc" | "desc";
 export interface FavoriteStockItem {
   stockCode: string;
   stockName: string;
+  theme?: string | null;
   currentPrice: number | null;
   changeRate: number | null;
   previousClose: number | null;

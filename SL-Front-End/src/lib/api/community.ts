@@ -356,13 +356,13 @@ export const communityApi = {
   // ============================================================
 
   /**
-   * 복제용 전략 데이터 조회
+   * 복제용 전략 데이터 조회 (세션 ID 기반)
    */
   getCloneStrategyData: async (
     sessionId: string
   ): Promise<CloneStrategyData> => {
     const response = await axiosInstance.get<CloneStrategyData>(
-      `/community/clone-strategy/${sessionId}`
+      `/strategies/sessions/${sessionId}/clone-data`
     );
     return response.data;
   },

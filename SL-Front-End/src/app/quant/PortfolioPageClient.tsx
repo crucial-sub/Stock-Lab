@@ -7,6 +7,7 @@ import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
 import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { strategyApi } from "@/lib/api/strategy";
+import { Portfolio } from "./page";
 
 /**
  * 포트폴리오 페이지 클라이언트 컴포넌트
@@ -14,16 +15,6 @@ import { strategyApi } from "@/lib/api/strategy";
  * @description 포트폴리오 목록과 대시보드를 표시하는 클라이언트 컴포넌트
  * 인터랙션과 상태 관리를 담당합니다.
  */
-
-interface Portfolio {
-  id: string;
-  strategyId: string;
-  title: string;
-  profitRate: number;
-  isActive: boolean;
-  lastModified: string;
-  createdAt: string;
-}
 
 interface PortfolioPageClientProps {
   /** 총 모의 자산 */
@@ -82,16 +73,32 @@ export function PortfolioPageClient({
     });
   };
 
-  // 포트폴리오 클릭 핸들러 - 백테스트 결과 상세 페이지로 이동
+  // 포트폴리오 클릭 핸들러 - 상태에 따라 다른 페이지로 이동
   const handlePortfolioClick = (id: string) => {
+    const portfolio = portfolios.find((p) => p.id === id);
+    if (!portfolio) return;
+
     // 자동매매 전략 카드인 경우 자동매매 상태 페이지로 이동
     if (id.startsWith("auto-")) {
-      const portfolio = portfolios.find((p) => p.id === id);
-      if (portfolio?.strategyId) {
+      if (portfolio.strategyId) {
         router.push(`/quant/auto-trading/${portfolio.strategyId}`);
-        return;
       }
+      return;
     }
+
+    // PENDING 상태 - 백테스트 설정 화면으로 이동
+    if (portfolio.status === "PENDING") {
+      if (portfolio.sourceSessionId) {
+        // 복제된 전략 - 조건 자동 채움
+        router.push(`/quant/new?clone=${portfolio.sourceSessionId}`);
+      } else {
+        // 새로 만든 전략 - 빈 화면 (현재는 사용 안함)
+        router.push(`/quant/new`);
+      }
+      return;
+    }
+
+    // RUNNING, COMPLETED 등 - 결과 화면으로 이동
     router.push(`/quant/result/${id}`);
   };
 

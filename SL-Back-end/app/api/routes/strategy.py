@@ -84,6 +84,7 @@ async def get_my_strategies(
                 is_active=session.is_active if hasattr(session, 'is_active') else False,
                 is_public=strategy.is_public if hasattr(strategy, 'is_public') else False,
                 status=session.status,
+                source_session_id=session.source_session_id if hasattr(session, 'source_session_id') else None,
                 total_return=float(stats.total_return) if stats and stats.total_return else None,
                 created_at=session.created_at,
                 updated_at=session.updated_at
@@ -262,7 +263,7 @@ async def get_public_strategies(
         )
 
         query = (
-            select(PortfolioStrategy, User, SimulationStatistics)
+            select(PortfolioStrategy, User, SimulationStatistics, SimulationSession)
             .join(User, User.user_id == PortfolioStrategy.user_id, isouter=True)
             .join(
                 latest_sessions_subquery,
@@ -303,7 +304,7 @@ async def get_public_strategies(
         total = (await db.execute(count_query)).scalar() or 0
 
         strategies: List[PublicStrategyListItem] = []
-        for strategy, user, stats in rows:
+        for strategy, user, stats, session in rows:
             owner_name = None if strategy.is_anonymous else (user.name if user else None)
             description = None if strategy.hide_strategy_details else strategy.description
 
@@ -315,6 +316,7 @@ async def get_public_strategies(
                     is_anonymous=strategy.is_anonymous,
                     hide_strategy_details=strategy.hide_strategy_details,
                     owner_name=owner_name,
+                    session_id=session.session_id if session else None,
                     total_return=float(stats.total_return)
                     if stats and stats.total_return is not None
                     else None,
@@ -573,7 +575,7 @@ async def get_session_clone_data(
 ):
     """
     백테스트 세션 복제 데이터 조회 (백테스트 창으로 전달)
-    - 본인이 소유한 세션만 조회 가능
+    - 본인 소유 세션 또는 공개된 전략의 세션만 조회 가능
     - 매수/매도 조건, 기간, 종목 등 모든 설정을 포함
     """
     try:
@@ -593,7 +595,11 @@ async def get_session_clone_data(
             .where(
                 and_(
                     SimulationSession.session_id == session_id,
-                    SimulationSession.user_id == user_id  # 본인 세션만
+                    # 본인 세션이거나 공개된 전략인 경우
+                    or_(
+                        SimulationSession.user_id == user_id,
+                        PortfolioStrategy.is_public == True
+                    )
                 )
             )
         )

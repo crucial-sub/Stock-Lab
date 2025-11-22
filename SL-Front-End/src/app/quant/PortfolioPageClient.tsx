@@ -7,6 +7,7 @@ import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
 import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { strategyApi } from "@/lib/api/strategy";
+import { Portfolio } from "./page";
 
 /**
  * 포트폴리오 페이지 클라이언트 컴포넌트
@@ -14,18 +15,6 @@ import { strategyApi } from "@/lib/api/strategy";
  * @description 포트폴리오 목록과 대시보드를 표시하는 클라이언트 컴포넌트
  * 인터랙션과 상태 관리를 담당합니다.
  */
-
-interface Portfolio {
-  id: string;
-  strategyId: string;
-  title: string;
-  profitRate: number;
-  isActive: boolean;
-  status: string;
-  sourceSessionId?: string | null;
-  lastModified: string;
-  createdAt: string;
-}
 
 interface PortfolioPageClientProps {
   /** 총 모의 자산 */

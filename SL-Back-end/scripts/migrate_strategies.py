@@ -51,7 +51,7 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
         "buy_price_offset": 0,
         "trade_targets": {
             "use_all_stocks": False,  # 전체 종목 사용 안 함
-            "selected_universes": ["KOSPI", "KOSDAQ"],
+            "selected_universes": [], # 현재 안쓰는 속성이므로 건들지 말것.
             "selected_themes": [
                 "전기 / 전자",
                 "화학",

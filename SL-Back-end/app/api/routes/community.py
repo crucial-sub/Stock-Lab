@@ -15,7 +15,7 @@ import logging
 import json
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_current_user_optional
 from app.models.community import (
     CommunityPost, CommunityComment, CommunityLike, CommunityCommentLike
 )
@@ -156,7 +156,7 @@ async def get_posts(
 @router.get("/posts/{post_id}", response_model=PostDetail)
 async def get_post(
     post_id: str,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """게시글 상세 조회 (조회수 증가)"""
@@ -441,7 +441,7 @@ async def delete_post(
 @router.get("/posts/{post_id}/comments", response_model=CommentListResponse)
 async def get_comments(
     post_id: str,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """댓글 목록 조회 (대댓글 포함)"""

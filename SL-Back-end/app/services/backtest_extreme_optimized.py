@@ -1097,7 +1097,7 @@ class ExtremeOptimizer:
                     # GPM: 매출총이익률 = (매출액 - 매출원가) / 매출액 * 100
                     gpm = np.nan
                     revenue = row.get('매출액')
-                    cogs = row.get('매출원가', 0)
+                    cogs = row.get('매출원가') or 0  # None이면 0으로 처리
                     if revenue is not None and revenue > 0:
                         gpm = ((float(revenue) - float(cogs)) / float(revenue)) * 100
 
@@ -1108,7 +1108,7 @@ class ExtremeOptimizer:
 
                     # QUICK_RATIO: 당좌비율 = (유동자산 - 재고자산) / 유동부채
                     quick_ratio = np.nan
-                    inventory = row.get('재고자산', 0)
+                    inventory = row.get('재고자산') or 0  # None이면 0으로 처리
                     if current_assets is not None and current_liabilities is not None and current_liabilities > 0:
                         quick_ratio = (float(current_assets) - float(inventory)) / float(current_liabilities)
 
@@ -1245,7 +1245,8 @@ class ExtremeOptimizer:
                     if market_cap is not None and total_debt is not None and ocf is not None:
                         icf = row.get('투자활동현금흐름')
                         if icf is not None:
-                            ev = float(market_cap) + float(total_debt) - float(cash or 0)
+                            cash_value = cash if cash is not None else 0
+                            ev = float(market_cap) + float(total_debt) - float(cash_value)
                             fcf = float(ocf) - abs(float(icf))
                             if fcf != 0:
                                 ev_fcf = ev / fcf
@@ -1262,9 +1263,9 @@ class ExtremeOptimizer:
 
                     # PTBV: Price to Tangible Book Value
                     ptbv = np.nan
-                    intangible_assets = row.get('무형자산', 0)
+                    intangible_assets = row.get('무형자산') or 0  # None이면 0으로 처리
                     if market_cap is not None and total_equity is not None:
-                        tangible_bv = float(total_equity) - float(intangible_assets or 0)
+                        tangible_bv = float(total_equity) - float(intangible_assets)
                         if tangible_bv > 0:
                             ptbv = float(market_cap) / tangible_bv
 
@@ -1346,7 +1347,8 @@ class ExtremeOptimizer:
                     # ENTERPRISE_YIELD: EBIT / EV * 100
                     enterprise_yield = np.nan
                     if market_cap is not None and total_debt is not None and operating_income is not None:
-                        ev_calc = float(market_cap) + float(total_debt) - float(cash or 0)
+                        cash_value = cash if cash is not None else 0
+                        ev_calc = float(market_cap) + float(total_debt) - float(cash_value)
                         if ev_calc != 0:
                             enterprise_yield = (float(operating_income) / ev_calc) * 100
 
@@ -1403,9 +1405,9 @@ class ExtremeOptimizer:
                     # EV: Enterprise Value = 시가총액 + 부채총계 - 현금
                     ev = np.nan
                     total_debt = row.get('부채총계')
-                    cash = row.get('현금및현금성자산', 0)
+                    cash = row.get('현금및현금성자산') or 0  # None이면 0으로 처리
                     if market_cap is not None and total_debt is not None:
-                        ev = float(market_cap) + float(total_debt) - float(cash or 0)
+                        ev = float(market_cap) + float(total_debt) - float(cash)
 
                     # EV_SALES: EV / 매출액
                     ev_sales = np.nan
@@ -1565,9 +1567,9 @@ class ExtremeOptimizer:
                     # Profitability/Efficiency Factors (9개)
                     # EBITDA_MARGIN: EBITDA Margin (영업이익 + 감가상각비로 근사)
                     ebitda_margin = np.nan
-                    depreciation = row.get('감가상각비', 0)
+                    depreciation = row.get('감가상각비') or 0  # None이면 0으로 처리
                     if operating_income is not None and revenue is not None and revenue > 0:
-                        ebitda = float(operating_income) + float(depreciation or 0)
+                        ebitda = float(operating_income) + float(depreciation)
                         ebitda_margin = (ebitda / float(revenue)) * 100
 
                     # DUPONT_ROE: DuPont ROE = Net Margin * Asset Turnover * Equity Multiplier
@@ -1673,7 +1675,7 @@ class ExtremeOptimizer:
                     if net_income is not None and total_assets is not None and total_debt is not None and total_assets > 0:
                         x1_roa = float(net_income) / float(total_assets)
                         x2_leverage = float(total_debt) / float(total_assets) if total_assets > 0 else 0
-                        x3_liquidity = float(current_assets) / float(current_liabilities) if current_liabilities and current_liabilities > 0 else 1
+                        x3_liquidity = float(current_assets) / float(current_liabilities) if current_assets is not None and current_liabilities is not None and current_liabilities > 0 else 1
                         zmijewski_score = -4.3 - 4.5*x1_roa + 5.7*x2_leverage - 0.004*x3_liquidity
 
                     # Microstructure Factors - add REINVESTMENT_RATE here
@@ -1786,9 +1788,9 @@ class ExtremeOptimizer:
                 date_idx = date_to_idx.get(row_date)
                 if date_idx is not None:
                     price_matrix[stock_idx, date_idx] = float(row['close_price'])
-                    volume_matrix[stock_idx, date_idx] = float(row.get('volume', 0))  # Phase 2-B
-                    high_matrix[stock_idx, date_idx] = float(row.get('high_price', row['close_price']))  # Phase 2-B
-                    low_matrix[stock_idx, date_idx] = float(row.get('low_price', row['close_price']))  # Phase 2-B
+                    volume_matrix[stock_idx, date_idx] = float(row.get('volume') or 0)  # Phase 2-B
+                    high_matrix[stock_idx, date_idx] = float(row.get('high_price') or row['close_price'])  # Phase 2-B
+                    low_matrix[stock_idx, date_idx] = float(row.get('low_price') or row['close_price'])  # Phase 2-B
 
             # 4. 모든 지표를 한 번에 계산 (병렬)
             logger.info(f"🔥 극한 최적화 계산 시작 ({n_stocks}개 × {n_days}일)")
@@ -1968,6 +1970,9 @@ class ExtremeOptimizer:
                 bb_middle_val = bb_middle[stock_idx, calc_date_idx]
                 price_position = ((current_price - bb_middle_val) / bb_middle_val * 100) if bb_middle_val > 0 else np.nan
 
+                # BOLLINGER_WIDTH: 볼린저 밴드 폭 (bb_middle_val 재사용하여 0 나누기 방지)
+                bollinger_width = float(bb_width / bb_middle_val * 100) if bb_middle_val > 0 and not np.isnan(bb_middle_val) else np.nan
+
                 # PRICE_VS_MA20 계산
                 ma_20_val = ma_20[stock_idx, calc_date_idx]
                 price_vs_ma20 = ((current_price - ma_20_val) / ma_20_val * 100) if ma_20_val > 0 and not np.isnan(ma_20_val) else np.nan
@@ -1981,7 +1986,7 @@ class ExtremeOptimizer:
                     'RSI': float(rsi[stock_idx, calc_date_idx]),
                     'RSI_14': float(rsi[stock_idx, calc_date_idx]),  # Phase 2-B (RSI와 동일)
                     'BOLLINGER_POSITION': float(bb_pos),
-                    'BOLLINGER_WIDTH': float(bb_width / bb_middle[stock_idx, calc_date_idx] * 100),
+                    'BOLLINGER_WIDTH': bollinger_width,  # 계산된 값 사용
                     'MACD': float(macd_line[stock_idx, calc_date_idx]),
                     'MACD_SIGNAL': float(macd_signal[stock_idx, calc_date_idx]),
                     'MACD_HISTOGRAM': float(macd_hist[stock_idx, calc_date_idx]),

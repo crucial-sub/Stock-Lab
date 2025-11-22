@@ -326,7 +326,12 @@ class BacktestEngine:
 
             # 순차 데이터 로딩 (SQLAlchemy AsyncSession은 동시 작업 미지원)
             price_data = await self._load_price_data(start_date, end_date, target_themes, target_stocks, target_universes)
-            financial_data = await self._load_financial_data(start_date, end_date)
+
+            # 🔥 가격 데이터에서 실제 선택된 종목 코드 추출 (테마 필터링 결과 반영)
+            actual_stocks = price_data['stock_code'].unique().tolist() if not price_data.empty else []
+            logger.info(f"🎯 실제 선택된 종목: {len(actual_stocks)}개")
+
+            financial_data = await self._load_financial_data(start_date, end_date, actual_stocks)
 
             # 1.5. 기존 백테스트 결과 삭제 (재실행 시 중복 방지)
             from sqlalchemy import delete
@@ -650,15 +655,18 @@ class BacktestEngine:
 
         return df
 
-    async def _load_financial_data(self, start_date: date, end_date: date) -> pd.DataFrame:
+    async def _load_financial_data(self, start_date: date, end_date: date, target_stocks: List[str] = None) -> pd.DataFrame:
         """재무 데이터 로드 + Redis 캐싱"""
 
         logger.info(f"📊 재무 데이터 로드 시작: {start_date} ~ {end_date}")
+        if target_stocks:
+            logger.info(f"🎯 필터링 대상: {len(target_stocks)}개 종목")
 
-        # 🚀 Redis 캐시 키 생성
+        # 🚀 Redis 캐시 키 생성 (종목 필터링 포함)
         from app.core.cache import get_cache
         cache = get_cache()
-        cache_key = f"financial_data:{start_date}:{end_date}"
+        stocks_str = ','.join(sorted(target_stocks)) if target_stocks else 'ALL'
+        cache_key = f"financial_data:{start_date}:{end_date}:{stocks_str}"
 
         # 🚀 캐시 조회
         try:
@@ -823,6 +831,15 @@ class BacktestEngine:
                     else row.get('매출액'),
                     axis=1
                 )
+
+            # 🔥 필터링: 선택한 종목만 (DB 로드 이후 필터링)
+            if target_stocks and not financial_df.empty:
+                before_count = len(financial_df)
+                before_stocks = financial_df['stock_code'].nunique()
+                financial_df = financial_df[financial_df['stock_code'].isin(target_stocks)]
+                after_count = len(financial_df)
+                after_stocks = financial_df['stock_code'].nunique()
+                logger.info(f"🎯 재무 데이터 필터링: {before_count}건({before_stocks}종목) → {after_count}건({after_stocks}종목)")
 
             logger.info(f"Loaded financial data for {financial_df['stock_code'].nunique()} companies")
 

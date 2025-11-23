@@ -262,13 +262,21 @@ export function AIHelperSidebar({
           ...prev,
           {
             role: "assistant",
-            content: response.answer,
-            backtestConditionsBuy: buyConditions,
-            backtestConditionsSell: sellConditions,
+           content: response.answer,
+           backtestConditionsBuy: buyConditions,
+           backtestConditionsSell: sellConditions,
             appliedBuy: false,
             appliedSell: false,
           },
         ]);
+
+        // 자동 적용: 응답에 조건이 있으면 즉시 추가
+        if (buyConditions.length > 0) {
+          onApplyBuy(buyConditions);
+        }
+        if (sellConditions.length > 0) {
+          onApplySell(sellConditions);
+        }
       } catch (error) {
         console.error("Failed to send message:", error);
         setMessages((prev) => [

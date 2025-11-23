@@ -143,13 +143,19 @@ class UniverseService:
         특정 유니버스의 종목 수 계산 (히스토리 테이블 우선, 동적 계산 폴백)
 
         Args:
-            trade_date: 기준 거래일
+            trade_date: 기준 거래일 (date 객체 또는 YYYYMMDD 문자열)
             universe_id: 유니버스 ID (예: KOSPI_MEGA, KOSDAQ_SMALL)
 
         Returns:
             종목 수
         """
         try:
+            # 날짜 타입 변환 (문자열이면 date 객체로 변환)
+            if isinstance(trade_date, str):
+                if len(trade_date) == 8:  # YYYYMMDD
+                    from datetime import datetime
+                    trade_date = datetime.strptime(trade_date, '%Y%m%d').date()
+
             # 1차: 히스토리 테이블에서 조회
             stmt_history = (
                 select(func.count(StockUniverseHistory.stock_code))
@@ -386,11 +392,24 @@ class UniverseService:
 
         Args:
             universe_ids: 유니버스 ID 리스트
-            trade_date: 기준 거래일
+            trade_date: 기준 거래일 (YYYYMMDD 문자열 또는 date 객체)
 
         Returns:
             종목 코드 리스트
         """
+        try:
+            # 문자열을 date 객체로 변환 (YYYYMMDD -> date)
+            if isinstance(trade_date, str):
+                if len(trade_date) == 8:  # YYYYMMDD
+                    from datetime import datetime
+                    trade_date = datetime.strptime(trade_date, '%Y%m%d').date()
+                # 이미 datetime이면 date로 변환
+                elif hasattr(trade_date, 'date'):
+                    trade_date = trade_date.date()
+        except Exception as e:
+            logger.error(f"날짜 변환 실패: {e}")
+            return []
+
         all_stock_codes = set()
 
         # 각 유니버스별로 종목 코드 수집

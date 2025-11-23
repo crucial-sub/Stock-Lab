@@ -902,14 +902,14 @@ export function AIAssistantPageClient({
           </div>
         ) : (
           /* 초기 화면 */
-          <div className="flex flex-col items-center">
+          <div className="relative flex min-h-[100vh] w-full flex-col items-center">
             {/* 타이틀 */}
-            <h1 className="text-[32px] font-bold text-black text-center mb-[80px]">
+            <span className="text-[2rem] font-semibold text-black text-center mt-[5rem] mb-[20rem]">
               궁금한 내용을 AI에게 확인해보세요!
-            </h1>
+            </span>
 
             {/* 큰 카드 */}
-            <div className="w-full max-w-[1000px] mb-[112px]">
+            <div className="w-full max-w-[1000px] mb-[1.5rem]">
               <StrategyCard
                 question={largeSample.question}
                 description={largeSample.description}
@@ -919,7 +919,7 @@ export function AIAssistantPageClient({
             </div>
 
             {/* 작은 카드 그리드 (2x2) */}
-            <div className="grid grid-cols-2 gap-x-[40px] gap-y-[32px] mb-[114px]">
+            <div className="grid w-full max-w-[1000px] grid-cols-2 gap-x-[1.5rem] gap-y-[1.5rem] mb-[1rem] mx-auto">
               {smallSample.map((strategy) => (
                 <StrategyCard
                   key={strategy.id}
@@ -929,8 +929,10 @@ export function AIAssistantPageClient({
               ))}
             </div>
 
+            <div className="w-full max-w-[1000px] flex-1" />
+
             {/* AI 입력창 */}
-            <div className="w-full max-w-[1000px]">
+            <div className="sticky bottom-[0px] w-full max-w-[1000px] backdrop-blur-md py-4">
               <AISearchInput
                 placeholder="만들고 싶은 전략을 AI에게 요청하세요!"
                 onSubmit={handleAISubmit}

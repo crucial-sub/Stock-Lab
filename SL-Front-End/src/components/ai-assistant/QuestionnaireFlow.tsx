@@ -49,16 +49,16 @@ interface QuestionCardProps {
 
 function QuestionCard({ question, selectedOptionId, onSelect, isCompleted, isLocked = false }: QuestionCardProps) {
   return (
-    <div className="w-full max-w-[800px] mx-auto mb-6">
+    <div className="w-full max-w-[1000px] mb-10">
       {/* 질문 텍스트 */}
       <div className="mb-4">
-        <p className="text-lg font-semibold text-gray-900">
+        <p className="text-[1.25rem] font-semibold text-body">
           Q{question.order}. {question.text}
         </p>
       </div>
 
       {/* 선택지 그리드 */}
-      <div className="grid gap-3">
+      <div className="grid gap-2">
         {question.options.map((option) => {
           const isSelected = selectedOptionId === option.id;
 
@@ -68,29 +68,29 @@ function QuestionCard({ question, selectedOptionId, onSelect, isCompleted, isLoc
               onClick={() => !isLocked && onSelect(option.id)}
               disabled={isLocked}
               className={`
-                w-full p-4 rounded-lg border-2 transition-all text-left
+                w-full max-w-[1000px] p-5 rounded-[12px] border-[0.5px] transition-all text-left shadow-elev-card-soft
                 ${isLocked
-                  ? "cursor-not-allowed opacity-70"
+                  ? "cursor-not-allowed"
                   : "cursor-pointer"
                 }
                 ${isSelected
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-gray-200 bg-white hover:border-gray-300"
+                  ? "border-brand-purple bg-brand-purple/10"
+                  : "border-[#C8C8C8] bg-[#1822340D] hover:border-brand-purple hover:bg-[#FFFFFF33]"
                 }
               `}
             >
               <div className="flex items-start gap-3">
                 {/* 아이콘 */}
-                <span className="text-2xl flex-shrink-0">{option.icon}</span>
+                <span className="text-[1.125rem] flex-shrink-0">{option.icon}</span>
 
                 <div className="flex-1">
                   {/* 레이블 */}
-                  <p className={`font-medium ${isSelected ? "text-blue-700" : "text-gray-900"}`}>
+                  <p className={`text-[1.125rem] font-normal ${isSelected ? "font-semibold text-brand-purple" : "text-body"}`}>
                     {option.label}
                   </p>
 
                   {/* 설명 */}
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-[1rem] text-muted mt-1.5">
                     {option.description}
                   </p>
                 </div>
@@ -98,7 +98,7 @@ function QuestionCard({ question, selectedOptionId, onSelect, isCompleted, isLoc
                 {/* 선택 인디케이터 */}
                 {isSelected && (
                   <div className="flex-shrink-0">
-                    <svg className="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-6 h-6 text-brand-purple" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -123,20 +123,20 @@ interface AnswerReviewCardProps {
 
 function AnswerReviewCard({ answers, onConfirm }: AnswerReviewCardProps) {
   return (
-    <div className="w-full max-w-[800px] mx-auto mb-6">
+    <div className="w-full max-w-[1000px] mx-auto">
       {/* 제목 */}
       <div className="mb-4">
-        <h3 className="text-xl font-bold text-gray-900">✅ 모든 질문에 답변하셨습니다!</h3>
-        <p className="text-sm text-gray-600 mt-1">
+        <h3 className="text-[1.25rem] font-semibold text-body">✅ 모든 질문에 답변하셨습니다!</h3>
+        <p className="text-[1rem] text-muted mt-1.5">
           위로 스크롤하여 답변을 수정할 수 있습니다. 확인 후 아래 버튼을 눌러주세요.
         </p>
       </div>
 
       {/* 전략 추천받기 버튼 */}
-      <div className="flex justify-center">
+      <div className="flex justify-center mt-10">
         <button
           onClick={onConfirm}
-          className="px-8 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold text-lg"
+          className="px-10 py-3 text-[1.125rem] font-semibold bg-brand-purple text-white rounded-[12px] hover:opacity-80 transition-colors"
         >
           🎯 맞춤 전략 추천받기
         </button>
@@ -156,20 +156,25 @@ interface ProgressBarProps {
 
 function ProgressBar({ current, total }: ProgressBarProps) {
   const percentage = (current / total) * 100;
+  const clampedPercentage = Math.min(100, Math.max(0, percentage));
 
   return (
-    <div className="sticky top-0 z-10 bg-white border-b border-gray-200 py-4 px-6 mb-6">
-      <div className="max-w-[800px] mx-auto">
-        {/* 진행률 텍스트 */}
-        <p className="text-sm text-gray-600 mb-3 text-center">
-          진행률: {current}/{total} ({Math.round(percentage)}%)
-        </p>
-
-        {/* 진행률 바 */}
-        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+    <div className="sticky top-0 z-10 pt-2 mb-2">
+      <div className="max-w-[1000px] mx-auto rounded-[12px] border border-white bg-white/90 p-5">
+        <div className="flex items-center justify-between text-[1rem] font-semibold uppercase tracking-wide text-muted mb-2">
+          <span>투자 성향 설문 진행률</span>
+          <span className="text-brand-purple font-semibold text-[1rem]">
+            {current}/{total} · {Math.round(clampedPercentage)}%
+          </span>
+        </div>
+        <div className="relative h-3 rounded-full bg-[#e0e4ff]">
           <div
-            className="h-full bg-blue-500 transition-all duration-300"
-            style={{ width: `${percentage}%` }}
+            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#b590ff] via-[#8f6dff] to-[#5a3dee] shadow-[0_8px_20px_rgba(90,61,222,0.35)] transition-all duration-500"
+            style={{ width: `${clampedPercentage}%` }}
+          />
+          <div
+            className="absolute -top-1 h-5 w-5 rounded-full border-2 border-white bg-[#5a3dee] shadow-[0_10px_25px_rgba(90,61,222,0.35)] transition-all duration-500"
+            style={{ left: `${clampedPercentage}%`, transform: "translateX(-50%)" }}
           />
         </div>
       </div>
@@ -261,7 +266,7 @@ export function QuestionnaireFlow({
       <ProgressBar current={answers.length} total={TOTAL_QUESTIONS} />
 
       {/* 질문 카드 목록 (누적) */}
-      <div className="flex-1 px-4 py-6">
+      <div className="flex-1 py-5">
         {visibleQuestions.map((question, index) => {
           const answer = answers.find(a => a.questionId === question.id);
           const isCompleted = !!answer;
@@ -292,16 +297,21 @@ export function QuestionnaireFlow({
 
         {/* 전략 추천 후 다시 시작 버튼 */}
         {isRecommendationShown && onRestart && (
-          <div className="w-full max-w-[800px] mx-auto mb-6">
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800 mb-3">
-                ⚠️ 전략 추천이 완료되었습니다. 선택지를 수정하려면 설문조사를 다시 시작해주세요.
-              </p>
+          <div className="w-full max-w-[1000px] mx-auto my-[4rem]">
+            <div className="px-6 py-4 bg-brand-purple/10 border border-brand-purple rounded-[12px] flex flex-wrap items-center justify-between gap-4">
+              <div className="">
+                <p className="text-[1.125rem] font-semibold text-brand-purple mb-1">
+                  ✔︎ 전략 추천이 완료되었습니다!
+                </p>
+                <p className="text-[0.875rem] text-muted font-normal">
+                  선택지를 수정하려면 설문조사를 다시 시작해주세요.
+                </p>
+              </div>
               <button
                 onClick={onRestart}
-                className="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-semibold"
+                className="whitespace-nowrap px-6 py-3 bg-brand-purple text-[1rem] font-semibold text-white rounded-full hover:opacity-80 transition-colors"
               >
-                🔄 설문조사 다시 시작하기
+                설문조사 다시 시작하기
               </button>
             </div>
           </div>

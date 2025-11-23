@@ -98,23 +98,23 @@ export function BacktestResultView({
   const { statistics, periodReturns, backtestId, summary } = result;
 
   return (
-    <div className="w-full max-w-[900px] mx-auto space-y-8 py-6 bg-white">
+    <div className="w-full max-w-[1000px] mx-auto space-y-5 pt-10 px-5 bg-[#1822340D] border-[0.5px] border-[#18223433] rounded-[12px] shadow-elev-card-soft">
       {/* 1. 헤더 - 사용자명 + 전략명 */}
-      <div className="text-center border-b border-gray-200 pb-4">
-        <h1 className="text-2xl font-bold text-gray-900">
+      <div className="text-center border-b border-[#18223433] pb-10">
+        <span className="text-[1.5rem] font-semibold text-black">
           {userName}_{strategyName}
-        </h1>
-        <p className="text-sm text-gray-600 mt-2">
-          백테스트 기간: {config.startDate} ~ {config.endDate} | 투자 금액:{" "}
-          {statistics.initialCapital.toLocaleString()}원
+        </span>
+        <p className="text-[0.875rem] text-muted mt-1">
+          백테스트 기간: {config.startDate} ~ {config.endDate} | 투자 금액: {statistics.initialCapital.toLocaleString()}원
         </p>
       </div>
 
       {/* 2. 통계 섹션 */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <span className="text-[1.25rem] font-semibold text-semibold">
           📊 주요 통계
-        </h2>
+        </span>
+        <div className="mt-3"/>
         <StatisticsSection
           statistics={{
             totalReturn: statistics.totalReturn,

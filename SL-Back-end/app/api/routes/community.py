@@ -27,7 +27,7 @@ from app.schemas.community import (
     PostCreate, PostUpdate, PostSummary, PostDetail, PostListResponse,
     CommentCreate, CommentUpdate, CommentItem, CommentListResponse,
     LikeResponse, RankingItem, TopRankingsResponse, RankingListResponse,
-    CloneStrategyData, StrategySnapshot, SessionSnapshot
+    CloneStrategyData
 )
 
 logger = logging.getLogger(__name__)
@@ -132,7 +132,6 @@ async def get_posts(
                 is_anonymous=post.is_anonymous,
                 tags=post.tags,
                 post_type=post.post_type,
-                session_snapshot=SessionSnapshot(**post.session_snapshot) if post.session_snapshot else None,
                 view_count=post.view_count,
                 like_count=post.like_count,
                 comment_count=post.comment_count,
@@ -196,16 +195,6 @@ async def get_post(
             like_result = await db.execute(like_query)
             is_liked = like_result.scalar_one_or_none() is not None
 
-        # 전략 스냅샷 파싱
-        strategy_snapshot = None
-        session_snapshot = None
-
-        if post.strategy_snapshot:
-            strategy_snapshot = StrategySnapshot(**post.strategy_snapshot)
-
-        if post.session_snapshot:
-            session_snapshot = SessionSnapshot(**post.session_snapshot)
-
         return PostDetail(
             post_id=post.post_id,
             title=post.title,
@@ -215,8 +204,6 @@ async def get_post(
             is_anonymous=post.is_anonymous,
             tags=post.tags,
             post_type=post.post_type,
-            strategy_snapshot=strategy_snapshot,
-            session_snapshot=session_snapshot,
             view_count=post.view_count + 1,  # 증가된 값
             like_count=post.like_count,
             comment_count=post.comment_count,
@@ -240,57 +227,6 @@ async def create_post(
 ):
     """게시글 작성"""
     try:
-        # 전략 공유인 경우 스냅샷 생성
-        strategy_snapshot = None
-        session_snapshot = None
-
-        if post_data.post_type == "STRATEGY_SHARE" and post_data.strategy_id and post_data.session_id:
-            # 전략 및 세션 조회
-            strategy_query = select(PortfolioStrategy, TradingRule).join(
-                TradingRule, TradingRule.strategy_id == PortfolioStrategy.strategy_id
-            ).where(
-                PortfolioStrategy.strategy_id == post_data.strategy_id
-            )
-            strategy_result = await db.execute(strategy_query)
-            strategy_row = strategy_result.one_or_none()
-
-            if strategy_row:
-                strategy, trading_rule = strategy_row
-
-                # 전략 스냅샷 생성
-                strategy_snapshot = {
-                    "strategy_name": strategy.strategy_name,
-                    "strategy_type": strategy.strategy_type,
-                    "description": strategy.description,
-                    "buy_conditions": trading_rule.buy_condition or [],
-                    "sell_conditions": trading_rule.sell_condition or {},
-                    "trade_targets": trading_rule.buy_condition.get('trade_targets', {}) if trading_rule.buy_condition else {}
-                }
-
-            # 세션 통계 조회
-            stats_query = select(SimulationSession, SimulationStatistics).join(
-                SimulationStatistics, SimulationStatistics.session_id == SimulationSession.session_id
-            ).where(
-                SimulationSession.session_id == post_data.session_id
-            )
-            stats_result = await db.execute(stats_query)
-            stats_row = stats_result.one_or_none()
-
-            if stats_row:
-                session, stats = stats_row
-
-                # 세션 스냅샷 생성
-                session_snapshot = {
-                    "initial_capital": session.initial_capital,
-                    "start_date": session.start_date.strftime("%Y%m%d"),
-                    "end_date": session.end_date.strftime("%Y%m%d"),
-                    "total_return": stats.total_return,
-                    "annualized_return": stats.annualized_return,
-                    "max_drawdown": stats.max_drawdown,
-                    "sharpe_ratio": stats.sharpe_ratio,
-                    "win_rate": stats.win_rate
-                }
-
         # 게시글 생성
         new_post = CommunityPost(
             user_id=current_user.user_id,
@@ -298,10 +234,6 @@ async def create_post(
             content=post_data.content,
             tags=post_data.tags,
             post_type=post_data.post_type,
-            strategy_id=post_data.strategy_id,
-            session_id=post_data.session_id,
-            strategy_snapshot=strategy_snapshot,
-            session_snapshot=session_snapshot,
             is_anonymous=post_data.is_anonymous
         )
 
@@ -323,8 +255,6 @@ async def create_post(
             is_anonymous=new_post.is_anonymous,
             tags=new_post.tags,
             post_type=new_post.post_type,
-            strategy_snapshot=StrategySnapshot(**strategy_snapshot) if strategy_snapshot else None,
-            session_snapshot=SessionSnapshot(**session_snapshot) if session_snapshot else None,
             view_count=0,
             like_count=0,
             comment_count=0,
@@ -383,8 +313,6 @@ async def update_post(
             is_anonymous=post.is_anonymous,
             tags=post.tags,
             post_type=post.post_type,
-            strategy_snapshot=StrategySnapshot(**post.strategy_snapshot) if post.strategy_snapshot else None,
-            session_snapshot=SessionSnapshot(**post.session_snapshot) if post.session_snapshot else None,
             view_count=post.view_count,
             like_count=post.like_count,
             comment_count=post.comment_count,
@@ -1250,69 +1178,5 @@ async def clone_strategy_by_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/strategies/clone/{share_id}")
-async def clone_shared_strategy(
-    share_id: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """포트폴리오 공유 게시글에서 전략 복제 (내 포트폴리오에 추가)"""
-    try:
-        # 공유 게시글 조회
-        post_query = select(CommunityPost).where(
-            and_(
-                CommunityPost.post_id == share_id,
-                CommunityPost.post_type == "STRATEGY_SHARE"
-            )
-        )
-        post_result = await db.execute(post_query)
-        post = post_result.scalar_one_or_none()
 
-        if not post:
-            raise HTTPException(status_code=404, detail="공유 게시글을 찾을 수 없습니다")
-
-        if not post.strategy_snapshot or not post.session_snapshot:
-            raise HTTPException(status_code=400, detail="전략 데이터가 없습니다")
-
-        # 스냅샷에서 데이터 복원
-        strategy_snap = post.strategy_snapshot
-        session_snap = post.session_snapshot
-
-        # 새로운 전략 생성
-        new_strategy = PortfolioStrategy(
-            strategy_name=f"{strategy_snap['strategy_name']} (복제)",
-            strategy_type=strategy_snap.get('strategy_type'),
-            description=f"복제된 전략 (원본: {strategy_snap['strategy_name']})",
-            user_id=current_user.user_id,
-            is_public=False,
-            is_anonymous=False
-        )
-        db.add(new_strategy)
-        await db.flush()
-
-        # TradingRule 생성
-        new_trading_rule = TradingRule(
-            strategy_id=new_strategy.strategy_id,
-            rule_type="CONDITION_BASED",
-            rebalance_frequency="DAILY",
-            max_positions=20,
-            position_sizing="EQUAL_WEIGHT",
-            buy_condition=strategy_snap.get('buy_conditions'),
-            sell_condition=strategy_snap.get('sell_conditions')
-        )
-        db.add(new_trading_rule)
-
-        await db.commit()
-
-        return {
-            "message": "전략이 복제되었습니다",
-            "strategy_id": new_strategy.strategy_id
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"전략 복제 실패: {e}", exc_info=True)
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
 

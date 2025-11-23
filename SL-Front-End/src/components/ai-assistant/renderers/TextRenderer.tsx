@@ -19,16 +19,16 @@ export function TextRenderer({ message }: TextRendererProps) {
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6`}>
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-5`}>
       <div
         className={[
-          "max-w-[75%] px-5 py-3.5 rounded-2xl shadow-sm",
+          "max-w-[75%] px-5 py-3 rounded-[12px]",
           isUser
-            ? "bg-blue-600 text-white"
-            : "bg-white text-gray-900 border border-gray-200",
+            ? "bg-[#1822340D] text-black font-normal text-[1rem]"
+            : "text-black",
         ].join(" ")}
       >
-        <div className="text-[15px] leading-relaxed whitespace-pre-line">
+        <div className="leading-relaxed whitespace-pre-line">
           {message.content}
         </div>
       </div>

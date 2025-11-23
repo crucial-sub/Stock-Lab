@@ -961,7 +961,7 @@ async def rebuild_rankings(
         from app.services.ranking_service import get_ranking_service
 
         # 관리자 권한 체크 (선택사항)
-        if not current_user.is_admin:
+        if not current_user.is_superuser:
             raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
 
         logger.info(f"🔄 랭킹 재구축 시작 (요청: {current_user.email}, limit={limit})")
@@ -1100,7 +1100,10 @@ async def clone_strategy_by_session(
             .where(
                 and_(
                     SimulationSession.session_id == session_id,
-                    PortfolioStrategy.is_public == True  # 공개된 전략만
+                    or_(
+                        PortfolioStrategy.is_public == True,
+                        PortfolioStrategy.user_id == current_user.user_id
+                    )  # 공개된 전략또는 내 전략일때
                 )
             )
         )
@@ -1154,6 +1157,32 @@ async def clone_strategy_by_session(
             is_active=False
         )
         db.add(new_session)
+        await db.flush()  # session_id 생성을 위해 flush
+
+        # 원본 세션의 통계 데이터 복사 (수익률 표시용)
+        stats_query = select(SimulationStatistics).where(
+            SimulationStatistics.session_id == session_id
+        )
+        stats_result = await db.execute(stats_query)
+        original_stats = stats_result.scalar_one_or_none()
+
+        if original_stats:
+            new_stats = SimulationStatistics(
+                session_id=new_session.session_id,
+                total_return=original_stats.total_return,
+                annualized_return=original_stats.annualized_return,
+                max_drawdown=original_stats.max_drawdown,
+                sharpe_ratio=original_stats.sharpe_ratio,
+                win_rate=original_stats.win_rate,
+                total_trades=original_stats.total_trades,
+                winning_trades=original_stats.winning_trades,
+                losing_trades=original_stats.losing_trades,
+                avg_loss=original_stats.avg_loss,
+                profit_factor=original_stats.profit_factor,
+                final_capital=original_stats.final_capital
+            )
+            db.add(new_stats)
+            logger.info(f"📊 통계 데이터 복사 완료: total_return={original_stats.total_return}%")
 
         await db.commit()
         await db.refresh(new_strategy)

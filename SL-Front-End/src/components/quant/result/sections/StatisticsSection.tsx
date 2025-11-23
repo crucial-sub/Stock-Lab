@@ -55,13 +55,13 @@ export function StatisticsSection({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 mb-6">
+    <div className="grid grid-cols-1 gap-5 mb-10 lg:grid-cols-1">
       <FieldPanel conditionType="none" className="h-full">
-        <div className="flex flex-col gap-6">
-          <h2 className="text-[1.75rem] font-semibold">통계</h2>
+        <div className="flex flex-col gap-5">
+          <span className="text-[1.125rem] font-semibold">통계</span>
 
           {/* 상단 주요 지표 */}
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             <StatMetric
               label="일 평균 수익률"
               value={formatSignedPercent(dailyReturn, 3)}
@@ -89,7 +89,7 @@ export function StatisticsSection({
           </div>
 
           {/* 하단 자산 정보 */}
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             <StatMetric label="투자 원금" value={formatCurrency(initialCapital)} />
             <StatMetric
               label="총 손익"

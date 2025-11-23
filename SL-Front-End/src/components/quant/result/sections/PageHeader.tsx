@@ -18,6 +18,11 @@ interface PageHeaderProps {
   onStartEdit?: () => void;
   onSaveEdit?: () => void;
   onCancelEdit?: () => void;
+  // 액션 버튼 관련
+  isOwner?: boolean;
+  isPublic?: boolean;
+  onClone?: () => void;
+  onToggleShare?: () => void;
 }
 
 export function PageHeader({
@@ -31,7 +36,10 @@ export function PageHeader({
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
-
+  isOwner,
+  isPublic,
+  onClone,
+  onToggleShare,
 }: PageHeaderProps) {
   return (
     <div className="flex justify-between items-center mb-6">
@@ -98,6 +106,28 @@ export function PageHeader({
           </>
         )}
       </h1>
+
+      {/* 우측 액션 버튼 */}
+      <div className="ml-auto flex gap-2">
+        {/* 복제 버튼 */}
+        <button
+          onClick={onClone}
+          className="px-4 py-2 rounded-[12px] bg-brand-purple text-white font-semibold hover:opacity-80 transition-opacity"
+        >
+          전략 복제
+        </button>
+
+        {/* 공유 토글 버튼 */}
+        {isOwner && (
+          <button
+            onClick={onToggleShare}
+            className="px-4 py-2 rounded-[12px] bg-brand-purple text-white font-semibold hover:opacity-80 transition-opacity"
+          >
+            {isPublic ? "전략 공유 해제하기" : "전략 공유하기"}
+          </button>
+        )}
+
+      </div>
     </div>
   );
 }

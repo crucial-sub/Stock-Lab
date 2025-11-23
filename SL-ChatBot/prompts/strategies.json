@@ -1,230 +1,705 @@
 {
+  "base_backtest_config": {
+    "strategy_name": null,
+    "is_day_or_month": "daily",
+    "commission_rate": 0.1,
+    "slippage": 0,
+    "buy_logic": "and",
+    "priority_factor": "기본값({MARKET_CAP})",
+    "priority_order": "desc",
+    "per_stock_ratio": 10,
+    "max_holdings": 10,
+    "max_buy_value": null,
+    "max_daily_stock": null,
+    "buy_price_basis": "전일 종가",
+    "buy_price_offset": 0,
+    "trade_targets": {
+      "use_all_stocks": false,
+      "selected_universes": [],
+      "selected_themes": [],
+      "selected_stocks": [],
+      "selected_stock_count": null,
+      "total_stock_count": 2645,
+      "total_theme_count": 29
+    },
+    "buy_conditions": [],
+    "target_and_loss": {
+      "target_gain": null,
+      "stop_loss": null
+    },
+    "hold_days": null,
+    "condition_sell": null
+  },
   "strategies": [
-    /*migrate_strategies.py warren_buffett 팩터 참고*/
     {
-      "id": "warren_buffett",
-      "name": "워렌버핏 가치투자 전략",
-      "summary": "저평가 우량주에 투자해 재평가를 노리는 보수적 가치 전략",
-      "tags": ["long_term", "style_value", "risk_low"],
+      "id": "surge_stocks",
+      "name": "오늘의 급등 종목",
+      "summary": "단기 급등과 거래량이 몰린 테마 종목 포착",
+      "tags": ["short_term", "style_momentum", "risk_high"],
       "conditions_preview": [
-        { "condition": "PBR <= 1.0" },
-        { "condition": "ROE >= 15" }
+        { "condition": "시가총액 > 70억" },
+        { "condition": "거래대금·변동성 상위 테마" }
       ],
       "buy_conditions": [
-        { "factor": "PBR", "operator": "<=", "value": 1.0 },
-        { "factor": "ROE", "operator": ">=", "value": 15.0 }
+        { "factor": "MARKET_CAP", "operator": ">", "value": 7000000000 }
       ],
       "sell_conditions": [
-        { "factor": "PBR", "operator": ">", "value": 3.0 },
-        { "factor": "ROE", "operator": "<", "value": 5.0 }
-      ]
+        { "factor": "DISTANCE_FROM_52W_HIGH", "operator": "<", "value": -35 },
+        { "factor": "CHANGE_RATE", "operator": "<", "value": -7 }
+      ],
+      "backtest_config": {
+        "strategy_name": "surge_stocks",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({CHANGE_RATE})",
+        "priority_order": "desc",
+        "per_stock_ratio": 15,
+        "max_holdings": 8,
+        "max_buy_value": 50000000,
+        "max_daily_stock": 5,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["전기 / 전자", "증권"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({MARKET_CAP})", "inequality": ">", "exp_right_side": 7000000000 }
+        ],
+        "target_and_loss": { "target_gain": 12, "stop_loss": 7 },
+        "hold_days": {
+          "min_hold_days": 3,
+          "max_hold_days": 15,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": "<", "exp_right_side": -35 },
+            { "name": "B", "exp_left_side": "기본값({CHANGE_RATE})", "inequality": "<", "exp_right_side": -7 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
     },
-    /*migrate_strategies.py peter_lynch 팩터 참고*/
+    {
+      "id": "steady_growth",
+      "name": "꾸준 성장주",
+      "summary": "매출·이익 성장과 재무안정이 꾸준한 종목",
+      "tags": ["mid_term", "long_term", "style_growth", "risk_medium"],
+      "conditions_preview": [
+        { "condition": "매출/이익 성장률 > -5%" },
+        { "condition": "ROE > 8%, 부채비율 < 120%" }
+      ],
+      "buy_conditions": [
+        { "factor": "REVENUE_GROWTH_1Y", "operator": ">", "value": -5 },
+        { "factor": "OPERATING_INCOME_GROWTH_YOY", "operator": ">", "value": -5 },
+        { "factor": "DEBT_RATIO", "operator": "<", "value": 120 },
+        { "factor": "ROE", "operator": ">", "value": 8 }
+      ],
+      "sell_conditions": [
+        { "factor": "ROE", "operator": "<", "value": 5 },
+        { "factor": "REVENUE_GROWTH_1Y", "operator": "<", "value": -10 }
+      ],
+      "backtest_config": {
+        "strategy_name": "steady_growth",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({ROE})",
+        "priority_order": "desc",
+        "per_stock_ratio": 10,
+        "max_holdings": 15,
+        "max_buy_value": 70000000,
+        "max_daily_stock": 4,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["IT서비스", "전기 / 가스 / 수도", "음식료 / 담배"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": -5 },
+          { "name": "B", "exp_left_side": "기본값({OPERATING_INCOME_GROWTH_YOY})", "inequality": ">", "exp_right_side": -5 },
+          { "name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 120 },
+          { "name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 8 }
+        ],
+        "target_and_loss": { "target_gain": 20, "stop_loss": 12 },
+        "hold_days": {
+          "min_hold_days": 60,
+          "max_hold_days": 360,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({ROE})", "inequality": "<", "exp_right_side": 5 },
+            { "name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": "<", "exp_right_side": -10 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
+    },
     {
       "id": "peter_lynch",
       "name": "피터 린치 전략",
-      "summary": "저평가 성장주(GARP)를 PEG와 수익 성장으로 선별",
-      "tags": ["medium_term", "style_growth", "risk_medium"],
+      "aliases": ["피터 린치", "피터린치", "핀터린치"],
+      "summary": "PER·PEG로 저평가 성장주를 찾는 GARP 스타일",
+      "tags": ["mid_term", "long_term", "style_growth", "risk_medium"],
       "conditions_preview": [
-        { "condition": "PER < 30" },
-        { "condition": "0 < PEG < 1.8" }
+        { "condition": "PER < 40" },
+        { "condition": "0 < PEG < 2.0" }
       ],
       "buy_conditions": [
-        { "factor": "PER", "operator": "<", "value": 30.0 },
-        { "factor": "PEG", "operator": "<", "value": 1.8 }
+        { "factor": "PER", "operator": "<", "value": 40 },
+        { "factor": "PEG", "operator": ">", "value": 0 },
+        { "factor": "PEG", "operator": "<", "value": 2.0 },
+        { "factor": "DEBT_RATIO", "operator": "<", "value": 180 },
+        { "factor": "ROE", "operator": ">", "value": 3 },
+        { "factor": "ROA", "operator": ">", "value": 0.5 }
       ],
       "sell_conditions": [
-        { "factor": "PER", "operator": ">", "value": 40.0 },
-        { "factor": "PEG", "operator": ">", "value": 2.5 }
-      ]
-    },
-    /*migrate_strategies.py cathie_wood 팩터 참고*/
-    {
-      "id": "cathy_wood",
-      "name": "캐시 우드 혁신 전략",
-      "summary": "혁신 테마 고성장주에 집중 투자",
-      "tags": ["long_term", "style_growth", "risk_high", "sector_innovation"],
-      "conditions_preview": [
-        { "condition": "매출 성장률 > 20%" },
-        { "condition": "R&D 비중 상위" }
+        { "factor": "PEG", "operator": ">", "value": 2.5 },
+        { "factor": "DEBT_RATIO", "operator": ">", "value": 200 }
       ],
-      "buy_conditions": [
-        { "factor": "SalesGrowth", "operator": ">", "value": 20.0 },
-        { "factor": "RNDExpenseRatio", "operator": ">", "value": 5.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "SalesGrowth", "operator": "<", "value": 10.0 },
-        { "factor": "volatility", "operator": ">", "value": 50.0 }
-      ]
+      "backtest_config": {
+        "strategy_name": "peter_lynch",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({PEG})",
+        "priority_order": "asc",
+        "per_stock_ratio": 8,
+        "max_holdings": 18,
+        "max_buy_value": 50000000,
+        "max_daily_stock": 4,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["IT서비스", "섬유 / 의류"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 40 },
+          { "name": "B", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0 },
+          { "name": "C", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2.0 },
+          { "name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 180 },
+          { "name": "E", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 3 },
+          { "name": "F", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 0.5 }
+        ],
+        "target_and_loss": { "target_gain": 25, "stop_loss": 15 },
+        "hold_days": {
+          "min_hold_days": 90,
+          "max_hold_days": 540,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 2.5 },
+            { "name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 200 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
     },
     {
-      "id": "strategy_value",
-      "name": "가치투자 전략",
-      "summary": "저평가된 우량 기업에 장기 투자",
+      "id": "warren_buffett",
+      "name": "워렌버핏 가치투자 전략",
+      "summary": "ROE·유동비율·저평가 기준으로 안정적 우량주 선별",
       "tags": ["long_term", "style_value", "risk_low"],
       "conditions_preview": [
-        { "condition": "PER < 12" },
-        { "condition": "PBR < 1.2" }
+        { "condition": "ROE > 12, PER < 20, PBR < 2" },
+        { "condition": "유동비율 > 1.2, 부채비율 < 170" }
       ],
       "buy_conditions": [
-        { "factor": "PER", "operator": "<", "value": 12.0 },
-        { "factor": "PBR", "operator": "<", "value": 1.2 }
+        { "factor": "ROE", "operator": ">", "value": 12 },
+        { "factor": "CURRENT_RATIO", "operator": ">", "value": 1.2 },
+        { "factor": "PER", "operator": "<", "value": 20 },
+        { "factor": "PBR", "operator": "<", "value": 2.0 },
+        { "factor": "DEBT_RATIO", "operator": "<", "value": 170 },
+        { "factor": "EARNINGS_GROWTH_1Y", "operator": ">", "value": 5 }
       ],
       "sell_conditions": [
-        { "factor": "PER", "operator": ">", "value": 18.0 },
-        { "factor": "PBR", "operator": ">", "value": 2.0 }
-      ]
+        { "factor": "PBR", "operator": ">", "value": 2.5 },
+        { "factor": "ROE", "operator": "<", "value": 8 }
+      ],
+      "backtest_config": {
+        "strategy_name": "warren_buffett",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({PBR})",
+        "priority_order": "asc",
+        "per_stock_ratio": 8,
+        "max_holdings": 15,
+        "max_buy_value": 100000000,
+        "max_daily_stock": 3,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["IT서비스", "금융", "전기 / 가스 / 수도", "보험"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12 },
+          { "name": "B", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.2 },
+          { "name": "C", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20 },
+          { "name": "D", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0 },
+          { "name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 170 },
+          { "name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 5 }
+        ],
+        "target_and_loss": { "target_gain": 40, "stop_loss": 20 },
+        "hold_days": {
+          "min_hold_days": 180,
+          "max_hold_days": 720,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.5 },
+            { "name": "B", "exp_left_side": "기본값({ROE})", "inequality": "<", "exp_right_side": 8 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
     },
     {
-      "id": "strategy_quality",
-      "name": "퀄리티 투자 전략",
-      "summary": "재무 건전성이 높은 우량주 선별",
-      "tags": ["long_term", "style_quality", "risk_low"],
-      "conditions_preview": [
-        { "condition": "ROE > 12" },
-        { "condition": "부채비율 < 80%" }
-      ],
-      "buy_conditions": [
-        { "factor": "ROE", "operator": ">", "value": 12.0 },
-        { "factor": "debt_ratio", "operator": "<", "value": 80.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "ROE", "operator": "<", "value": 8.0 },
-        { "factor": "debt_ratio", "operator": ">", "value": 120.0 }
-      ]
-    },
-    /*migrate_strategies.py william_oneil 팩터 참고*/
-    {
-      "id": "strategy_william_oneil",
+      "id": "william_oneil",
       "name": "윌리엄 오닐 전략",
-      "aliases": ["윌리엄 전략", "윌리엄오닐 전략", "CAN SLIM", "CANSLIM"],
-      "summary": "성장·모멘텀·수급을 결합한 성장 모멘텀 전략",
+      "aliases": ["윌리엄 전략", "CANSLIM"],
+      "summary": "순이익 성장과 신고가 돌파 구간을 노리는 모멘텀 성장주",
       "tags": ["medium_term", "style_growth", "style_momentum", "risk_medium"],
       "conditions_preview": [
-        { "condition": "EPS 성장률 > 25%" },
-        { "condition": "52주 신고가 돌파" }
+        { "condition": "순이익 증가율 12% 이상" },
+        { "condition": "52주 최고가 대비 75% 이상" }
       ],
       "buy_conditions": [
-        { "factor": "EPSGrowth", "operator": ">", "value": 25.0 },
-        { "factor": "PRICE_CHANGE_52W", "operator": ">", "value": 0.0 }
+        { "factor": "EARNINGS_GROWTH_1Y", "operator": ">", "value": 12 },
+        { "factor": "ROE", "operator": ">", "value": 12 },
+        { "factor": "DISTANCE_FROM_52W_HIGH", "operator": ">", "value": -25 }
       ],
       "sell_conditions": [
-        { "factor": "EPSGrowth", "operator": "<", "value": 10.0 },
-        { "factor": "PRICE_CHANGE_52W", "operator": "<", "value": -10.0 }
-      ]
+        { "factor": "DISTANCE_FROM_52W_HIGH", "operator": "<", "value": -35 }
+      ],
+      "backtest_config": {
+        "strategy_name": "william_oneil",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({EARNINGS_GROWTH_1Y})",
+        "priority_order": "desc",
+        "per_stock_ratio": 12,
+        "max_holdings": 8,
+        "max_buy_value": 50000000,
+        "max_daily_stock": 4,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["전기 / 전자", "통신"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 12 },
+          { "name": "B", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12 },
+          { "name": "C", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": ">", "exp_right_side": -25 }
+        ],
+        "target_and_loss": { "target_gain": 28, "stop_loss": 12 },
+        "hold_days": {
+          "min_hold_days": 20,
+          "max_hold_days": 180,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+        "sell_conditions": [
+          { "name": "A", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": "<", "exp_right_side": -35 }
+        ],
+        "sell_logic": "or",
+        "sell_price_basis": "전일 종가",
+        "sell_price_offset": 0
+      }
+      }
     },
     {
-      "id": "value_per_discount",
-      "name": "PER 저평가 전략",
-      "summary": "이익 대비 주가가 낮은 기업을 선별하는 기본 가치 전략",
-      "tags": ["long_term", "style_value", "risk_low"],
+      "id": "bill_ackman",
+      "name": "빌 애크먼 리레이팅 전략",
+      "summary": "ROIC·저평가·재무 개선 여지를 노리는 가치+성장 조합",
+      "tags": ["long_term", "style_value", "style_quality", "risk_medium"],
       "conditions_preview": [
-        { "condition": "PER <= 10" },
-        { "condition": "PER > 15 시 매도" }
+        { "condition": "ROIC > 10, PER < 22, PBR < 2.5" },
+        { "condition": "부채비율 100% 초과 기업" }
       ],
       "buy_conditions": [
-        { "factor": "PER", "operator": "<=", "value": 10.0 }
+        { "factor": "ROIC", "operator": ">", "value": 10 },
+        { "factor": "PER", "operator": "<", "value": 22 },
+        { "factor": "PBR", "operator": "<", "value": 2.5 },
+        { "factor": "DEBT_RATIO", "operator": ">", "value": 100 }
       ],
       "sell_conditions": [
-        { "factor": "PER", "operator": ">", "value": 15.0 }
-      ]
+        { "factor": "PER", "operator": ">", "value": 25 },
+        { "factor": "ROIC", "operator": "<", "value": 5 }
+      ],
+      "backtest_config": {
+        "strategy_name": "bill_ackman",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({ROIC})",
+        "priority_order": "asc",
+        "per_stock_ratio": 10,
+        "max_holdings": 10,
+        "max_buy_value": 100000000,
+        "max_daily_stock": 3,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["IT서비스", "금융", "증권"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 10 },
+          { "name": "B", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 22 },
+          { "name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.5 },
+          { "name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 100 }
+        ],
+        "target_and_loss": { "target_gain": 30, "stop_loss": 15 },
+        "hold_days": {
+          "min_hold_days": 90,
+          "max_hold_days": 360,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({PER})", "inequality": ">", "exp_right_side": 25 },
+            { "name": "B", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 5 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
     },
     {
-      "id": "value_pbr_discount",
-      "name": "PBR 저평가 전략",
-      "summary": "순자산 대비 주가가 낮은 기업을 매수해 재평가를 노리는 전략",
-      "tags": ["long_term", "style_value", "risk_low"],
+      "id": "charlie_munger",
+      "name": "찰리 멍거 우량주 전략",
+      "summary": "고ROIC·저평가·저부채 기업을 장기 보유",
+      "tags": ["long_term", "style_quality", "style_value", "risk_low"],
       "conditions_preview": [
-        { "condition": "PBR <= 1" },
-        { "condition": "PBR > 2 시 매도" }
+        { "condition": "ROIC > 12, PER < 14, PBR < 2" },
+        { "condition": "부채비율 < 70, 유동비율 > 1.5" }
       ],
       "buy_conditions": [
-        { "factor": "PBR", "operator": "<=", "value": 1.0 }
+        { "factor": "ROIC", "operator": ">", "value": 12 },
+        { "factor": "PER", "operator": "<", "value": 14 },
+        { "factor": "PBR", "operator": "<", "value": 2.0 },
+        { "factor": "ROE", "operator": ">", "value": 12 },
+        { "factor": "REVENUE_GROWTH_1Y", "operator": ">", "value": 10 },
+        { "factor": "DEBT_RATIO", "operator": "<", "value": 70 },
+        { "factor": "CURRENT_RATIO", "operator": ">", "value": 1.5 }
       ],
       "sell_conditions": [
-        { "factor": "PBR", "operator": ">", "value": 2.0 }
-      ]
+        { "factor": "ROIC", "operator": "<", "value": 8 },
+        { "factor": "PBR", "operator": ">", "value": 2.3 }
+      ],
+      "backtest_config": {
+        "strategy_name": "charlie_munger",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({ROIC})",
+        "priority_order": "desc",
+        "per_stock_ratio": 10,
+        "max_holdings": 12,
+        "max_buy_value": 80000000,
+        "max_daily_stock": 3,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["화학", "비금속", "전기 / 가스 / 수도"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 12 },
+          { "name": "B", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 14 },
+          { "name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0 },
+          { "name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12 },
+          { "name": "E", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 10 },
+          { "name": "F", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 70 },
+          { "name": "G", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5 }
+        ],
+        "target_and_loss": { "target_gain": 35, "stop_loss": 18 },
+        "hold_days": {
+          "min_hold_days": 180,
+          "max_hold_days": 900,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 8 },
+            { "name": "B", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.3 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
     },
     {
-      "id": "value_psr_discount",
-      "name": "PSR 저평가 전략",
-      "summary": "매출 대비 주가가 저평가된 기업을 찾는 가치 전략",
-      "tags": ["long_term", "style_value", "risk_medium"],
+      "id": "glenn_welling",
+      "name": "글렌 웰링 밸류업 전략",
+      "summary": "EV/EBITDA·PSR 저평가와 성장성을 함께 보는 리레이팅 전략",
+      "tags": ["medium_term", "style_value", "risk_medium"],
       "conditions_preview": [
-        { "condition": "PSR <= 2" },
-        { "condition": "PSR > 3 시 매도" }
+        { "condition": "EV/EBITDA < 10, PSR < 2.0" },
+        { "condition": "PEG 0~1.2, ROIC < 12" }
       ],
       "buy_conditions": [
-        { "factor": "PSR", "operator": "<=", "value": 2.0 }
+        { "factor": "EV_EBITDA", "operator": "<", "value": 10 },
+        { "factor": "ROIC", "operator": "<", "value": 12 },
+        { "factor": "PBR", "operator": "<", "value": 2.0 },
+        { "factor": "PSR", "operator": "<", "value": 2.0 },
+        { "factor": "PEG", "operator": ">", "value": 0 },
+        { "factor": "PEG", "operator": "<", "value": 1.2 }
       ],
       "sell_conditions": [
-        { "factor": "PSR", "operator": ">", "value": 3.0 }
-      ]
+        { "factor": "EV_EBITDA", "operator": ">", "value": 12 },
+        { "factor": "PBR", "operator": ">", "value": 2.2 }
+      ],
+      "backtest_config": {
+        "strategy_name": "glenn_welling",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({EV_EBITDA})",
+        "priority_order": "asc",
+        "per_stock_ratio": 10,
+        "max_holdings": 12,
+        "max_buy_value": 70000000,
+        "max_daily_stock": 3,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["기계 / 장비", "기타 제조", "비금속"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({EV_EBITDA})", "inequality": "<", "exp_right_side": 10 },
+          { "name": "B", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 12 },
+          { "name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0 },
+          { "name": "D", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 2.0 },
+          { "name": "E", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0 },
+          { "name": "F", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 1.2 }
+        ],
+        "target_and_loss": { "target_gain": 25, "stop_loss": 15 },
+        "hold_days": {
+          "min_hold_days": 120,
+          "max_hold_days": 540,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({EV_EBITDA})", "inequality": ">", "exp_right_side": 12 },
+            { "name": "B", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.2 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
     },
     {
-      "id": "dividend_high_yield",
-      "name": "고배당 전략",
-      "summary": "높은 배당 수익률을 제공하는 종목에 집중하는 방어적 전략",
-      "tags": ["long_term", "style_dividend", "risk_low"],
+      "id": "cathie_wood",
+      "name": "캐시 우드 혁신 성장 전략",
+      "summary": "매출 고성장·높은 PEG 허용으로 혁신 테마 집중",
+      "tags": ["long_term", "style_growth", "risk_high", "sector_innovation"],
       "conditions_preview": [
-        { "condition": "배당수익률 >= 4%" },
-        { "condition": "배당수익률 < 3% 시 매도" }
+        { "condition": "PEG 0~2.5, PSR < 25" },
+        { "condition": "매출 성장률 > 15, 유동비율 > 1.5" }
       ],
       "buy_conditions": [
-        { "factor": "dividend_yield", "operator": ">=", "value": 4.0 }
+        { "factor": "PEG", "operator": ">", "value": 0 },
+        { "factor": "PEG", "operator": "<", "value": 2.5 },
+        { "factor": "PSR", "operator": "<", "value": 25 },
+        { "factor": "REVENUE_GROWTH_1Y", "operator": ">", "value": 15 },
+        { "factor": "CURRENT_RATIO", "operator": ">", "value": 1.5 }
       ],
       "sell_conditions": [
-        { "factor": "dividend_yield", "operator": "<", "value": 3.0 }
-      ]
+        { "factor": "PSR", "operator": ">", "value": 30 },
+        { "factor": "REVENUE_GROWTH_1Y", "operator": "<", "value": 5 }
+      ],
+      "backtest_config": {
+        "strategy_name": "cathie_wood",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({REVENUE_GROWTH_1Y})",
+        "priority_order": "desc",
+        "per_stock_ratio": 8,
+        "max_holdings": 14,
+        "max_buy_value": 60000000,
+        "max_daily_stock": 4,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["전기 / 전자", "통신"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0 },
+          { "name": "B", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2.5 },
+          { "name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 25 },
+          { "name": "D", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 15 },
+          { "name": "E", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5 }
+        ],
+        "target_and_loss": { "target_gain": 40, "stop_loss": 20 },
+        "hold_days": {
+          "min_hold_days": 90,
+          "max_hold_days": 360,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({PSR})", "inequality": ">", "exp_right_side": 30 },
+            { "name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": "<", "exp_right_side": 5 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
     },
     {
-      "id": "quality_high_roe",
-      "name": "고ROE 전략",
-      "summary": "자본 효율이 높은 우량 기업을 선별하는 퀄리티 전략",
-      "tags": ["long_term", "style_quality", "risk_low"],
+      "id": "glenn_greenberg",
+      "name": "글렌 그린버그 집중 가치 전략",
+      "summary": "ROIC·저PER·저부채 중심의 집중 투자",
+      "tags": ["long_term", "style_value", "style_quality", "risk_medium"],
       "conditions_preview": [
-        { "condition": "ROE >= 12%" },
-        { "condition": "ROE < 10% 시 매도" }
+        { "condition": "PER < 20, ROIC > 12" },
+        { "condition": "부채비율 < 70" }
       ],
       "buy_conditions": [
-        { "factor": "ROE", "operator": ">=", "value": 12.0 }
+        { "factor": "PER", "operator": "<", "value": 20 },
+        { "factor": "ROIC", "operator": ">", "value": 12 },
+        { "factor": "DEBT_RATIO", "operator": "<", "value": 70 }
       ],
       "sell_conditions": [
-        { "factor": "ROE", "operator": "<", "value": 10.0 }
-      ]
-    },
-    {
-      "id": "quality_low_debt",
-      "name": "저부채 전략",
-      "summary": "부채 비율이 낮은 재무 건전 기업을 선별",
-      "tags": ["long_term", "style_quality", "risk_low"],
-      "conditions_preview": [
-        { "condition": "부채비율 <= 100%" },
-        { "condition": "부채비율 > 150% 시 매도" }
+        { "factor": "ROIC", "operator": "<", "value": 8 },
+        { "factor": "DEBT_RATIO", "operator": ">", "value": 90 }
       ],
-      "buy_conditions": [
-        { "factor": "debt_ratio", "operator": "<=", "value": 100.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "debt_ratio", "operator": ">", "value": 150.0 }
-      ]
-    },
-    {
-      "id": "quality_high_margin",
-      "name": "고마진 기업",
-      "summary": "영업이익률이 높은 기업을 선별하는 안정적 퀄리티 전략",
-      "tags": ["medium_term", "style_quality", "risk_medium"],
-      "conditions_preview": [
-        { "condition": "영업이익률 >= 15%" },
-        { "condition": "영업이익률 < 10% 시 매도" }
-      ],
-      "buy_conditions": [
-        { "factor": "opm", "operator": ">=", "value": 15.0 }
-      ],
-      "sell_conditions": [
-        { "factor": "opm", "operator": "<", "value": 10.0 }
-      ]
+      "backtest_config": {
+        "strategy_name": "glenn_greenberg",
+        "is_day_or_month": "daily",
+        "commission_rate": 0.1,
+        "slippage": 0,
+        "buy_logic": "and",
+        "priority_factor": "기본값({ROIC})",
+        "priority_order": "desc",
+        "per_stock_ratio": 10,
+        "max_holdings": 8,
+        "max_buy_value": 100000000,
+        "max_daily_stock": 2,
+        "buy_price_basis": "전일 종가",
+        "buy_price_offset": 0,
+        "trade_targets": {
+          "use_all_stocks": false,
+          "selected_universes": [],
+          "selected_themes": ["유통", "증권", "은행"],
+          "selected_stocks": [],
+          "selected_stock_count": null,
+          "total_stock_count": 2645,
+          "total_theme_count": 29
+        },
+        "buy_conditions": [
+          { "name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20 },
+          { "name": "B", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 12 },
+          { "name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 70 }
+        ],
+        "target_and_loss": { "target_gain": 30, "stop_loss": 15 },
+        "hold_days": {
+          "min_hold_days": 120,
+          "max_hold_days": 540,
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        },
+        "condition_sell": {
+          "sell_conditions": [
+            { "name": "A", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 8 },
+            { "name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 90 }
+          ],
+          "sell_logic": "or",
+          "sell_price_basis": "전일 종가",
+          "sell_price_offset": 0
+        }
+      }
     }
-    
   ]
 }

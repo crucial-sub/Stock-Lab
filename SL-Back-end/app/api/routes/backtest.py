@@ -607,9 +607,28 @@ async def run_backtest(
 
     except HTTPException:
         # HTTPException은 그대로 전달 (429, 404 등)
+        # 429 에러가 아닌 경우 Rate Limit 카운터 감소
         raise
     except Exception as e:
         logger.error(f"백테스트 실행 실패: {e}", exc_info=True)
+        
+        # 🚀 Rate Limit 카운터 감소 (백테스트 시작 실패 시)
+        try:
+            from app.core.cache import get_redis
+            redis_client = get_redis()
+            if redis_client:
+                rate_limit_key = f"backtest:running:{current_user.user_id}"
+                running_count = await redis_client.get(rate_limit_key)
+                if running_count:
+                    new_count = max(0, int(running_count) - 1)
+                    if new_count > 0:
+                        await redis_client.setex(rate_limit_key, 3600, new_count)
+                    else:
+                        await redis_client.delete(rate_limit_key)
+                    logger.info(f"🚦 Rate Limit 감소 (에러): user_id={current_user.user_id}, 남은 실행: {new_count}/3")
+        except Exception as redis_error:
+            logger.warning(f"Rate Limit 감소 실패 (무시): {redis_error}")
+        
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1705,24 +1724,25 @@ async def list_available_factors(db: AsyncSession = Depends(get_db)):
                 {"id": 38, "name": "distance_from_52w_low", "display_name": "52주 최저가 대비", "category": "모멘텀", "description": "현재가와 52주 최저가의 거리"},
                 {"id": 39, "name": "relative_strength", "display_name": "상대강도", "category": "모멘텀", "description": "시장 대비 초과 수익률"},
                 {"id": 40, "name": "volume_momentum", "display_name": "거래량 모멘텀", "category": "모멘텀", "description": "거래량 증가율"},
+                {"id": 41, "name": "change_rate", "display_name": "등락률", "category": "모멘텀", "description": "전일 대비 등락률(%)"},
 
                 # 안정성 지표 (STABILITY) - 8개
-                {"id": 41, "name": "debt_to_equity", "display_name": "부채비율", "category": "안정성", "description": "부채총계를 자기자본으로 나눈 비율"},
-                {"id": 42, "name": "debt_ratio", "display_name": "부채비율(%)", "category": "안정성", "description": "부채총계를 총자산으로 나눈 비율"},
-                {"id": 43, "name": "current_ratio", "display_name": "유동비율", "category": "안정성", "description": "유동자산을 유동부채로 나눈 비율"},
-                {"id": 44, "name": "quick_ratio", "display_name": "당좌비율", "category": "안정성", "description": "당좌자산을 유동부채로 나눈 비율"},
-                {"id": 45, "name": "interest_coverage", "display_name": "이자보상배율", "category": "안정성", "description": "영업이익을 이자비용으로 나눈 비율"},
-                {"id": 46, "name": "altman_z_score", "display_name": "Altman Z-Score", "category": "안정성", "description": "파산 위험도 측정 지표"},
-                {"id": 47, "name": "beta", "display_name": "베타", "category": "안정성", "description": "시장 대비 변동성"},
-                {"id": 48, "name": "earnings_quality", "display_name": "이익품질", "category": "안정성", "description": "현금흐름 대비 순이익 비율"},
+                {"id": 42, "name": "debt_to_equity", "display_name": "부채비율", "category": "안정성", "description": "부채총계를 자기자본으로 나눈 비율"},
+                {"id": 43, "name": "debt_ratio", "display_name": "부채비율(%)", "category": "안정성", "description": "부채총계를 총자산으로 나눈 비율"},
+                {"id": 44, "name": "current_ratio", "display_name": "유동비율", "category": "안정성", "description": "유동자산을 유동부채로 나눈 비율"},
+                {"id": 45, "name": "quick_ratio", "display_name": "당좌비율", "category": "안정성", "description": "당좌자산을 유동부채로 나눈 비율"},
+                {"id": 46, "name": "interest_coverage", "display_name": "이자보상배율", "category": "안정성", "description": "영업이익을 이자비용으로 나눈 비율"},
+                {"id": 47, "name": "altman_z_score", "display_name": "Altman Z-Score", "category": "안정성", "description": "파산 위험도 측정 지표"},
+                {"id": 48, "name": "beta", "display_name": "베타", "category": "안정성", "description": "시장 대비 변동성"},
+                {"id": 49, "name": "earnings_quality", "display_name": "이익품질", "category": "안정성", "description": "현금흐름 대비 순이익 비율"},
 
                 # 기술적 지표 (TECHNICAL) - 6개
-                {"id": 49, "name": "rsi_14", "display_name": "RSI(14)", "category": "기술적분석", "description": "14일 기준 상대강도지수 (0-100)"},
-                {"id": 50, "name": "bollinger_position", "display_name": "볼린저밴드 위치", "category": "기술적분석", "description": "볼린저밴드 내 현재가 위치"},
-                {"id": 51, "name": "macd_signal", "display_name": "MACD 시그널", "category": "기술적분석", "description": "MACD와 시그널선 차이"},
-                {"id": 52, "name": "stochastic_14", "display_name": "스토캐스틱(14)", "category": "기술적분석", "description": "14일 기준 스토캐스틱 (0-100)"},
-                {"id": 53, "name": "volume_roc", "display_name": "거래량 변화율", "category": "기술적분석", "description": "거래량 변화율"},
-                {"id": 54, "name": "price_position", "display_name": "가격 위치", "category": "기술적분석", "description": "52주 범위 내 현재가 위치 (0-100)"},
+                {"id": 50, "name": "rsi_14", "display_name": "RSI(14)", "category": "기술적분석", "description": "14일 기준 상대강도지수 (0-100)"},
+                {"id": 51, "name": "bollinger_position", "display_name": "볼린저밴드 위치", "category": "기술적분석", "description": "볼린저밴드 내 현재가 위치"},
+                {"id": 52, "name": "macd_signal", "display_name": "MACD 시그널", "category": "기술적분석", "description": "MACD와 시그널선 차이"},
+                {"id": 53, "name": "stochastic_14", "display_name": "스토캐스틱(14)", "category": "기술적분석", "description": "14일 기준 스토캐스틱 (0-100)"},
+                {"id": 54, "name": "volume_roc", "display_name": "거래량 변화율", "category": "기술적분석", "description": "거래량 변화율"},
+                {"id": 55, "name": "price_position", "display_name": "가격 위치", "category": "기술적분석", "description": "52주 범위 내 현재가 위치 (0-100)"},
             ]
         }
 

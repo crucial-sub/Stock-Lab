@@ -99,8 +99,43 @@ export default function QuantStrategySummaryPanel({
   const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
   const addSellConditionUIWithData = useBacktestConfigStore((state) => state.addSellConditionUIWithData);
   const setBuyConditionsUI = useBacktestConfigStore((state) => state.setBuyConditionsUI);
+  const setSellConditionsUI = useBacktestConfigStore((state) => state.setSellConditionsUI);
   const setBuyLogic = useBacktestConfigStore((state) => state.setBuyLogic);
   const setConditionSell = useBacktestConfigStore((state) => state.setConditionSell);
+  const setTargetAndLoss = useBacktestConfigStore((state) => state.setTargetAndLoss);
+  const setHoldDays = useBacktestConfigStore((state) => state.setHoldDays);
+  const setPriorityFactor = useBacktestConfigStore((state) => state.setPriorityFactor);
+  const setPriorityOrder = useBacktestConfigStore((state) => state.setPriorityOrder);
+  const setPerStockRatio = useBacktestConfigStore((state) => state.setPerStockRatio);
+  const setMaxHoldings = useBacktestConfigStore((state) => state.setMaxHoldings);
+  const setMaxBuyValue = useBacktestConfigStore((state) => state.setMaxBuyValue);
+  const setMaxDailyStock = useBacktestConfigStore((state) => state.setMaxDailyStock);
+  const setBuyPriceBasis = useBacktestConfigStore((state) => state.setBuyPriceBasis);
+  const setBuyPriceOffset = useBacktestConfigStore((state) => state.setBuyPriceOffset);
+  const setTradeTargets = useBacktestConfigStore((state) => state.setTradeTargets);
+
+  // AI 헬퍼로 새 전략을 적용할 때 기존 조건/논리 초기화
+  const resetConditionsFromHelper = () => {
+    setBuyConditionsUI([]);
+    setSellConditionsUI([]);
+    setBuyLogic("");
+    setConditionSell(null);
+    setTargetAndLoss(null);
+    setHoldDays(null);
+    setPriorityFactor("");
+    setPriorityOrder("desc");
+    setPerStockRatio(0);
+    setMaxHoldings(0);
+    setMaxBuyValue(null);
+    setMaxDailyStock(null);
+    setBuyPriceBasis("전일 종가");
+    setBuyPriceOffset(0);
+    setTradeTargets({
+      use_all_stocks: true,
+      selected_themes: [],
+      selected_stocks: [],
+    });
+  };
 
   // 날짜 초기화 (클라이언트 사이드에서만 실행)
   // setter 함수는 안정적이므로 dependency에서 제외 (React Compiler가 자동 처리)
@@ -124,83 +159,149 @@ export default function QuantStrategySummaryPanel({
 
   // AI 헬퍼에서 생성된 조건을 매수 조건에 추가
   const handleBuyConditionsAdd = (conditions: any[]) => {
-    const hasExisting = useBacktestConfigStore
-      .getState()
-      .buyConditionsUI.some((c) => c.factorName);
-
-    if (hasExisting) {
+    // 기존 매수 조건이 있으면 초기화 후 새로 채움
+    if (useBacktestConfigStore.getState().buyConditionsUI.length > 0) {
       setBuyConditionsUI([]);
       setBuyLogic("");
     }
 
+    const existing = useBacktestConfigStore.getState().buyConditionsUI;
+    const makeKey = (c: any) =>
+      [
+        (c.factorName || "").toUpperCase(),
+        c.argument || "",
+        c.operator || "",
+        c.value || "",
+      ].join("|");
+    const nextConditions: any[] = [...existing];
+
     conditions.forEach((dslCondition) => {
       const { factor, params, operator, value, subFactorName } = dslCondition;
       const factorName = factor;
       const sfName = subFactorName || "기본값";
       const arg = params && params.length > 0 ? String(params[0]) : undefined;
-
-      addBuyConditionUIWithData({
+      const normalized = {
         factorName,
         subFactorName: sfName,
         operator: operator,
         value: value !== null ? String(value) : "",
         argument: arg,
-      });
+      };
+      // 동일 조건이 이미 있으면 기존 것을 제거하고 새 조건으로 덮어씀
+      const key = makeKey(normalized);
+      const dupIndex = nextConditions.findIndex((c) => makeKey(c) === key);
+      if (dupIndex >= 0) {
+        nextConditions.splice(dupIndex, 1);
+      }
+      nextConditions.push(normalized);
     });
 
-    // 조건 추가 후 논리식 자동 생성 (2개 이상일 때만)
-    setTimeout(() => {
-      const updatedConditions = useBacktestConfigStore.getState().buyConditionsUI;
-      const validConditions = updatedConditions.filter(c => c.factorName);
-      if (validConditions.length >= 2) {
-        const logic = validConditions.map(c => c.id).join(" and ");
-        setBuyLogic(logic);
-      }
-      if (validConditions.length >= 3) {
-        const logic = validConditions.map(c => c.id).join(" or ");
-        setBuyLogic(logic);
-      }
-    }, 100);
+    // ID 재할당(A,B,...) 후 스토어 반영
+    const reassigned = nextConditions.map((c, idx) => ({
+      ...c,
+      id: String.fromCharCode(65 + idx),
+    }));
+    setBuyConditionsUI(reassigned);
+
+    // 논리식: 기존에 or가 있으면 or로, 없으면 and로 재구성
+    const existingLogic = useBacktestConfigStore.getState().buy_logic || "";
+    const normalized = existingLogic.toLowerCase();
+    const op = normalized.includes(" or ") || normalized.includes("||") ? "or" : "and";
+    const logic =
+      reassigned.length >= 2
+        ? reassigned.map((c) => c.id).join(` ${op} `)
+        : reassigned.length === 1
+          ? reassigned[0].id
+          : "";
+    setBuyLogic(logic);
   };
 
   // AI 헬퍼에서 생성된 조건을 매도 조건에 추가
   const handleSellConditionsAdd = (conditions: any[]) => {
+    // 기존 매도 조건이 있으면 초기화 후 새로 채움
+    if (useBacktestConfigStore.getState().sellConditionsUI.length > 0) {
+      useBacktestConfigStore.getState().setSellConditionsUI([]);
+      setConditionSell(null);
+    }
+
+    const existingSell = useBacktestConfigStore.getState().sellConditionsUI;
+    const makeKey = (c: any) =>
+      [
+        (c.factorName || "").toUpperCase(),
+        c.argument || "",
+        c.operator || "",
+        c.value || "",
+      ].join("|");
+    const nextConditions: any[] = [...existingSell];
+
     conditions.forEach((dslCondition) => {
       const { factor, params, operator, value, subFactorName } = dslCondition;
       const factorName = factor;
       const sfName = subFactorName || "기본값";
       const arg = params && params.length > 0 ? String(params[0]) : undefined;
-
-      addSellConditionUIWithData({
+      const normalized = {
         factorName,
         subFactorName: sfName,
         operator: operator,
         value: value !== null ? String(value) : "",
         argument: arg,
-      });
+      };
+      const key = makeKey(normalized);
+      const dupIndex = nextConditions.findIndex((c) => makeKey(c) === key);
+      if (dupIndex >= 0) {
+        nextConditions.splice(dupIndex, 1);
+      }
+      nextConditions.push(normalized);
     });
 
-    // 조건 추가 후 논리식 자동 생성 (2개 이상일 때만)
-    setTimeout(() => {
-      const state = useBacktestConfigStore.getState();
-      const updatedConditions = state.sellConditionsUI;
-      const validConditions = updatedConditions.filter(c => c.factorName);
+    // ID 재할당(A,B,...) 후 스토어 반영
+    const reassigned = nextConditions.map((c, idx) => ({
+      ...c,
+      id: String.fromCharCode(65 + idx),
+    }));
+    useBacktestConfigStore.getState().setSellConditionsUI(reassigned);
 
-      if (validConditions.length >= 2) {
-        const logic = validConditions.map(c => c.id).join(" and ");
-        const currentConditionSell = state.condition_sell || {
-          sell_conditions: [],
-          sell_logic: "",
-          sell_price_basis: "당일 시가",
-          sell_price_offset: 0,
-        };
+    // 논리식: 기존에 or가 있으면 or로, 없으면 and로 재구성
+    const state = useBacktestConfigStore.getState();
+    const currentConditionSell = state.condition_sell || {
+      sell_conditions: [],
+      sell_logic: "",
+      sell_price_basis: "당일 시가",
+      sell_price_offset: 0,
+    };
+    const normalized = (currentConditionSell.sell_logic || "").toLowerCase();
+    const op = normalized.includes(" or ") || normalized.includes("||") ? "or" : "and";
+    const logic =
+      reassigned.length >= 2
+        ? reassigned.map((c) => c.id).join(` ${op} `)
+        : reassigned.length === 1
+          ? reassigned[0].id
+          : "";
 
-        setConditionSell({
-          ...currentConditionSell,
-          sell_logic: logic,
-        });
-      }
-    }, 100);
+    setConditionSell({
+      ...currentConditionSell,
+      sell_logic: logic,
+    });
+  };
+
+  // AI 헬퍼 기본 백테스트 설정 적용 (목표가/손절/보유기간 등)
+  const handleBacktestConfigApply = (config: any) => {
+    if (!config) return;
+
+    setTargetAndLoss(config.target_and_loss ?? null);
+    setHoldDays(config.hold_days ?? null);
+    setConditionSell(config.condition_sell ?? null);
+    if (config.buy_logic) setBuyLogic(config.buy_logic);
+
+    if (config.buy_price_basis) setBuyPriceBasis(config.buy_price_basis);
+    if (typeof config.buy_price_offset === "number") setBuyPriceOffset(config.buy_price_offset);
+    if (config.priority_factor) setPriorityFactor(config.priority_factor);
+    if (config.priority_order) setPriorityOrder(config.priority_order);
+    if (typeof config.per_stock_ratio === "number") setPerStockRatio(config.per_stock_ratio);
+    if (typeof config.max_holdings === "number") setMaxHoldings(config.max_holdings);
+    if (config.max_buy_value !== undefined) setMaxBuyValue(config.max_buy_value);
+    if (config.max_daily_stock !== undefined) setMaxDailyStock(config.max_daily_stock);
+    if (config.trade_targets) setTradeTargets(config.trade_targets);
   };
 
   return (
@@ -705,8 +806,11 @@ export default function QuantStrategySummaryPanel({
               <AIHelperSidebar
                 onBuyConditionsAdd={handleBuyConditionsAdd}
                 onSellConditionsAdd={handleSellConditionsAdd}
+                onBacktestConfigApply={handleBacktestConfigApply}
+                onResetConditions={resetConditionsFromHelper}
                 currentBuyConditions={buyConditionsUI}
                 currentSellConditions={sellConditionsUI}
+                onConditionsApplied={() => setPanelMode("summary")}
               />
             </div>
           )}

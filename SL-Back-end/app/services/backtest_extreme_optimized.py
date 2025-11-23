@@ -2090,6 +2090,13 @@ class ExtremeOptimizer:
                 # BOLLINGER_WIDTH: 볼린저 밴드 폭 (bb_middle_val 재사용하여 0 나누기 방지)
                 bollinger_width = float(bb_width / bb_middle_val * 100) if bb_middle_val > 0 and not np.isnan(bb_middle_val) else np.nan
 
+                # CHANGE_RATE: 전일 대비 등락률(%)
+                change_rate = np.nan
+                if calc_date_idx > 0:
+                    prev_price = price_matrix[stock_idx, calc_date_idx - 1]
+                    if prev_price > 0:
+                        change_rate = (current_price - prev_price) / prev_price * 100.0
+
                 # PRICE_VS_MA20 계산
                 ma_20_val = ma_20[stock_idx, calc_date_idx]
                 price_vs_ma20 = ((current_price - ma_20_val) / ma_20_val * 100) if ma_20_val > 0 and not np.isnan(ma_20_val) else np.nan
@@ -2104,6 +2111,7 @@ class ExtremeOptimizer:
                     'MOMENTUM_3M': float(momentum_3m[stock_idx, calc_date_idx]),
                     'MOMENTUM_6M': float(momentum_6m[stock_idx, calc_date_idx]),  # Phase 2-B
                     'MOMENTUM_12M': float(momentum_12m[stock_idx, calc_date_idx]),  # Phase 2-B
+                    'CHANGE_RATE': float(change_rate),
                     'RSI': float(rsi[stock_idx, calc_date_idx]),
                     'RSI_14': float(rsi[stock_idx, calc_date_idx]),  # Phase 2-B (RSI와 동일)
                     'BOLLINGER_POSITION': float(bb_pos),

@@ -37,8 +37,7 @@ export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-end gap-1">
-        <span className="text-3xl font-semibold">수익률</span>
-        <span className="font-semibold">(%)</span>
+        <span className="text-[1.125rem] font-semibold">수익률</span>
       </div>
 
       <div className="relative w-full h-48">

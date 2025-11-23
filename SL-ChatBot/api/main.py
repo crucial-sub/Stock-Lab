@@ -70,7 +70,6 @@ async def health():
         "components": {
             "api": "ok",
             "chatbot": "ok",
-            "mcp": "ok",
             "rag": "ok"
         }
     }

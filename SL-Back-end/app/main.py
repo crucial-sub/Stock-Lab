@@ -246,7 +246,7 @@ app.include_router(
 
 app.include_router(
     market_quote.router,
-    prefix="",  # 라우터 자체에 /market 경로 포함
+    prefix=settings.API_V1_PREFIX,
     tags=["Market Quote"]
 )
 

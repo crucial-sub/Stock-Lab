@@ -8,6 +8,7 @@ import { strategyApi } from "@/lib/api/strategy";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Portfolio } from "./page";
+import { autoTradingApi } from "@/lib/api/auto-trading";
 
 /**
  * 포트폴리오 페이지 클라이언트 컴포넌트

@@ -1,3 +1,4 @@
+import { useRouter } from "next/navigation";
 
 export interface PortfolioShareCardProps {
   portfolioName: string;
@@ -5,6 +6,7 @@ export interface PortfolioShareCardProps {
   description: string;
   returnRate: string;
   stocks: string[];
+  sessionId: string;
   onAdd?: () => void;
   className?: string;
 }
@@ -20,9 +22,12 @@ export function PortfolioShareCard({
   author,
   description,
   returnRate,
+  sessionId,
   onAdd,
   className = "",
 }: PortfolioShareCardProps) {
+  const router = useRouter();
+
   const sanitizeDescription = (text: string) => {
     if (!text) return "";
     return text
@@ -30,6 +35,7 @@ export function PortfolioShareCard({
       .replace(/\s{2,}/g, " ")
       .trim();
   };
+
   const formattedDescription = sanitizeDescription(description);
 
   return (
@@ -63,11 +69,12 @@ export function PortfolioShareCard({
 
       <button
         onClick={() => {
+          router.push(`/quant/result/${sessionId}`);
         }}
         disabled={!onAdd}
         className={`w-full px-4 py-2 rounded-[12px] text-white transition-colors ${onAdd
-            ? "bg-brand-purple hover:opacity-80"
-            : "bg-gray-300 cursor-not-allowed"
+          ? "bg-brand-purple hover:opacity-80"
+          : "bg-gray-300 cursor-not-allowed"
           }`}
       >
         더보기

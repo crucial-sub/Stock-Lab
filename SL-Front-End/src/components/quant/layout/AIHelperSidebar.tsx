@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { AISearchInput } from "@/components/home/ui";
 import { sendChatMessage } from "@/lib/api/chatbot";
+import { useAIHelperStore } from "@/stores/aiHelperStore";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,6 +12,7 @@ interface Message {
   backtestConditionsSell?: any[];
   appliedBuy?: boolean;
   appliedSell?: boolean;
+  backtestConfig?: any;
 }
 
 interface BuyConditionUI {
@@ -34,8 +36,11 @@ interface SellConditionUI {
 interface AIHelperSidebarProps {
   onBuyConditionsAdd?: (conditions: any[]) => void;
   onSellConditionsAdd?: (conditions: any[]) => void;
+  onBacktestConfigApply?: (config: any) => void;
+  onResetConditions?: () => void;
   currentBuyConditions?: BuyConditionUI[];
   currentSellConditions?: SellConditionUI[];
+  onConditionsApplied?: () => void;
 }
 
 /**
@@ -47,38 +52,70 @@ function AIHelperMessage({
   onSellConditionsAdd,
   onBuyApplied,
   onSellApplied,
+  onConditionsApplied,
+  onBacktestConfigApply,
+  onResetConditions,
 }: {
   message: Message;
   onBuyConditionsAdd?: (conditions: any[]) => void;
   onSellConditionsAdd?: (conditions: any[]) => void;
   onBuyApplied?: () => void;
   onSellApplied?: () => void;
+  onConditionsApplied?: () => void;
+  onBacktestConfigApply?: (config: any) => void;
+  onResetConditions?: () => void;
 }) {
   const isUser = message.role === "user";
+  const configAppliedRef = useRef(false);
+  const resetAppliedRef = useRef(false);
+
+  const applyBacktestConfigOnce = () => {
+    if (configAppliedRef.current) return;
+    if (message.backtestConfig && onBacktestConfigApply) {
+      onBacktestConfigApply(message.backtestConfig);
+      configAppliedRef.current = true;
+    }
+  };
+
+  const resetConditionsOnce = () => {
+    if (resetAppliedRef.current) return;
+    if (onResetConditions) {
+      onResetConditions();
+      resetAppliedRef.current = true;
+    }
+  };
 
   const handleAddBuyConditions = () => {
     if (message.backtestConditionsBuy && message.backtestConditionsBuy.length > 0 && onBuyConditionsAdd) {
+      resetConditionsOnce();
       const normalized = message.backtestConditionsBuy.map((cond) => ({
         ...cond,
         subFactorName: cond?.subFactorName || "기본값",
       }));
       onBuyConditionsAdd(normalized);
+      applyBacktestConfigOnce();
       onBuyApplied?.();
+      onConditionsApplied?.();
     }
   };
 
   const handleAddSellConditions = () => {
     if (message.backtestConditionsSell && message.backtestConditionsSell.length > 0 && onSellConditionsAdd) {
+      resetConditionsOnce();
       const normalized = message.backtestConditionsSell.map((cond) => ({
         ...cond,
         subFactorName: cond?.subFactorName || "기본값",
       }));
       onSellConditionsAdd(normalized);
+      applyBacktestConfigOnce();
       onSellApplied?.();
+      onConditionsApplied?.();
     }
   };
 
   const handleApplyBoth = () => {
+    resetConditionsOnce();
+    applyBacktestConfigOnce();
     handleAddBuyConditions();
     handleAddSellConditions();
   };
@@ -183,12 +220,19 @@ function AIHelperMessage({
 export function AIHelperSidebar({
   onBuyConditionsAdd,
   onSellConditionsAdd,
+  onBacktestConfigApply,
+  onResetConditions,
   currentBuyConditions = [],
-  currentSellConditions = []
+  currentSellConditions = [],
+  onConditionsApplied,
 }: AIHelperSidebarProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [sessionId, setSessionId] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(false);
+  const messages = useAIHelperStore((s) => s.messages);
+  const addMessage = useAIHelperStore((s) => s.addMessage);
+  const updateMessage = useAIHelperStore((s) => s.updateMessage);
+  const sessionId = useAIHelperStore((s) => s.sessionId);
+  const setSessionId = useAIHelperStore((s) => s.setSessionId);
+  const isLoading = useAIHelperStore((s) => s.isLoading);
+  const setIsLoading = useAIHelperStore((s) => s.setIsLoading);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // 메시지 추가 시 자동 스크롤
@@ -203,7 +247,7 @@ export function AIHelperSidebar({
       if (isLoading) return;
 
       // 사용자 메시지 추가
-      setMessages((prev) => [...prev, { role: "user", content: value }]);
+      addMessage({ role: "user", content: value });
       setIsLoading(true);
 
       try {
@@ -255,34 +299,36 @@ export function AIHelperSidebar({
 
         // AI 응답 메시지 추가
         const backtestConditions: any = response.backtest_conditions || {};
-        const buyConditions = backtestConditions.buy || backtestConditions || [];
-        const sellConditions = backtestConditions.sell || [];
+        const buyConditions = Array.isArray(backtestConditions)
+          ? backtestConditions
+          : Array.isArray(backtestConditions.buy)
+            ? backtestConditions.buy
+            : [];
+        const sellConditions = Array.isArray(backtestConditions.sell)
+          ? backtestConditions.sell
+          : [];
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: response.answer,
-            backtestConditionsBuy: buyConditions,
-            backtestConditionsSell: sellConditions,
-            appliedBuy: false,
-            appliedSell: false,
-          },
-        ]);
+        addMessage({
+          role: "assistant",
+          content: response.answer,
+          backtestConditionsBuy: buyConditions,
+          backtestConditionsSell: sellConditions,
+          appliedBuy: false,
+          appliedSell: false,
+          backtestConfig: response.backtest_config,
+        });
+
       } catch (error) {
         console.error("Failed to send message:", error);
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "메시지 전송에 실패했습니다. 다시 시도해주세요.",
-          },
-        ]);
+        addMessage({
+          role: "assistant",
+          content: "메시지 전송에 실패했습니다. 다시 시도해주세요.",
+        });
       } finally {
         setIsLoading(false);
       }
     },
-    [sessionId, isLoading, currentBuyConditions, currentSellConditions]
+    [sessionId, isLoading, currentBuyConditions, currentSellConditions, addMessage, setSessionId, setIsLoading]
   );
 
   return (
@@ -312,20 +358,10 @@ export function AIHelperSidebar({
                 message={message}
                 onBuyConditionsAdd={onBuyConditionsAdd}
                 onSellConditionsAdd={onSellConditionsAdd}
-                onBuyApplied={() =>
-                  setMessages((prev) =>
-                    prev.map((m, i) =>
-                      i === index ? { ...m, appliedBuy: true } : m
-                    )
-                  )
-                }
-                onSellApplied={() =>
-                  setMessages((prev) =>
-                    prev.map((m, i) =>
-                      i === index ? { ...m, appliedSell: true } : m
-                    )
-                  )
-                }
+                onBacktestConfigApply={onBacktestConfigApply}
+                onConditionsApplied={onConditionsApplied}
+                onBuyApplied={() => updateMessage(index, { appliedBuy: true })}
+                onSellApplied={() => updateMessage(index, { appliedSell: true })}
               />
             ))}
           </div>

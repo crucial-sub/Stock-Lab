@@ -1100,7 +1100,7 @@ async def clone_strategy_by_session(
             .where(
                 and_(
                     SimulationSession.session_id == session_id,
-                    PortfolioStrategy.is_public == True  # 공개된 전략만
+                    PortfolioStrategy.is_public == True or PortfolioStrategy.user_id == current_user.user_id  # 공개된 전략또는 내 전략일때
                 )
             )
         )

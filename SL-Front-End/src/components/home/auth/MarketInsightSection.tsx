@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
 import { Title } from "@/components/common/Title";
 import type {
   MarketNews,
@@ -17,14 +19,13 @@ export function MarketInsightSection({
   news,
 }: MarketInsightSectionProps) {
   const router = useRouter();
+  const [selectedStock, setSelectedStock] = useState<{
+    name: string;
+    code: string;
+  } | null>(null);
 
   const handleStockClick = (stock: MarketStock) => {
-    const params = new URLSearchParams({
-      tab: "volume",
-      stockCode: stock.id,
-      stockName: stock.name,
-    });
-    router.push(`/market-price?${params.toString()}`);
+    setSelectedStock({ name: stock.name, code: stock.id });
   };
 
   const handleNewsClick = (item: MarketNews) => {
@@ -104,6 +105,12 @@ export function MarketInsightSection({
           </div>
         </article>
       </div>
+      <StockDetailModal
+        isOpen={!!selectedStock}
+        onClose={() => setSelectedStock(null)}
+        stockName={selectedStock?.name || ""}
+        stockCode={selectedStock?.code || ""}
+      />
     </section>
   );
 }

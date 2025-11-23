@@ -32,11 +32,12 @@ export function StrategyCard({
       onClick={onClick}
       className={[
         "bg-surface border border-surface",
-        "rounded-lg",
+        "rounded-[12px]",
         "transition-all duration-200",
         "flex",
         "flex-col",
         "gap-2",
+        "shadow-elev-card-soft",
         "hover:bg-[#FFFFFF0D]",
         "hover:border-brand-purple",
         "hover:shadow-elev-brand",

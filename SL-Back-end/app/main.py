@@ -294,7 +294,7 @@ app.include_router(
 
 app.include_router(
     universes.router,
-    prefix=f"{settings.API_V1_PREFIX}/universes",
+    prefix=settings.API_V1_PREFIX,
     tags=["Universes"]
 )
 

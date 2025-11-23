@@ -27,6 +27,29 @@ except Exception:
     except Exception as e:
         print(f"경고: LangChain RedisCache를 불러오지 못했습니다. 캐시 비활성화. 오류: {e}")
         RedisCache = None
+
+
+class InMemorySessionStore:
+    """대화 세션 스토어 (메모리 기반)."""
+    def __init__(self):
+        self._store: Dict[str, Any] = {}
+
+    def get_or_create(self, key: str, factory: Any) -> Any:
+        if key not in self._store:
+            self._store[key] = factory()
+        return self._store[key]
+
+    def delete(self, key: str) -> None:
+        if key in self._store:
+            del self._store[key]
+
+    def delete_by_suffix(self, suffix: str) -> None:
+        keys = [k for k in self._store.keys() if k.endswith(suffix)]
+        for k in keys:
+            del self._store[k]
+
+    def clear(self) -> None:
+        self._store.clear()
 _pydantic_v1_module = None
 try:
     import pydantic as _pydantic
@@ -194,6 +217,10 @@ class ChatHandler:
         # 챗봇 사용 가이드 캐시
         self.usage_notes: Optional[str] = None
         self.page_guides_cache: Dict[str, str] = {}
+        # 세션 스토어 (메모리 기본, 교체 가능)
+        self.session_store = InMemorySessionStore()
+        # 기존 코드 호환용 (더 이상 직접 사용하지 않는 것을 권장)
+        self.conversation_history = self.session_store._store
 
         self._load_config()
         self._load_forbidden_patterns()
@@ -1227,8 +1254,8 @@ class ChatHandler:
                     break
         return detected
 
-    def _build_category_conditions(self, categories: List[str]) -> List[Dict[str, Any]]:
-        """카테고리별 기본 DSL 조건 묶음 생성."""
+    def _build_category_conditions(self, categories: List[str], message: str = "") -> List[Dict[str, Any]]:
+        """카테고리별 기본 DSL 조건 묶음 생성 + 메시지 숫자 반영."""
         preset: Dict[str, List[Dict[str, Any]]] = {
             "VALUE_QUALITY": [
                 {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 10},
@@ -1278,9 +1305,38 @@ class ChatHandler:
                 {"factor": "RSI_14", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 30},
             ],
         }
+        # 메시지에 나온 숫자를 간단히 반영 (PER/PBR/ROE만 우선)
+        msg_lower = (message or "").lower()
+        numeric_overrides: Dict[str, float] = {}
+        for token, factor in [("per", "PER"), ("pbr", "PBR"), ("roe", "ROE")]:
+            import re
+            m = re.search(rf"{token}\s*([0-9]+\.?[0-9]*)", msg_lower)
+            if m:
+                try:
+                    numeric_overrides[factor] = float(m.group(1))
+                except Exception:
+                    pass
+
         conditions: List[Dict[str, Any]] = []
-        for cat in categories:
-            conditions.extend(preset.get(cat, []))
+        # 숫자 지정이 있다면, 해당 팩터만 최소 조건으로 생성하여 불필요한 프리셋을 제거
+        if numeric_overrides:
+            default_ops = {"PER": "<=", "PBR": "<=", "ROE": ">="}
+            for factor, val in numeric_overrides.items():
+                op = default_ops.get(factor, "<=")
+                conditions.append(
+                    {
+                        "factor": factor,
+                        "params": [],
+                        "operator": op,
+                        "right_factor": None,
+                        "right_params": [],
+                        "value": val,
+                    }
+                )
+        else:
+            for cat in categories:
+                conditions.extend(preset.get(cat, []))
+
         return conditions
 
     def _ensure_ai_helper_actions(self, response: Dict[str, Any]) -> None:
@@ -1300,8 +1356,8 @@ class ChatHandler:
             }
         ]
         response["ui_language"] = ui_language
-        # 기본 버튼이 중복 노출되지 않도록 backtest_conditions는 빈 값으로 남긴다.
-        response["backtest_conditions"] = {"buy": [], "sell": []}
+        # 프런트에서 버튼 렌더를 위해 조건은 그대로 유지
+        response["backtest_conditions"] = backtest_conditions
 
     async def _build_news_response(self, message: str) -> dict:
         """뉴스/테마 요청에 대한 일관된 요약 응답 생성."""
@@ -1341,12 +1397,19 @@ class ChatHandler:
         if not categories:
             return None
 
-        conditions = self._build_category_conditions(categories)
+        conditions = self._build_category_conditions(categories, message=message)
         if not conditions:
             return None
 
         cat_text = ", ".join(categories)
         lines = [f"- {c['factor']} {c['operator']} {c['value']}" for c in conditions]
+        # 매도 의도 탐지
+        msg_lower = message.lower()
+        sell_triggers = ["매도", "팔", "익절", "손절", "청산"]
+        is_sell = any(t in msg_lower for t in sell_triggers)
+        buy_conditions: List[Dict[str, Any]] = conditions if not is_sell else []
+        sell_conditions: List[Dict[str, Any]] = conditions if is_sell else []
+
         answer = (
             "## 요약\n"
             f"{cat_text} 기준으로 스크리닝 조건을 만들었습니다.\n\n"
@@ -1359,8 +1422,8 @@ class ChatHandler:
             "intent": "dsl_suggestion",
             "sources": [],
             "backtest_conditions": {
-                "buy": conditions,
-                "sell": []
+                "buy": buy_conditions,
+                "sell": sell_conditions
             }
         }
 
@@ -2298,6 +2361,15 @@ class ChatHandler:
             return executor
         return self.agent_executors.get("assistant")
 
+    def _get_memory(self, session_id: str, client_type: str):
+        """세션별 대화 메모리 가져오기 (스토어 추상화)."""
+        key = f"{client_type}:{session_id}"
+        return self.session_store.get_or_create(key, ChatMessageHistory)
+
+    def delete_session_history(self, session_id: str) -> None:
+        """세션별 메모리 삭제."""
+        self.session_store.delete_by_suffix(f":{session_id}")
+
     def _process_agent_response(
         self,
         response: dict,
@@ -2386,10 +2458,7 @@ class ChatHandler:
             }
 
         # Get or create conversation memory for the session
-        memory_key = f"{client_type}:{session_id}"
-        if memory_key not in self.conversation_history:
-            self.conversation_history[memory_key] = ChatMessageHistory()
-        memory = self.conversation_history[memory_key]
+        memory = self._get_memory(session_id, client_type)
 
         try:
             # Use asyncio.to_thread to run the synchronous invoke method in a separate thread
@@ -2474,10 +2543,7 @@ class ChatHandler:
             yield {"type": "final", "result": final_response}
             return
 
-        memory_key = f"{client_type}:{session_id}"
-        if memory_key not in self.conversation_history:
-            self.conversation_history[memory_key] = ChatMessageHistory()
-        memory = self.conversation_history[memory_key]
+        memory = self._get_memory(session_id, client_type)
         chat_history = getattr(memory, "messages", []) if memory else []
 
         invoke_input = {

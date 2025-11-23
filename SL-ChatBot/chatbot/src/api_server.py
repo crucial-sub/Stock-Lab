@@ -176,8 +176,7 @@ async def delete_session(session_id: str):
         # 세션 데이터 정리
         if session_id in handler.session_state:
             del handler.session_state[session_id]
-        if session_id in handler.conversation_history:
-            del handler.conversation_history[session_id]
+        handler.delete_session_history(session_id)
 
         return {
             "message": "Session deleted",

@@ -27,6 +27,5 @@ services:
     volumes:
       - ./api:/app
       - ./chatbot:/chatbot
-      - ./mcp-server:/mcp-server
       - ./rag:/rag
     restart: unless-stopped

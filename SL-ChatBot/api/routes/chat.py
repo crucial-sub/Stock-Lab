@@ -281,8 +281,7 @@ async def delete_session(session_id: str):
         )
 
     # Clear session history
-    keys_to_delete = [key for key in chatbot.handler.conversation_history.keys() if key.endswith(f":{session_id}")]
-    for key in keys_to_delete:
-        del chatbot.handler.conversation_history[key]
+    if hasattr(chatbot.handler, "delete_session_history"):
+        chatbot.handler.delete_session_history(session_id)
 
     return {"message": "Session deleted", "session_id": session_id}

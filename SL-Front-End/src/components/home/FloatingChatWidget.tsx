@@ -84,6 +84,25 @@ export function FloatingChatWidget() {
       });
       setSessionId(response.session_id);
 
+      // 백테스트 조건이 있으면 자동 적용
+      const bc = response.backtest_conditions;
+      if (bc) {
+        const mappedBuy: any[] = [];
+        const mappedSell: any[] = [];
+        if (Array.isArray(bc)) {
+          mappedBuy.push(...bc);
+        } else {
+          if (Array.isArray(bc.buy)) mappedBuy.push(...bc.buy);
+          if (Array.isArray(bc.sell)) mappedSell.push(...bc.sell);
+        }
+        if (mappedBuy.length > 0) {
+          setBuyConditionsUI([...buyConditionsUI, ...mappedBuy]);
+        }
+        if (mappedSell.length > 0) {
+          setSellConditionsUI([...sellConditionsUI, ...mappedSell]);
+        }
+      }
+
       pushMessage({
         id: createMessageId(),
         role: "assistant",
@@ -207,7 +226,14 @@ export function FloatingChatWidget() {
                   if (isUser || isSystem) {
                     return <div className="whitespace-pre-wrap">{message.content}</div>;
                   }
-                  const markdown = normalizeMarkdown(message.content);
+                  const markdown = limitBullets(
+                    normalizeMarkdown(message.content)
+                      .split("\n")
+                      .filter((line) => line.trim().length > 0)
+                      .slice(0, 8)
+                      .join("\n"),
+                    4,
+                  );
                   return (
                     <div className={markdownProseClasses}>
                       <ReactMarkdown

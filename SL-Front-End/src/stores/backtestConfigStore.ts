@@ -356,7 +356,11 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
       })),
 
     // 초기화 함수
-    reset: () => set(defaultConfig),
+    reset: () => set({
+      ...defaultConfig,
+      buyConditionsUI: [],
+      sellConditionsUI: [],
+    }),
 
     // BacktestRunRequest 형식으로 데이터 반환
     getBacktestRequest: () => {

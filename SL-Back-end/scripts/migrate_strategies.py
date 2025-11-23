@@ -105,16 +105,16 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
         "peter_lynch": {
             "buy_conditions": [
                 {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 30}, #PER < 30
-                # PEG 조건 제외 (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0}, #PEG > 0
+                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 1.8}, #PEG < 1.8
                 # 재고/매출 조건 제외 (계산 불가)
                 {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150}, # 부채비율 < 150%
                 {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 5}, # ROE > 5%
                 {"name": "D", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 1}, # ROA > 1%
                 # 배당수익률 조건 제외  (계산 불가)
             ],
-            "priority_factor": "기본값({PER})",  # PEG 대신 PER 사용
+            "priority_factor": "기본값({PEG})",
             "priority_order": "asc",
-            # TODO: PEG, 재고/매출 추가 (향후 구현)
         },
         "warren_buffett": {
             "buy_conditions": [
@@ -146,20 +146,20 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
         },
         "bill_ackman": {
             "buy_conditions": [
-                # ROIC 제외 (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 13}, # ROIC > 13%
                 {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20}, # PER < 20
                 {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2}, # PBR < 2
                 {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 150}, # 부채비율 > 150%
                 # FCF 조건 제외 (계산 불가)
                 # 배당수익률 조건 제외  (계산 불가)
             ],
-            "priority_factor": "기본값({PER})",  # ROIC 대신 PER 사용
+            "priority_factor": "기본값({ROIC})",
             "priority_order": "asc",
-            # TODO: ROIC, FCF 추가 (향후 구현)
+            # TODO: FCF 추가 (향후 구현)
         },
         "charlie_munger": {
             "buy_conditions": [
-                # ROIC 제외 (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 15}, # ROIC > 15%
                 {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 10}, # PER < 10
                 {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5}, # PBR < 1.5
                 {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 15}, # ROE > 15
@@ -167,44 +167,43 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
                 {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 50}, # 부채비율 < 50%
                 {"name": "F", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2} # 유동비율 > 2
             ],
-            "priority_factor": "기본값({ROE})",  # ROIC 대신 ROE 사용
+            "priority_factor": "기본값({ROIC})",
             "priority_order": "desc",
-            # TODO: ROIC 추가 (향후 구현)
         },
         "glenn_welling": {
             "buy_conditions": [
-                # EV/EBITDA 제외 (계산 불가)
-                # ROIC 제외 (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({EV/EBITDA})", "inequality": "<", "exp_right_side": 8}, # EV/EBITDA < 8
+                {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 10}, # ROIC < 10%
                 {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5}, # PBR < 1.5
-                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 1.5} # PSR < 1.5
-                # PEG 제외 (계산 불가)
+                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 1.5}, # PSR < 1.5
+                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0}, #PEG > 0
+                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 1}, #PEG < 1
             ],
             "priority_factor": "기본값({PBR})",
             "priority_order": "asc",
-            # TODO: EV/EBITDA, ROIC, PEG(= (PER / EPS성장률)) 추가 (향후 구현)
         },
         "cathie_wood": {
             "buy_conditions": [
-                # PEG 제외 (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0}, #PEG > 0
+                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2}, #PEG < 2
                 {"name": "A", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 20}, # PSR < 20
                 {"name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 20}, # 매출 성장률 > 20%
                 {"name": "C", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2} # 유동비율 > 2
             ],
             "priority_factor": "기본값({REVENUE_GROWTH_1Y})",
             "priority_order": "desc",
-            # TODO: PEG 추가 (향후 구현)
         },
         "glenn_greenberg": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 15}, # PER < 20
-                # ROIC 제외 (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 15}, # PER < 15
+                {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 15}, # ROIC > 15%
                 {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 50}, # 부채비율 < 50%
                 # 총 마진 성장률 조건 제외 (계산 불가)
                 # FCF 조건 제외 (계산 불가)
             ],
             "priority_factor": "기본값({FCF_YIELD})",  # ROIC 대신 FCF_YIELD 사용
             "priority_order": "desc",
-            # TODO: ROIC, 총 마진 성장률, FCF 추가 (향후 구현)
+            # TODO: 총 마진 성장률, FCF 추가 (향후 구현)
         },
         #! 여기서부터는 추가 전략
         

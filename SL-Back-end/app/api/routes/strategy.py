@@ -416,6 +416,30 @@ async def update_strategy_sharing_settings(
         if strategy.user_id != user_id:
             raise HTTPException(status_code=403, detail="이 전략을 수정할 권한이 없습니다")
 
+        # 1.5. 공유 설정 시 백테스트 상태 확인
+        if settings.is_public is True:
+            # 최신 세션 조회
+            session_query = (
+                select(SimulationSession)
+                .where(SimulationSession.strategy_id == strategy_id)
+                .order_by(desc(SimulationSession.created_at))
+                .limit(1)
+            )
+            session_result = await db.execute(session_query)
+            latest_session = session_result.scalar_one_or_none()
+
+            if latest_session:
+                if latest_session.status == "RUNNING":
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="백테스트 진행 중인 포트폴리오는 공유할 수 없습니다."
+                    )
+                elif latest_session.status == "FAILED":
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="백테스트 실패한 포트폴리오는 공유할 수 없습니다."
+                    )
+
         # 2. is_public 변경 여부 확인 (Redis 동기화용)
         old_is_public = strategy.is_public
 

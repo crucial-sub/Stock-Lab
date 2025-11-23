@@ -108,6 +108,17 @@ except ImportError:
         print(f"경고: ChatMessageHistory를 불러오지 못했습니다. pip install langchain-community 실행 필요. 오류: {e}")
         ChatMessageHistory = None
 
+# 토큰 스트리밍 콜백
+AsyncIteratorCallbackHandler = None
+try:
+    from langchain.callbacks import AsyncIteratorCallbackHandler  # type: ignore
+except ImportError:
+    try:
+        from langchain.callbacks.base import AsyncIteratorCallbackHandler  # type: ignore
+    except ImportError as e:
+        print(f"경고: AsyncIteratorCallbackHandler를 불러오지 못했습니다. LangChain 버전을 확인하세요. 오류: {e}")
+        AsyncIteratorCallbackHandler = None
+
 # Load environment variables
 env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(env_path)
@@ -504,7 +515,7 @@ class ChatHandler:
                 chatbedrock_kwargs = {
                     "client": bedrock_client,
                     "model_kwargs": model_kwargs,
-                    "streaming": False,
+                    "streaming": True,
                 }
                 # inference_profile_id를 사용하면 provider 지정이 필요하다.
                 if inference_profile_id:
@@ -2029,6 +2040,70 @@ class ChatHandler:
             return executor
         return self.agent_executors.get("assistant")
 
+    def _process_agent_response(
+        self,
+        response: dict,
+        message: str,
+        memory: Optional[Any],
+        intent: str,
+        context: str,
+    ) -> dict:
+        """에이전트 응답을 파싱하고 메모리/부가 데이터까지 정리."""
+        answer = response.get("output", "No response generated.")
+        if isinstance(answer, list):
+            formatted_parts = []
+            for element in answer:
+                if isinstance(element, str):
+                    formatted_parts.append(element)
+                elif isinstance(element, dict):
+                    text = element.get("text") or element.get("message") or element.get("output")
+                    if isinstance(text, str):
+                        formatted_parts.append(text)
+                    else:
+                        formatted_parts.append(str(text))
+                else:
+                    formatted_parts.append(str(element))
+            answer = "\n".join(formatted_parts)
+
+        answer = self._clean_tool_calls_from_response(answer)
+
+        if memory:
+            memory.add_user_message(message)
+            memory.add_ai_message(answer)
+
+        backtest_conditions = None
+        intermediate_steps = response.get("intermediate_steps", [])
+        print(f"DEBUG: intermediate_steps count: {len(intermediate_steps)}")
+
+        for i, step in enumerate(intermediate_steps):
+            print(f"DEBUG: Step {i}: type={type(step)}, len={len(step) if hasattr(step, '__len__') else 'N/A'}")
+            if len(step) >= 2:
+                action, result = step[0], step[1]
+                print(f"DEBUG: Action type: {type(action)}, has tool attr: {hasattr(action, 'tool')}")
+                if hasattr(action, 'tool'):
+                    print(f"DEBUG: Action.tool = '{action.tool}'")
+                print(f"DEBUG: Result type: {type(result)}, content: {result}")
+
+                if hasattr(action, 'tool') and action.tool == 'build_backtest_conditions':
+                    print(f"DEBUG: Found build_backtest_conditions tool!")
+                    if isinstance(result, dict) and result.get("success"):
+                        backtest_conditions = result.get("conditions", [])
+                        print(f"DEBUG: Extracted conditions: {backtest_conditions}")
+                        break
+                    else:
+                        print(f"DEBUG: Result not successful or not dict: {result}")
+
+        result_dict = {
+            "answer": answer,
+            "intent": intent,
+            "context": context
+        }
+
+        if backtest_conditions:
+            result_dict["backtest_conditions"] = backtest_conditions
+
+        return result_dict
+
     async def _generate_response_langchain(
         self,
         message: str,
@@ -2086,64 +2161,13 @@ class ChatHandler:
                     invoke_input
                 )
 
-            answer = response.get("output", "No response generated.")
-            if isinstance(answer, list):
-                formatted_parts = []
-                for element in answer:
-                    if isinstance(element, str):
-                        formatted_parts.append(element)
-                    elif isinstance(element, dict):
-                        text = element.get("text") or element.get("message") or element.get("output")
-                        if isinstance(text, str):
-                            formatted_parts.append(text)
-                        else:
-                            formatted_parts.append(str(text))
-                    else:
-                        formatted_parts.append(str(element))
-                answer = "\n".join(formatted_parts)
-
-
-            answer = self._clean_tool_calls_from_response(answer)
-
-            # Manually save conversation history to the session's memory
-            if memory:
-                memory.add_user_message(message)
-                memory.add_ai_message(answer)
-
-            # Extract backtest conditions from intermediate steps if build_backtest_conditions was called
-            backtest_conditions = None
-            intermediate_steps = response.get("intermediate_steps", [])
-            print(f"DEBUG: intermediate_steps count: {len(intermediate_steps)}")
-
-            for i, step in enumerate(intermediate_steps):
-                print(f"DEBUG: Step {i}: type={type(step)}, len={len(step) if hasattr(step, '__len__') else 'N/A'}")
-                if len(step) >= 2:
-                    action, result = step[0], step[1]
-                    print(f"DEBUG: Action type: {type(action)}, has tool attr: {hasattr(action, 'tool')}")
-                    if hasattr(action, 'tool'):
-                        print(f"DEBUG: Action.tool = '{action.tool}'")
-                    print(f"DEBUG: Result type: {type(result)}, content: {result}")
-
-                    # Check if this was a build_backtest_conditions tool call
-                    if hasattr(action, 'tool') and action.tool == 'build_backtest_conditions':
-                        print(f"DEBUG: Found build_backtest_conditions tool!")
-                        if isinstance(result, dict) and result.get("success"):
-                            backtest_conditions = result.get("conditions", [])
-                            print(f"DEBUG: Extracted conditions: {backtest_conditions}")
-                            break
-                        else:
-                            print(f"DEBUG: Result not successful or not dict: {result}")
-
-            result_dict = {
-                "answer": answer,
-                "intent": intent,
-                "context": context
-            }
-
-            if backtest_conditions:
-                result_dict["backtest_conditions"] = backtest_conditions
-
-            return result_dict
+            return self._process_agent_response(
+                response=response,
+                message=message,
+                memory=memory,
+                intent=intent,
+                context=context,
+            )
         except Exception as e:
             error_str = str(e)
             self._log_agent_error(
@@ -2164,6 +2188,102 @@ class ChatHandler:
                 "answer": user_message,
                 "intent": intent
             }
+
+    async def stream_response_langchain(
+        self,
+        message: str,
+        intent: str,
+        context: str,
+        session_id: Optional[str],
+        client_type: str = "assistant",
+    ) -> Any:
+        """LangChain 에이전트를 스트리밍으로 실행해 토큰을 yield."""
+        executor = self._get_agent_executor(client_type)
+        if not executor or not AsyncIteratorCallbackHandler:
+            # 스트리밍 콜백을 사용할 수 없으면 기존 방식으로 전체 응답 반환
+            final_response = await self._generate_response_langchain(
+                message=message,
+                intent=intent,
+                context=context,
+                session_id=session_id,
+                client_type=client_type,
+            )
+            yield {"type": "final", "result": final_response}
+            return
+
+        memory_key = f"{client_type}:{session_id}"
+        if memory_key not in self.conversation_history:
+            self.conversation_history[memory_key] = ChatMessageHistory()
+        memory = self.conversation_history[memory_key]
+        chat_history = getattr(memory, "messages", []) if memory else []
+
+        invoke_input = {
+            "input": message,
+            "context": context,
+            "chat_history": chat_history,
+            "agent_scratchpad": ""
+        }
+
+        callback = AsyncIteratorCallbackHandler()
+        response_holder: Dict[str, Any] = {}
+
+        async def _invoke_agent():
+            if hasattr(executor, "ainvoke"):
+                response_holder["response"] = await executor.ainvoke(
+                    invoke_input,
+                    config={"callbacks": [callback]},
+                )
+            else:
+                response_holder["response"] = await asyncio.to_thread(
+                    executor.invoke,
+                    invoke_input,
+                    config={"callbacks": [callback]},
+                )
+
+        task = asyncio.create_task(_invoke_agent())
+
+        try:
+            async for token in callback.aiter():
+                yield {"type": "token", "content": token}
+        except Exception as e:
+            self._log_agent_error(
+                error=e,
+                intent=intent,
+                client_type=client_type,
+                message=message,
+                context=context,
+            )
+            raise
+        finally:
+            await task
+
+        if task.cancelled():
+            return
+
+        if task.exception():
+            raise task.exception()
+
+        response = response_holder.get("response")
+        if not response:
+            yield {
+                "type": "final",
+                "result": {
+                    "answer": "스트리밍 응답 생성에 실패했습니다.",
+                    "intent": intent,
+                    "context": context,
+                },
+            }
+            return
+
+        result_dict = self._process_agent_response(
+            response=response,
+            message=message,
+            memory=memory,
+            intent=intent,
+            context=context,
+        )
+
+        yield {"type": "final", "result": result_dict}
 
     def _log_agent_error(
         self,

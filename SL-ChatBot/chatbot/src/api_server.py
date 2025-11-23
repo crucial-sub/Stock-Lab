@@ -1,5 +1,4 @@
 """LLM Chat API Server - FastAPI 기반"""
-import asyncio
 import json
 import uuid
 from fastapi import FastAPI, HTTPException, Query
@@ -260,47 +259,121 @@ async def generate_sse_stream(
     message_id = f"msg_{uuid.uuid4().hex[:12]}"
 
     try:
-        # stream_start 이벤트 전송
         yield f"data: {json.dumps({'type': 'stream_start', 'messageId': message_id}, ensure_ascii=False)}\n\n"
 
-        # 전체 응답 생성 (기존 handler.handle 호출)
-        result = await handler.handle(message=message, session_id=session_id)
-        answer = result.get("answer", "")
+        # === 1) 스트리밍이 아닌 빠른 응답 케이스 선처리 ===
+        client_type = handler._route_client_type(message)
 
-        # 토큰 단위 분할 및 전송 (5-10 토큰씩 배칭)
-        # 간단한 구현: 단어 단위로 분할 (공백 기준)
-        words = answer.split()
-        batch_size = 7  # 평균 배칭 크기
+        # 설문/전략 추천 플로우는 기존 handle로 처리
+        if handler._is_strategy_request(message) or handler._is_simple_greeting(message):
+            result = await handler.handle(message=message, session_id=session_id)
+            answer = result.get("answer", "")
+            if answer:
+                yield f"data: {json.dumps({'type': 'stream_chunk', 'content': answer, 'format': 'markdown'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'stream_end', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+            return
 
-        for i in range(0, len(words), batch_size):
-            batch = words[i:i + batch_size]
-            chunk_content = " ".join(batch)
+        news_hint = handler._needs_news_keyword(message)
+        if news_hint:
+            yield f"data: {json.dumps({'type': 'stream_chunk', 'content': news_hint, 'format': 'markdown'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'stream_end', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+            return
 
-            # 마지막 청크가 아니면 공백 추가
-            if i + batch_size < len(words):
-                chunk_content += " "
+        policy_violation = handler._check_investment_advisory_policy(message, session_id=session_id)
+        if policy_violation:
+            yield f"data: {json.dumps({'type': 'stream_chunk', 'content': policy_violation, 'format': 'markdown'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'stream_end', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+            return
 
-            # stream_chunk 이벤트 전송
+        category_response = handler._maybe_handle_category_mapping(message)
+        if category_response:
+            answer = category_response.get("answer", "")
+            if answer:
+                yield f"data: {json.dumps({'type': 'stream_chunk', 'content': answer, 'format': 'markdown'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'stream_end', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+            return
+
+        handler._ensure_news_retriever()
+        if handler._is_news_theme_request(message) and not handler.news_retriever:
+            unavailable_answer = handler._format_news_unavailable(message)
+            yield f"data: {json.dumps({'type': 'stream_chunk', 'content': unavailable_answer, 'format': 'markdown'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'stream_end', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+            return
+
+        # === 2) 에이전트 입력 준비 ===
+        intent = await handler._classify_intent(message)
+        if client_type == "ai_helper" and intent not in {"dsl_generation", "backtest_configuration", "explain"}:
+            intent = "dsl_generation"
+
+        if client_type == "home_widget":
+            context = ""
+        else:
+            context = await handler._retrieve_context(message, intent)
+
+        news_context = ""
+        if handler._is_news_theme_request(message) and handler.news_retriever:
+            news_context = await handler._fetch_news_for_context(message)
+            sentiment_context = await handler._fetch_sentiment_for_context(message)
+
+            combined_context = ""
+            if news_context:
+                combined_context += f"[최신 뉴스 정보]\n{news_context}"
+            if sentiment_context:
+                combined_context += f"\n\n[감성 분석 데이터]\n{sentiment_context}"
+
+            if combined_context:
+                context = f"{context}\n\n{combined_context}" if context else combined_context
+
+        if intent == "backtest_configuration":
+            result = handler._handle_backtest_configuration(message, session_id)
+            answer = result.get("answer", "")
+            if answer:
+                yield f"data: {json.dumps({'type': 'stream_chunk', 'content': answer, 'format': 'markdown'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'stream_end', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+            return
+
+        # === 3) LangChain 스트리밍 실행 ===
+        final_result = None
+        tokens_sent = False
+        async for event in handler.stream_response_langchain(
+            message=message,
+            intent=intent,
+            context=context,
+            session_id=session_id,
+            client_type=client_type,
+        ):
+            if event.get("type") == "token":
+                chunk_event = {
+                    "type": "stream_chunk",
+                    "content": event.get("content", ""),
+                    "format": "markdown"
+                }
+                yield f"data: {json.dumps(chunk_event, ensure_ascii=False)}\n\n"
+                tokens_sent = True
+            elif event.get("type") == "final":
+                final_result = event.get("result", {})
+
+        # 스트리밍 토큰이 없었던 경우 최종 응답이라도 단일 청크로 전달
+        if final_result and not tokens_sent and final_result.get("answer"):
             chunk_event = {
                 "type": "stream_chunk",
-                "content": chunk_content,
+                "content": final_result.get("answer", ""),
                 "format": "markdown"
             }
             yield f"data: {json.dumps(chunk_event, ensure_ascii=False)}\n\n"
 
-            # 200ms 대기 (토큰 배칭 시뮬레이션)
-            await asyncio.sleep(0.2)
-
-        # ui_language가 있으면 전송
-        if result.get("ui_language"):
+        if final_result and final_result.get("ui_language"):
             ui_language_event = {
                 "type": "ui_language",
-                "data": result["ui_language"]
+                "data": final_result["ui_language"]
             }
             yield f"data: {json.dumps(ui_language_event, ensure_ascii=False)}\n\n"
 
         # stream_end 이벤트 전송
-        yield f"data: {json.dumps({'type': 'stream_end', 'messageId': message_id}, ensure_ascii=False)}\n\n"
+        end_payload = {"type": "stream_end", "messageId": message_id}
+        if final_result and final_result.get("backtest_conditions"):
+            end_payload["backtest_conditions"] = final_result["backtest_conditions"]
+        yield f"data: {json.dumps(end_payload, ensure_ascii=False)}\n\n"
 
     except Exception as e:
         # 에러 이벤트 전송

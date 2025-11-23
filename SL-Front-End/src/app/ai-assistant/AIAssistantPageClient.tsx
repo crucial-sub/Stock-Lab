@@ -866,7 +866,7 @@ export function AIAssistantPageClient({
             {/* 스크롤 가능한 메시지 영역 - 스크롤바 숨김 */}
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto mb-4 px-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+              className="flex-1 overflow-y-auto mb-4 px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             >
               <div className="w-full max-w-[1000px] mx-auto">
                 <ChatHistory

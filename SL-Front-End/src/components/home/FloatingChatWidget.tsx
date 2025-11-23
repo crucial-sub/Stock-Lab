@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { sendChatMessage } from "@/lib/api/chatbot";
 import { markdownComponents, markdownProseClasses } from "@/components/ai-assistant/renderers/shared/MarkdownComponents";
-import { normalizeMarkdown } from "@/lib/markdown-utils";
+import { normalizeMarkdown, limitBullets } from "@/lib/markdown-utils";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 
 type MessageRole = "assistant" | "user" | "system";
@@ -152,7 +152,7 @@ export function FloatingChatWidget() {
       </button>
 
       {isOpen ? (
-        <div className="fixed bottom-24 right-6 z-30 w-[23rem] max-w-[92vw] rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed bottom-24 right-6 z-30 w-[32rem] max-w-[92vw] rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center justify-between rounded-t-2xl bg-gradient-to-r from-blue-600 to-indigo-500 px-4 py-3 text-white">
             <div>
               <p className="text-sm font-semibold">AI 어시스턴트</p>
@@ -295,7 +295,7 @@ export function FloatingChatWidget() {
             <form onSubmit={handleSubmit} className="border-t border-slate-200 p-3">
               <div className="flex gap-2">
                 <textarea
-                  className="h-16 flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="h-10 flex-1 resize-none rounded-[12px] border border-slate-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   placeholder="예: 퀀트투자가 뭐야?"
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
@@ -305,7 +305,7 @@ export function FloatingChatWidget() {
                 <button
                   type="submit"
                   disabled={isSending || !inputValue.trim()}
-                  className="h-16 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition enabled:hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="h-10 rounded-[12px] bg-blue-600 px-4 text-sm font-semibold text-white transition enabled:hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {isSending ? "전송중" : "보내기"}
                 </button>

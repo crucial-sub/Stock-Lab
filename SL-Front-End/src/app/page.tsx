@@ -19,6 +19,7 @@ export default async function HomePage() {
 
   let userName = "게스트";
   let hasKiwoomAccount = false;
+  let aiRecommendationBlock = false;
   let kiwoomAccountData = null;
   let performanceChartData = null;
   let marketStocks: MarketStock[] = [];
@@ -39,6 +40,7 @@ export default async function HomePage() {
       const userInfo = await authApi.getCurrentUserServer(token);
       userName = userInfo.nickname || "사용자";
       hasKiwoomAccount = userInfo.has_kiwoom_account || false;
+      aiRecommendationBlock = userInfo.ai_recommendation_block || false;
 
       // 2. 키움 계좌 연동되어 있으면 잔고 조회
       if (hasKiwoomAccount) {
@@ -167,6 +169,7 @@ export default async function HomePage() {
       userName={userName}
       isLoggedIn={isLoggedIn}
       hasKiwoomAccount={hasKiwoomAccount}
+      aiRecommendationBlock={aiRecommendationBlock}
       kiwoomAccountData={kiwoomAccountData}
       performanceChartData={performanceChartData}
       dashboardData={dashboardData}

@@ -15,6 +15,7 @@ import {
   GuestPortfolioSection,
 } from "@/components/home/guest";
 import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
+import { authApi } from "@/lib/api/auth";
 import { marketQuoteApi } from "@/lib/api/market-quote";
 import { fetchLatestNews } from "@/lib/api/news";
 import type {
@@ -63,6 +64,7 @@ interface HomePageClientProps {
   userName: string;
   isLoggedIn: boolean;
   hasKiwoomAccount: boolean;
+  aiRecommendationBlock: boolean;
   kiwoomAccountData: KiwoomAccountData | null;
   performanceChartData: AccountPerformanceChart | null;
   dashboardData: DashboardData;
@@ -259,6 +261,7 @@ export function HomePageClient({
   userName,
   isLoggedIn,
   hasKiwoomAccount,
+  aiRecommendationBlock,
   kiwoomAccountData,
   performanceChartData,
   dashboardData,
@@ -266,7 +269,9 @@ export function HomePageClient({
   marketNewsInitial,
 }: HomePageClientProps) {
   const router = useRouter();
-  const [isAssistantCtaDismissed, setIsAssistantCtaDismissed] = useState(false);
+  const [isAssistantCtaDismissed, setIsAssistantCtaDismissed] = useState(
+    aiRecommendationBlock,
+  );
   const normalizeStock = useCallback(
     (item: MarketStock): MarketStock => ({
       ...item,
@@ -396,8 +401,13 @@ export function HomePageClient({
   const handleAssistantCtaClick = useCallback(() => {
     router.push("/ai-assistant?autoStart=questionnaire");
   }, [router]);
-  const handleAssistantCtaDismiss = useCallback(() => {
+  const handleAssistantCtaDismiss = useCallback(async () => {
     setIsAssistantCtaDismissed(true);
+    try {
+      await authApi.updateAIRecommendation(true);
+    } catch (error) {
+      console.error("Failed to update AI recommendation block:", error);
+    }
   }, []);
 
   if (!isLoggedIn) {

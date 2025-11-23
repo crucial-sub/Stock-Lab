@@ -47,6 +47,7 @@ class UserResponse(UserBase):
     is_superuser: bool
     created_at: datetime
     has_kiwoom_account: bool = False  # 키움 계좌 연동 여부
+    ai_recommendation_block: bool = False  # AI 추천 블록 여부
 
     model_config = ConfigDict(from_attributes=True)
 

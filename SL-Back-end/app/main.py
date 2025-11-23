@@ -246,7 +246,7 @@ app.include_router(
 
 app.include_router(
     market_quote.router,
-    prefix=settings.API_V1_PREFIX,
+    prefix="",  # 라우터 자체에 /market 경로 포함
     tags=["Market Quote"]
 )
 
@@ -276,7 +276,7 @@ app.include_router(
 
 app.include_router(
     investment_strategy.router,
-    prefix=f"{settings.API_V1_PREFIX}/strategies",
+    prefix=f"{settings.API_V1_PREFIX}/investment-strategies",
     tags=["Investment Strategy"]
 )
 
@@ -294,7 +294,7 @@ app.include_router(
 
 app.include_router(
     universes.router,
-    prefix=f"{settings.API_V1_PREFIX}/universes",
+    prefix=settings.API_V1_PREFIX,
     tags=["Universes"]
 )
 

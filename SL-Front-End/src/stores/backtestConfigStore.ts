@@ -126,7 +126,6 @@ const defaultConfig: BacktestRunRequest = {
   condition_sell: null, // 토글 off
   trade_targets: {
     use_all_stocks: true,
-    selected_universes: [],
     selected_themes: [],
     selected_stocks: [],
   },

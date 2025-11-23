@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 
 /**
  * 포트폴리오 카드
@@ -158,10 +158,10 @@ export function PortfolioCard({
               e.stopPropagation(); // 카드 클릭 이벤트 전파 방지
               onSelect(id);
             }}
-            className="w-5 h-5"
+            className="relative shrink-0 w-10 h-[1.875rem] flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             aria-label={isSelected ? "선택 해제" : "선택"}
           >
-            <div className="relative w-full h-full">
+            <div className="relative w-5 h-5 pointer-events-none">
               <Image
                 src={
                   isSelected

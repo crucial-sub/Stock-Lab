@@ -326,7 +326,12 @@ class BacktestEngine:
 
             # 순차 데이터 로딩 (SQLAlchemy AsyncSession은 동시 작업 미지원)
             price_data = await self._load_price_data(start_date, end_date, target_themes, target_stocks, target_universes)
-            financial_data = await self._load_financial_data(start_date, end_date)
+
+            # 🔥 가격 데이터에서 실제 선택된 종목 코드 추출 (테마 필터링 결과 반영)
+            actual_stocks = price_data['stock_code'].unique().tolist() if not price_data.empty else []
+            logger.info(f"🎯 실제 선택된 종목: {len(actual_stocks)}개")
+
+            financial_data = await self._load_financial_data(start_date, end_date, actual_stocks)
 
             # 1.5. 기존 백테스트 결과 삭제 (재실행 시 중복 방지)
             from sqlalchemy import delete
@@ -523,32 +528,34 @@ class BacktestEngine:
                 # 캐시 데이터를 DataFrame으로 변환
                 df = pd.DataFrame(cached_data)
 
-                # 메모리에서 필터링 적용
+                # 메모리에서 필터링 적용 (AND 로직)
                 if target_themes or target_stocks or target_universes:
-                    filter_mask = pd.Series([False] * len(df))
+                    if target_stocks:
+                        # 개별 종목 선택 시 다른 필터 무시
+                        filter_mask = df['stock_code'].isin(target_stocks) if 'stock_code' in df.columns else pd.Series([False] * len(df))
+                        logger.info(f"🎯 개별 종목 필터만 적용 (메모리): {len(target_stocks)}개")
+                    else:
+                        # 유니버스 & 테마를 AND로 결합
+                        filter_mask = pd.Series([True] * len(df))  # 시작은 모두 True
 
-                    if target_themes and 'industry' in df.columns:
-                        filter_mask |= df['industry'].isin(target_themes)
-                        logger.info(f"🎯 테마 필터 (메모리): {len(target_themes)}개 산업")
+                        if target_themes and 'industry' in df.columns:
+                            filter_mask &= df['industry'].isin(target_themes)
+                            logger.info(f"🎯 테마 AND 필터 (메모리): {len(target_themes)}개 산업")
 
-                    if target_stocks and 'stock_code' in df.columns:
-                        filter_mask |= df['stock_code'].isin(target_stocks)
-                        logger.info(f"🎯 개별 종목 필터 (메모리): {len(target_stocks)}개")
-
-                    if target_universes:
-                        # 유니버스 종목 코드 조회
-                        from app.services.universe_service import UniverseService
-                        universe_service = UniverseService(self.db)
-                        universe_stock_codes = await universe_service.get_stock_codes_by_universes(
-                            target_universes,
-                            trade_date=start_date.strftime("%Y%m%d")
-                        )
-                        if universe_stock_codes and 'stock_code' in df.columns:
-                            filter_mask |= df['stock_code'].isin(universe_stock_codes)
-                            logger.info(f"🎯 유니버스 필터 (메모리): {len(universe_stock_codes)}개 종목")
+                        if target_universes:
+                            # 유니버스 종목 코드 조회
+                            from app.services.universe_service import UniverseService
+                            universe_service = UniverseService(self.db)
+                            universe_stock_codes = await universe_service.get_stock_codes_by_universes(
+                                target_universes,
+                                trade_date=start_date.strftime("%Y%m%d")
+                            )
+                            if universe_stock_codes and 'stock_code' in df.columns:
+                                filter_mask &= df['stock_code'].isin(universe_stock_codes)
+                                logger.info(f"🎯 유니버스 AND 필터 (메모리): {len(universe_stock_codes)}개 종목")
 
                     df = df[filter_mask]
-                    logger.info(f"✅ 필터링 후: {len(df)}개 레코드")
+                    logger.info(f"✅ AND 필터링 후: {len(df)}개 레코드")
 
                 return df
         except Exception as e:
@@ -593,12 +600,18 @@ class BacktestEngine:
                 else:
                     logger.warning(f"⚠️ 유니버스에 종목이 없습니다: {target_universes}")
 
-            # OR 조건으로 결합 (테마 또는 개별 종목 또는 유니버스)
-            logger.info(f"🔍 필터 조건 개수: {len(filter_conditions)} (OR 결합)")
-            if len(filter_conditions) > 1:
-                conditions.append(or_(*filter_conditions))
-            elif len(filter_conditions) == 1:
-                conditions.append(filter_conditions[0])
+            # AND 조건으로 결합 (유니버스 AND 테마로 교집합 필터링)
+            # 개별 종목은 OR로 추가 (개별 종목 선택 시 다른 필터 무시)
+            logger.info(f"🔍 필터 조건 개수: {len(filter_conditions)} (AND 결합)")
+            if target_stocks:
+                # 개별 종목이 있으면 개별 종목만 사용 (다른 필터 무시)
+                conditions.append(Company.stock_code.in_(target_stocks))
+                logger.info(f"✅ 개별 종목 필터만 적용")
+            else:
+                # 유니버스와 테마를 AND로 결합
+                for condition in filter_conditions:
+                    conditions.append(condition)
+                logger.info(f"✅ 유니버스 & 테마 AND 필터 적용")
 
         query = select(
             StockPrice.company_id,
@@ -650,15 +663,18 @@ class BacktestEngine:
 
         return df
 
-    async def _load_financial_data(self, start_date: date, end_date: date) -> pd.DataFrame:
+    async def _load_financial_data(self, start_date: date, end_date: date, target_stocks: List[str] = None) -> pd.DataFrame:
         """재무 데이터 로드 + Redis 캐싱"""
 
         logger.info(f"📊 재무 데이터 로드 시작: {start_date} ~ {end_date}")
+        if target_stocks:
+            logger.info(f"🎯 필터링 대상: {len(target_stocks)}개 종목")
 
-        # 🚀 Redis 캐시 키 생성
+        # 🚀 Redis 캐시 키 생성 (종목 필터링 포함)
         from app.core.cache import get_cache
         cache = get_cache()
-        cache_key = f"financial_data:{start_date}:{end_date}"
+        stocks_str = ','.join(sorted(target_stocks)) if target_stocks else 'ALL'
+        cache_key = f"financial_data:{start_date}:{end_date}:{stocks_str}"
 
         # 🚀 캐시 조회
         try:
@@ -704,7 +720,8 @@ class BacktestEngine:
                 FinancialStatement.bsns_year >= start_year,
                 FinancialStatement.bsns_year <= end_year,
                 IncomeStatement.account_nm.in_([
-                    '매출액', '매출', '영업수익',
+                    # 매출액 (연도별로 다른 이름)
+                    '매출액', '매출', '영업수익', '수익(매출액)',
                     '영업이익', '영업이익(손실)',
                     '당기순이익', '당기순이익(손실)',
                     '매출총이익', '매출원가'
@@ -746,6 +763,11 @@ class BacktestEngine:
         # 계정 과목 정규화 (연도별 차이 해결)
         if not income_df.empty:
             income_df['account_nm'] = income_df['account_nm'].str.replace('당기순이익(손실)', '당기순이익', regex=False)
+            # 매출액 정규화 (여러 이름을 '매출액'으로 통일)
+            income_df['account_nm'] = income_df['account_nm'].str.replace('영업수익', '매출액', regex=False)
+            income_df['account_nm'] = income_df['account_nm'].str.replace('수익(매출액)', '매출액', regex=False)
+            income_df['account_nm'] = income_df['account_nm'].str.replace('매출', '매출액', regex=False)
+            logger.info("매출액 계정명 정규화 완료")
 
         # 데이터 통합 및 피벗
         if not income_df.empty:
@@ -823,6 +845,15 @@ class BacktestEngine:
                     else row.get('매출액'),
                     axis=1
                 )
+
+            # 🔥 필터링: 선택한 종목만 (DB 로드 이후 필터링)
+            if target_stocks and not financial_df.empty:
+                before_count = len(financial_df)
+                before_stocks = financial_df['stock_code'].nunique()
+                financial_df = financial_df[financial_df['stock_code'].isin(target_stocks)]
+                after_count = len(financial_df)
+                after_stocks = financial_df['stock_code'].nunique()
+                logger.info(f"🎯 재무 데이터 필터링: {before_count}건({before_stocks}종목) → {after_count}건({after_stocks}종목)")
 
             logger.info(f"Loaded financial data for {financial_df['stock_code'].nunique()} companies")
 
@@ -1859,6 +1890,57 @@ class BacktestEngine:
                         cagr = (pow(float(current_asset) / float(past_asset), 1/3) - 1) * 100
                         entry['ASSET_GROWTH_3Y'] = cagr
 
+                # OPERATING_PROFIT_GROWTH_3Y (영업이익 CAGR 3Y)
+                if '영업이익' in current.columns and '영업이익' in past_3y.columns:
+                    current_op = current.select('영업이익').to_pandas().iloc[0, 0]
+                    past_op = past_3y.select('영업이익').to_pandas().iloc[0, 0]
+                    if current_op and past_op and past_op > 0 and current_op > 0:
+                        cagr = (pow(float(current_op) / float(past_op), 1/3) - 1) * 100
+                        entry['OPERATING_PROFIT_GROWTH_3Y'] = cagr
+
+                # GROSS_MARGIN_GROWTH (총 마진 성장률 3Y CAGR)
+                if '매출액' in current.columns and '매출원가' in current.columns and '매출액' in past_3y.columns and '매출원가' in past_3y.columns:
+                    current_revenue = current.select('매출액').to_pandas().iloc[0, 0]
+                    current_cogs = current.select('매출원가').to_pandas().iloc[0, 0]
+                    past_revenue = past_3y.select('매출액').to_pandas().iloc[0, 0]
+                    past_cogs = past_3y.select('매출원가').to_pandas().iloc[0, 0]
+                    if current_revenue and current_cogs and past_revenue and past_cogs and current_revenue > 0 and past_revenue > 0:
+                        current_gross_margin = ((float(current_revenue) - float(current_cogs)) / float(current_revenue)) * 100
+                        past_gross_margin = ((float(past_revenue) - float(past_cogs)) / float(past_revenue)) * 100
+                        if past_gross_margin > 0:
+                            cagr = (pow(current_gross_margin / past_gross_margin, 1/3) - 1) * 100
+                            entry['GROSS_MARGIN_GROWTH'] = cagr
+
+            # EPS 성장률 계산 (YoY, QoQ)
+            if not past_1y.is_empty():
+                # EPS_GROWTH_YOY (EPS 전년 대비 성장률)
+                if '당기순이익' in current.columns and '당기순이익' in past_1y.columns:
+                    current_income = current.select('당기순이익').to_pandas().iloc[0, 0]
+                    past_income = past_1y.select('당기순이익').to_pandas().iloc[0, 0]
+                    # EPS는 순이익/발행주식수로 계산하지만, 여기서는 순이익 증가율로 근사
+                    if current_income and past_income and past_income != 0:
+                        if past_income > 0:
+                            yoy_growth = ((float(current_income) / float(past_income)) - 1) * 100
+                            entry['EPS_GROWTH_YOY'] = yoy_growth
+
+            # EPS_GROWTH_QOQ (EPS 분기 대비 성장률)
+            # 최근 2개 분기 데이터 가져오기
+            recent_quarters = stock_data.filter(
+                (pl.col('available_date') <= calc_date) &
+                (pl.col('reprt_code').is_in(['11013', '11012', '11014']))  # 1Q, 반기, 3Q (11011 연간 제외)
+            ).sort('available_date', descending=True).head(2)
+
+            if len(recent_quarters) >= 2:
+                latest_q = recent_quarters.head(1)
+                prev_q = recent_quarters.tail(1)
+                if '당기순이익' in latest_q.columns and '당기순이익' in prev_q.columns:
+                    latest_income = latest_q.select('당기순이익').to_pandas().iloc[0, 0]
+                    prev_income = prev_q.select('당기순이익').to_pandas().iloc[0, 0]
+                    if latest_income and prev_income and prev_income != 0:
+                        if prev_income > 0:
+                            qoq_growth = ((float(latest_income) / float(prev_income)) - 1) * 100
+                            entry['EPS_GROWTH_QOQ'] = qoq_growth
+
         return factors
 
     def _calculate_stability_factors(self, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
@@ -2410,7 +2492,10 @@ class BacktestEngine:
             # FCF_YIELD (잉여현금흐름수익률)
             if ocf and ocf > 0:
                 # FCF = 영업현금흐름 - CAPEX (간단히 영업현금흐름으로 근사)
-                entry['FCF_YIELD'] = (float(ocf) / market_cap) * 100
+                fcf = float(ocf)  # 실제로는 영업현금흐름 - 투자현금흐름
+                entry['FCF_YIELD'] = (fcf / market_cap) * 100
+                # FREE_CASH_FLOW (잉여현금흐름 절대값, 단위: 억원)
+                entry['FREE_CASH_FLOW'] = fcf / 100000000  # 원 → 억원
 
             # EV/EBITDA, EV/SALES (기업가치 배수)
             debt = row.get('부채총계')

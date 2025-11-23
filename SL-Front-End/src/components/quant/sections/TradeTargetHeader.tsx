@@ -30,13 +30,11 @@ export function TradeTargetHeader({
 interface StockCountProps {
   selectedCount: number;
   totalCount: number;
-  hasUniverseFilter?: boolean;
 }
 
 export function StockCount({
   selectedCount,
   totalCount,
-  hasUniverseFilter = false,
 }: StockCountProps) {
   return (
     <div className="mb-5">
@@ -48,17 +46,6 @@ export function StockCount({
         <span className="text-[1.25rem] font-semibold">/ {totalCount} 종목</span>
         <span className="ml-1 mb-1 text-[0.75rem] ">(선택 / 전체)</span>
       </div>
-      {hasUniverseFilter && selectedCount > 0 && (
-        <div className="mt-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-xs text-blue-700">
-            <strong>ℹ️ 유니버스 필터 적용됨</strong>
-            <br />
-            표시된 종목 수는 선택한 업종의 전체 종목 수입니다.
-            실제 백테스트 실행 시 선택한 유니버스(시가총액 구간) 필터가 추가로 적용되어
-            종목 수가 줄어들 수 있습니다.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

@@ -37,40 +37,33 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
     # ✅ 프론트엔드 양식과 일치하도록 수정 (2025-11-21)
     base_config = {
         "strategy_name": strategy_id,
-        "is_day_or_month": "daily",  # "D" → "daily" (프론트엔드 양식)
+        "is_day_or_month": "daily",  # "daily"
         "commission_rate": 0.1,  # 0.1% 수수료
         "slippage": 0,  # 0% 슬리피지
         "buy_logic": "and",  # 매수 조건 AND 결합
-        "priority_factor": "기본값({market_cap})",  # 서브팩터 포함 양식
+        "priority_factor": "기본값({MARKET_CAP})",  # 서브팩터 포함 양식
         "priority_order": "desc",
         "per_stock_ratio": 10,  # 종목당 10% 투자
         "max_holdings": 10,  # 최대 10개 종목 보유
         "max_buy_value": None,
         "max_daily_stock": None,
-        "buy_price_basis": "전일 종가",  # "close" → "전일 종가" (프론트엔드 양식)
+        "buy_price_basis": "전일 종가",  # "전일 종가"
         "buy_price_offset": 0,
         "trade_targets": {
             "use_all_stocks": False,  # 전체 종목 사용 안 함
-            "selected_universes": ["KOSPI", "KOSDAQ"],
+            "selected_universes": [], # 현재 안쓰는 속성이므로 절대 건들지 말것.
             "selected_themes": [
                 "전기 / 전자",
-                "화학",
-                "은행",
-                "증권",
-                "통신",
                 "IT서비스",
-                "음식료 / 담배",
-                "제약",
-                "건설",
                 "유통"
-            ],  # 주요 테마 10개 선택 (약 300-400 종목)
+            ],  # 주요 테마 3개 선택 (약 800 종목)
             "selected_stocks": [],
             "selected_stock_count": None,  # 런타임에 계산됨
             "total_stock_count": 2645,      # 전체 종목 수
             "total_theme_count": 29         # 전체 테마 수
         },
         "buy_conditions": [],
-        "target_and_loss": {               # 구조 추가
+        "target_and_loss": {
             "target_gain": None,
             "stop_loss": None
         },
@@ -80,18 +73,18 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
 
     # 전략별 특화 설정
     strategy_specific_configs = {
+        #! 기존 유명 전략 목록
         "surge_stocks": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({MARKET_CAP})", "inequality": ">", "exp_right_side": 10000000000}
+                {"name": "A", "exp_left_side": "기본값({MARKET_CAP})", "inequality": ">", "exp_right_side": 10000000000} # 시가총액 > 100억
             ],
-            "priority_factor": "기본값({CHANGE_RATE})",
+            "priority_factor": "기본값({CHANGE_RATE})", # 등락률인데 바꿀 필요 있어보임
             "priority_order": "desc",
             "per_stock_ratio": 20,
             "max_holdings": 5,
             # 급등주 전략: 거래량 많은 주요 테마 (변동성 높은 업종)
             "trade_targets": {
                 "use_all_stocks": False,
-                "selected_universes": ["KOSPI", "KOSDAQ"],
                 "selected_themes": ["전기 / 전자", "제약", "IT서비스", "기계 / 장비", "화학"],
                 "selected_stocks": [],
                 "selected_stock_count": None,
@@ -101,86 +94,78 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
         },
         "steady_growth": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({REVENUE_GROWTH_3Y})", "inequality": ">", "exp_right_side": 0},
-                {"name": "B", "exp_left_side": "기본값({OPERATING_INCOME_GROWTH})", "inequality": ">", "exp_right_side": 0},  # 1Y로 대체
-                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 100},
-                {"name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 10}
+                {"name": "A", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 0},  # 매출 CAGR(3Y) > 0 조건을 1Y로 대체
+                {"name": "B", "exp_left_side": "기본값({OPERATING_INCOME_GROWTH_YOY})", "inequality": ">", "exp_right_side": 0},  # 영업이익 CAGR(3Y) > 0 조건을 1Y로 대체
+                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 100}, # 부채비율 < 100%
+                {"name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 10} # ROE > 10%
             ],
             "priority_factor": "기본값({ROE})",
-            # TODO: 영업이익 CAGR 3Y 계산 함수 추가 필요
-        },
-        "benjamin_graham": {
-            "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2.0},  # 200% = 2.0
-                {"name": "B", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 15}
-            ],
-            "priority_factor": "기본값({PBR})",
-            "priority_order": "asc",
-            # TODO: 순유동자산, 장기부채, EPS 5년 성장률, 연속 흑자 조건 추가 (향후 구현)
+            # TODO: 매출 CAGR(3Y), 영업이익 CAGR(3Y) 구현 가능 여부 확인(계산 비용까지 포함해서)
         },
         "peter_lynch": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 30},
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 30}, #PER < 30
                 # PEG 조건 제외 (계산 불가)
                 # 재고/매출 조건 제외 (계산 불가)
-                {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150},
-                {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 5},
-                {"name": "D", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 1},
-                {"name": "E", "exp_left_side": "기본값({DIVIDEND_YIELD})", "inequality": ">", "exp_right_side": 3}
+                {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150}, # 부채비율 < 150%
+                {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 5}, # ROE > 5%
+                {"name": "D", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 1}, # ROA > 1%
+                # 배당수익률 조건 제외  (계산 불가)
             ],
             "priority_factor": "기본값({PER})",  # PEG 대신 PER 사용
             "priority_order": "asc",
-            # TODO: PEG, 재고/매출 비율 추가 (향후 구현)
+            # TODO: PEG, 재고/매출 추가 (향후 구현)
         },
         "warren_buffett": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 15},
+                {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 15}, # ROE > 15%
                 # 장기부채비율 제외 (계산 불가)
-                {"name": "B", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5},
-                {"name": "C", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 17},
-                {"name": "D", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5},
-                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150},
-                {"name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH})", "inequality": ">", "exp_right_side": 10}
+                {"name": "B", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5}, # 유동비율 > 1.5
+                # FCF 제외 (계산 불가)
+                {"name": "C", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 17}, # PER < 17
+                {"name": "D", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5}, # PBR < 1.5
+                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150}, # 부채비율 < 150%
+                {"name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 10} # EPS(주당순이익) 성장률 > 10% 조건을 순이익증가율(1Y)로 대체
             ],
             "priority_factor": "기본값({PBR})",
             "priority_order": "asc",
-            # TODO: 장기부채비율 추가 (향후 구현)
+            # TODO: FCF, EPS 성장률 추가 (향후 구현)
         },
         "william_oneil": {
             "buy_conditions": [
-                # QoQ 성장률 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({EARNINGS_GROWTH})", "inequality": ">", "exp_right_side": 18},
-                {"name": "B", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 17}
-                # 52주 신고가 조건 제외 (계산 불가)
+                # EPS 성장률 (QoQ) 제외 (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 18}, # EPS(주당순이익) 성장률 > 18% 조건을 순이익증가율(1Y)로 대체
+                {"name": "B", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 17}, # ROE > 17%
+                {"name": "C", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": ">", "exp_right_side": -15} # 현재가 > 52주 신고가의 85% (팩터 검증 필요)
             ],
-            "priority_factor": "기본값({EARNINGS_GROWTH})",
+            "priority_factor": "기본값({EARNINGS_GROWTH_1Y})",
             "priority_order": "desc",
             "per_stock_ratio": 15,
             "max_holdings": 6,
-            # TODO: QoQ 성장률, 52주 신고가 비율 추가 (향후 구현)
+            # TODO: EPS 성장률 (QoQ) 추가 (향후 구현)
         },
         "bill_ackman": {
             "buy_conditions": [
                 # ROIC 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20},
-                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2},
-                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 150},
-                {"name": "D", "exp_left_side": "기본값({FCF_YIELD})", "inequality": ">", "exp_right_side": 0},
-                {"name": "E", "exp_left_side": "기본값({DIVIDEND_YIELD})", "inequality": ">", "exp_right_side": 2}
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20}, # PER < 20
+                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2}, # PBR < 2
+                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 150}, # 부채비율 > 150%
+                # FCF 조건 제외 (계산 불가)
+                # 배당수익률 조건 제외  (계산 불가)
             ],
             "priority_factor": "기본값({PER})",  # ROIC 대신 PER 사용
             "priority_order": "asc",
-            # TODO: ROIC 추가 (향후 구현)
+            # TODO: ROIC, FCF 추가 (향후 구현)
         },
         "charlie_munger": {
             "buy_conditions": [
                 # ROIC 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 10},
-                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5},
-                {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 15},
-                {"name": "D", "exp_left_side": "기본값({REVENUE_GROWTH})", "inequality": ">", "exp_right_side": 15},
-                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 50},
-                {"name": "F", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2}
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 10}, # PER < 10
+                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5}, # PBR < 1.5
+                {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 15}, # ROE > 15
+                {"name": "D", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 15}, # 매출 성장률 > 15%
+                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 50}, # 부채비율 < 50%
+                {"name": "F", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2} # 유동비율 > 2
             ],
             "priority_factor": "기본값({ROE})",  # ROIC 대신 ROE 사용
             "priority_order": "desc",
@@ -188,65 +173,41 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
         },
         "glenn_welling": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({EV_EBITDA})", "inequality": "<", "exp_right_side": 8},
+                # EV/EBITDA 제외 (계산 불가)
                 # ROIC 제외 (계산 불가)
-                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5},
-                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 1.5}
+                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5}, # PBR < 1.5
+                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 1.5} # PSR < 1.5
                 # PEG 제외 (계산 불가)
             ],
             "priority_factor": "기본값({PBR})",
             "priority_order": "asc",
-            # TODO: ROIC, PEG 추가 (향후 구현)
+            # TODO: EV/EBITDA, ROIC, PEG(= (PER / EPS성장률)) 추가 (향후 구현)
         },
         "cathie_wood": {
             "buy_conditions": [
                 # PEG 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 20},
-                {"name": "B", "exp_left_side": "기본값({REVENUE_GROWTH})", "inequality": ">", "exp_right_side": 20},
-                {"name": "C", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2}
+                {"name": "A", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 20}, # PSR < 20
+                {"name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 20}, # 매출 성장률 > 20%
+                {"name": "C", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2} # 유동비율 > 2
             ],
-            "priority_factor": "기본값({REVENUE_GROWTH})",
+            "priority_factor": "기본값({REVENUE_GROWTH_1Y})",
             "priority_order": "desc",
             # TODO: PEG 추가 (향후 구현)
         },
         "glenn_greenberg": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 15},
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 15}, # PER < 20
                 # ROIC 제외 (계산 불가)
-                {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 50},
-                {"name": "C", "exp_left_side": "기본값({GROSS_PROFIT_GROWTH})", "inequality": ">", "exp_right_side": 3},
-                {"name": "D", "exp_left_side": "기본값({FCF_YIELD})", "inequality": ">", "exp_right_side": 5}
+                {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 50}, # 부채비율 < 50%
+                # 총 마진 성장률 조건 제외 (계산 불가)
+                # FCF 조건 제외 (계산 불가)
             ],
             "priority_factor": "기본값({FCF_YIELD})",  # ROIC 대신 FCF_YIELD 사용
             "priority_order": "desc",
-            # TODO: ROIC 추가 (향후 구현)
+            # TODO: ROIC, 총 마진 성장률, FCF 추가 (향후 구현)
         },
-        "undervalued_dividend": {
-            "buy_conditions": [
-                # 배당수익률 5년 평균 비교 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({FCF_YIELD})", "inequality": ">", "exp_right_side": 0},
-                {"name": "B", "exp_left_side": "기본값({EARNINGS_GROWTH})", "inequality": ">", "exp_right_side": 5},
-                # 배당금 성장 연수 제외 (계산 불가)
-                # 배당성향 제외 (계산 불가)
-                {"name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1},
-                {"name": "D", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20}
-            ],
-            "priority_factor": "기본값({DIVIDEND_YIELD})",
-            "priority_order": "desc",
-            # TODO: 배당 관련 팩터들 추가 (향후 구현)
-        },
-        "long_term_dividend": {
-            "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({DIVIDEND_YIELD})", "inequality": ">=", "exp_right_side": 4},
-                {"name": "B", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20},
-                {"name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5},
-                {"name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 66},
-                {"name": "E", "exp_left_side": "기본값({OPERATING_INCOME_GROWTH})", "inequality": ">=", "exp_right_side": 3}
-            ],
-            "priority_factor": "기본값({DIVIDEND_YIELD})",
-            "priority_order": "desc",
-            # TODO: 영업이익 CAGR 3Y 추가 (향후 구현)
-        },
+        #! 여기서부터는 추가 전략
+        
     }
 
     # 전략별 설정 병합

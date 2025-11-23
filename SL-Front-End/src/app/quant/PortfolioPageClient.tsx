@@ -1,12 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
 import { PortfolioCard } from "@/components/quant/PortfolioCard";
 import { PortfolioDashboard } from "@/components/quant/PortfolioDashboard";
-import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { strategyApi } from "@/lib/api/strategy";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Portfolio } from "./page";
 
 /**
@@ -235,22 +235,46 @@ export function PortfolioPageClient({
       alert("전략 이름을 입력해주세요.");
       return;
     }
-    if (trimmedName === portfolio.title) {
+
+    // 자동매매 전략인 경우 이모지 제거
+    const isAutoTrading = portfolio.id.startsWith("auto-");
+    const displayName = isAutoTrading ? trimmedName.replace(/^🤖\s*/, "") : trimmedName;
+
+    if (displayName === portfolio.title.replace(/^🤖\s*/, "")) {
       handleCancelRename();
       return;
     }
 
     try {
       setIsRenaming(true);
-      await strategyApi.updateStrategy(portfolio.strategyId, {
-        strategyName: trimmedName,
-      });
 
-      setPortfolios((prev) =>
-        prev.map((item) =>
-          item.id === portfolio.id ? { ...item, title: trimmedName } : item,
-        ),
-      );
+      // 자동매매 전략인지 백테스트 전략인지 구분
+      if (isAutoTrading) {
+        // 자동매매 전략 이름 수정
+        await autoTradingApi.updateStrategyName(portfolio.strategyId, {
+          strategy_name: displayName,
+        });
+
+        setPortfolios((prev) =>
+          prev.map((item) =>
+            item.id === portfolio.id
+              ? { ...item, title: `🤖 ${displayName}` }
+              : item,
+          ),
+        );
+      } else {
+        // 백테스트 전략 이름 수정
+        await strategyApi.updateStrategy(portfolio.strategyId, {
+          strategyName: displayName,
+        });
+
+        setPortfolios((prev) =>
+          prev.map((item) =>
+            item.id === portfolio.id ? { ...item, title: displayName } : item,
+          ),
+        );
+      }
+
       handleCancelRename();
     } catch (error: unknown) {
       console.error("전략 이름 수정 실패:", error);
@@ -298,7 +322,7 @@ export function PortfolioPageClient({
             type="button"
             onClick={handleDeleteSelected}
             disabled={isDeleting || selectedIds.size === 0}
-            className="text-[#c8c8c8] hover:text-black transition-colors underline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-[#505050] hover:text-black transition-colors underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isDeleting ? "삭제 중..." : "선택항목 삭제"}
           </button>

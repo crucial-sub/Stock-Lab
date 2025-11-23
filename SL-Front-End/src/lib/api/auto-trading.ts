@@ -13,6 +13,10 @@ export interface AutoTradingDeactivateRequest {
   deactivation_mode?: string; // immediate, sell_and_deactivate, scheduled_sell
 }
 
+export interface AutoTradingStrategyNameUpdateRequest {
+  strategy_name: string;
+}
+
 // Response Types
 export interface AutoTradingActivateResponse {
   message: string;
@@ -27,6 +31,12 @@ export interface AutoTradingDeactivateResponse {
   is_active: boolean;
   deactivated_at: string;
   positions_sold: number;
+}
+
+export interface AutoTradingStrategyNameUpdateResponse {
+  message: string;
+  strategy_id: string;
+  strategy_name: string;
 }
 
 export interface LivePositionResponse {
@@ -254,6 +264,21 @@ export const autoTradingApi = {
       `/auto-trading/strategies/${strategyId}/deactivate`,
       request,
     );
+    return response.data;
+  },
+
+  /**
+   * 자동매매 전략 이름 수정
+   */
+  updateStrategyName: async (
+    strategyId: string,
+    request: AutoTradingStrategyNameUpdateRequest,
+  ): Promise<AutoTradingStrategyNameUpdateResponse> => {
+    const response =
+      await axiosInstance.patch<AutoTradingStrategyNameUpdateResponse>(
+        `/auto-trading/strategies/${strategyId}/name`,
+        request,
+      );
     return response.data;
   },
 

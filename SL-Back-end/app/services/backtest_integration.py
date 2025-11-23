@@ -71,11 +71,15 @@ def integrate_optimizations(backtest_engine):
         """
         logger.debug("🚀 순차 데이터 로드 시작")
 
+        # 🔍 디버깅: target_stocks 확인
+        logger.info(f"🎯 전달받은 target_stocks: {len(target_stocks or [])}개 종목")
+        logger.info(f"🎯 전달받은 target_themes: {len(target_themes or [])}개 테마")
+
         # 캐시 키 생성 (테마/종목 이름 기반)
         themes_str = ','.join(sorted(target_themes or []))
         stocks_str = ','.join(sorted(target_stocks or []))
         price_cache_key = f"price_data:{start_date}:{end_date}:{themes_str}:{stocks_str}"
-        financial_cache_key = f"financial_data:{start_date}:{end_date}"
+        financial_cache_key = f"financial_data:{start_date}:{end_date}:{stocks_str}"  # 종목별 캐시
         stock_prices_cache_key = f"stock_prices:{start_date}:{end_date}:{stocks_str}"
 
         # 1. 가격 데이터 로드 (캐시 확인 → DB)
@@ -101,7 +105,9 @@ def integrate_optimizations(backtest_engine):
             cached_financial = await optimized_cache.get_price_data_cached(financial_cache_key)
             if cached_financial is None:
                 logger.debug("재무 데이터 캐시 미스 - DB 로드")
-                financial_data = await db_manager.load_financial_data_optimized(start_date, end_date)
+                financial_data = await db_manager.load_financial_data_optimized(start_date, end_date, target_stocks=target_stocks)
+                # 🔥 필터링은 load_financial_data_optimized() 내부에서 이미 수행됨
+
                 # 캐시 저장
                 if not financial_data.empty:
                     await optimized_cache.set_price_data_cached(financial_cache_key, financial_data)

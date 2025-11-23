@@ -116,6 +116,11 @@ export const strategyApi = {
       data: { session_ids: sessionIds },
     });
   },
+  /**
+   * 전략 이름 수정
+   */
+  updateStrategyName: async (strategyId: string, strategyName: string) =>
+    strategyApi.updateStrategy(strategyId, { strategyName }),
 
   /**
    * 공개 전략 목록 조회 (최신순)

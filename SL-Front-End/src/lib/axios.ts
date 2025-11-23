@@ -9,14 +9,26 @@ import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
 import { getAuthTokenFromCookie } from "./auth/token";
 
+const ensureApiPrefix = (raw?: string, fallback = "http://localhost:8000/api/v1") => {
+  if (!raw || raw.trim().length === 0) return fallback;
+  const trimmed = raw.replace(/\/$/, "");
+  if (trimmed.endsWith("/api/v1")) return trimmed;
+  if (trimmed.endsWith("/api")) return `${trimmed}/v1`;
+  return `${trimmed}/api/v1`;
+};
+
+const CLIENT_BASE_URL = ensureApiPrefix(
+  process.env.NEXT_PUBLIC_API_BASE_URL,
+  "http://localhost:8000/api/v1",
+);
+
 /**
  * Axios 기본 인스턴스
  * - 서버/클라이언트 환경 모두에서 사용 가능합니다
  * - baseURL은 환경변수에서 가져옵니다
  */
 export const axiosInstance = axios.create({
-  baseURL:
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1",
+  baseURL: CLIENT_BASE_URL,
   timeout: 180000, // 3분 (백테스트는 시간이 오래 걸림)
   headers: {
     "Content-Type": "application/json",
@@ -32,6 +44,15 @@ export const axiosInstance = axios.create({
  */
 axiosInstance.interceptors.request.use(
   (config) => {
+    // baseURL가 /api/v1로 끝나는데 url이 /api/v1/로 시작하면 한 번만 사용하도록 정규화
+    if (
+      config.baseURL?.endsWith("/api/v1") &&
+      typeof config.url === "string" &&
+      config.url.startsWith("/api/v1/")
+    ) {
+      config.url = config.url.replace(/^\/api\/v1/, "");
+    }
+
     // 요청 전 처리 (예: 토큰 추가)
     const token = getAuthTokenFromCookie();
     if (token) {
@@ -71,10 +92,18 @@ axiosInstance.interceptors.response.use(
         requestUrl.includes("/community/posts") ||
         requestUrl.includes("/community/rankings") ||
         requestUrl.includes("/strategies/public");
+      const isKiwoomApiRequest =
+        requestUrl.includes("/kiwoom/");
       const isAuthError = status === 401 || status === 403;
 
       if ((isAuthMeRequest || isPublicApiRequest) && isAuthError) {
         // 로그인하지 않은 상태에서의 정상적인 에러이므로 무시
+        return Promise.reject(error);
+      }
+
+      // Kiwoom API 에러는 세션 만료 모달을 띄우지 않음 (API 자체의 문제)
+      if (isKiwoomApiRequest && isAuthError) {
+        console.warn("키움 API 오류:", data);
         return Promise.reject(error);
       }
 
@@ -121,11 +150,13 @@ axiosInstance.interceptors.response.use(
  * - SSR 환경에서 사용합니다
  * - 서버 내부 URL을 사용할 수 있습니다
  */
+const SERVER_BASE_URL = ensureApiPrefix(
+  process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL,
+  "http://localhost:8000/api/v1",
+);
+
 export const axiosServerInstance = axios.create({
-  baseURL:
-    process.env.API_BASE_URL ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    "http://localhost:8000/api/v1",
+  baseURL: SERVER_BASE_URL,
   timeout: 180000, // 3분 (백테스트는 시간이 오래 걸림)
   headers: {
     "Content-Type": "application/json",
@@ -135,6 +166,13 @@ export const axiosServerInstance = axios.create({
 // 서버 인스턴스에도 동일한 인터셉터 적용
 axiosServerInstance.interceptors.request.use(
   (config) => {
+    if (
+      config.baseURL?.endsWith("/api/v1") &&
+      typeof config.url === "string" &&
+      config.url.startsWith("/api/v1/")
+    ) {
+      config.url = config.url.replace(/^\/api\/v1/, "");
+    }
     return config;
   },
   (error) => {

@@ -520,11 +520,15 @@ async def run_backtest(
         has_stock_selection = request.trade_targets.selected_stocks and len(request.trade_targets.selected_stocks) > 0
 
         if has_universe_selection:
-            # 유니버스 선택이 있으면 유니버스 기반 필터링
+            # 유니버스 선택이 있으면 유니버스 기반 필터링 (테마와 AND 결합 가능)
             target_universes = request.trade_targets.selected_universes
-            target_themes = []  # 유니버스 사용 시 테마는 무시
+            # 테마도 함께 전달 (AND 필터링)
+            selected_theme_codes = request.trade_targets.selected_themes if has_theme_selection else []
+            target_themes = [
+                THEME_CODE_TO_INDUSTRY.get(code, code) for code in selected_theme_codes
+            ]
             target_stocks = request.trade_targets.selected_stocks if has_stock_selection else []
-            logger.info(f"🎯 유니버스 필터링 모드: universes={target_universes}, themes=[], stocks={len(target_stocks)}")
+            logger.info(f"🎯 유니버스 & 테마 AND 필터링 모드: universes={target_universes}, themes={len(target_themes)}, stocks={len(target_stocks)}")
         elif has_theme_selection or has_stock_selection:
             # 테마/종목 선택이 있으면 테마/종목 기반 필터링
             selected_theme_codes = request.trade_targets.selected_themes

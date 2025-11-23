@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import ColorBorderLeft from "@/components/quant/common/ColorBorderLeft";
+import type { ReactNode } from "react";
 
 /**
  * FieldPanel - 퀀트 투자 생성 페이지 필드 공통 패널 컴포넌트
@@ -9,7 +9,7 @@ import ColorBorderLeft from "@/components/quant/common/ColorBorderLeft";
  */
 interface FieldPanelProps {
   children: ReactNode;
-  conditionType: "buy" | "sell" | "target";
+  conditionType: "buy" | "sell" | "target" | "none";
   className?: string;
 }
 
@@ -20,9 +20,9 @@ export function FieldPanel({
 }: FieldPanelProps) {
   return (
     <div
-      className={`bg-[#FFFFFF66] rounded-md shadow-card p-8 relative ${className}`}
+      className={`bg-[#FFFFFF66] rounded-md shadow-elev-card-soft p-8 relative ${className}`}
     >
-      <ColorBorderLeft conditionType={conditionType} />
+      {conditionType !== "none" && <ColorBorderLeft conditionType={conditionType} />}
       {children}
     </div>
   );

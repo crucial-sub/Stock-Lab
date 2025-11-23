@@ -707,6 +707,7 @@ export default function QuantStrategySummaryPanel({
                 onSellConditionsAdd={handleSellConditionsAdd}
                 currentBuyConditions={buyConditionsUI}
                 currentSellConditions={sellConditionsUI}
+                onConditionsApplied={() => setPanelMode("summary")}
               />
             </div>
           )}

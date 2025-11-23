@@ -17,40 +17,37 @@ export function AITypingIndicator() {
     <div className="flex justify-start mb-6">
       <style dangerouslySetInnerHTML={{
         __html: `
-          @keyframes bigBounce {
-            0%, 100% {
-              transform: translateY(0) scale(1);
+          @keyframes gradientShift {
+            0% {
+              background-position: 0% 50%;
             }
             50% {
-              transform: translateY(-20px) scale(1.1);
+              background-position: 100% 50%;
+            }
+            100% {
+              background-position: 0% 50%;
             }
           }
-          .big-bounce {
-            animation: bigBounce 1s ease-in-out infinite;
+          .typing-gradient {
+            background: linear-gradient(
+              90deg,
+              rgb(var(--color-brand-purple) / 0.35),
+              rgb(var(--color-brand-purple)),
+              rgb(var(--color-brand-purple) / 0.35)
+            );
+            background-size: 200% 200%;
+            animation: gradientShift 1.5s ease infinite;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
           }
         `
       }} />
 
-      <div className="flex items-center space-x-3 px-5 py-4">
-        {/* 점 애니메이션 - 더 큰 폭으로 튀기기 */}
-        <div className="flex items-center space-x-1.5" style={{ minHeight: "12px" }}>
-          <div
-            className="w-3 h-3 bg-gray-500 rounded-full big-bounce"
-            style={{ animationDelay: "0ms" }}
-          />
-          <div
-            className="w-3 h-3 bg-gray-500 rounded-full big-bounce"
-            style={{ animationDelay: "200ms" }}
-          />
-          <div
-            className="w-3 h-3 bg-gray-500 rounded-full big-bounce"
-            style={{ animationDelay: "400ms" }}
-          />
-        </div>
-
+      <div className="flex items-center space-x-0 py-5">
         {/* 텍스트 */}
-        <span className="text-base text-gray-600 font-medium ml-2 flex items-center">
-          AI가 답변을 생성하고 있습니다...
+        <span className="text-base font-semibold flex items-center typing-gradient">
+          AI가 답변을 생각하고 있습니다...
         </span>
       </div>
     </div>

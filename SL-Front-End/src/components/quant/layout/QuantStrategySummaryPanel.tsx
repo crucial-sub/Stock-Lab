@@ -1,10 +1,10 @@
 "use client";
 
+import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
+import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { getCurrentDate, getOneYearAgo } from "@/lib/date-utils";
-import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 import { AIHelperSidebar } from "./AIHelperSidebar";
 
 interface QuantStrategySummaryPanelProps {
@@ -156,7 +156,7 @@ export default function QuantStrategySummaryPanel({
         const logic = validConditions.map(c => c.id).join(" and ");
         setBuyLogic(logic);
       }
-      if(validConditions.length >=3){
+      if (validConditions.length >= 3) {
         const logic = validConditions.map(c => c.id).join(" or ");
         setBuyLogic(logic);
       }
@@ -213,9 +213,8 @@ export default function QuantStrategySummaryPanel({
       {/* 화살표 버튼 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`absolute ${
-          isOpen ? "left-5 top-5" : "right-2 left-2 top-5"
-        } top-5 z-10 hover:opacity-70 transition-opacity`}
+        className={`absolute ${isOpen ? "left-5 top-5" : "right-2 left-2 top-5"
+          } top-5 z-10 hover:opacity-70 transition-opacity`}
         aria-label={isOpen ? "요약 패널 닫기" : "요약 패널 열기"}
       >
         <Image
@@ -234,32 +233,28 @@ export default function QuantStrategySummaryPanel({
             <div className="flex pl-16">
               <button
                 onClick={() => setPanelMode("summary")}
-                className={`flex w-[44.5rem] h-16 justify-center items-center ${
-                  panelMode === "summary" ? "border-b-2 border-brand-purple" : ""
-                }`}
+                className={`flex w-[44.5rem] h-16 justify-center items-center ${panelMode === "summary" ? "border-b-2 border-brand-purple" : ""
+                  }`}
               >
                 <h2
-                  className={`text-xl ${
-                    panelMode === "summary"
-                      ? "font-semibold text-brand"
-                      : "font-normal text-muted"
-                  }`}
+                  className={`text-xl ${panelMode === "summary"
+                    ? "font-semibold text-brand"
+                    : "font-normal text-muted"
+                    }`}
                 >
                   요약보기
                 </h2>
               </button>
               <button
                 onClick={() => setPanelMode("ai_helper")}
-                className={`flex w-[44.5rem] h-16 justify-center items-center ${
-                  panelMode === "ai_helper" ? "border-b-2 border-brand-purple" : ""
-                }`}
+                className={`flex w-[44.5rem] h-16 justify-center items-center ${panelMode === "ai_helper" ? "border-b-2 border-brand-purple" : ""
+                  }`}
               >
                 <h2
-                  className={`text-xl ${
-                    panelMode === "ai_helper"
-                      ? "font-semibold text-brand"
-                      : "font-normal text-muted"
-                  }`}
+                  className={`text-xl ${panelMode === "ai_helper"
+                    ? "font-semibold text-brand"
+                    : "font-normal text-muted"
+                    }`}
                 >
                   AI 헬퍼
                 </h2>
@@ -272,489 +267,435 @@ export default function QuantStrategySummaryPanel({
             <>
               {/* 탭 버튼 */}
               <div className="flex gap-3 px-4 mb-6 w-full justify-center">
-            <button
-              onClick={() => setSelectedSummaryTab("buy")}
-              className={`
+                <button
+                  onClick={() => setSelectedSummaryTab("buy")}
+                  className={`
                 px-5 py-2 rounded-md text-[1.25rem] font-semibold transition-colors
-                ${
-                  selectedSummaryTab === "buy"
-                    ? "bg-price-up text-white"
-                    : " hover:bg-surface"
-                }
+                ${selectedSummaryTab === "buy"
+                      ? "bg-price-up text-white"
+                      : " hover:bg-surface"
+                    }
               `}
-            >
-              매수 조건
-            </button>
-            <button
-              onClick={() => setSelectedSummaryTab("sell")}
-              className={`
+                >
+                  매수 조건
+                </button>
+                <button
+                  onClick={() => setSelectedSummaryTab("sell")}
+                  className={`
                 px-5 py-2 rounded-md text-[1.25rem] font-semibold transition-colors
-                ${
-                  selectedSummaryTab === "sell"
-                    ? "bg-price-down text-white"
-                    : " hover:bg-surface"
-                }
+                ${selectedSummaryTab === "sell"
+                      ? "bg-price-down text-white"
+                      : " hover:bg-surface"
+                    }
               `}
-            >
-              매도 조건
-            </button>
-            <button
-              onClick={() => setSelectedSummaryTab("target")}
-              className={`
+                >
+                  매도 조건
+                </button>
+                <button
+                  onClick={() => setSelectedSummaryTab("target")}
+                  className={`
                 px-5 py-2 rounded-md text-[1.25rem] font-semibold transition-colors
-                ${
-                  selectedSummaryTab === "target"
-                    ? "bg-surface text-black"
-                    : " hover:bg-surface"
-                }
+                ${selectedSummaryTab === "target"
+                      ? "bg-surface text-black"
+                      : " hover:bg-surface"
+                    }
               `}
-            >
-              매매 대상
-            </button>
-          </div>
+                >
+                  매매 대상
+                </button>
+              </div>
 
-          {/* 요약 내용 */}
-          <div className="px-10 space-y-8 flex-1 min-h-0 overflow-y-auto">
-            {selectedSummaryTab === "buy" && (
-              <>
-                {/* 일반 조건 */}
-                <div className="space-y-4">
-                  <FieldTitle tab="buy">일반 조건</FieldTitle>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <SummaryItem
-                      label="백테스트 데이터"
-                      value={is_day_or_month === "daily" ? "일봉" : "월봉"}
-                    />
-                    <SummaryItem
-                      label="투자 금액"
-                      value={`${initial_investment.toLocaleString()}만원`}
-                    />
-                    <SummaryItem
-                      label="투자 시작일"
-                      value={
-                        isMounted
-                          ? `${start_date.slice(0, 4)}.${start_date.slice(
-                              4,
-                              6,
-                            )}.${start_date.slice(6, 8)}`
-                          : ""
-                      }
-                    />
-                    <SummaryItem
-                      label="투자 종료일"
-                      value={
-                        isMounted
-                          ? `${end_date.slice(0, 4)}.${end_date.slice(
-                              4,
-                              6,
-                            )}.${end_date.slice(6, 8)}`
-                          : ""
-                      }
-                    />
-                    <SummaryItem
-                      label="수수료율"
-                      value={`${commission_rate}%`}
-                    />
-                    <SummaryItem label="슬리피지" value={`${slippage}%`} />
-                  </div>
-                </div>
-
-                {/* 매수 조건 */}
-                <div className="space-y-4">
-                  <FieldTitle tab="buy">매수 조건</FieldTitle>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <div>
-                      <div
-                        className={`text-[1rem] font-normal ${
-                          buyConditionsUI.length > 0 &&
-                          buyConditionsUI.some((c) => c.factorName)
-                            ? ""
-                            : "text-muted"
-                        }`}
-                      >
-                        매수 조건식
-                      </div>
-                      <div
-                        className={`font-semibold text-[1rem] ${
-                          buyConditionsUI.length > 0 &&
-                          buyConditionsUI.some((c) => c.factorName)
-                            ? ""
-                            : "text-muted"
-                        }`}
-                      >
-                        {buyConditionsUI.length > 0 &&
-                        buyConditionsUI.some((c) => c.factorName) ? (
-                          <div className="space-y-1">
-                            {buyConditionsUI
-                              .filter((c) => c.factorName)
-                              .map((c) => {
-                                let expression = "";
-                                if (c.subFactorName) {
-                                  expression = c.argument
-                                    ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
-                                    : `${c.subFactorName}({${c.factorName}})`;
-                                } else {
-                                  expression = `{${c.factorName}}`;
-                                }
-                                return (
-                                  <div key={c.id} className="flex gap-2">
-                                    <span className="font-semibold">
-                                      {c.id}:
-                                    </span>
-                                    <span>
-                                      {expression} {c.operator} {c.value}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                          </div>
-                        ) : (
-                          "미설정"
-                        )}
+              {/* 요약 내용 */}
+              <div className="px-10 space-y-8 flex-1 min-h-0 overflow-y-auto">
+                {selectedSummaryTab === "buy" && (
+                  <>
+                    {/* 일반 조건 */}
+                    <div className="space-y-4">
+                      <FieldTitle tab="buy">일반 조건</FieldTitle>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <SummaryItem
+                          label="백테스트 데이터"
+                          value={is_day_or_month === "daily" ? "일봉" : "월봉"}
+                        />
+                        <SummaryItem
+                          label="투자 금액"
+                          value={`${initial_investment.toLocaleString()}만원`}
+                        />
+                        <SummaryItem
+                          label="투자 시작일"
+                          value={
+                            isMounted
+                              ? `${start_date.slice(0, 4)}.${start_date.slice(
+                                4,
+                                6,
+                              )}.${start_date.slice(6, 8)}`
+                              : ""
+                          }
+                        />
+                        <SummaryItem
+                          label="투자 종료일"
+                          value={
+                            isMounted
+                              ? `${end_date.slice(0, 4)}.${end_date.slice(
+                                4,
+                                6,
+                              )}.${end_date.slice(6, 8)}`
+                              : ""
+                          }
+                        />
+                        <SummaryItem
+                          label="수수료율"
+                          value={`${commission_rate}%`}
+                        />
+                        <SummaryItem label="슬리피지" value={`${slippage}%`} />
                       </div>
                     </div>
-                    <SummaryItem
-                      label="논리 조건식"
-                      value={buy_logic || "미설정"}
-                      disabled={!buy_logic}
-                    />
-                    <div className="col-span-2">
-                      <SummaryItem
-                        label="매수 종목 선택 우선순위"
-                        value={
-                          priority_factor
-                            ? `[${
-                                priority_order === "desc"
+
+                    {/* 매수 조건 */}
+                    <div className="space-y-4">
+                      <FieldTitle tab="buy">매수 조건</FieldTitle>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <div>
+                          <div
+                            className={`text-[1rem] font-normal ${buyConditionsUI.length > 0 &&
+                              buyConditionsUI.some((c) => c.factorName)
+                              ? ""
+                              : "text-muted"
+                              }`}
+                          >
+                            매수 조건식
+                          </div>
+                          <div
+                            className={`font-semibold text-[1rem] ${buyConditionsUI.length > 0 &&
+                              buyConditionsUI.some((c) => c.factorName)
+                              ? ""
+                              : "text-muted"
+                              }`}
+                          >
+                            {buyConditionsUI.length > 0 &&
+                              buyConditionsUI.some((c) => c.factorName) ? (
+                              <div className="space-y-1">
+                                {buyConditionsUI
+                                  .filter((c) => c.factorName)
+                                  .map((c) => {
+                                    let expression = "";
+                                    if (c.subFactorName) {
+                                      expression = c.argument
+                                        ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
+                                        : `${c.subFactorName}({${c.factorName}})`;
+                                    } else {
+                                      expression = `{${c.factorName}}`;
+                                    }
+                                    return (
+                                      <div key={c.id} className="flex gap-2">
+                                        <span className="font-semibold">
+                                          {c.id}:
+                                        </span>
+                                        <span>
+                                          {expression} {c.operator} {c.value}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            ) : (
+                              "미설정"
+                            )}
+                          </div>
+                        </div>
+                        <SummaryItem
+                          label="논리 조건식"
+                          value={buy_logic || "미설정"}
+                          disabled={!buy_logic}
+                        />
+                        <div className="col-span-2">
+                          <SummaryItem
+                            label="매수 종목 선택 우선순위"
+                            value={
+                              priority_factor
+                                ? `[${priority_order === "desc"
                                   ? "높은 값부터"
                                   : "낮은 값부터"
-                              }] ${priority_factor}`
-                            : "미설정"
-                        }
-                        disabled={!priority_factor}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 매수 비중 설정 */}
-                <div className="space-y-4">
-                  <FieldTitle tab="buy">매수 비중 설정</FieldTitle>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <SummaryItem
-                      label="종목당 매수 비중"
-                      value={`${per_stock_ratio}%`}
-                    />
-                    <SummaryItem
-                      label="최대 보유 종목 수"
-                      value={`${max_holdings}종목`}
-                    />
-                    <div className="col-span-2">
-                      <SummaryItem
-                        label={`종목당 최대 매수 금액 ${
-                          max_buy_value !== null ? "(활성화)" : "(비활성화)"
-                        }`}
-                        value={
-                          max_buy_value !== null
-                            ? `${max_buy_value.toLocaleString()}만원`
-                            : "0만원"
-                        }
-                        disabled={max_buy_value === null}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <SummaryItem
-                        label={`1일 최대 매수 종목 수 ${
-                          max_daily_stock !== null ? "(활성화)" : "(비활성화)"
-                        }`}
-                        value={
-                          max_daily_stock !== null
-                            ? `${max_daily_stock}종목`
-                            : "0종목"
-                        }
-                        disabled={max_daily_stock === null}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 매수 방법 설정 */}
-                <div className="space-y-4">
-                  <FieldTitle tab="buy">매수 방법 설정</FieldTitle>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <div className="col-span-2">
-                      <SummaryItem
-                        label="매수 가격 기준"
-                        value={`${buy_price_basis} 기준, ${
-                          buy_price_offset > 0 ? "+" : ""
-                        }${buy_price_offset}%`}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {selectedSummaryTab === "sell" && (
-              <>
-                {/* 목표가/손절가 설정 */}
-                <div className="space-y-4">
-                  <FieldTitle tab="sell" isActive={target_and_loss !== null}>
-                    목표가 / 손절가 설정
-                  </FieldTitle>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <SummaryItem
-                      label="목표가"
-                      value={
-                        target_and_loss?.target_gain !== null &&
-                        target_and_loss?.target_gain !== undefined
-                          ? `${target_and_loss.target_gain}%`
-                          : "미설정"
-                      }
-                      disabled={!target_and_loss}
-                    />
-                    <SummaryItem
-                      label="손절가"
-                      value={
-                        target_and_loss?.stop_loss !== null &&
-                        target_and_loss?.stop_loss !== undefined
-                          ? `${target_and_loss.stop_loss}%`
-                          : "미설정"
-                      }
-                      disabled={!target_and_loss}
-                    />
-                  </div>
-                </div>
-
-                {/* 보유 기간 */}
-                <div className="space-y-4">
-                  <FieldTitle tab="sell" isActive={hold_days !== null}>
-                    보유 기간
-                  </FieldTitle>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <SummaryItem
-                      label="최소 보유 기간"
-                      value={
-                        hold_days ? `${hold_days.min_hold_days}일` : "미설정"
-                      }
-                      disabled={!hold_days}
-                    />
-                    <SummaryItem
-                      label="최대 보유 기간"
-                      value={
-                        hold_days ? `${hold_days.max_hold_days}일` : "미설정"
-                      }
-                      disabled={!hold_days}
-                    />
-                    <div className="col-span-2">
-                      <SummaryItem
-                        label="매도 가격 기준"
-                        value={
-                          hold_days
-                            ? `${hold_days.sell_price_basis} 기준, ${
-                                hold_days.sell_price_offset > 0 ? "+" : ""
-                              }${hold_days.sell_price_offset}%`
-                            : "미설정"
-                        }
-                        disabled={!hold_days}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 조건 매도 */}
-                <div className="space-y-4">
-                  <FieldTitle tab="sell" isActive={condition_sell !== null}>
-                    조건 매도
-                  </FieldTitle>
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                    <div>
-                      <div
-                        className={`text-[1rem] font-normal ${
-                          condition_sell &&
-                          sellConditionsUI.length > 0 &&
-                          sellConditionsUI.some((c) => c.factorName)
-                            ? ""
-                            : "text-muted"
-                        }`}
-                      >
-                        매도 조건식
+                                }] ${priority_factor}`
+                                : "미설정"
+                            }
+                            disabled={!priority_factor}
+                          />
+                        </div>
                       </div>
-                      <div
-                        className={`font-semibold text-[1rem] ${
-                          condition_sell &&
-                          sellConditionsUI.length > 0 &&
-                          sellConditionsUI.some((c) => c.factorName)
-                            ? ""
-                            : "text-muted"
-                        }`}
-                      >
-                        {condition_sell &&
-                        sellConditionsUI.length > 0 &&
-                        sellConditionsUI.some((c) => c.factorName) ? (
-                          <div className="space-y-1">
-                            {sellConditionsUI
-                              .filter((c) => c.factorName)
-                              .map((c) => {
-                                let expression = "";
-                                if (c.subFactorName) {
-                                  expression = c.argument
-                                    ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
-                                    : `${c.subFactorName}({${c.factorName}})`;
-                                } else {
-                                  expression = `{${c.factorName}}`;
-                                }
-                                return (
-                                  <div key={c.id} className="flex gap-2">
-                                    <span className="font-semibold">
-                                      {c.id}:
-                                    </span>
-                                    <span>
-                                      {expression} {c.operator} {c.value}
-                                    </span>
-                                  </div>
-                                );
-                              })}
+                    </div>
+
+                    {/* 매수 비중 설정 */}
+                    <div className="space-y-4">
+                      <FieldTitle tab="buy">매수 비중 설정</FieldTitle>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <SummaryItem
+                          label="종목당 매수 비중"
+                          value={`${per_stock_ratio}%`}
+                        />
+                        <SummaryItem
+                          label="최대 보유 종목 수"
+                          value={`${max_holdings}종목`}
+                        />
+                        <div className="col-span-2">
+                          <SummaryItem
+                            label={`종목당 최대 매수 금액 ${max_buy_value !== null ? "(활성화)" : "(비활성화)"
+                              }`}
+                            value={
+                              max_buy_value !== null
+                                ? `${max_buy_value.toLocaleString()}만원`
+                                : "0만원"
+                            }
+                            disabled={max_buy_value === null}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <SummaryItem
+                            label={`1일 최대 매수 종목 수 ${max_daily_stock !== null ? "(활성화)" : "(비활성화)"
+                              }`}
+                            value={
+                              max_daily_stock !== null
+                                ? `${max_daily_stock}종목`
+                                : "0종목"
+                            }
+                            disabled={max_daily_stock === null}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 매수 방법 설정 */}
+                    <div className="space-y-4">
+                      <FieldTitle tab="buy">매수 방법 설정</FieldTitle>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <div className="col-span-2">
+                          <SummaryItem
+                            label="매수 가격 기준"
+                            value={`${buy_price_basis} 기준, ${buy_price_offset > 0 ? "+" : ""
+                              }${buy_price_offset}%`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {selectedSummaryTab === "sell" && (
+                  <>
+                    {/* 목표가/손절가 설정 */}
+                    <div className="space-y-4">
+                      <FieldTitle tab="sell" isActive={target_and_loss !== null}>
+                        목표가 / 손절가 설정
+                      </FieldTitle>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <SummaryItem
+                          label="목표가"
+                          value={
+                            target_and_loss?.target_gain !== null &&
+                              target_and_loss?.target_gain !== undefined
+                              ? `${target_and_loss.target_gain}%`
+                              : "미설정"
+                          }
+                          disabled={!target_and_loss}
+                        />
+                        <SummaryItem
+                          label="손절가"
+                          value={
+                            target_and_loss?.stop_loss !== null &&
+                              target_and_loss?.stop_loss !== undefined
+                              ? `${target_and_loss.stop_loss}%`
+                              : "미설정"
+                          }
+                          disabled={!target_and_loss}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 보유 기간 */}
+                    <div className="space-y-4">
+                      <FieldTitle tab="sell" isActive={hold_days !== null}>
+                        보유 기간
+                      </FieldTitle>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <SummaryItem
+                          label="최소 보유 기간"
+                          value={
+                            hold_days ? `${hold_days.min_hold_days}일` : "미설정"
+                          }
+                          disabled={!hold_days}
+                        />
+                        <SummaryItem
+                          label="최대 보유 기간"
+                          value={
+                            hold_days ? `${hold_days.max_hold_days}일` : "미설정"
+                          }
+                          disabled={!hold_days}
+                        />
+                        <div className="col-span-2">
+                          <SummaryItem
+                            label="매도 가격 기준"
+                            value={
+                              hold_days
+                                ? `${hold_days.sell_price_basis} 기준, ${hold_days.sell_price_offset > 0 ? "+" : ""
+                                }${hold_days.sell_price_offset}%`
+                                : "미설정"
+                            }
+                            disabled={!hold_days}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 조건 매도 */}
+                    <div className="space-y-4">
+                      <FieldTitle tab="sell" isActive={condition_sell !== null}>
+                        조건 매도
+                      </FieldTitle>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <div>
+                          <div
+                            className={`text-[1rem] font-normal ${condition_sell &&
+                              sellConditionsUI.length > 0 &&
+                              sellConditionsUI.some((c) => c.factorName)
+                              ? ""
+                              : "text-muted"
+                              }`}
+                          >
+                            매도 조건식
+                          </div>
+                          <div
+                            className={`font-semibold text-[1rem] ${condition_sell &&
+                              sellConditionsUI.length > 0 &&
+                              sellConditionsUI.some((c) => c.factorName)
+                              ? ""
+                              : "text-muted"
+                              }`}
+                          >
+                            {condition_sell &&
+                              sellConditionsUI.length > 0 &&
+                              sellConditionsUI.some((c) => c.factorName) ? (
+                              <div className="space-y-1">
+                                {sellConditionsUI
+                                  .filter((c) => c.factorName)
+                                  .map((c) => {
+                                    let expression = "";
+                                    if (c.subFactorName) {
+                                      expression = c.argument
+                                        ? `${c.subFactorName}({${c.factorName}},{${c.argument}})`
+                                        : `${c.subFactorName}({${c.factorName}})`;
+                                    } else {
+                                      expression = `{${c.factorName}}`;
+                                    }
+                                    return (
+                                      <div key={c.id} className="flex gap-2">
+                                        <span className="font-semibold">
+                                          {c.id}:
+                                        </span>
+                                        <span>
+                                          {expression} {c.operator} {c.value}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            ) : (
+                              "미설정"
+                            )}
+                          </div>
+                        </div>
+                        <SummaryItem
+                          label="논리 조건식"
+                          value={condition_sell?.sell_logic || "미설정"}
+                          disabled={!condition_sell?.sell_logic}
+                        />
+                        <div className="col-span-2">
+                          <SummaryItem
+                            label="매도 가격 기준"
+                            value={
+                              condition_sell
+                                ? `${condition_sell.sell_price_basis} 기준, ${condition_sell.sell_price_offset > 0 ? "+" : ""
+                                }${condition_sell.sell_price_offset}%`
+                                : "미설정"
+                            }
+                            disabled={!condition_sell?.sell_price_basis}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {selectedSummaryTab === "target" && (
+                  <>
+                    {/* 매매 대상 */}
+                    <div className="space-y-7">
+                      {/* 종목 개수 표시 */}
+                      <div className="space-y-5">
+                        <FieldTitle tab="target">매매 대상 종목</FieldTitle>
+                        {trade_targets.total_stock_count !== undefined && (
+                          <div className="space-y-5">
+                            <div className="flex flex-col gap-1">
+                              <span>선택한 매매 대상 종목</span>
+                              <span className="font-semibold">
+                                {trade_targets.selected_stock_count || 0} 종목
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                              <span>전체 종목</span>
+                              <span className="font-semibold">
+                                {trade_targets.total_stock_count} 종목
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-5">
+                        <FieldTitle tab="target">선택한 테마</FieldTitle>
+                        <div className="flex gap-[6.5625rem]">
+                          <div className="flex flex-col gap-1">
+                            <span>선택한 테마 수</span>
+                            <span className="font-semibold">
+                              {trade_targets.selected_themes.length}개
+                            </span>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span>전체 테마 수</span>
+                            <span className="font-semibold">29개</span>
+                          </div>
+                        </div>
+                        {trade_targets.selected_themes.length > 0 ? (
+                          <div className="grid grid-cols-3 gap-2">
+                            {trade_targets.selected_themes.map((theme, index) => (
+                              <div key={index} className="text-sm ">
+                                {theme}
+                              </div>
+                            ))}
                           </div>
                         ) : (
-                          "미설정"
+                          <div className="text-sm ">선택 안 함</div>
+                        )}
+                      </div>
+                      <div className="space-y-5">
+                        <FieldTitle tab="target">
+                          선택한 세부 종목 ({trade_targets.selected_stocks.length}
+                          개)
+                        </FieldTitle>
+                        {trade_targets.selected_stocks.length > 0 ? (
+                          <ul className="list-disc list-inside text-sm  space-y-1">
+                            {trade_targets.selected_stocks.map((stock, index) => (
+                              <li key={index}>{stock}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="text-sm ">선택 안 함</div>
                         )}
                       </div>
                     </div>
-                    <SummaryItem
-                      label="논리 조건식"
-                      value={condition_sell?.sell_logic || "미설정"}
-                      disabled={!condition_sell?.sell_logic}
-                    />
-                    <div className="col-span-2">
-                      <SummaryItem
-                        label="매도 가격 기준"
-                        value={
-                          condition_sell
-                            ? `${condition_sell.sell_price_basis} 기준, ${
-                                condition_sell.sell_price_offset > 0 ? "+" : ""
-                              }${condition_sell.sell_price_offset}%`
-                            : "미설정"
-                        }
-                        disabled={!condition_sell?.sell_price_basis}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {selectedSummaryTab === "target" && (
-              <>
-                {/* 매매 대상 */}
-                <div className="space-y-7">
-                  {/* 종목 개수 표시 */}
-                  <div className="space-y-5">
-                    <FieldTitle tab="target">매매 대상 종목</FieldTitle>
-                    {trade_targets.total_stock_count !== undefined && (
-                      <div className="space-y-5">
-                        <div className="flex flex-col gap-1">
-                          <span>선택한 매매 대상 종목</span>
-                          <span className="font-semibold">
-                            {trade_targets.selected_stock_count || 0} 종목
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <span>전체 종목</span>
-                          <span className="font-semibold">
-                            {trade_targets.total_stock_count} 종목
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 선택한 유니버스 */}
-                  <div className="space-y-5">
-                    <FieldTitle tab="target">선택한 유니버스</FieldTitle>
-                    <div className="flex gap-[6.5625rem]">
-                      <div className="flex flex-col gap-1">
-                        <span>선택한 유니버스 수</span>
-                        <span className="font-semibold">
-                          {trade_targets.selected_universes?.length || 0}개
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span>전체 유니버스 수</span>
-                        <span className="font-semibold">8개</span>
-                      </div>
-                    </div>
-                    {trade_targets.selected_universes && trade_targets.selected_universes.length > 0 ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        {trade_targets.selected_universes.map((universeId, index) => {
-                          // 유니버스 ID를 한글 이름으로 매핑
-                          const universeNameMap: Record<string, string> = {
-                            "KOSPI_MEGA": "코스피 초대형",
-                            "KOSPI_LARGE": "코스피 대형",
-                            "KOSPI_MID": "코스피 중형",
-                            "KOSPI_SMALL": "코스피 소형",
-                            "KOSDAQ_MEGA": "코스닥 초대형",
-                            "KOSDAQ_LARGE": "코스닥 대형",
-                            "KOSDAQ_MID": "코스닥 중형",
-                            "KOSDAQ_SMALL": "코스닥 소형",
-                          };
-                          return (
-                            <div key={index} className="text-sm">
-                              {universeNameMap[universeId] || universeId}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-sm">선택 안 함</div>
-                    )}
-                  </div>
-
-                  <div className="space-y-5">
-                    <FieldTitle tab="target">선택한 테마</FieldTitle>
-                    <div className="flex gap-[6.5625rem]">
-                      <div className="flex flex-col gap-1">
-                        <span>선택한 테마 수</span>
-                        <span className="font-semibold">
-                          {trade_targets.selected_themes.length}개
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span>전체 테마 수</span>
-                        <span className="font-semibold">16개</span>
-                      </div>
-                    </div>
-                    {trade_targets.selected_themes.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2">
-                        {trade_targets.selected_themes.map((theme, index) => (
-                          <div key={index} className="text-sm ">
-                            {theme}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-sm ">선택 안 함</div>
-                    )}
-                  </div>
-                  <div className="space-y-5">
-                    <FieldTitle tab="target">
-                      선택한 세부 종목 ({trade_targets.selected_stocks.length}
-                      개)
-                    </FieldTitle>
-                    {trade_targets.selected_stocks.length > 0 ? (
-                      <ul className="list-disc list-inside text-sm  space-y-1">
-                        {trade_targets.selected_stocks.map((stock, index) => (
-                          <li key={index}>{stock}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="text-sm ">선택 안 함</div>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+                  </>
+                )}
+              </div>
             </>
           )}
 

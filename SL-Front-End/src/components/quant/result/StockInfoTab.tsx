@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { BacktestResult, UniverseStock } from "@/types/api";
 import { StockDetailModal } from "@/components/modal/StockDetailModal";
+import type { BacktestResult, UniverseStock } from "@/types/api";
+import { useMemo, useState } from "react";
 
 /**
  * 매매종목 정보 탭 컴포넌트
@@ -102,10 +102,6 @@ export function StockInfoTab({
           <div className="w-3 h-3 rounded-full bg-blue-500" />
           <span className="text-text-muted">매도</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded border border-border-subtle bg-bg-surface opacity-50" />
-          <span className="text-text-muted">거래 없음</span>
-        </div>
       </div>
 
       {/* 그리드 레이아웃 */}
@@ -127,11 +123,10 @@ export function StockInfoTab({
                     code: stock.stockCode,
                   })
                 }
-                className={`relative p-4 rounded border transition-all cursor-pointer text-left ${
-                  hasTraded
-                    ? "bg-bg-muted border-border-subtle hover:border-accent-primary hover:bg-bg-surface"
-                    : "bg-bg-surface border-border-subtle opacity-50 hover:opacity-75"
-                }`}
+                className={`relative p-4 rounded border transition-all cursor-pointer text-left hover:border-brand-purple ${hasTraded
+                  ? "shadow-elev-brand"
+                  : "shadow-elev-sm"
+                  }`}
               >
                 {/* 순번 */}
                 <div className="absolute top-2 left-2 text-xs font-medium text-text-muted">

@@ -108,27 +108,26 @@ export function PageHeader({
       </h1>
 
       {/* 우측 액션 버튼 */}
-      {isOwner !== undefined && (
-        <div className="ml-auto">
-          {isOwner ? (
-            // 내 포트폴리오 - 공유 토글 버튼
-            <button
-              onClick={onToggleShare}
-              className="px-4 py-2 rounded-[12px] bg-brand-purple text-white font-semibold hover:opacity-80 transition-opacity"
-            >
-              {isPublic ? "전략 공유 해제하기" : "전략 공유하기"}
-            </button>
-          ) : (
-            // 남의 포트폴리오 - 복제 버튼
-            <button
-              onClick={onClone}
-              className="px-4 py-2 rounded-[12px] bg-brand-purple text-white font-semibold hover:opacity-80 transition-opacity"
-            >
-              전략 복제
-            </button>
-          )}
-        </div>
-      )}
+      <div className="ml-auto flex gap-2">
+        {/* 복제 버튼 */}
+        <button
+          onClick={onClone}
+          className="px-4 py-2 rounded-[12px] bg-brand-purple text-white font-semibold hover:opacity-80 transition-opacity"
+        >
+          전략 복제
+        </button>
+
+        {/* 공유 토글 버튼 */}
+        {isOwner && (
+          <button
+            onClick={onToggleShare}
+            className="px-4 py-2 rounded-[12px] bg-brand-purple text-white font-semibold hover:opacity-80 transition-opacity"
+          >
+            {isPublic ? "전략 공유 해제하기" : "전략 공유하기"}
+          </button>
+        )}
+
+      </div>
     </div>
   );
 }

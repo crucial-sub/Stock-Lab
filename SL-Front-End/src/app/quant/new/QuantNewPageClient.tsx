@@ -85,6 +85,29 @@ export function QuantNewPageClient() {
     setConditionSell,
     setTradeTargets,
   } = useBacktestConfigStore();
+  const reset = useBacktestConfigStore((state) => state.reset);
+
+  // 페이지 진입 시 query parameter가 없으면 store 초기화
+  useEffect(() => {
+    const conditionsParam = searchParams.get("conditions");
+    const cloneParam = searchParams.get("clone");
+
+    // query parameter가 없으면 store 초기화
+    if (!conditionsParam && !cloneParam) {
+      reset();
+      conditionsAppliedRef.current = false;
+      cloneAppliedRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 마운트 시 한 번만 실행
+
+  // 페이지 언마운트 시 cleanup
+  useEffect(() => {
+    return () => {
+      // 페이지를 떠날 때 store 초기화
+      reset();
+    };
+  }, [reset]);
 
   useEffect(() => {
     if (conditionsAppliedRef.current) return;

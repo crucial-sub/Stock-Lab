@@ -17,6 +17,16 @@ try:
 except ImportError:
     redis = None
 
+# LangChain 캐시 (Redis)
+RedisCache = None
+try:
+    from langchain.cache import RedisCache  # type: ignore
+except Exception:
+    try:
+        from langchain_community.cache import RedisCache  # type: ignore
+    except Exception as e:
+        print(f"경고: LangChain RedisCache를 불러오지 못했습니다. 캐시 비활성화. 오류: {e}")
+        RedisCache = None
 _pydantic_v1_module = None
 try:
     import pydantic as _pydantic
@@ -181,12 +191,16 @@ class ChatHandler:
         self.llm_target_id: Optional[str] = None
         # 외부 서비스 핸들러 (선언만 해 AttributeError 방지)
         self.sentiment_service = None
+        # 챗봇 사용 가이드 캐시
+        self.usage_notes: Optional[str] = None
+        self.page_guides_cache: Dict[str, str] = {}
 
         self._load_config()
         self._load_forbidden_patterns()
         self.questions = self._load_questions()
         self._load_strategies()
         self._load_nl_category_mapping()
+        self._load_usage_notes()
         self._init_cache_client()
         self._init_components()
         self._ensure_news_retriever()
@@ -214,6 +228,11 @@ class ChatHandler:
         try:
             self.cache_client = redis.from_url(redis_url, decode_responses=True)
             self.logger.info(f"Redis cache enabled ({redis_url})")
+            # LangChain Redis 캐시 설정 (프롬프트/컨텍스트 해시 기반)
+            if RedisCache:
+                import langchain
+                langchain.cache = RedisCache(self.cache_client)
+                self.logger.info("LangChain Redis cache 활성화됨")
         except Exception as e:
             self.logger.warning(f"Redis 초기화 실패: {e}")
             self.cache_client = None
@@ -287,6 +306,33 @@ class ChatHandler:
                 ],
             },
         ]
+
+    def _load_usage_notes(self) -> None:
+        """챗봇 사용 가이드(요약)를 로드해 캐시."""
+        candidates = [
+            Path("/app/docs/user-guide/chatbot-usage-notes.md"),
+            Path(__file__).parent.parent.parent / "docs" / "user-guide" / "chatbot-usage-notes.md",
+        ]
+        for path in candidates:
+            if path.exists():
+                try:
+                    text = path.read_text(encoding="utf-8")
+                    # 너무 길면 앞부분만 캐시
+                    self.usage_notes = text[:1200]
+                    print(f"Loaded chatbot usage notes from {path}")
+                    return
+                except Exception as exc:
+                    print(f"WARNING: failed to load usage notes ({path}): {exc}")
+        self.usage_notes = None
+
+    def _load_doc_snippet(self, path: Path, max_chars: int = 800) -> Optional[str]:
+        """지정된 문서에서 앞부분만 잘라 요약 스니펫으로 반환."""
+        try:
+            text = path.read_text(encoding="utf-8")
+            return text[:max_chars]
+        except Exception as exc:
+            print(f"WARNING: failed to load doc snippet ({path}): {exc}")
+            return None
 
     def _load_nl_category_mapping(self):
         """자연어 → 상위 팩터 카테고리 매핑 로드."""
@@ -708,6 +754,12 @@ class ChatHandler:
             category_response["session_id"] = session_id
             return category_response
 
+        # 사용 가이드 요청 시 즉시 가이드 반환
+        guide_response = self._maybe_handle_usage_guide(message)
+        if guide_response:
+            guide_response["session_id"] = session_id
+            return guide_response
+
         # 뉴스/테마 요청인데 뉴스/테마 서비스가 없으면 즉시 템플릿형 안내로 응답
         self._ensure_news_retriever()
         if self._is_news_theme_request(message) and not self.news_retriever:
@@ -718,6 +770,11 @@ class ChatHandler:
                 "session_id": session_id,
                 "sources": []
             }
+        # 뉴스/테마 요청이면 일관된 뉴스 요약으로 즉시 응답
+        if self._is_news_theme_request(message) and self.news_retriever:
+            news_resp = await self._build_news_response(message)
+            news_resp["session_id"] = session_id
+            return news_resp
 
         # 1. Classify intent
         intent = await self._classify_intent(message)
@@ -754,6 +811,37 @@ class ChatHandler:
                 if combined_context:
                     context = f"{context}\n\n{combined_context}" if context else combined_context
 
+                # 뉴스 요청이면 바로 요약을 반환해 애매한 답변을 방지
+                if news_context:
+                    answer_lines = ["## 최신 뉴스 요약", news_context]
+                    if sentiment_context:
+                        answer_lines.append("\n### 감성 요약")
+                        answer_lines.append(sentiment_context)
+                    answer_lines.append("\n※ 매수/매도 권유가 아닌 정보 제공용입니다.")
+                    return {
+                        "answer": "\n".join(answer_lines),
+                        "intent": "news_summary",
+                        "session_id": session_id,
+                        "sources": []
+                    }
+                else:
+                    # 뉴스 데이터가 없으면 명확하게 안내하고 종료
+                    no_news = (
+                        "## 최신 뉴스 요약\n"
+                        "죄송합니다. 해당 키워드로 최근 뉴스 데이터를 찾지 못했습니다.\n\n"
+                        "### 다음에 시도해보세요\n"
+                        "- 더 구체적인 종목명/테마로 다시 요청 (예: '삼성전자 최근 뉴스')\n"
+                        "- 기간을 넓혀 과거 뉴스 포함 검색\n"
+                        "- 다른 키워드로 재시도\n\n"
+                        "※ 매수/매도 권유가 아닌 정보 제공용입니다."
+                    )
+                    return {
+                        "answer": no_news,
+                        "intent": "news_summary",
+                        "session_id": session_id,
+                        "sources": []
+                    }
+
             if intent == 'backtest_configuration':
                 response = self._handle_backtest_configuration(message, session_id)
             else:
@@ -762,6 +850,9 @@ class ChatHandler:
                 )
 
         response["session_id"] = session_id
+        # AI 헬퍼 모드에서는 바로 적용 가능한 매수/매도 버튼을 노출하도록 UI 언어를 보강한다.
+        if client_type == "ai_helper":
+            self._ensure_ai_helper_actions(response)
         return response
 
     def _is_simple_greeting(self, message: str) -> bool:
@@ -1052,6 +1143,11 @@ class ChatHandler:
 
         try:
             news_items = await self.news_retriever.search_news_by_keyword(search_query, max_results=5)
+            # 공백 제거 버전으로 재시도 (예: '삼성 전자' → '삼성전자')
+            if not news_items and " " in search_query:
+                compact_query = search_query.replace(" ", "")
+                print(f"[뉴스 컨텍스트 검색] 결과 없음 → 공백 제거 재시도: '{compact_query}'")
+                news_items = await self.news_retriever.search_news_by_keyword(compact_query, max_results=5)
             print(f"[뉴스 컨텍스트 검색] 결과 {len(news_items)}건")
 
             if not news_items:
@@ -1134,32 +1230,110 @@ class ChatHandler:
     def _build_category_conditions(self, categories: List[str]) -> List[Dict[str, Any]]:
         """카테고리별 기본 DSL 조건 묶음 생성."""
         preset: Dict[str, List[Dict[str, Any]]] = {
-            "VALUE": [
+            "VALUE_QUALITY": [
                 {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 10},
                 {"factor": "PBR", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 1.0},
-            ],
-            "QUALITY": [
                 {"factor": "ROE", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 15},
-                {"factor": "OperatingProfitMargin", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "DebtRatio", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 150},
+            ],
+            "PURE_VALUE": [
+                {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "PBR", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 1.0},
             ],
             "GROWTH": [
                 {"factor": "revenue_cagr_3y", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
                 {"factor": "eps_growth_rate", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
             ],
-            "MOMENTUM": [
-                {"factor": "RET_60D", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 0.05},
+            "VALUE_GROWTH": [
+                {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 15},
+                {"factor": "PBR", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 1.5},
+                {"factor": "revenue_cagr_3y", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+            ],
+            "QUALITY": [
+                {"factor": "ROE", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 15},
+                {"factor": "OperatingProfitMargin", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "DebtRatio", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 100},
             ],
             "STABILITY": [
+                {"factor": "DebtRatio", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 100},
                 {"factor": "VOLATILITY_60D", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 0.2},
             ],
             "DIVIDEND": [
-                {"factor": "DividendYield", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 3},
+                {"factor": "DividendYield", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 4},
+            ],
+            "MOMENTUM": [
+                {"factor": "RET_20D", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 0.05},
+                {"factor": "RET_60D", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 0},
+            ],
+            "SHORT_TERM": [
+                {"factor": "RET_5D", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 0.03},
+                {"factor": "volume_ratio", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 1.5},
+            ],
+            "LOW_RISK": [
+                {"factor": "VOLATILITY_60D", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 0.15},
+                {"factor": "BETA", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 0.9},
+            ],
+            "REVERSAL": [
+                {"factor": "RET_20D", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": -0.1},
+                {"factor": "RSI_14", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 30},
             ],
         }
         conditions: List[Dict[str, Any]] = []
         for cat in categories:
             conditions.extend(preset.get(cat, []))
         return conditions
+
+    def _ensure_ai_helper_actions(self, response: Dict[str, Any]) -> None:
+        """AI 헬퍼 응답에 매수/매도 통합 적용 버튼을 강제한다."""
+        backtest_conditions = response.get("backtest_conditions")
+        # 조건이 없으면 기본 빈 구조라도 제공
+        if not backtest_conditions:
+            backtest_conditions = {"buy": [], "sell": []}
+        ui_language = response.get("ui_language") or {}
+        # 기존 actions를 통합 적용 버튼 하나로 덮어쓴다.
+        ui_language["type"] = ui_language.get("type") or "backtest_configuration"
+        ui_language["actions"] = [
+            {
+                "type": "apply_backtest_conditions",
+                "label": "매수·매도 한번에 적용",
+                "conditions": backtest_conditions,
+            }
+        ]
+        response["ui_language"] = ui_language
+        # 기본 버튼이 중복 노출되지 않도록 backtest_conditions는 빈 값으로 남긴다.
+        response["backtest_conditions"] = {"buy": [], "sell": []}
+
+    async def _build_news_response(self, message: str) -> dict:
+        """뉴스/테마 요청에 대한 일관된 요약 응답 생성."""
+        news_context = await self._fetch_news_for_context(message)
+        sentiment_context = await self._fetch_sentiment_for_context(message)
+
+        if news_context:
+            answer_lines = ["## 최신 뉴스 요약", news_context]
+            if sentiment_context:
+                answer_lines.append("\n### 감성 요약")
+                answer_lines.append(sentiment_context)
+            answer_lines.append("\n※ 매수/매도 권유가 아닌 정보 제공용입니다.")
+            return {
+                "answer": "\n".join(answer_lines),
+                "intent": "news_summary",
+                "sources": [],
+            }
+
+        no_news = (
+            "## 최신 뉴스 요약\n"
+            "죄송합니다. 해당 키워드로 최근 뉴스 데이터를 찾지 못했습니다.\n\n"
+            "### 다음에 시도해보세요\n"
+            "- 더 구체적인 종목명/테마로 다시 요청 (예: '삼성전자 최근 뉴스')\n"
+            "- 기간을 넓혀 과거 뉴스 포함 검색\n"
+            "- 다른 키워드로 재시도\n\n"
+            "※ 매수/매도 권유가 아닌 정보 제공용입니다."
+        )
+        return {
+            "answer": no_news,
+            "intent": "news_summary",
+            "sources": [],
+        }
 
     def _maybe_handle_category_mapping(self, message: str) -> Optional[dict]:
         """자연어 카테고리 매핑으로 즉시 DSL 조건을 반환."""
@@ -1188,6 +1362,82 @@ class ChatHandler:
                 "buy": conditions,
                 "sell": []
             }
+        }
+
+    def _maybe_handle_usage_guide(self, message: str) -> Optional[dict]:
+        """챗봇 사용 가이드 요청이면 요약과 경로를 반환."""
+        if not message:
+            return None
+        msg_lower = message.lower()
+        guide_triggers = ["가이드", "사용법", "이용법", "어떻게 써", "도움말", "how to use", "사용 방법", "챗봇 쓰는", "매뉴얼"]
+        if not any(t in msg_lower for t in guide_triggers):
+            return None
+        # 페이지별 키워드 매핑
+        page_guides = [
+            {
+                "id": "chatbot",
+                "keywords": ["챗봇", "ai 어시스턴트", "assistant"],
+                "title": "챗봇 이용 안내",
+                "path": Path(__file__).parent.parent.parent / "docs" / "user-guide" / "chatbot-usage-notes.md",
+            },
+            {
+                "id": "quant",
+                "keywords": ["전략 포트폴리오", "백테스트", "퀀트", "전략 페이지"],
+                "title": "전략/포트폴리오 사용법",
+                "path": Path(__file__).parent.parent.parent / "docs" / "user-guide" / "06-quant.md",
+            },
+            {
+                "id": "quant_new",
+                "keywords": ["새 전략", "전략 생성", "조건 만들기"],
+                "title": "새 전략 생성 가이드",
+                "path": Path(__file__).parent.parent.parent / "docs" / "user-guide" / "07-quant-new.md",
+            },
+            {
+                "id": "market",
+                "keywords": ["시세", "가격", "realtime", "실시간"],
+                "title": "실시간 시세 사용법",
+                "path": Path(__file__).parent.parent.parent / "docs" / "user-guide" / "12-realtime.md",
+            },
+        ]
+
+        for pg in page_guides:
+            if any(k in msg_lower for k in pg["keywords"]):
+                cache_key = pg["id"]
+                snippet = self.page_guides_cache.get(cache_key)
+                if not snippet:
+                    snippet = self._load_doc_snippet(pg["path"])
+                    if snippet:
+                        self.page_guides_cache[cache_key] = snippet
+                # 파일을 못 읽으면 간단한 텍스트 가이드로 대체
+                fallback_texts = {
+                    "chatbot": "AI 어시스턴트에서 질문을 입력하면 실시간으로 답변을 받습니다. 로그인 시 대화 기록이 저장되고, 전략/뉴스/지표 등 금융 질문에만 응답합니다.",
+                    "quant": "전략 포트폴리오에서 보유 전략을 확인하고 백테스트 결과를 비교합니다. 각 전략 카드를 눌러 상세 성과를 보고, 백테스트를 재실행할 수 있습니다.",
+                    "quant_new": "새 전략 생성 페이지에서 매수/매도 조건을 입력하고 기간·리밸런싱 등을 설정 후 백테스트를 실행합니다. 결과 페이지로 이동해 성과를 확인하세요.",
+                    "market": "실시간 시세에서 종목을 검색해 현재가/차트를 확인하고, 관심 종목을 추가할 수 있습니다.",
+                }
+                text_body = snippet or fallback_texts.get(cache_key, "해당 가이드를 로드하지 못했습니다.")
+                answer = (
+                    f"{pg['title']}\n"
+                    f"{text_body}\n\n"
+                    f"자세히: docs/user-guide/{pg['path'].name}"
+                )
+                return {
+                    "answer": answer,
+                    "intent": "guide",
+                    "sources": [f"docs/user-guide/{pg['path'].name}"],
+                }
+
+        # 기본 챗봇 가이드
+        summary = self.usage_notes or "챗봇 이용 가이드를 로드하지 못했습니다. docs/user-guide/chatbot-usage-notes.md를 확인해주세요."
+        answer = (
+            "## 챗봇 이용 안내\n"
+            "가이드 요약을 전달드려요. 자세한 내용은 docs/user-guide/chatbot-usage-notes.md를 참고하세요.\n\n"
+            f"{summary}"
+        )
+        return {
+            "answer": answer,
+            "intent": "guide",
+            "sources": ["docs/user-guide/chatbot-usage-notes.md"],
         }
 
     async def _handle_questionnaire_flow(self, session_id: str, answer: Optional[dict], message: str) -> dict:
@@ -1511,6 +1761,17 @@ class ChatHandler:
                     "원하는 번호나 전략명을 알려주세요."
                 ),
                 "intent": "clarify_backtest",
+                "session_id": session_id,
+            }
+
+        # 전략이 식별되지 않았다면 기본값으로 워렌버핏을 사용
+        if not matched_id:
+            matched_id = "warren_buffett"
+        tpl = self.strategy_backtest_templates.get(matched_id)
+        if not tpl:
+            return {
+                "answer": "해당 전략 템플릿을 찾지 못했습니다. strategies.json을 확인해주세요.",
+                "intent": "backtest_configuration",
                 "session_id": session_id,
             }
 
@@ -2133,7 +2394,12 @@ class ChatHandler:
         try:
             # Use asyncio.to_thread to run the synchronous invoke method in a separate thread
             # Pass inputs in a structured dictionary, not a single message list
-            chat_history = getattr(memory, "messages", []) if memory else []
+            raw_chat_history = getattr(memory, "messages", []) if memory else []
+            # Bedrock/Anthropic는 빈 content 메시지를 허용하지 않으므로 필터링
+            chat_history = [
+                m for m in raw_chat_history
+                if hasattr(m, "content") and isinstance(m.content, str) and m.content.strip()
+            ]
 
             # Prepare invoke input
             # Note: agent_scratchpad is required for both tool-calling and ReAct agents

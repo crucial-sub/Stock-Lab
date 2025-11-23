@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, type FormEvent } from "react";
+import { useEffect, useRef, useState, useMemo, type FormEvent, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -101,6 +101,13 @@ export function FloatingChatWidget() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void handleSend();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void handleSend();
+    }
   };
 
   return (
@@ -266,6 +273,7 @@ export function FloatingChatWidget() {
                   placeholder="예: 퀀트투자가 뭐야?"
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
+                  onKeyDown={handleKeyDown}
                   disabled={isSending}
                 />
                 <button

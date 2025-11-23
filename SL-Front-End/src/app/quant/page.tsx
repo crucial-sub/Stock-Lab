@@ -100,19 +100,7 @@ export default async function PortfolioPage() {
     // 두 리스트 합치기
     const portfolios: Portfolio[] = [...backtestPortfolios, ...autoTradingPortfolios];
 
-    // 3. 키움 계좌 잔고 조회 (메인 페이지와 동일)
-    let kiwoomAccountData: KiwoomAccountData | null = null;
-    try {
-      const kiwoomStatus = await kiwoomApi.getStatusServer(token);
-      if (kiwoomStatus.is_connected) {
-        const accountResponse = await kiwoomApi.getAccountBalanceServer(token);
-        kiwoomAccountData = (accountResponse as { data?: unknown }).data ?? accountResponse;
-      }
-    } catch (error) {
-      console.warn("키움 계좌 데이터 조회 실패:", error);
-    }
-
-    // 4. 실제 자동매매 대시보드 데이터 가져오기
+    // 3. 자동매매 대시보드 데이터 가져오기
     let dashboardData = {
       total_assets: 0,
       total_return: 0,
@@ -129,55 +117,11 @@ export default async function PortfolioPage() {
       console.warn("대시보드 데이터 조회 실패:", error);
     }
 
-    // 메인 페이지와 동일한 로직: 키움 계좌 정보 사용
-    const parseNumericValue = (value?: string | number): number => {
-      if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-      if (!value) return 0;
-      const cleaned = value.toString().replace(/[,%\s]/g, "");
-      const parsed = Number.parseFloat(cleaned);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    };
-
-    let totalAssets = 0;
-    let totalProfit = 0;  // 평가손익 (자동매매 종목만)
-    let totalReturn = 0;  // 수익률 (자동매매 1억 기준)
-    let evaluationAmount = 0;  // 평가금액 (자동매매 종목 평가액 + 현금)
-
-    if (kiwoomAccountData?.holdings) {
-      const evalAmount = parseNumericValue((kiwoomAccountData).holdings.tot_evlt_amt);
-      const cashBalance = parseNumericValue((kiwoomAccountData).cash?.balance);
-      const allocatedCapital = Number(dashboardData.total_allocated_capital) || 0;
-
-      // 키움 계좌 전체 금액에서 자동매매 할당 금액을 빼서 실제 사용 가능한 자산 계산
-      totalAssets = evalAmount + cashBalance - allocatedCapital;
-
-      // 자동매매 전략의 손익과 수익률 사용 (활성화된 첫 번째 전략)
-      const autoStrategy = autoTradingStrategies.find(s => s.is_active);
-      if (autoStrategy) {
-        // 백엔드에서 계산한 자동매매 1억 기준 수익률 사용
-        const strategyEval = Math.floor(Number(autoStrategy.kiwoom_total_eval) || 0);
-        const strategyProfit = Math.floor(Number(autoStrategy.kiwoom_total_profit) || 0);
-        const strategyReturn = Number(autoStrategy.kiwoom_total_profit_rate) || 0;
-
-        totalProfit = strategyProfit;
-        totalReturn = strategyReturn;
-        evaluationAmount = strategyEval;
-      } else {
-        // fallback: 전체 계좌 데이터
-        const profit = parseNumericValue((kiwoomAccountData).holdings.tot_evlt_pl);
-        const returnRate = parseNumericValue((kiwoomAccountData).holdings.tot_prft_rt);
-        totalProfit = profit;
-        totalReturn = returnRate;
-        evaluationAmount = evalAmount;
-      }
-    } else {
-      // 키움 데이터 없으면 기존 포트폴리오 데이터 사용
-      totalAssets = Number(dashboardData.total_assets) || 0;
-      totalProfit = Number(dashboardData.total_profit) || 0;
-      totalReturn = Number(dashboardData.total_return) || 0;
-      evaluationAmount = totalAssets;
-    }
-
+    // 자동매매 대시보드 데이터만 사용
+    const totalAssets = Number(dashboardData.total_assets) || 0;
+    const totalProfit = Number(dashboardData.total_profit) || 0;
+    const totalReturn = Number(dashboardData.total_return) || 0;
+    const evaluationAmount = totalAssets;
     const activeCount = Number(dashboardData.active_strategy_count) || 0;
 
     return (

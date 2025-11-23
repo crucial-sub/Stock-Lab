@@ -23,6 +23,11 @@ class AutoTradingDeactivateRequest(BaseModel):
     deactivation_mode: Optional[str] = Field(None, description="비활성화 모드: immediate(즉시), sell_and_deactivate(매도 후 비활성화), scheduled_sell(예약 매도)")
 
 
+class AutoTradingStrategyNameUpdateRequest(BaseModel):
+    """자동매매 전략 이름 수정 요청"""
+    strategy_name: str = Field(..., description="새로운 전략 이름", min_length=1, max_length=100)
+
+
 # Response Schemas
 class LivePositionResponse(BaseModel):
     """보유 종목 응답"""
@@ -137,6 +142,13 @@ class AutoTradingDeactivateResponse(BaseModel):
     is_active: bool
     deactivated_at: datetime
     positions_sold: int
+
+
+class AutoTradingStrategyNameUpdateResponse(BaseModel):
+    """자동매매 전략 이름 수정 응답"""
+    message: str
+    strategy_id: UUID
+    strategy_name: str
 
 
 class AutoTradingLogResponse(BaseModel):

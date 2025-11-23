@@ -13,7 +13,7 @@ import { axiosInstance } from "../axios";
 
 /**
  * 전략 추천
- * - POST /api/v1/strategies/recommend
+ * - POST /api/v1/investment-strategies/recommend
  * - 사용자 설문 결과 태그를 기반으로 매칭되는 전략 추천
  *
  * @param request - 추천 요청 (user_tags, top_n)
@@ -31,7 +31,7 @@ export async function recommendStrategies(
   request: StrategyRecommendationRequest,
 ): Promise<StrategyMatch[]> {
   const response = await axiosInstance.post<StrategyMatch[]>(
-    "/strategies/recommend",
+    "/investment-strategies/recommend",
     request,
   );
   return response.data;
@@ -39,7 +39,7 @@ export async function recommendStrategies(
 
 /**
  * 전략 상세 정보 조회
- * - GET /api/v1/strategies/{strategyId}
+ * - GET /api/v1/investment-strategies/{strategyId}
  * - 백테스트 실행에 필요한 전체 설정 포함
  * - 조회 시 인기도 점수 자동 증가
  *
@@ -62,7 +62,7 @@ export async function getStrategyDetail(
   strategyId: string,
 ): Promise<StrategyDetail> {
   const response = await axiosInstance.get<StrategyDetail>(
-    `/strategies/${strategyId}`,
+    `/investment-strategies/${strategyId}`,
   );
   return response.data;
 }

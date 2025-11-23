@@ -61,13 +61,7 @@ export default function CommunityPageClient() {
       {/* 수익률 랭킹 */}
       <section>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-body">수익률 랭킹</h2>
-          <button
-            onClick={() => router.push("/community/rankings")}
-            className="text-base text-gray-700 underline hover:text-gray-600"
-          >
-            더보기
-          </button>
+          <span className="text-[1.5rem] font-semibold text-body">수익률 랭킹</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {rankingsLoading ? (
@@ -102,10 +96,10 @@ export default function CommunityPageClient() {
       {/* 공유된 포트폴리오 */}
       <section>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-body">포트폴리오 공유하기</h2>
+          <span className="text-[1.5rem] font-semibold text-body">포트폴리오 공유하기</span>
           <button
             onClick={() => router.push("/community/public-strategies")}
-            className="text-base text-gray-700 underline hover:text-gray-600"
+            className="text-[1rem] text-brand-purple font-normal hover:underline"
           >
             더보기
           </button>

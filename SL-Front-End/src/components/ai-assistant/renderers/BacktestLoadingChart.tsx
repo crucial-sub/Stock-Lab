@@ -43,12 +43,17 @@ interface ChartDataPoint {
   sellCountNegative: number;
 }
 
+const COLOR_RETURN = am5.color(0x7c5cfe);
+const COLOR_RETURN_FILL = am5.color(0xded6ff);
+const COLOR_BUY = am5.color(0xff6464); // price-up
+const COLOR_SELL = am5.color(0x007dfc); // price-down
+
 /**
  * 백테스트 로딩 차트 컴포넌트
  *
  * - amcharts5 기반 실시간 업데이트 차트
- * - 누적 수익률 라인 그래프 (파란색)
- * - 매수/매도 횟수 막대 그래프 (양방향)
+ * - 누적 수익률 라인 그래프 (브랜드 퍼플)
+ * - 매수/매도 횟수 막대 그래프 (price-up / price-down)
  * - X축 범위 고정 (투자 시작일 ~ 종료일)
  * - 줌/패닝 비활성화
  */
@@ -80,43 +85,60 @@ export function BacktestLoadingChart({
     // 차트 생성
     const chart = root.container.children.push(
       am5xy.XYChart.new(root, {
-        panX: false, // 패닝 비활성화
+        panX: false,
         panY: false,
-        wheelX: "none", // 줌 비활성화
+        wheelX: "none",
         wheelY: "none",
         pinchZoomX: false,
       })
     );
+    chart.get("colors")!.set("step", 1);
+    chart.set("paddingTop", 20);
+    chart.set("paddingBottom", 10);
+    chart.chartContainer.setAll({
+      background: am5.Rectangle.new(root, {
+        fill: am5.color(0xF2F6FF),
+        fillOpacity: 1,
+        cornerRadius: 20,
+      }),
+    });
 
     // X축 (날짜) - 범위 고정
+    const xAxisRenderer = am5xy.AxisRendererX.new(root, {
+      minGridDistance: 50,
+      strokeOpacity: 0.1,
+      minorGridEnabled: true,
+    });
     const xAxis = chart.xAxes.push(
       am5xy.DateAxis.new(root, {
         baseInterval: { timeUnit: "day", count: 1 },
         min: new Date(startDate).getTime(),
         max: new Date(endDate).getTime(),
-        strictMinMax: true, // ⭐ 범위 고정
-        renderer: am5xy.AxisRendererX.new(root, {
-          minGridDistance: 50,
-        }),
+        strictMinMax: true,
+        renderer: xAxisRenderer,
       })
     );
+    xAxisRenderer.grid.template.setAll({ strokeOpacity: 0.05 });
 
     // X축 레이블 포맷 (YYYY.MM.DD)
     xAxis.get("dateFormats")!["day"] = "yyyy.MM.dd";
     xAxis.get("periodChangeDateFormats")!["day"] = "yyyy.MM.dd";
 
     // Y축 1 (수익률) - 왼쪽
+    const yAxisReturnRenderer = am5xy.AxisRendererY.new(root, {});
     const yAxisReturn = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
-        renderer: am5xy.AxisRendererY.new(root, {}),
+        renderer: yAxisReturnRenderer,
       })
     );
+    yAxisReturnRenderer.grid.template.setAll({ strokeOpacity: 0.05 });
 
     // Y축 2 (매매 횟수) - 오른쪽, 0 기준 양방향
     const yAxisTrade = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {
           opposite: true,
+          gridTemplate: { strokeOpacity: 0 },
         }),
       })
     );
@@ -129,7 +151,7 @@ export function BacktestLoadingChart({
         yAxis: yAxisReturn,
         valueYField: "cumulativeReturn",
         valueXField: "date",
-        stroke: am5.color(0x3b82f6), // 파란색
+        stroke: COLOR_RETURN,
         tooltip: am5.Tooltip.new(root, {
           labelText: `[bold]{valueX.formatDate('yyyy.MM.dd')}[/]
 누적수익률: {cumulativeReturn}%
@@ -139,6 +161,13 @@ export function BacktestLoadingChart({
       })
     );
     returnSeries.strokes.template.setAll({ strokeWidth: 2 });
+    returnSeries.fills.template.setAll({
+      fill: COLOR_RETURN_FILL,
+      fillOpacity: 0.3,
+    });
+    returnSeries.set("fillGradient", am5.LinearGradient.new(root, {
+      stops: [{ color: COLOR_RETURN_FILL }, { color: am5.color(0xffffff), opacity: 0 }],
+    }));
     returnSeries.data.setAll([]); // 빈 배열로 시작
 
     // 시리즈 2: 매수 횟수 막대 (위로)
@@ -149,8 +178,8 @@ export function BacktestLoadingChart({
         yAxis: yAxisTrade,
         valueYField: "buyCount",
         valueXField: "date",
-        fill: am5.color(0xef4444), // 빨간색
-        stroke: am5.color(0xef4444),
+        fill: COLOR_BUY,
+        stroke: COLOR_BUY,
         clustered: false, // 겹치기 허용
         tooltip: am5.Tooltip.new(root, {
           labelText: "매수: {buyCount}회",
@@ -171,8 +200,8 @@ export function BacktestLoadingChart({
         yAxis: yAxisTrade,
         valueYField: "sellCountNegative", // 음수 값
         valueXField: "date",
-        fill: am5.color(0x3b82f6), // 파란색
-        stroke: am5.color(0x3b82f6),
+        fill: COLOR_SELL,
+        stroke: COLOR_SELL,
         clustered: false,
         tooltip: am5.Tooltip.new(root, {
           labelText: "매도: {sellCount}회",
@@ -189,7 +218,7 @@ export function BacktestLoadingChart({
     chart.set(
       "cursor",
       am5xy.XYCursor.new(root, {
-        behavior: "none", // 줌 비활성화
+        behavior: "none",
       })
     );
 

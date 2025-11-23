@@ -51,7 +51,7 @@ export function DiscussionPreviewSection({
         {showMoreHref && (
           <button
             onClick={() => router.push(showMoreHref)}
-            className="text-[1rem] text-brand-purple font-normal hover:underline"
+            className="text-base text-gray-700 underline hover:text-gray-600"
           >
             더보기
           </button>

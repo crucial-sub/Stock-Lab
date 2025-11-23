@@ -464,6 +464,7 @@ export function HomePageClient({
               하면 자동매매를 이용할 수 있습니다.
             </p>
           )}
+          {hasPerformanceChartData && <PerformanceChartSection />}
           <MarketInsightSection stocks={marketStocks} news={marketNews} />
           <UsageTipsSection tips={usageTips} />
           {hasHighlights && (

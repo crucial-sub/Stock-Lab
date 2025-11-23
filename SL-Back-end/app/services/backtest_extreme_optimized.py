@@ -871,11 +871,17 @@ class ExtremeOptimizer:
             )
             logger.info(f"✅ 재무 팩터 사전 계산 완료: {len(financial_factors_cache)}개 종목")
 
-        # 병렬 처리 여부 결정 (5개 이상 날짜면 병렬 처리)
-        if len(calc_dates) < 5:
-            logger.info("날짜 수가 적어 순차 처리 사용")
+        # 병렬 처리 여부 결정
+        # FIXME: 멀티프로세싱 시 price_pl.to_pandas() 변환에서 메모리 문제 발생
+        # 순차 처리로 변경 (안정성 우선)
+        use_sequential = True  # 임시로 순차 처리 강제
+
+        if use_sequential or len(calc_dates) < 1000:  # 순차 처리 사용
+            logger.info(f"순차 처리 사용 ({len(calc_dates)}개 날짜)")
             all_results = {}
-            for calc_date in calc_dates:
+            for i, calc_date in enumerate(calc_dates):
+                if i % 50 == 0:
+                    logger.info(f"진행 중: {i}/{len(calc_dates)} 날짜 처리 완료")
                 all_results[calc_date] = self.calculate_all_indicators_extreme(
                     price_pl, None, calc_date, None  # 재무 데이터 None (캐시 사용)
                 )
@@ -883,13 +889,16 @@ class ExtremeOptimizer:
                 for stock_code in all_results[calc_date]:
                     if stock_code in financial_factors_cache:
                         all_results[calc_date][stock_code].update(financial_factors_cache[stock_code])
+            logger.info(f"✅ 순차 처리 완료: {len(all_results)}개 날짜")
             return all_results
 
         # 멀티프로세싱으로 병렬 처리
         import concurrent.futures
 
         # Polars DataFrame을 pickle 가능한 형태로 변환 (pandas 또는 dict)
+        logger.info("Polars → Pandas 변환 시작...")
         price_dict = price_pl.to_pandas() if price_pl is not None else None
+        logger.info("Polars → Pandas 변환 완료")
         # 재무 데이터는 전달하지 않음 (이미 계산됨)
         financial_dict = None
         stock_prices_dict = None  # 더 이상 필요 없음
@@ -1356,7 +1365,10 @@ class ExtremeOptimizer:
                     sma_20 = np.nan
 
                     # 가격 데이터가 있으면 기술적 지표 계산
-                    if stock_prices_pl is not None and not stock_prices_pl.is_empty():
+                    # stock_prices_pl은 시가총액 데이터만 있으므로 price_pl 사용 불가
+                    # 대신 전체 가격 데이터(price_pl)가 필요하지만 여기서는 사용 불가
+                    # TODO: price_pl을 파라미터로 전달받아야 함
+                    if False:  # 임시로 비활성화
                         stock_prices = stock_prices_pl.filter(pl.col('stock_code') == stock_code)
                         if len(stock_prices) > 0:
                             # 날짜순 정렬

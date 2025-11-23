@@ -13,6 +13,7 @@ export function AccountSection() {
   const [allocatedCapital, setAllocatedCapital] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   const fetchAccountBalance = async () => {
     setIsLoading(true);
@@ -60,6 +61,30 @@ export function AccountSection() {
     fetchAccountBalance();
   };
 
+  const handleDisconnect = async () => {
+    const confirmed = window.confirm(
+      "키움증권 연동을 해제하시겠습니까?\n\n해제 시 자동매매 기능을 사용할 수 없습니다.\n활성화된 자동매매 전략이 있다면 먼저 비활성화해주세요."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsDisconnecting(true);
+      await kiwoomApi.deleteCredentials();
+      setIsKiwoomConnected(false);
+      setAccountBalance(null);
+      setAllocatedCapital(0);
+      alert("키움증권 연동이 해제되었습니다.");
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "연동 해제에 실패했습니다.";
+      alert(errorMessage);
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
+
   return (
     <section className="rounded-[12px] p-7 shadow-elev-card backdrop-blur bg-[#1822340D]">
       <div className="flex flex-wrap items-center justify-between">
@@ -75,13 +100,22 @@ export function AccountSection() {
             계좌 연동하기
           </button>
         ) : (
-          <button
-            onClick={fetchAccountBalance}
-            disabled={isLoading}
-            className="rounded-full bg-[#FF6464] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#FF6464CC] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isLoading ? "조회 중..." : "연동 새로고침"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={fetchAccountBalance}
+              disabled={isLoading || isDisconnecting}
+              className="rounded-full bg-[#5d6bf5] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#5d6bf5]/80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoading ? "조회 중..." : "새로고침"}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={isLoading || isDisconnecting}
+              className="rounded-full bg-[#FF6464] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#FF6464]/80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isDisconnecting ? "해제 중..." : "연동 해제"}
+            </button>
+          </div>
         )}
       </div>
 

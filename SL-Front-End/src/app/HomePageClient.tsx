@@ -182,53 +182,8 @@ const buildAuthenticatedStats = (
   dashboardData: DashboardData,
   kiwoomAccountData: KiwoomAccountData | null,
 ): HomeStatCardData[] => {
-  // 키움 데이터가 있으면 키움 데이터 사용, 없으면 포트폴리오 데이터 사용
+  // 자동매매 대시보드 데이터 우선 사용 (활성 전략이 있는 경우)
   const activeCount = Number(dashboardData.active_strategy_count) || 0;
-  const allocatedCapital = Number(dashboardData.total_allocated_capital) || 0;
-
-  if (kiwoomAccountData?.holdings) {
-    const evaluationAmount = parseNumericValue(
-      kiwoomAccountData.holdings.tot_evlt_amt,
-    );
-    const totalProfit = parseNumericValue(
-      kiwoomAccountData.holdings.tot_evlt_pl,
-    );
-    const totalReturn = parseNumericValue(
-      kiwoomAccountData.holdings.tot_prft_rt,
-    );
-    const cashBalance = parseNumericValue(kiwoomAccountData.cash?.balance);
-
-    // 키움 계좌 전체 금액에서 자동매매 할당 금액을 빼서 실제 사용 가능한 자산 계산
-    const totalAssets = evaluationAmount + cashBalance - allocatedCapital;
-    const availableCash = cashBalance - allocatedCapital;
-
-    return [
-      {
-        id: "asset",
-        title: "총 자산",
-        value: `${totalAssets.toLocaleString()}원`,
-        change: `평가손익 ${formatCurrencyWithSign(totalProfit)}`,
-        badge:
-          availableCash > 0
-            ? `예수금 ${availableCash.toLocaleString()}원`
-            : "연동계좌",
-      },
-      {
-        id: "return",
-        title: "수익률",
-        value: formatPercentWithSign(totalReturn),
-        change: `평가금액 ${evaluationAmount.toLocaleString()}원`,
-      },
-      {
-        id: "active",
-        title: "활성 포트폴리오",
-        value: `${activeCount}개`,
-        change: "현재 활성 포트폴리오 개수",
-      },
-    ];
-  }
-
-  // 키움 데이터 없으면 기존 포트폴리오 데이터 사용
   const totalAssets = parseNumericValue(dashboardData.total_assets);
   const totalReturn = parseNumericValue(dashboardData.total_return);
   const totalProfit = parseNumericValue(dashboardData.total_profit);
@@ -236,9 +191,10 @@ const buildAuthenticatedStats = (
   return [
     {
       id: "asset",
-      title: "총 자산",
+      title: "총 모의 자산",
       value: `${totalAssets.toLocaleString()}원`,
       change: formatCurrencyWithSign(totalProfit),
+      badge: activeCount > 0 ? "자동매매 활성" : undefined,
     },
     {
       id: "return",

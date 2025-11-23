@@ -584,9 +584,28 @@ async def run_backtest(
 
     except HTTPException:
         # HTTPException은 그대로 전달 (429, 404 등)
+        # 429 에러가 아닌 경우 Rate Limit 카운터 감소
         raise
     except Exception as e:
         logger.error(f"백테스트 실행 실패: {e}", exc_info=True)
+        
+        # 🚀 Rate Limit 카운터 감소 (백테스트 시작 실패 시)
+        try:
+            from app.core.cache import get_redis
+            redis_client = get_redis()
+            if redis_client:
+                rate_limit_key = f"backtest:running:{current_user.user_id}"
+                running_count = await redis_client.get(rate_limit_key)
+                if running_count:
+                    new_count = max(0, int(running_count) - 1)
+                    if new_count > 0:
+                        await redis_client.setex(rate_limit_key, 3600, new_count)
+                    else:
+                        await redis_client.delete(rate_limit_key)
+                    logger.info(f"🚦 Rate Limit 감소 (에러): user_id={current_user.user_id}, 남은 실행: {new_count}/3")
+        except Exception as redis_error:
+            logger.warning(f"Rate Limit 감소 실패 (무시): {redis_error}")
+        
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -167,9 +167,13 @@ class OptimizedDBManager:
             # 필수 계정과목
             if required_accounts is None:
                 required_accounts = [
-                    '매출액', '영업이익', '당기순이익',
+                    # 매출액 (연도별로 다른 이름으로 저장됨)
+                    '매출액', '영업수익', '수익(매출액)',
+                    '영업이익', '당기순이익',
                     '자산총계', '자본총계', '부채총계',
-                    '유동자산', '유동부채', '현금및현금성자산'
+                    '유동자산', '유동부채', '현금및현금성자산',
+                    # 매출원가 (매출총이익 계산에 필요)
+                    '매출원가'
                 ]
 
             # 손익계산서 + 재무상태표 통합 쿼리
@@ -263,6 +267,14 @@ class OptimizedDBManager:
                 after_count = len(financial_pivot)
                 after_stocks = financial_pivot['stock_code'].nunique()
                 logger.info(f"🎯 재무 데이터 필터링: {before_count}건({before_stocks}종목) → {after_count}건({after_stocks}종목)")
+            # 매출액 컬럼 정규화 (여러 이름으로 저장된 매출액을 '매출액'으로 통일)
+            revenue_columns = ['매출액', '영업수익', '수익(매출액)']
+            if '매출액' not in financial_pivot.columns:
+                for col in revenue_columns:
+                    if col in financial_pivot.columns and col != '매출액':
+                        financial_pivot['매출액'] = financial_pivot[col]
+                        logger.info(f"매출액 컬럼 정규화: '{col}' → '매출액'")
+                        break
 
             logger.info(f"Loaded financial data for {financial_pivot['stock_code'].nunique()} companies (optimized)")
 

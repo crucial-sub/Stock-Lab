@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from app.core.database import get_db
 from app.services.universe_service import UniverseService
 
-router = APIRouter()
+router = APIRouter(prefix="/universes", tags=["Universes"])
 
 
 class UniverseInfo(BaseModel):

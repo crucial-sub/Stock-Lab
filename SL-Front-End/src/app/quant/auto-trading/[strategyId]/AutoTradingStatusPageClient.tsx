@@ -300,13 +300,13 @@ export function AutoTradingStatusPageClient({
                                 type="button"
                                 onClick={() =>
                                   setSelectedStock({
-                                    name: pos.stock_name,
+                                    name: pos.stock_name ?? pos.stock_code,
                                     code: pos.stock_code,
                                   })
                                 }
                                 className="text-left hover:text-brand-purple hover:underline transition-colors cursor-pointer"
                               >
-                                {pos.stock_name}
+                                {pos.stock_name ?? pos.stock_code}
                               </button>
                             </td>
                             <td className="px-4 py-3 text-sm text-right">

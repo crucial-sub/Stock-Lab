@@ -197,6 +197,8 @@ export interface TradingRuleSettings {
   rebalanceDay?: number;
   positionSizing?: string;
   maxPositions?: number;
+  minHoldDays?: number;
+  maxHoldDays?: number;
   minPositionWeight?: number;
   maxPositionWeight?: number;
   stopLossPct?: number;

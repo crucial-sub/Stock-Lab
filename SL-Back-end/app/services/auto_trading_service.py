@@ -197,8 +197,7 @@ class AutoTradingService:
                 portfolio_strategy = portfolio_result.scalar_one_or_none()
 
                 base_name = portfolio_strategy.strategy_name if portfolio_strategy else "전략"
-                timestamp = datetime.now().strftime("%m%d%H%M")
-                strategy_name = f"{base_name}-{timestamp}"
+                strategy_name = f"{base_name} 연동"
 
             # 6. 새로운 자동매매 전략 생성 (백테스트 조건 전부 복사)
             strategy = AutoTradingStrategy(
@@ -923,6 +922,9 @@ class AutoTradingService:
         Returns:
             매도한 종목 수
         """
+        from app.utils.date_utils import count_business_days
+        from datetime import date
+
         # 보유 포지션 조회
         positions_query = select(LivePosition).where(
             LivePosition.strategy_id == strategy.strategy_id
@@ -936,9 +938,17 @@ class AutoTradingService:
 
         sold_count = 0
         failed_positions: List[Tuple[LivePosition, str]] = []  # (position, reason)
+        today = date.today()
 
         for position in positions:
             try:
+                # 🔥 hold_days 동적 계산 (영업일 기준)
+                actual_hold_days = count_business_days(position.buy_date, today)
+
+                # DB 값과 다르면 업데이트 (정합성 유지)
+                if position.hold_days != actual_hold_days:
+                    position.hold_days = actual_hold_days
+
                 # 현재가 업데이트 필요 (실제로는 키움 API로 조회)
                 # 여기서는 position.current_price 사용
                 current_price = position.current_price or position.avg_buy_price
@@ -961,18 +971,18 @@ class AutoTradingService:
 
                 # 3. 최소 보유일 미달이면 매도 안함
                 if should_sell and strategy.min_hold_days:
-                    if position.hold_days < strategy.min_hold_days:
+                    if actual_hold_days < strategy.min_hold_days:
                         logger.info(
                             f"   {position.stock_code}: 매도 조건 충족하나 "
-                            f"최소 보유일({strategy.min_hold_days}일) 미달 (보유: {position.hold_days}일)"
+                            f"최소 보유일({strategy.min_hold_days}일) 미달 (보유: {actual_hold_days}일, 매수일: {position.buy_date})"
                         )
                         continue
 
                 # 4. 최대 보유일 체크
                 if not should_sell and strategy.max_hold_days:
-                    if position.hold_days >= strategy.max_hold_days:
+                    if actual_hold_days >= strategy.max_hold_days:
                         should_sell = True
-                        sell_reason = f"최대 보유일 도달 ({position.hold_days}일)"
+                        sell_reason = f"최대 보유일 도달 ({actual_hold_days}일, 매수일: {position.buy_date})"
 
                 # 5. 매도 조건 충족 시 매도 실행
                 if should_sell:
@@ -1335,7 +1345,8 @@ class AutoTradingService:
                 "total_profit": Decimal("0"),
                 "active_strategy_count": 0,
                 "total_positions": 0,
-                "total_trades_today": 0
+                "total_trades_today": 0,
+                "total_allocated_capital": Decimal("0")
             }
 
         # 2. 전체 통계 계산 - 먼저 할당 자본 계산

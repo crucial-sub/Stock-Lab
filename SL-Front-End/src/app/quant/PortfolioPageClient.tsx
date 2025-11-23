@@ -235,22 +235,46 @@ export function PortfolioPageClient({
       alert("전략 이름을 입력해주세요.");
       return;
     }
-    if (trimmedName === portfolio.title) {
+
+    // 자동매매 전략인 경우 이모지 제거
+    const isAutoTrading = portfolio.id.startsWith("auto-");
+    const displayName = isAutoTrading ? trimmedName.replace(/^🤖\s*/, "") : trimmedName;
+
+    if (displayName === portfolio.title.replace(/^🤖\s*/, "")) {
       handleCancelRename();
       return;
     }
 
     try {
       setIsRenaming(true);
-      await strategyApi.updateStrategy(portfolio.strategyId, {
-        strategyName: trimmedName,
-      });
 
-      setPortfolios((prev) =>
-        prev.map((item) =>
-          item.id === portfolio.id ? { ...item, title: trimmedName } : item,
-        ),
-      );
+      // 자동매매 전략인지 백테스트 전략인지 구분
+      if (isAutoTrading) {
+        // 자동매매 전략 이름 수정
+        await autoTradingApi.updateStrategyName(portfolio.strategyId, {
+          strategy_name: displayName,
+        });
+
+        setPortfolios((prev) =>
+          prev.map((item) =>
+            item.id === portfolio.id
+              ? { ...item, title: `🤖 ${displayName}` }
+              : item,
+          ),
+        );
+      } else {
+        // 백테스트 전략 이름 수정
+        await strategyApi.updateStrategy(portfolio.strategyId, {
+          strategyName: displayName,
+        });
+
+        setPortfolios((prev) =>
+          prev.map((item) =>
+            item.id === portfolio.id ? { ...item, title: displayName } : item,
+          ),
+        );
+      }
+
       handleCancelRename();
     } catch (error: unknown) {
       console.error("전략 이름 수정 실패:", error);

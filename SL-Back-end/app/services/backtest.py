@@ -528,32 +528,34 @@ class BacktestEngine:
                 # 캐시 데이터를 DataFrame으로 변환
                 df = pd.DataFrame(cached_data)
 
-                # 메모리에서 필터링 적용
+                # 메모리에서 필터링 적용 (AND 로직)
                 if target_themes or target_stocks or target_universes:
-                    filter_mask = pd.Series([False] * len(df))
+                    if target_stocks:
+                        # 개별 종목 선택 시 다른 필터 무시
+                        filter_mask = df['stock_code'].isin(target_stocks) if 'stock_code' in df.columns else pd.Series([False] * len(df))
+                        logger.info(f"🎯 개별 종목 필터만 적용 (메모리): {len(target_stocks)}개")
+                    else:
+                        # 유니버스 & 테마를 AND로 결합
+                        filter_mask = pd.Series([True] * len(df))  # 시작은 모두 True
 
-                    if target_themes and 'industry' in df.columns:
-                        filter_mask |= df['industry'].isin(target_themes)
-                        logger.info(f"🎯 테마 필터 (메모리): {len(target_themes)}개 산업")
+                        if target_themes and 'industry' in df.columns:
+                            filter_mask &= df['industry'].isin(target_themes)
+                            logger.info(f"🎯 테마 AND 필터 (메모리): {len(target_themes)}개 산업")
 
-                    if target_stocks and 'stock_code' in df.columns:
-                        filter_mask |= df['stock_code'].isin(target_stocks)
-                        logger.info(f"🎯 개별 종목 필터 (메모리): {len(target_stocks)}개")
-
-                    if target_universes:
-                        # 유니버스 종목 코드 조회
-                        from app.services.universe_service import UniverseService
-                        universe_service = UniverseService(self.db)
-                        universe_stock_codes = await universe_service.get_stock_codes_by_universes(
-                            target_universes,
-                            trade_date=start_date.strftime("%Y%m%d")
-                        )
-                        if universe_stock_codes and 'stock_code' in df.columns:
-                            filter_mask |= df['stock_code'].isin(universe_stock_codes)
-                            logger.info(f"🎯 유니버스 필터 (메모리): {len(universe_stock_codes)}개 종목")
+                        if target_universes:
+                            # 유니버스 종목 코드 조회
+                            from app.services.universe_service import UniverseService
+                            universe_service = UniverseService(self.db)
+                            universe_stock_codes = await universe_service.get_stock_codes_by_universes(
+                                target_universes,
+                                trade_date=start_date.strftime("%Y%m%d")
+                            )
+                            if universe_stock_codes and 'stock_code' in df.columns:
+                                filter_mask &= df['stock_code'].isin(universe_stock_codes)
+                                logger.info(f"🎯 유니버스 AND 필터 (메모리): {len(universe_stock_codes)}개 종목")
 
                     df = df[filter_mask]
-                    logger.info(f"✅ 필터링 후: {len(df)}개 레코드")
+                    logger.info(f"✅ AND 필터링 후: {len(df)}개 레코드")
 
                 return df
         except Exception as e:
@@ -598,12 +600,18 @@ class BacktestEngine:
                 else:
                     logger.warning(f"⚠️ 유니버스에 종목이 없습니다: {target_universes}")
 
-            # OR 조건으로 결합 (테마 또는 개별 종목 또는 유니버스)
-            logger.info(f"🔍 필터 조건 개수: {len(filter_conditions)} (OR 결합)")
-            if len(filter_conditions) > 1:
-                conditions.append(or_(*filter_conditions))
-            elif len(filter_conditions) == 1:
-                conditions.append(filter_conditions[0])
+            # AND 조건으로 결합 (유니버스 AND 테마로 교집합 필터링)
+            # 개별 종목은 OR로 추가 (개별 종목 선택 시 다른 필터 무시)
+            logger.info(f"🔍 필터 조건 개수: {len(filter_conditions)} (AND 결합)")
+            if target_stocks:
+                # 개별 종목이 있으면 개별 종목만 사용 (다른 필터 무시)
+                conditions.append(Company.stock_code.in_(target_stocks))
+                logger.info(f"✅ 개별 종목 필터만 적용")
+            else:
+                # 유니버스와 테마를 AND로 결합
+                for condition in filter_conditions:
+                    conditions.append(condition)
+                logger.info(f"✅ 유니버스 & 테마 AND 필터 적용")
 
         query = select(
             StockPrice.company_id,
@@ -712,7 +720,8 @@ class BacktestEngine:
                 FinancialStatement.bsns_year >= start_year,
                 FinancialStatement.bsns_year <= end_year,
                 IncomeStatement.account_nm.in_([
-                    '매출액', '매출', '영업수익',
+                    # 매출액 (연도별로 다른 이름)
+                    '매출액', '매출', '영업수익', '수익(매출액)',
                     '영업이익', '영업이익(손실)',
                     '당기순이익', '당기순이익(손실)',
                     '매출총이익', '매출원가'
@@ -754,6 +763,11 @@ class BacktestEngine:
         # 계정 과목 정규화 (연도별 차이 해결)
         if not income_df.empty:
             income_df['account_nm'] = income_df['account_nm'].str.replace('당기순이익(손실)', '당기순이익', regex=False)
+            # 매출액 정규화 (여러 이름을 '매출액'으로 통일)
+            income_df['account_nm'] = income_df['account_nm'].str.replace('영업수익', '매출액', regex=False)
+            income_df['account_nm'] = income_df['account_nm'].str.replace('수익(매출액)', '매출액', regex=False)
+            income_df['account_nm'] = income_df['account_nm'].str.replace('매출', '매출액', regex=False)
+            logger.info("매출액 계정명 정규화 완료")
 
         # 데이터 통합 및 피벗
         if not income_df.empty:

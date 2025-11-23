@@ -6,6 +6,9 @@ import Image from "next/image";
 import type { ChangeEvent } from "react";
 
 interface PageHeaderProps {
+  title?: string;
+  subtitle?: string;
+  onBack?: () => void;
   onRetryBacktest?: () => void;
   strategyName?: string;
   isEditingName?: boolean;
@@ -18,6 +21,7 @@ interface PageHeaderProps {
 }
 
 export function PageHeader({
+  onBack,
   onRetryBacktest,
   strategyName,
   isEditingName = false,
@@ -27,9 +31,18 @@ export function PageHeader({
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
+
 }: PageHeaderProps) {
   return (
     <div className="flex justify-between items-center mb-6">
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="text-sm text-gray-500 hover:text-gray-700 mb-1"
+        >
+          ← 돌아가기
+        </button>
+      )}
       <h1 className="flex items-center gap-3 text-[1.75rem] font-semibold text-body">
         {isEditingName ? (
           <>

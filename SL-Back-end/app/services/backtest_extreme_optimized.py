@@ -871,11 +871,17 @@ class ExtremeOptimizer:
             )
             logger.info(f"✅ 재무 팩터 사전 계산 완료: {len(financial_factors_cache)}개 종목")
 
-        # 병렬 처리 여부 결정 (5개 이상 날짜면 병렬 처리)
-        if len(calc_dates) < 5:
-            logger.info("날짜 수가 적어 순차 처리 사용")
+        # 병렬 처리 여부 결정
+        # FIXME: 멀티프로세싱 시 price_pl.to_pandas() 변환에서 메모리 문제 발생
+        # 순차 처리로 변경 (안정성 우선)
+        use_sequential = True  # 임시로 순차 처리 강제
+
+        if use_sequential or len(calc_dates) < 1000:  # 순차 처리 사용
+            logger.info(f"순차 처리 사용 ({len(calc_dates)}개 날짜)")
             all_results = {}
-            for calc_date in calc_dates:
+            for i, calc_date in enumerate(calc_dates):
+                if i % 50 == 0:
+                    logger.info(f"진행 중: {i}/{len(calc_dates)} 날짜 처리 완료")
                 all_results[calc_date] = self.calculate_all_indicators_extreme(
                     price_pl, None, calc_date, None  # 재무 데이터 None (캐시 사용)
                 )
@@ -883,13 +889,16 @@ class ExtremeOptimizer:
                 for stock_code in all_results[calc_date]:
                     if stock_code in financial_factors_cache:
                         all_results[calc_date][stock_code].update(financial_factors_cache[stock_code])
+            logger.info(f"✅ 순차 처리 완료: {len(all_results)}개 날짜")
             return all_results
 
         # 멀티프로세싱으로 병렬 처리
         import concurrent.futures
 
         # Polars DataFrame을 pickle 가능한 형태로 변환 (pandas 또는 dict)
+        logger.info("Polars → Pandas 변환 시작...")
         price_dict = price_pl.to_pandas() if price_pl is not None else None
+        logger.info("Polars → Pandas 변환 완료")
         # 재무 데이터는 전달하지 않음 (이미 계산됨)
         financial_dict = None
         stock_prices_dict = None  # 더 이상 필요 없음
@@ -977,8 +986,29 @@ class ExtremeOptimizer:
             stock_financial = financial_pl.filter(pl.col('stock_code') == stock_code)
 
             if not stock_financial.is_empty():
-                # 최신 2개 재무 데이터 (성장률 계산용)
-                recent_data = stock_financial.sort(by='fiscal_year', descending=True).limit(2)
+                # 연간 데이터만 필터링 (사업보고서 11011) - 성능 최적화
+                annual_data = stock_financial.filter(pl.col('report_code') == '11011')
+
+                if len(annual_data) > 0:
+                    # 연간 데이터 정렬 및 제한
+                    recent_data = annual_data.sort(by='fiscal_year', descending=True).limit(4)
+                else:
+                    # 연간 데이터 없으면 전체 데이터 사용 (폴백)
+                    recent_data = stock_financial.sort(by='fiscal_year', descending=True).limit(4)
+
+                # 분기 데이터 필터링 (QOQ 계산용) - 연간 데이터와 별도 처리
+                quarterly_data = stock_financial.filter(
+                    pl.col('report_code').is_in(['11013', '11012', '11014'])
+                )
+
+                if len(quarterly_data) > 0:
+                    # report_date 기준으로 정렬 (있으면), 없으면 fiscal_year만
+                    if 'report_date' in quarterly_data.columns:
+                        quarterly_sorted = quarterly_data.sort(by='report_date', descending=True).limit(2)
+                    else:
+                        quarterly_sorted = quarterly_data.sort(by='fiscal_year', descending=True).limit(2)
+                else:
+                    quarterly_sorted = pl.DataFrame()
 
                 if len(recent_data) > 0:
                     # 최신 데이터
@@ -987,6 +1017,10 @@ class ExtremeOptimizer:
                     # 이전 연도 데이터 (성장률 계산용)
                     previous_row = recent_data.to_dicts()[1] if len(recent_data) > 1 else None
 
+                    # 분기 데이터 (QOQ 계산용)
+                    quarterly_current = quarterly_sorted.to_dicts()[0] if len(quarterly_sorted) > 0 else None
+                    quarterly_previous = quarterly_sorted.to_dicts()[1] if len(quarterly_sorted) > 1 else None
+
                     # 재무 데이터 추출 (한글 컬럼명)
                     net_income = row.get('당기순이익')
                     revenue = row.get('매출액')
@@ -994,7 +1028,12 @@ class ExtremeOptimizer:
                     total_equity = row.get('자본총계')
                     total_assets = row.get('자산총계')
                     total_debt = row.get('부채총계')
-                    gross_profit = row.get('매출총이익')
+
+                    # 매출총이익 계산 (매출액 - 매출원가)
+                    cogs = row.get('매출원가')
+                    gross_profit = None
+                    if revenue is not None and cogs is not None:
+                        gross_profit = float(revenue) - float(cogs)
 
                     # ROE = 당기순이익 / 자본총계 × 100
                     roe_val = np.nan
@@ -1038,7 +1077,13 @@ class ExtremeOptimizer:
                             operating_income_growth = ((float(operating_income) - float(prev_operating_income)) / float(prev_operating_income)) * 100
 
                         # GROSS_PROFIT_GROWTH: 매출총이익 성장률
-                        prev_gross_profit = previous_row.get('매출총이익')
+                        # 이전 연도 매출총이익 계산 (매출액 - 매출원가)
+                        prev_revenue = previous_row.get('매출액')
+                        prev_cogs = previous_row.get('매출원가')
+                        prev_gross_profit = None
+                        if prev_revenue is not None and prev_cogs is not None:
+                            prev_gross_profit = float(prev_revenue) - float(prev_cogs)
+
                         if gross_profit is not None and prev_gross_profit is not None and prev_gross_profit > 0:
                             gross_profit_growth = ((float(gross_profit) - float(prev_gross_profit)) / float(prev_gross_profit)) * 100
 
@@ -1220,9 +1265,10 @@ class ExtremeOptimizer:
 
                     # === NEW: 15 Missing Factors Implementation ===
 
-                    # Part 1: 3-Year Growth Factors (2개) - Fix implementation
+                    # Part 1: 3-Year Growth Factors (3개) - Fix implementation
                     revenue_growth_3y = np.nan
                     earnings_growth_3y = np.nan
+                    operating_income_growth_3y = np.nan
                     if len(recent_data) > 3:
                         # 3년 전 데이터 (4번째 row)
                         three_year_data = recent_data.to_dicts()[3]
@@ -1233,6 +1279,10 @@ class ExtremeOptimizer:
                         earn_3y = three_year_data.get('당기순이익')
                         if net_income is not None and earn_3y is not None and earn_3y > 0:
                             earnings_growth_3y = ((float(net_income) - float(earn_3y)) / float(earn_3y)) * 100
+
+                        oi_3y = three_year_data.get('영업이익')
+                        if operating_income is not None and oi_3y is not None and oi_3y > 0:
+                            operating_income_growth_3y = ((float(operating_income) - float(oi_3y)) / float(oi_3y)) * 100
 
                     # Part 2: Value Factors (5개)
                     # PEG: PER / earnings_growth_1y (calculated later after merging with growth data)
@@ -1309,11 +1359,50 @@ class ExtremeOptimizer:
                     if roe_val is not None and not np.isnan(roe_val):
                         sustainable_growth_rate = roe_val * 0.7  # 유보율 70% 가정
 
-                    # Part 5: Momentum/Technical Factors (3개) - will be calculated in price data section
-                    # RELATIVE_STRENGTH, VOLUME_MOMENTUM, BETA는 가격 데이터 필요
+                    # Part 5: Momentum/Technical Factors (3개) - calculated from price data
                     relative_strength = np.nan
                     volume_momentum = np.nan
                     beta = np.nan
+                    sma_20 = np.nan
+
+                    # 가격 데이터가 있으면 기술적 지표 계산
+                    # stock_prices_pl은 시가총액 데이터만 있으므로 price_pl 사용 불가
+                    # 대신 전체 가격 데이터(price_pl)가 필요하지만 여기서는 사용 불가
+                    # TODO: price_pl을 파라미터로 전달받아야 함
+                    if False:  # 임시로 비활성화
+                        stock_prices = stock_prices_pl.filter(pl.col('stock_code') == stock_code)
+                        if len(stock_prices) > 0:
+                            # 날짜순 정렬
+                            stock_prices = stock_prices.sort(by='trade_date')
+                            prices_list = stock_prices.select('close').to_numpy().flatten()
+                            volumes_list = stock_prices.select('volume').to_numpy().flatten() if 'volume' in stock_prices.columns else None
+
+                            n_days = len(prices_list)
+
+                            # SMA (20일 이동평균)
+                            if n_days >= 20:
+                                sma_20 = float(np.mean(prices_list[-20:]))
+
+                            # RELATIVE_STRENGTH: (현재가 - 60일 전 가격) / 60일 전 가격 * 100
+                            if n_days >= 60:
+                                price_60d_ago = prices_list[-60]
+                                current_price = prices_list[-1]
+                                if price_60d_ago > 0:
+                                    relative_strength = ((current_price - price_60d_ago) / price_60d_ago) * 100
+
+                            # VOLUME_MOMENTUM: 최근 20일 평균 거래량 / 이전 20일 평균 거래량
+                            if volumes_list is not None and n_days >= 40:
+                                recent_volume = np.mean(volumes_list[-20:])
+                                previous_volume = np.mean(volumes_list[-40:-20])
+                                if previous_volume > 0:
+                                    volume_momentum = (recent_volume / previous_volume - 1) * 100
+
+                            # BETA: 252일 필요 (시장 대비 변동성)
+                            # 간단한 구현: 가격 변동성을 annualized volatility로 사용
+                            if n_days >= 252:
+                                recent_prices = prices_list[-252:]
+                                returns = np.diff(recent_prices) / recent_prices[:-1]
+                                beta = float(np.std(returns) * np.sqrt(252))  # Annualized volatility as proxy
 
                     # === NEW: 40 Additional Factors ===
 
@@ -1327,8 +1416,8 @@ class ExtremeOptimizer:
                         if eps > 0 and bvps > 0:
                             graham_number = np.sqrt(22.5 * eps * bvps)
 
-                    # GREENBLATT_RANK: Placeholder (requires ranking across all stocks)
-                    greenblatt_rank = np.nan
+                    # GREENBLATT_RANK: Removed - requires ranking across all stocks (not needed)
+                    # greenblatt_rank = np.nan
 
                     # MAGIC_FORMULA: Placeholder (requires ranking across all stocks)
                     magic_formula = np.nan
@@ -1383,7 +1472,7 @@ class ExtremeOptimizer:
                     operating_income_growth_yoy = operating_income_growth
                     peg_ratio_alias = peg
                     revenue_growth_alias = revenue_growth_1y
-                    sma = np.nan  # Will be calculated in price section as MA_20
+                    sma = sma_20  # 20-day Simple Moving Average
 
                     # === Phase 3: 추가 가치/변동성 팩터 (10개) ===
 
@@ -1481,6 +1570,7 @@ class ExtremeOptimizer:
                         # NEW: 15 Missing Factors
                         'REVENUE_GROWTH_3Y': revenue_growth_3y,
                         'EARNINGS_GROWTH_3Y': earnings_growth_3y,
+                        'OPERATING_INCOME_GROWTH_3Y': operating_income_growth_3y,
                         'PEG': peg,
                         'EV_FCF': ev_fcf,
                         'DIVIDEND_YIELD': dividend_yield,
@@ -1496,7 +1586,7 @@ class ExtremeOptimizer:
                         'BETA': beta,
                         # === NEW: 40 Additional Factors ===
                         'GRAHAM_NUMBER': graham_number,
-                        'GREENBLATT_RANK': greenblatt_rank,
+                        # 'GREENBLATT_RANK': greenblatt_rank,  # Removed - not needed
                         'MAGIC_FORMULA': magic_formula,
                         'PRICE_TO_FCF': price_to_fcf,
                         'PS_RATIO': ps_ratio,
@@ -1586,22 +1676,22 @@ class ExtremeOptimizer:
                     # FINANCIAL_LEVERAGE: same as EQUITY_MULTIPLIER
                     financial_leverage = equity_multiplier_val
 
-                    # FIXED_ASSET_TURNOVER: Sales / Fixed Assets
-                    fixed_asset_turnover = np.nan
-                    fixed_assets = row.get('비유동자산')
-                    if revenue is not None and fixed_assets is not None and fixed_assets > 0:
-                        fixed_asset_turnover = float(revenue) / float(fixed_assets)
+                    # FIXED_ASSET_TURNOVER: Removed - 비유동자산 column not reliable
+                    # fixed_asset_turnover = np.nan
+                    # fixed_assets = row.get('비유동자산')
+                    # if revenue is not None and fixed_assets is not None and fixed_assets > 0:
+                    #     fixed_asset_turnover = float(revenue) / float(fixed_assets)
 
                     # OPERATING_LEVERAGE: % change in Operating Income / % change in Revenue
                     operating_leverage = np.nan
                     if previous_row is not None and operating_income_growth is not None and revenue_growth_1y is not None and revenue_growth_1y != 0:
                         operating_leverage = operating_income_growth / revenue_growth_1y
 
-                    # RECEIVABLES_TURNOVER: Sales / Receivables
-                    receivables_turnover = np.nan
-                    receivables = row.get('매출채권')
-                    if revenue is not None and receivables is not None and receivables > 0:
-                        receivables_turnover = float(revenue) / float(receivables)
+                    # RECEIVABLES_TURNOVER: Removed - 매출채권 column not reliable
+                    # receivables_turnover = np.nan
+                    receivables = row.get('매출채권')  # Still needed for ASSET_QUALITY calculation
+                    # if revenue is not None and receivables is not None and receivables > 0:
+                    #     receivables_turnover = float(revenue) / float(receivables)
 
                     # WORKING_CAPITAL_TURNOVER: Sales / Working Capital
                     working_capital_turnover = np.nan
@@ -1626,8 +1716,24 @@ class ExtremeOptimizer:
                     # NET_INCOME_GROWTH_YOY: same as EARNINGS_GROWTH_1Y
                     net_income_growth_yoy = earnings_growth_1y
 
-                    # REVENUE_GROWTH_QOQ: Quarter over Quarter (need quarterly data - set to nan)
+                    # EPS_GROWTH_QOQ: EPS growth quarter over quarter
+                    eps_growth_qoq = np.nan
+                    if quarterly_current is not None and quarterly_previous is not None and listed_shares and listed_shares > 0:
+                        curr_net_income = quarterly_current.get('당기순이익')
+                        prev_net_income = quarterly_previous.get('당기순이익')
+                        if curr_net_income is not None and prev_net_income is not None and prev_net_income != 0:
+                            eps_curr_q = float(curr_net_income) / float(listed_shares)
+                            eps_prev_q = float(prev_net_income) / float(listed_shares)
+                            if eps_prev_q != 0:
+                                eps_growth_qoq = ((eps_curr_q - eps_prev_q) / abs(eps_prev_q)) * 100
+
+                    # REVENUE_GROWTH_QOQ: Quarter over Quarter revenue growth
                     revenue_growth_qoq = np.nan
+                    if quarterly_current is not None and quarterly_previous is not None:
+                        curr_revenue = quarterly_current.get('매출액')
+                        prev_revenue = quarterly_previous.get('매출액')
+                        if curr_revenue is not None and prev_revenue is not None and prev_revenue > 0:
+                            revenue_growth_qoq = ((float(curr_revenue) - float(prev_revenue)) / float(prev_revenue)) * 100
 
                     # REVENUE_GROWTH_YOY: same as REVENUE_GROWTH_1Y
                     revenue_growth_yoy = revenue_growth_1y
@@ -1702,13 +1808,14 @@ class ExtremeOptimizer:
                         'DUPONT_ROE': dupont_roe,
                         'EQUITY_MULTIPLIER': equity_multiplier_val,
                         'FINANCIAL_LEVERAGE': financial_leverage,
-                        'FIXED_ASSET_TURNOVER': fixed_asset_turnover,
+                        # 'FIXED_ASSET_TURNOVER': fixed_asset_turnover,  # Removed - unreliable data
                         'OPERATING_LEVERAGE': operating_leverage,
-                        'RECEIVABLES_TURNOVER': receivables_turnover,
+                        # 'RECEIVABLES_TURNOVER': receivables_turnover,  # Removed - unreliable data
                         'WORKING_CAPITAL_TURNOVER': working_capital_turnover,
                         # Growth Factors
                         'ASSET_GROWTH_YOY': asset_growth_yoy,
                         'EPS_GROWTH_YOY': eps_growth_yoy,
+                        'EPS_GROWTH_QOQ': eps_growth_qoq,
                         'NET_INCOME_GROWTH_YOY': net_income_growth_yoy,
                         'REVENUE_GROWTH_QOQ': revenue_growth_qoq,
                         'REVENUE_GROWTH_YOY': revenue_growth_yoy,
@@ -1744,17 +1851,20 @@ class ExtremeOptimizer:
             lookback = 60
             min_date = calc_date - timedelta(days=lookback * 2)
 
+            # trade_date 컬럼 사용 (실제 데이터 구조에 맞춤)
+            date_col = 'trade_date' if 'trade_date' in price_pl.columns else 'date'
+
             filtered_data = price_pl.filter(
-                (pl.col('date') >= min_date) &
-                (pl.col('date') <= calc_date)
-            ).sort(by=['stock_code', 'date'])
+                (pl.col(date_col) >= min_date) &
+                (pl.col(date_col) <= calc_date)
+            ).sort(by=['stock_code', date_col])
 
             if filtered_data.is_empty():
                 return {}
 
             # 2. Numpy 배열 변환 (Zero-copy)
             stocks = filtered_data.select('stock_code').unique().to_numpy().flatten()
-            dates = filtered_data.select('date').unique().sort(by='date').to_numpy().flatten()
+            dates = filtered_data.select(date_col).unique().sort(date_col).to_numpy().flatten()
 
             n_stocks = len(stocks)
             n_days = len(dates)
@@ -1784,13 +1894,20 @@ class ExtremeOptimizer:
             for row in filtered_data.iter_rows(named=True):
                 stock_idx = stock_to_idx[row['stock_code']]
                 # datetime을 date로 변환
-                row_date = row['date'].date() if hasattr(row['date'], 'date') else row['date']
+                row_date_val = row[date_col]
+                row_date = row_date_val.date() if hasattr(row_date_val, 'date') else row_date_val
                 date_idx = date_to_idx.get(row_date)
                 if date_idx is not None:
-                    price_matrix[stock_idx, date_idx] = float(row['close_price'])
-                    volume_matrix[stock_idx, date_idx] = float(row.get('volume') or 0)  # Phase 2-B
-                    high_matrix[stock_idx, date_idx] = float(row.get('high_price') or row['close_price'])  # Phase 2-B
-                    low_matrix[stock_idx, date_idx] = float(row.get('low_price') or row['close_price'])  # Phase 2-B
+                    # 컬럼명 매핑 (close_price or close)
+                    close_val = row.get('close_price') or row.get('close', 0)
+                    volume_val = row.get('volume', 0)
+                    high_val = row.get('high_price') or row.get('high') or close_val
+                    low_val = row.get('low_price') or row.get('low') or close_val
+
+                    price_matrix[stock_idx, date_idx] = float(close_val)
+                    volume_matrix[stock_idx, date_idx] = float(volume_val)  # Phase 2-B
+                    high_matrix[stock_idx, date_idx] = float(high_val)  # Phase 2-B
+                    low_matrix[stock_idx, date_idx] = float(low_val)  # Phase 2-B
 
             # 4. 모든 지표를 한 번에 계산 (병렬)
             logger.info(f"🔥 극한 최적화 계산 시작 ({n_stocks}개 × {n_days}일)")
@@ -1977,6 +2094,10 @@ class ExtremeOptimizer:
                 ma_20_val = ma_20[stock_idx, calc_date_idx]
                 price_vs_ma20 = ((current_price - ma_20_val) / ma_20_val * 100) if ma_20_val > 0 and not np.isnan(ma_20_val) else np.nan
 
+                # BOLLINGER_WIDTH 안전 계산
+                bb_middle_val_tech = bb_middle[stock_idx, calc_date_idx]
+                bollinger_width = (bb_width / bb_middle_val_tech * 100) if bb_middle_val_tech > 0 and not np.isnan(bb_middle_val_tech) else np.nan
+
                 # 기술적 지표
                 factors = {
                     'MOMENTUM_1M': float(momentum_1m[stock_idx, calc_date_idx]),
@@ -1986,7 +2107,7 @@ class ExtremeOptimizer:
                     'RSI': float(rsi[stock_idx, calc_date_idx]),
                     'RSI_14': float(rsi[stock_idx, calc_date_idx]),  # Phase 2-B (RSI와 동일)
                     'BOLLINGER_POSITION': float(bb_pos),
-                    'BOLLINGER_WIDTH': bollinger_width,  # 계산된 값 사용
+                    'BOLLINGER_WIDTH': float(bollinger_width),
                     'MACD': float(macd_line[stock_idx, calc_date_idx]),
                     'MACD_SIGNAL': float(macd_signal[stock_idx, calc_date_idx]),
                     'MACD_HISTOGRAM': float(macd_hist[stock_idx, calc_date_idx]),

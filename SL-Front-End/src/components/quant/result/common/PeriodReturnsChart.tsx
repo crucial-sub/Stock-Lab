@@ -37,15 +37,14 @@ export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-end gap-1">
-        <span className="text-3xl font-semibold">수익률</span>
-        <span className="font-semibold">(%)</span>
+        <span className="text-[1.125rem] font-semibold">수익률</span>
       </div>
 
       <div className="relative w-full h-48">
         <div className="absolute inset-x-0 top-1/2 h-px bg-gray-400" />
 
         <div className="absolute inset-0 flex items-stretch gap-4 px-2">
-          {periodReturns.map((item) => {
+          {periodReturns.map((item, index) => {
             const isPositive = item.value > 0;
             const isNegative = item.value < 0;
             const barHeight = getBarHeight(item.value);
@@ -66,7 +65,7 @@ export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
                 : { top: "calc(50% + 10px)" };
 
             return (
-              <div key={item.label} className="relative flex-1 h-full">
+              <div key={index} className="relative flex-1 h-full">
                 {barHeight > 0 ? (
                   <div
                     className={`${barColor} absolute left-1/2 -translate-x-1/2 w-4 rounded-sm`}

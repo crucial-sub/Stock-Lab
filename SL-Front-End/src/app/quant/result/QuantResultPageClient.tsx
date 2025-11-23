@@ -12,26 +12,28 @@
  * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
 import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
-import { SettingsTab } from "@/components/quant/result/SettingsTab";
-import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
-import { StockInfoTab } from "@/components/quant/result/StockInfoTab";
 import {
   AutoTradingSection,
   PageHeader,
   StatisticsSection,
   TabNavigation,
 } from "@/components/quant/result/sections";
+import { SettingsTab } from "@/components/quant/result/SettingsTab";
+import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
+import { StockInfoTab } from "@/components/quant/result/StockInfoTab";
 import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import {
   useBacktestResultQuery,
   useBacktestSettingsQuery,
   useBacktestStatusQuery,
+  backtestQueryKey,
 } from "@/hooks/useBacktestQuery";
 import { mockBacktestResult } from "@/mocks/backtestResult";
+import { strategyApi } from "@/lib/api/strategy";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 
 interface QuantResultPageClientProps {
   backtestId: string;
@@ -45,6 +47,12 @@ export function QuantResultPageClient({
   initialStrategyName,
 }: QuantResultPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("stockInfo");
+  const [editableStrategyName, setEditableStrategyName] = useState<
+    string | undefined
+  >(initialStrategyName);
+  const [hasEditedName, setHasEditedName] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editInputValue, setEditInputValue] = useState("");
   const queryClient = useQueryClient();
   const previousStatusRef = useRef<string | undefined>(undefined);
 
@@ -75,6 +83,24 @@ export function QuantResultPageClient({
       !isMockMode && statusData?.status === "completed",
     );
 
+  const { data: myStrategies } = useQuery({
+    queryKey: ["myStrategies"],
+    queryFn: strategyApi.getMyStrategies,
+    staleTime: 1000 * 30,
+    enabled: !isMockMode,
+  });
+
+  const currentStrategyMeta = myStrategies?.strategies.find(
+    (item) => item.sessionId === backtestId,
+  );
+  const strategyId = currentStrategyMeta?.strategyId;
+
+  const resolvedStrategyName =
+    currentStrategyMeta?.strategyName ||
+    statusData?.strategyName ||
+    settings?.strategyName ||
+    initialStrategyName;
+
   // 백테스트 완료 시 결과 데이터 자동 갱신
   useEffect(() => {
     if (!isMockMode && statusData?.status === "completed") {
@@ -90,6 +116,80 @@ export function QuantResultPageClient({
       previousStatusRef.current = statusData.status;
     }
   }, [statusData?.status, backtestId, isMockMode, queryClient]);
+
+  // 외부 데이터로부터 전략명 동기화 (사용자가 직접 수정한 경우는 유지)
+  useEffect(() => {
+    if (!hasEditedName && resolvedStrategyName) {
+      setEditableStrategyName(resolvedStrategyName);
+    }
+  }, [hasEditedName, resolvedStrategyName]);
+
+  const updateNameMutation = useMutation({
+    mutationFn: (name: string) => {
+      if (!strategyId) {
+        return Promise.reject(new Error("전략 ID를 찾을 수 없습니다."));
+      }
+      return strategyApi.updateStrategyName(strategyId, name);
+    },
+    onSuccess: (_, name) => {
+      setEditableStrategyName(name);
+      setHasEditedName(true);
+      setIsEditingName(false);
+      queryClient.invalidateQueries({ queryKey: ["myStrategies"] });
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.status(backtestId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.settings(backtestId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.detail(backtestId),
+      });
+
+      queryClient.setQueryData(
+        backtestQueryKey.status(backtestId),
+        (prev: any) => (prev ? { ...prev, strategyName: name } : prev),
+      );
+      queryClient.setQueryData(
+        backtestQueryKey.settings(backtestId),
+        (prev: any) => (prev ? { ...prev, strategyName: name } : prev),
+      );
+    },
+    onError: (error: any) => {
+      alert(
+        error?.response?.data?.detail ||
+          error?.message ||
+          "백테스트 이름을 수정하지 못했습니다.",
+      );
+    },
+  });
+
+  const handleStartEdit = () => {
+    const currentName =
+      editableStrategyName ||
+      resolvedStrategyName ||
+      backtestId ||
+      "백테스트 이름";
+    setEditInputValue(currentName);
+    setIsEditingName(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingName(false);
+    setEditInputValue("");
+  };
+
+  const handleSaveEdit = () => {
+    const nextName = editInputValue.trim();
+    if (!nextName) return;
+
+    if (!strategyId) {
+      alert("전략 ID를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.");
+      return;
+    }
+
+    updateNameMutation.mutate(nextName);
+  };
 
   // Mock 데이터 또는 실제 데이터 사용
   const finalResult = isMockMode ? mockBacktestResult : result;
@@ -226,21 +326,26 @@ export function QuantResultPageClient({
 
   const periodReturns = calculatePeriodReturns();
 
-  // 백테스트 시작/종료 날짜 추출 (yieldPoints의 첫 번째와 마지막 날짜)
-  const _startDate =
-    finalResult.yieldPoints && finalResult.yieldPoints.length > 0
-      ? finalResult.yieldPoints[0].date
-      : undefined;
-  const _endDate =
-    finalResult.yieldPoints && finalResult.yieldPoints.length > 0
-      ? finalResult.yieldPoints[finalResult.yieldPoints.length - 1].date
-      : undefined;
+  const displayStrategyName =
+    editableStrategyName ||
+    resolvedStrategyName ||
+    finalResult.id ||
+    backtestId;
 
   return (
-    <div className="min-h-screen bg-bg-app py-6 px-6">
-      <div className="max-w-[1400px] mx-auto">
+    <div className="min-h-screen py-[5rem] px-[3.5rem]">
+      <div className="mx-auto">
         {/* 페이지 헤더 */}
-        <PageHeader />
+        <PageHeader
+          strategyName={displayStrategyName}
+          isEditingName={isEditingName}
+          editValue={editInputValue}
+          isSavingName={updateNameMutation.isPending}
+          onStartEdit={handleStartEdit}
+          onChangeEditValue={setEditInputValue}
+          onSaveEdit={handleSaveEdit}
+          onCancelEdit={handleCancelEdit}
+        />
 
         {/* 통계 섹션 */}
         <StatisticsSection

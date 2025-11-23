@@ -6,34 +6,35 @@
 interface StatMetricProps {
   label: string;
   value: string;
-  color?: string;
-  size?: "normal" | "large";
+  tone?: "positive" | "negative" | "neutral";
   tooltip?: string;
 }
 
 export function StatMetric({
   label,
   value,
-  color = "text-text-strong",
-  size = "normal",
+  tone = "neutral",
   tooltip,
 }: StatMetricProps) {
+  const toneClass =
+    tone === "positive"
+      ? "text-price-up"
+      : tone === "negative"
+        ? "text-price-down"
+        : "text-body";
+
   return (
-    <div>
-      <div
-        className={`font-bold ${color} mb-1 ${
-          size === "large" ? "text-xl" : "text-2xl"
-        }`}
-      >
+    <div className="flex flex-col gap-1">
+      <div className={`text-[1.5rem] text-nowrap font-semibold leading-tight ${toneClass}`}>
         {value}
       </div>
-      <div className="text-sm text-text-body flex items-center gap-1">
-        {label}
-        {tooltip && (
-          <span className="text-text-muted cursor-help" title={tooltip}>
+      <div className="text-sm text-muted flex items-center gap-1">
+        <span>{label}</span>
+        {tooltip ? (
+          <span className="text-muted cursor-help" title={tooltip}>
             ⓘ
           </span>
-        )}
+        ) : null}
       </div>
     </div>
   );

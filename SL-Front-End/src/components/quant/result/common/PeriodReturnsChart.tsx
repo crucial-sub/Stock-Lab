@@ -12,43 +12,86 @@ interface PeriodReturnsChartProps {
 }
 
 export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
-  return (
-    <div className="w-[500px]">
-      <h3 className="text-sm font-semibold text-text-strong mb-3">
-        수익률 (%)
-      </h3>
-      <div className="flex items-end gap-2 h-32">
-        {periodReturns.map((item, i) => {
-          const isPositive = item.value >= 0;
-          const barHeight = Math.abs(item.value) * 3;
+  const maxAbsReturn = periodReturns.reduce(
+    (max, item) => Math.max(max, Math.abs(item.value)),
+    0,
+  );
+  const maxBarHeight = 64;
+  const minBarHeight = 6;
 
-          return (
-            <div key={i} className="flex-1 flex flex-col items-center">
-              <div className="w-full h-24 flex items-end justify-center">
+  const getBarHeight = (value: number) => {
+    if (value === 0 || maxAbsReturn === 0) {
+      return 0;
+    }
+    return Math.max(
+      minBarHeight,
+      (Math.abs(value) / maxAbsReturn) * maxBarHeight,
+    );
+  };
+
+  const formatValue = (value: number) => {
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${value.toFixed(2)}%`;
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-end gap-1">
+        <span className="text-3xl font-semibold">수익률</span>
+        <span className="font-semibold">(%)</span>
+      </div>
+
+      <div className="relative w-full h-48">
+        <div className="absolute inset-x-0 top-1/2 h-px bg-gray-400" />
+
+        <div className="absolute inset-0 flex items-stretch gap-4 px-2">
+          {periodReturns.map((item) => {
+            const isPositive = item.value > 0;
+            const isNegative = item.value < 0;
+            const barHeight = getBarHeight(item.value);
+            const toneClass = isPositive
+              ? "text-price-up"
+              : isNegative
+                ? "text-price-down"
+                : "text-muted";
+            const barColor = isPositive
+              ? "bg-price-up"
+              : isNegative
+                ? "bg-price-down"
+                : "bg-gray-400";
+            const valuePosition = isPositive
+              ? { top: "calc(50% + 10px)" }
+              : isNegative
+                ? { top: "calc(50% - 26px)" }
+                : { top: "calc(50% + 10px)" };
+
+            return (
+              <div key={item.label} className="relative flex-1 h-full">
+                {barHeight > 0 ? (
+                  <div
+                    className={`${barColor} absolute left-1/2 -translate-x-1/2 w-4 rounded-sm`}
+                    style={{
+                      height: `${barHeight}px`,
+                      bottom: isPositive ? "50%" : undefined,
+                      top: isNegative ? "50%" : undefined,
+                    }}
+                  />
+                ) : null}
+
                 <div
-                  className={`w-full rounded-t transition-all ${
-                    isPositive ? "bg-red-500" : "bg-blue-500"
-                  }`}
-                  style={{
-                    height: `${barHeight}px`,
-                    minHeight: "4px",
-                  }}
-                />
+                  className={`absolute left-1/2 -translate-x-1/2 text-sm font-semibold leading-tight ${toneClass}`}
+                  style={valuePosition}
+                >
+                  {formatValue(item.value)}
+                </div>
+
+                <div className="absolute text-nowrap inset-x-0 bottom-2 text-center text-[0.75rem] font-normal">
+                  {item.label}
+                </div>
               </div>
-              <div
-                className={`text-[10px] mt-2 text-center leading-tight font-medium ${
-                  isPositive ? "text-red-500" : "text-blue-500"
-                }`}
-              >
-                {item.value > 0 ? "+" : ""}
-                {item.value.toFixed(2)}%
-              </div>
-              <div className="text-[10px] text-text-muted mt-1 text-center leading-tight">
-                {item.label}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

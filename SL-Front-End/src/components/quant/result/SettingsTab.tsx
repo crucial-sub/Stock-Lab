@@ -100,7 +100,6 @@ export function SettingsTab({ settings, isLoading = false }: SettingsTabProps) {
                 );
               }
 
-              const selectedUniverses = tradeTargets.selected_universes || [];
               const selectedThemes = tradeTargets.selected_themes || [];
               const selectedStocks = tradeTargets.selected_stocks || [];
               const selectedCount = tradeTargets.selected_stock_count || 0;
@@ -123,17 +122,6 @@ export function SettingsTab({ settings, isLoading = false }: SettingsTabProps) {
                       label="전체 테마 수"
                       value={`${totalThemeCount}개`}
                     />
-                  )}
-
-                  {selectedUniverses.length > 0 && (
-                    <div className="text-sm text-text-body mt-2">
-                      <span className="font-medium">선택한 유니버스:</span>
-                      <ul className="mt-1 pl-6 space-y-1 list-disc">
-                        {selectedUniverses.map((universe: string, idx: number) => (
-                          <li key={idx}>{universe}</li>
-                        ))}
-                      </ul>
-                    </div>
                   )}
 
                   {selectedThemes.length > 0 && (

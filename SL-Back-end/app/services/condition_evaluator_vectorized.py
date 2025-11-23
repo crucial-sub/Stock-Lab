@@ -83,16 +83,6 @@ class VectorizedConditionEvaluator:
                 return []
 
             # 5. 한 번에 모든 종목 평가!
-            # 🔍 임시 디버깅: DEBT_RATIO 확인
-            if 'DEBT_RATIO' in query_str:
-                logger.info(f"🔍 DEBT_RATIO 쿼리 확인:")
-                logger.info(f"  📝 쿼리: {query_str}")
-                logger.info(f"  📊 데이터 컬럼: {list(date_data.columns)}")
-                logger.info(f"  ✅ DEBT_RATIO in columns? {'DEBT_RATIO' in date_data.columns}")
-                if 'DEBT_RATIO' in date_data.columns:
-                    logger.info(f"  📈 DEBT_RATIO 샘플 값: {date_data['DEBT_RATIO'].head(3).tolist()}")
-                    logger.info(f"  📊 DEBT_RATIO < 200 개수: {(date_data['DEBT_RATIO'] < 200).sum()}")
-
             try:
                 selected = date_data.query(query_str)
                 selected_stocks = selected['stock_code'].tolist()

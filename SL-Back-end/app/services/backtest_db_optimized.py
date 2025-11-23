@@ -150,7 +150,8 @@ class OptimizedDBManager:
         self,
         start_date: date,
         end_date: date,
-        required_accounts: List[str] = None
+        required_accounts: List[str] = None,
+        target_stocks: List[str] = None
     ) -> pd.DataFrame:
         """
         재무 데이터 최적화 로드
@@ -258,6 +259,14 @@ class OptimizedDBManager:
 
             financial_pivot['report_date'] = financial_pivot.apply(make_report_date, axis=1)
 
+            # 🔥 필터링: 선택한 종목만 (DB 로드 이후 필터링)
+            if target_stocks and not financial_pivot.empty:
+                before_count = len(financial_pivot)
+                before_stocks = financial_pivot['stock_code'].nunique()
+                financial_pivot = financial_pivot[financial_pivot['stock_code'].isin(target_stocks)]
+                after_count = len(financial_pivot)
+                after_stocks = financial_pivot['stock_code'].nunique()
+                logger.info(f"🎯 재무 데이터 필터링: {before_count}건({before_stocks}종목) → {after_count}건({after_stocks}종목)")
             # 매출액 컬럼 정규화 (여러 이름으로 저장된 매출액을 '매출액'으로 통일)
             revenue_columns = ['매출액', '영업수익', '수익(매출액)']
             if '매출액' not in financial_pivot.columns:

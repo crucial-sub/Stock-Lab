@@ -376,6 +376,10 @@ async def generate_sse_stream(
         yield f"data: {json.dumps(end_payload, ensure_ascii=False)}\n\n"
 
     except Exception as e:
+        # 예외 상세를 로그로 남겨 추적
+        print(f"[SSE ERROR] message='{message}' session_id='{session_id}' error='{e}'")
+        import traceback
+        traceback.print_exc()
         # 에러 이벤트 전송
         error_str = str(e)
 

@@ -179,6 +179,8 @@ class ChatHandler:
         self.llm_model_id: Optional[str] = None
         self.llm_inference_profile_id: Optional[str] = None
         self.llm_target_id: Optional[str] = None
+        # 외부 서비스 핸들러 (선언만 해 AttributeError 방지)
+        self.sentiment_service = None
 
         self._load_config()
         self._load_forbidden_patterns()
@@ -380,7 +382,7 @@ class ChatHandler:
                 s.get("aliases", []),
             )
             self.strategy_alias_map[sid] = alias_tokens
-
+            
     def _load_forbidden_patterns(self):
         """금지 패턴을 외부 설정에서 로드 (없으면 기본값 사용)."""
         default_patterns = {
@@ -719,8 +721,10 @@ class ChatHandler:
 
         # 1. Classify intent
         intent = await self._classify_intent(message)
-        if client_type == "ai_helper" and intent not in {"dsl_generation", "backtest_configuration", "explain"}:
-            intent = "dsl_generation"
+        if client_type == "ai_helper":
+            # 헬퍼 모드에서는 개념 설명 대신 조건/DSL 생성에 집중
+            if intent != "backtest_configuration":
+                intent = "dsl_generation"
 
         # 2. Intent에 따라 다른 핸들러 호출
         if intent == 'dsl_generation':
@@ -1439,9 +1443,8 @@ class ChatHandler:
                     state["selected_strategy"] = "custom"
                     strategy_name = "커스텀 조건"
                 elif user_choice == 2:
-                    # 기본 전략만 적용 (워렌버핏)
-                    matched_id = "warren_buffett"
-                    tpl = self.strategy_backtest_templates[matched_id]
+                    
+                    
                     state["backtest_conditions"] = {
                         "buy": self._filter_valid_conditions(tpl["buy_conditions"]),
                         "sell": self._filter_valid_conditions(tpl["sell_conditions"]),
@@ -1450,8 +1453,7 @@ class ChatHandler:
                     strategy_name = tpl["strategy_name"]
                 else:  # user_choice == 3
                     # 전략 + 커스텀 조건 모두 적용
-                    matched_id = "warren_buffett"
-                    tpl = self.strategy_backtest_templates[matched_id]
+                    
                     buy_conditions = self._filter_valid_conditions(tpl["buy_conditions"])
                     buy_conditions.append(custom_buy_condition)
                     state["backtest_conditions"] = {
@@ -1511,11 +1513,6 @@ class ChatHandler:
                 "intent": "clarify_backtest",
                 "session_id": session_id,
             }
-
-        # 기본값: 워렌버핏
-        if not matched_id:
-            matched_id = "warren_buffett"
-        tpl = self.strategy_backtest_templates[matched_id]
 
         # 세션 상태에 DSL 저장 (백테스트 실행 시 사용)
         state = self.session_state.setdefault(session_id, {})
@@ -2244,7 +2241,21 @@ class ChatHandler:
 
         try:
             async for token in callback.aiter():
-                yield {"type": "token", "content": token}
+                # LangChain/Anthropic 툴 호출 태그 제거 (<function_calls>, <parameters>, <tool_name> 등)
+                if not isinstance(token, str):
+                    continue
+                if "<function_calls" in token or "</function_calls" in token or "<tool_name>" in token or "<parameters>" in token:
+                    continue
+                cleaned = re.sub(
+                    r"<\/?function_calls>|<\/?invoke>|<\/?tool_name>.*?<\/tool_name>|<\/?parameters>.*?<\/parameters>",
+                    "",
+                    token,
+                    flags=re.DOTALL,
+                )
+                # 완전히 빈 토큰만 건너뛰고, 나머지는 모델 출력 그대로 전달
+                if cleaned == "":
+                    continue
+                yield {"type": "token", "content": cleaned}
         except Exception as e:
             self._log_agent_error(
                 error=e,
@@ -2261,7 +2272,15 @@ class ChatHandler:
             return
 
         if task.exception():
-            raise task.exception()
+            exc = task.exception()
+            self._log_agent_error(
+                error=exc,
+                intent=intent,
+                client_type=client_type,
+                message=message,
+                context=context,
+            )
+            raise exc
 
         response = response_holder.get("response")
         if not response:
@@ -2341,6 +2360,13 @@ class ChatHandler:
         # <invoke> 블록 제거
         response = re.sub(
             r'<invoke>.*?</invoke>',
+            '',
+            response,
+            flags=re.DOTALL
+        )
+        # <parameters> 블록 제거
+        response = re.sub(
+            r'<parameters>.*?</parameters>',
             '',
             response,
             flags=re.DOTALL

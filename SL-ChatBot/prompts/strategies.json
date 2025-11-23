@@ -1,6 +1,6 @@
 {
   "strategies": [
-    /*migrate_strategies.py warren_buffett 팩터 참고*/
+    
     {
       "id": "warren_buffett",
       "name": "워렌버핏 가치투자 전략",
@@ -19,7 +19,7 @@
         { "factor": "ROE", "operator": "<", "value": 5.0 }
       ]
     },
-    /*migrate_strategies.py peter_lynch 팩터 참고*/
+    
     {
       "id": "peter_lynch",
       "name": "피터 린치 전략",
@@ -38,7 +38,7 @@
         { "factor": "PEG", "operator": ">", "value": 2.5 }
       ]
     },
-    /*migrate_strategies.py cathie_wood 팩터 참고*/
+    
     {
       "id": "cathy_wood",
       "name": "캐시 우드 혁신 전략",
@@ -93,7 +93,7 @@
         { "factor": "debt_ratio", "operator": ">", "value": 120.0 }
       ]
     },
-    /*migrate_strategies.py william_oneil 팩터 참고*/
+  
     {
       "id": "strategy_william_oneil",
       "name": "윌리엄 오닐 전략",

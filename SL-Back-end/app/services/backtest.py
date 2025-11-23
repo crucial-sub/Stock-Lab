@@ -1873,6 +1873,57 @@ class BacktestEngine:
                         cagr = (pow(float(current_asset) / float(past_asset), 1/3) - 1) * 100
                         entry['ASSET_GROWTH_3Y'] = cagr
 
+                # OPERATING_PROFIT_GROWTH_3Y (영업이익 CAGR 3Y)
+                if '영업이익' in current.columns and '영업이익' in past_3y.columns:
+                    current_op = current.select('영업이익').to_pandas().iloc[0, 0]
+                    past_op = past_3y.select('영업이익').to_pandas().iloc[0, 0]
+                    if current_op and past_op and past_op > 0 and current_op > 0:
+                        cagr = (pow(float(current_op) / float(past_op), 1/3) - 1) * 100
+                        entry['OPERATING_PROFIT_GROWTH_3Y'] = cagr
+
+                # GROSS_MARGIN_GROWTH (총 마진 성장률 3Y CAGR)
+                if '매출액' in current.columns and '매출원가' in current.columns and '매출액' in past_3y.columns and '매출원가' in past_3y.columns:
+                    current_revenue = current.select('매출액').to_pandas().iloc[0, 0]
+                    current_cogs = current.select('매출원가').to_pandas().iloc[0, 0]
+                    past_revenue = past_3y.select('매출액').to_pandas().iloc[0, 0]
+                    past_cogs = past_3y.select('매출원가').to_pandas().iloc[0, 0]
+                    if current_revenue and current_cogs and past_revenue and past_cogs and current_revenue > 0 and past_revenue > 0:
+                        current_gross_margin = ((float(current_revenue) - float(current_cogs)) / float(current_revenue)) * 100
+                        past_gross_margin = ((float(past_revenue) - float(past_cogs)) / float(past_revenue)) * 100
+                        if past_gross_margin > 0:
+                            cagr = (pow(current_gross_margin / past_gross_margin, 1/3) - 1) * 100
+                            entry['GROSS_MARGIN_GROWTH'] = cagr
+
+            # EPS 성장률 계산 (YoY, QoQ)
+            if not past_1y.is_empty():
+                # EPS_GROWTH_YOY (EPS 전년 대비 성장률)
+                if '당기순이익' in current.columns and '당기순이익' in past_1y.columns:
+                    current_income = current.select('당기순이익').to_pandas().iloc[0, 0]
+                    past_income = past_1y.select('당기순이익').to_pandas().iloc[0, 0]
+                    # EPS는 순이익/발행주식수로 계산하지만, 여기서는 순이익 증가율로 근사
+                    if current_income and past_income and past_income != 0:
+                        if past_income > 0:
+                            yoy_growth = ((float(current_income) / float(past_income)) - 1) * 100
+                            entry['EPS_GROWTH_YOY'] = yoy_growth
+
+            # EPS_GROWTH_QOQ (EPS 분기 대비 성장률)
+            # 최근 2개 분기 데이터 가져오기
+            recent_quarters = stock_data.filter(
+                (pl.col('available_date') <= calc_date) &
+                (pl.col('reprt_code').is_in(['11013', '11012', '11014']))  # 1Q, 반기, 3Q (11011 연간 제외)
+            ).sort('available_date', descending=True).head(2)
+
+            if len(recent_quarters) >= 2:
+                latest_q = recent_quarters.head(1)
+                prev_q = recent_quarters.tail(1)
+                if '당기순이익' in latest_q.columns and '당기순이익' in prev_q.columns:
+                    latest_income = latest_q.select('당기순이익').to_pandas().iloc[0, 0]
+                    prev_income = prev_q.select('당기순이익').to_pandas().iloc[0, 0]
+                    if latest_income and prev_income and prev_income != 0:
+                        if prev_income > 0:
+                            qoq_growth = ((float(latest_income) / float(prev_income)) - 1) * 100
+                            entry['EPS_GROWTH_QOQ'] = qoq_growth
+
         return factors
 
     def _calculate_stability_factors(self, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
@@ -2424,7 +2475,10 @@ class BacktestEngine:
             # FCF_YIELD (잉여현금흐름수익률)
             if ocf and ocf > 0:
                 # FCF = 영업현금흐름 - CAPEX (간단히 영업현금흐름으로 근사)
-                entry['FCF_YIELD'] = (float(ocf) / market_cap) * 100
+                fcf = float(ocf)  # 실제로는 영업현금흐름 - 투자현금흐름
+                entry['FCF_YIELD'] = (fcf / market_cap) * 100
+                # FREE_CASH_FLOW (잉여현금흐름 절대값, 단위: 억원)
+                entry['FREE_CASH_FLOW'] = fcf / 100000000  # 원 → 억원
 
             # EV/EBITDA, EV/SALES (기업가치 배수)
             debt = row.get('부채총계')

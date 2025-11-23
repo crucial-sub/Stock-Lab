@@ -39,19 +39,6 @@ interface ChatHistoryProps {
  * (스크롤은 부모 컴포넌트에서 관리)
  */
 export function ChatHistory({ messages, isWaitingForAI = false, onBacktestStart }: ChatHistoryProps) {
-  /**
-   * 메시지가 없을 때 빈 상태 표시
-   */
-  if (messages.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <p className="text-muted text-sm">
-          아직 메시지가 없습니다. AI에게 질문을 시작해보세요!
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="py-6 space-y-6">
       {messages.map((message) => (

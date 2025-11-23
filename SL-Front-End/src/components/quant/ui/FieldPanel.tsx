@@ -20,7 +20,7 @@ export function FieldPanel({
 }: FieldPanelProps) {
   return (
     <div
-      className={`bg-[#FFFFFF66] rounded-md shadow-elev-card-soft p-8 relative ${className}`}
+      className={`bg-[#FFFFFF33] rounded-[12px] shadow-elev-card-soft p-5 relative ${className}`}
     >
       {conditionType !== "none" && <ColorBorderLeft conditionType={conditionType} />}
       {children}

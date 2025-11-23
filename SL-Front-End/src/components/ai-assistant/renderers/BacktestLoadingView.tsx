@@ -65,24 +65,24 @@ export function BacktestLoadingView({
 
   // 수익률 색상 결정 (양수: 빨간색, 음수: 파란색)
   const returnColor =
-    currentReturn >= 0 ? "text-red-500" : "text-blue-500";
+    currentReturn >= 0 ? "text-price-up" : "text-price-down";
   const returnPrefix = currentReturn >= 0 ? "+" : "";
 
   return (
-    <div className="w-full max-w-[900px] mx-auto space-y-6 p-6 bg-white rounded-lg shadow-card">
+    <div className="w-full max-w-[1000px] mx-auto space-y-10 p-5 bg-[#1822340D] rounded-[12px] border-[0.5px] border-[#18223433]">
       {/* 1. 헤더 - 사용자명 + 전략명 */}
       <div className="text-center">
-        <h2 className="text-xl font-bold text-gray-900">
+        <h2 className="text-[1.25rem] font-semibold text-black">
           {userName}_{strategyName}
         </h2>
       </div>
 
       {/* 2. 서브 정보 - 누적 수익률, 진행시간, 예상시간 */}
-      <div className="flex justify-around items-center text-sm border-b border-gray-200 pb-4">
+      <div className="flex justify-around items-center text-[0.875rem] font-normal border-b border-muted pb-5">
         {/* 누적 수익률 */}
         <div className="flex flex-col items-center">
-          <span className="text-gray-500 mb-1">누적 수익률</span>
-          <span className={`text-lg font-bold ${returnColor}`}>
+          <span className="text-muted">누적 수익률</span>
+          <span className={`text-[1.125rem] font-semibold ${returnColor}`}>
             {returnPrefix}
             {(currentReturn || 0).toFixed(2)}%
           </span>
@@ -90,16 +90,16 @@ export function BacktestLoadingView({
 
         {/* 진행 시간 */}
         <div className="flex flex-col items-center">
-          <span className="text-gray-500 mb-1">진행 시간</span>
-          <span className="text-lg font-semibold text-gray-900">
+          <span className="text-muted">진행 시간</span>
+          <span className="text-[1.125rem] font-semibold text-black">
             {formatDuration(elapsedTime)}
           </span>
         </div>
 
         {/* 예상 시간 */}
         <div className="flex flex-col items-center">
-          <span className="text-gray-500 mb-1">예상 시간</span>
-          <span className="text-lg font-semibold text-gray-900">
+          <span className="text-muted">예상 시간</span>
+          <span className="text-[1.125rem] font-semibold text-black">
             {formatDuration(estimatedRemainingTime)}
           </span>
         </div>
@@ -107,12 +107,12 @@ export function BacktestLoadingView({
 
       {/* 3. 진행률 바 */}
       <div className="space-y-2">
-        <div className="flex justify-between items-center text-sm">
-          <span className="text-gray-700 font-medium">백테스트 진행 중</span>
-          <span className="text-brand-purple font-bold">{progress}%</span>
+        <div className="flex justify-between items-center text-[0.875rem]">
+          <span className="text-muted font-normal">백테스트 진행 중</span>
+          <span className="text-brand-purple font-semibold">{progress}%</span>
         </div>
 
-        <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className="relative h-2 bg-white/40 rounded-full overflow-hidden">
           <div
             className="h-full bg-brand-purple transition-all duration-500 ease-out"
             style={{ width: `${progress}%` }}
@@ -125,17 +125,15 @@ export function BacktestLoadingView({
       </div>
 
       {/* 4. 실시간 차트 */}
-      <div className="border border-gray-200 rounded-lg p-4">
-        <BacktestLoadingChart
-          startDate={config.startDate}
-          endDate={config.endDate}
-          accumulatedYieldPoints={yieldPoints}
-          progress={progress}
-        />
-      </div>
+      <BacktestLoadingChart
+        startDate={config.startDate}
+        endDate={config.endDate}
+        accumulatedYieldPoints={yieldPoints}
+        progress={progress}
+      />
 
       {/* 5. 진행 상태 메시지 */}
-      <div className="text-center text-sm text-gray-500">
+      <div className="text-center text-[0.875rem] text-muted font-normal">
         <p>
           백테스트 결과를 실시간으로 계산하고 있습니다.
           <br />

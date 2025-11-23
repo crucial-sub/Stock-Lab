@@ -45,7 +45,7 @@ export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
         <div className="absolute inset-x-0 top-1/2 h-px bg-gray-400" />
 
         <div className="absolute inset-0 flex items-stretch gap-4 px-2">
-          {periodReturns.map((item) => {
+          {periodReturns.map((item, index) => {
             const isPositive = item.value > 0;
             const isNegative = item.value < 0;
             const barHeight = getBarHeight(item.value);
@@ -66,7 +66,7 @@ export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
                 : { top: "calc(50% + 10px)" };
 
             return (
-              <div key={item.label} className="relative flex-1 h-full">
+              <div key={`${index}-${item.label}`} className="relative flex-1 h-full">
                 {barHeight > 0 ? (
                   <div
                     className={`${barColor} absolute left-1/2 -translate-x-1/2 w-4 rounded-sm`}

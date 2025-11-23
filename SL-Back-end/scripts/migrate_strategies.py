@@ -52,11 +52,7 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
         "trade_targets": {
             "use_all_stocks": False,  # 전체 종목 사용 안 함
             "selected_universes": [], # 현재 안쓰는 속성이므로 절대 건들지 말것.
-            "selected_themes": [
-                "전기 / 전자",
-                "IT서비스",
-                "유통"
-            ],  # 주요 테마 3개 선택 (약 800 종목)
+            "selected_themes": [],
             "selected_stocks": [],
             "selected_stock_count": None,  # 런타임에 계산됨
             "total_stock_count": 2645,      # 전체 종목 수
@@ -76,135 +72,457 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
         #! 기존 유명 전략 목록
         "surge_stocks": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({MARKET_CAP})", "inequality": ">", "exp_right_side": 10000000000} # 시가총액 > 100억
+                {"name": "A", "exp_left_side": "기본값({MARKET_CAP})", "inequality": ">", "exp_right_side": 7000000000} # 시가총액 > 70억
             ],
-            "priority_factor": "기본값({CHANGE_RATE})", # 등락률인데 바꿀 필요 있어보임
+            "priority_factor": "기본값({CHANGE_RATE})",
             "priority_order": "desc",
-            "per_stock_ratio": 20,
-            "max_holdings": 5,
+            "per_stock_ratio": 15,
+            "max_holdings": 8,
+            "max_buy_value": 50000000,
+            "max_daily_stock": 5,
             # 급등주 전략: 거래량 많은 주요 테마 (변동성 높은 업종)
             "trade_targets": {
                 "use_all_stocks": False,
-                "selected_themes": ["전기 / 전자", "제약", "IT서비스", "기계 / 장비", "화학"],
+                # 대형 변동성 테마 포함 (총 ~399종)
+                "selected_themes": ["전기 / 전자", "증권"],
                 "selected_stocks": [],
                 "selected_stock_count": None,
                 "total_stock_count": 2645,
                 "total_theme_count": 29
             },
+            "target_and_loss": {
+                "target_gain": 12,
+                "stop_loss": 7
+            },
+            "hold_days": {
+                "min_hold_days": 3,
+                "max_hold_days": 15,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": "<", "exp_right_side": -35},
+                    {"name": "B", "exp_left_side": "기본값({CHANGE_RATE})", "inequality": "<", "exp_right_side": -7}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            }
         },
         "steady_growth": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 0},  # 매출 CAGR(3Y) > 0 조건을 1Y로 대체
-                {"name": "B", "exp_left_side": "기본값({OPERATING_INCOME_GROWTH_YOY})", "inequality": ">", "exp_right_side": 0},  # 영업이익 CAGR(3Y) > 0 조건을 1Y로 대체
-                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 100}, # 부채비율 < 100%
-                {"name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 10} # ROE > 10%
+                {"name": "A", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": -5},  # 매출 성장률 완화
+                {"name": "B", "exp_left_side": "기본값({OPERATING_INCOME_GROWTH_YOY})", "inequality": ">", "exp_right_side": -5},  # 영업이익 성장률 완화
+                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 120}, # 부채비율 < 120%
+                {"name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 8} # ROE > 8%
             ],
             "priority_factor": "기본값({ROE})",
+            "per_stock_ratio": 10,
+            "max_holdings": 15,
+            "max_buy_value": 70000000,
+            "max_daily_stock": 4,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 방어적 업종 + 대형 IT 성장 (총 ~347종)
+                "selected_themes": ["IT서비스", "전기 / 가스 / 수도", "음식료 / 담배"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 20,
+                "stop_loss": 12
+            },
+            "hold_days": {
+                "min_hold_days": 60,
+                "max_hold_days": 360,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": "<", "exp_right_side": 5},
+                    {"name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": "<", "exp_right_side": -10}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
             # TODO: 매출 CAGR(3Y), 영업이익 CAGR(3Y) 구현 가능 여부 확인(계산 비용까지 포함해서)
         },
         "peter_lynch": {
-            "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 30}, #PER < 30
-                # PEG 조건 제외 (계산 불가)
-                # 재고/매출 조건 제외 (계산 불가)
-                {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150}, # 부채비율 < 150%
-                {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 5}, # ROE > 5%
-                {"name": "D", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 1}, # ROA > 1%
-                # 배당수익률 조건 제외  (계산 불가)
+            # 🚀 벡터화 평가 활성화: expression + conditions 형식
+            "expression": "A and B and C and D and E and F",  # AND 로직
+            "conditions": [
+                {"id": "A", "factor": "PER", "operator": "<", "value": 40},  # PER < 40
+                {"id": "B", "factor": "PEG", "operator": ">", "value": 0},   # PEG > 0
+                {"id": "C", "factor": "PEG", "operator": "<", "value": 2.0}, # PEG < 2.0
+                {"id": "D", "factor": "DEBT_RATIO", "operator": "<", "value": 180},  # 부채비율 < 180%
+                {"id": "E", "factor": "ROE", "operator": ">", "value": 3},   # ROE > 3%
+                {"id": "F", "factor": "ROA", "operator": ">", "value": 0.5}, # ROA > 0.5%
             ],
-            "priority_factor": "기본값({PER})",  # PEG 대신 PER 사용
+            # UI 표시용 (하위 호환성)
+            "buy_conditions": [
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 40},
+                {"name": "B", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0},
+                {"name": "C", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2.0},
+                {"name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 180},
+                {"name": "E", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 3},
+                {"name": "F", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 0.5},
+            ],
+            "priority_factor": "기본값({PEG})",
             "priority_order": "asc",
-            # TODO: PEG, 재고/매출 추가 (향후 구현)
+            "per_stock_ratio": 8,
+            "max_holdings": 18,
+            "max_buy_value": 50000000,
+            "max_daily_stock": 4,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 성장+소비 (총 ~303종)
+                "selected_themes": ["IT서비스", "섬유 / 의류"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 25,
+                "stop_loss": 15
+            },
+            "hold_days": {
+                "min_hold_days": 90,
+                "max_hold_days": 540,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                # 🚀 벡터화 평가 활성화: expression + conditions 형식
+                "expression": "A or B",  # OR 로직
+                "conditions": [
+                    {"id": "A", "factor": "PEG", "operator": ">", "value": 2.5},  # PEG > 2.5
+                    {"id": "B", "factor": "DEBT_RATIO", "operator": ">", "value": 200},  # 부채비율 > 200%
+                ],
+                # UI 표시용 (하위 호환성)
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 2.5},
+                    {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 200}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
         },
         "warren_buffett": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 15}, # ROE > 15%
+                {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12}, # ROE > 12%
                 # 장기부채비율 제외 (계산 불가)
-                {"name": "B", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5}, # 유동비율 > 1.5
+                {"name": "B", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.2}, # 유동비율 > 1.2
                 # FCF 제외 (계산 불가)
-                {"name": "C", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 17}, # PER < 17
-                {"name": "D", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5}, # PBR < 1.5
-                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 150}, # 부채비율 < 150%
-                {"name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 10} # EPS(주당순이익) 성장률 > 10% 조건을 순이익증가율(1Y)로 대체
+                {"name": "C", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20}, # PER < 20
+                {"name": "D", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0}, # PBR < 2.0
+                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 170}, # 부채비율 < 170%
+                {"name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 5} # EPS(주당순이익) 성장률 > 5% 조건을 순이익증가율(1Y)로 대체
             ],
             "priority_factor": "기본값({PBR})",
             "priority_order": "asc",
+            "per_stock_ratio": 8,
+            "max_holdings": 15,
+            "max_buy_value": 100000000,
+            "max_daily_stock": 3,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 대형 IT + 전통 가치 (총 ~392종)
+                "selected_themes": ["IT서비스", "금융", "전기 / 가스 / 수도", "보험"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 40,
+                "stop_loss": 20
+            },
+            "hold_days": {
+                "min_hold_days": 180,
+                "max_hold_days": 720,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.5},
+                    {"name": "B", "exp_left_side": "기본값({ROE})", "inequality": "<", "exp_right_side": 8}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
             # TODO: FCF, EPS 성장률 추가 (향후 구현)
         },
         "william_oneil": {
             "buy_conditions": [
                 # EPS 성장률 (QoQ) 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 18}, # EPS(주당순이익) 성장률 > 18% 조건을 순이익증가율(1Y)로 대체
-                {"name": "B", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 17}, # ROE > 17%
-                {"name": "C", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": ">", "exp_right_side": -15} # 현재가 > 52주 신고가의 85% (팩터 검증 필요)
+                {"name": "A", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 12}, # EPS(주당순이익) 성장률 > 12% 조건을 순이익증가율(1Y)로 대체
+                {"name": "B", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12}, # ROE > 12%
+                {"name": "C", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": ">", "exp_right_side": -25} # 현재가 > 52주 신고가의 75% (팩터 검증 필요)
             ],
             "priority_factor": "기본값({EARNINGS_GROWTH_1Y})",
             "priority_order": "desc",
-            "per_stock_ratio": 15,
-            "max_holdings": 6,
+            "per_stock_ratio": 12,
+            "max_holdings": 8,
+            "max_buy_value": 50000000,
+            "max_daily_stock": 4,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 고성장 대형 모멘텀 (총 ~395종)
+                "selected_themes": ["전기 / 전자", "통신"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 28,
+                "stop_loss": 12
+            },
+            "hold_days": {
+                "min_hold_days": 20,
+                "max_hold_days": 180,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": "<", "exp_right_side": -35}
+                ],
+                "sell_logic": "A",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
             # TODO: EPS 성장률 (QoQ) 추가 (향후 구현)
         },
         "bill_ackman": {
             "buy_conditions": [
-                # ROIC 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20}, # PER < 20
-                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2}, # PBR < 2
-                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 150}, # 부채비율 > 150%
+                {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 10}, # ROIC > 10%
+                {"name": "B", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 22}, # PER < 22
+                {"name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.5}, # PBR < 2.5
+                {"name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 100}, # 부채비율 > 100%
                 # FCF 조건 제외 (계산 불가)
                 # 배당수익률 조건 제외  (계산 불가)
             ],
-            "priority_factor": "기본값({PER})",  # ROIC 대신 PER 사용
+            "priority_factor": "기본값({ROIC})",
             "priority_order": "asc",
-            # TODO: ROIC, FCF 추가 (향후 구현)
+            "per_stock_ratio": 10,
+            "max_holdings": 10,
+            "max_buy_value": 100000000,
+            "max_daily_stock": 3,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 리레이팅 대상 업종 (총 ~386종)
+                "selected_themes": ["IT서비스", "금융", "증권"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 30,
+                "stop_loss": 15
+            },
+            "hold_days": {
+                "min_hold_days": 90,
+                "max_hold_days": 360,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({PER})", "inequality": ">", "exp_right_side": 25},
+                    {"name": "B", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 5}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            # TODO: FCF 추가 (향후 구현)
         },
         "charlie_munger": {
             "buy_conditions": [
-                # ROIC 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 10}, # PER < 10
-                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5}, # PBR < 1.5
-                {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 15}, # ROE > 15
-                {"name": "D", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 15}, # 매출 성장률 > 15%
-                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 50}, # 부채비율 < 50%
-                {"name": "F", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2} # 유동비율 > 2
+                {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 12}, # ROIC > 12%
+                {"name": "B", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 14}, # PER < 14
+                {"name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0}, # PBR < 2.0
+                {"name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12}, # ROE > 12
+                {"name": "E", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 10}, # 매출 성장률 > 10%
+                {"name": "F", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 70}, # 부채비율 < 70%
+                {"name": "G", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5} # 유동비율 > 1.5
             ],
-            "priority_factor": "기본값({ROE})",  # ROIC 대신 ROE 사용
+            "priority_factor": "기본값({ROIC})",
             "priority_order": "desc",
-            # TODO: ROIC 추가 (향후 구현)
+            "per_stock_ratio": 10,
+            "max_holdings": 12,
+            "max_buy_value": 80000000,
+            "max_daily_stock": 3,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 고품질 소재/제조 (총 ~277종)
+                "selected_themes": ["화학", "비금속", "전기 / 가스 / 수도"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 35,
+                "stop_loss": 18
+            },
+            "hold_days": {
+                "min_hold_days": 180,
+                "max_hold_days": 900,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 8},
+                    {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.3}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
         },
         "glenn_welling": {
             "buy_conditions": [
-                # EV/EBITDA 제외 (계산 불가)
-                # ROIC 제외 (계산 불가)
-                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 1.5}, # PBR < 1.5
-                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 1.5} # PSR < 1.5
-                # PEG 제외 (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({EV_EBITDA})", "inequality": "<", "exp_right_side": 10}, # EV/EBITDA < 10
+                {"name": "B", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 12}, # ROIC < 12%
+                {"name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0}, # PBR < 2.0
+                {"name": "D", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 2.0}, # PSR < 2.0
+                {"name": "E", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0}, #PEG > 0
+                {"name": "F", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 1.2}, #PEG < 1.2
             ],
-            "priority_factor": "기본값({PBR})",
+            "priority_factor": "기본값({EV_EBITDA})",
             "priority_order": "asc",
-            # TODO: EV/EBITDA, ROIC, PEG(= (PER / EPS성장률)) 추가 (향후 구현)
+            "per_stock_ratio": 10,
+            "max_holdings": 12,
+            "max_buy_value": 70000000,
+            "max_daily_stock": 3,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 스핀오프/턴어라운드 중소형 제조 (총 ~275종)
+                "selected_themes": ["기계 / 장비", "기타 제조", "비금속"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 25,
+                "stop_loss": 15
+            },
+            "hold_days": {
+                "min_hold_days": 120,
+                "max_hold_days": 540,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({EV_EBITDA})", "inequality": ">", "exp_right_side": 12},
+                    {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.2}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
         },
         "cathie_wood": {
             "buy_conditions": [
-                # PEG 제외 (계산 불가)
-                {"name": "A", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 20}, # PSR < 20
-                {"name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 20}, # 매출 성장률 > 20%
-                {"name": "C", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 2} # 유동비율 > 2
+                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0}, #PEG > 0
+                {"name": "B", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2.5}, #PEG < 2.5
+                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 25}, # PSR < 25
+                {"name": "D", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 15}, # 매출 성장률 > 15%
+                {"name": "E", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5} # 유동비율 > 1.5
             ],
             "priority_factor": "기본값({REVENUE_GROWTH_1Y})",
             "priority_order": "desc",
-            # TODO: PEG 추가 (향후 구현)
+            "per_stock_ratio": 8,
+            "max_holdings": 14,
+            "max_buy_value": 60000000,
+            "max_daily_stock": 4,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 대형 혁신/헬스케어 (총 ~395종)
+                "selected_themes": ["전기 / 전자", "통신"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 40,
+                "stop_loss": 20
+            },
+            "hold_days": {
+                "min_hold_days": 90,
+                "max_hold_days": 360,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({PSR})", "inequality": ">", "exp_right_side": 30},
+                    {"name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": "<", "exp_right_side": 5}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
         },
         "glenn_greenberg": {
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 15}, # PER < 20
-                # ROIC 제외 (계산 불가)
-                {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 50}, # 부채비율 < 50%
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20}, # PER < 20
+                {"name": "B", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 12}, # ROIC > 12%
+                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 70}, # 부채비율 < 70%
                 # 총 마진 성장률 조건 제외 (계산 불가)
                 # FCF 조건 제외 (계산 불가)
             ],
-            "priority_factor": "기본값({FCF_YIELD})",  # ROIC 대신 FCF_YIELD 사용
+            "priority_factor": "기본값({ROIC})",
             "priority_order": "desc",
-            # TODO: ROIC, 총 마진 성장률, FCF 추가 (향후 구현)
+            "per_stock_ratio": 10,
+            "max_holdings": 8,
+            "max_buy_value": 100000000,
+            "max_daily_stock": 2,
+            "trade_targets": {
+                "use_all_stocks": False,
+                # 소수 집중 가치 업종 (총 ~190종)
+                "selected_themes": ["유통", "증권", "은행"],
+                "selected_stocks": [],
+                "selected_stock_count": None,
+                "total_stock_count": 2645,
+                "total_theme_count": 29
+            },
+            "target_and_loss": {
+                "target_gain": 30,
+                "stop_loss": 15
+            },
+            "hold_days": {
+                "min_hold_days": 120,
+                "max_hold_days": 540,
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            "condition_sell": {
+                "sell_conditions": [
+                    {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 8},
+                    {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 90}
+                ],
+                "sell_logic": "or",
+                "sell_price_basis": "전일 종가",
+                "sell_price_offset": 0
+            },
+            # TODO: 총 마진 성장률, FCF 추가 (향후 구현)
         },
         #! 여기서부터는 추가 전략
         
@@ -252,6 +570,16 @@ async def migrate_strategies():
                 strategy_id,
                 strategy_data.get("conditions", [])
             )
+
+            # 🔍 디버그: 피터린치 설정 확인
+            if strategy_id == "peter_lynch":
+                print("\n" + "=" * 80)
+                print("🔍 디버그: 피터린치 backtest_config")
+                print("=" * 80)
+                print(f"expression: {backtest_config.get('expression')}")
+                print(f"conditions: {backtest_config.get('conditions')}")
+                print(f"buy_conditions (first 2): {backtest_config.get('buy_conditions', [])[:2]}")
+                print("=" * 80 + "\n")
 
             # 기존 전략 확인
             result = await db.execute(

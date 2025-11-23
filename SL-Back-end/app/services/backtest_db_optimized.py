@@ -56,6 +56,9 @@ class OptimizedDBManager:
                     'date', 'open_price', 'high_price', 'low_price', 'close_price',
                     'volume', 'trading_value', 'market_cap', 'listed_shares'
                 ]
+            # CHANGE_RATE 계산용으로 전일 종가가 필요하므로 close_price는 강제 포함
+            if 'close_price' not in required_columns:
+                required_columns.append('close_price')
 
             # 모멘텀 계산용 날짜 범위 (필요한 만큼만)
             extended_start = start_date - timedelta(days=300)  # 365일 → 300일로 단축
@@ -132,8 +135,14 @@ class OptimizedDBManager:
             # 데이터 타입 최적화
             df['date'] = pd.to_datetime(df['date'])
 
+            # 등락률(전일 대비 %) 계산
+            df = df.sort_values(['stock_code', 'date'])
+            df['prev_close'] = df.groupby('stock_code')['close_price'].shift(1)
+            df['CHANGE_RATE'] = ((df['close_price'] - df['prev_close']) / df['prev_close'] * 100).where(df['prev_close'] > 0)
+            df = df.drop(columns=['prev_close'])
+
             # 메모리 최적화: float64 → float32
-            numeric_columns = ['close_price', 'volume', 'trading_value', 'market_cap', 'listed_shares']
+            numeric_columns = ['close_price', 'volume', 'trading_value', 'market_cap', 'listed_shares', 'CHANGE_RATE']
             for col in numeric_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')

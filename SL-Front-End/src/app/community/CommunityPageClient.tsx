@@ -127,6 +127,7 @@ export default function CommunityPageClient() {
               return (
                 <PortfolioShareCard
                   key={item.strategyId}
+                  sessionId={item.sessionId || ""}
                   portfolioName={item.strategyName}
                   author={item.ownerName || "익명"}
                   description={item.description || "설명이 없습니다."}
@@ -135,7 +136,7 @@ export default function CommunityPageClient() {
                   onAdd={
                     item.sessionId
                       ? () =>
-                          handleCloneStrategy(item.sessionId!, item.strategyName)
+                        handleCloneStrategy(item.sessionId!, item.strategyName)
                       : undefined
                   }
                 />

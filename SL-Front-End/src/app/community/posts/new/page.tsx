@@ -24,7 +24,7 @@ export default function FreeBoardNewPostPage() {
       },
       {
         onSuccess: (post) => {
-          router.push(`/community/${post.postId}`);
+          router.push(`/community/${post.postId}?source=create`);
         },
         onError: (error) => {
           alert(`게시 실패: ${error.message}`);

@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Icon } from "@/components/common/Icon";
 import {
@@ -22,6 +22,18 @@ export default function CommunityPostDetailPage({
 }) {
   const { id: postId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const source = searchParams.get("source");
+
+  const handleBack = () => {
+    if (source === "create") {
+      router.push("/community/posts");
+    } else {
+      router.back();
+    }
+    router.refresh();
+  };
+
   const { data: post, isLoading: postLoading } = usePostDetailQuery(postId);
   const { data: commentsData, isLoading: commentsLoading } =
     useCommentsQuery(postId);
@@ -78,7 +90,7 @@ export default function CommunityPostDetailPage({
       <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-[24px]">
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={handleBack}
           className="self-start inline-flex items-center gap-1 text-[0.875rem] text-[#646464]"
         >
           <Icon

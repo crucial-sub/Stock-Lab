@@ -76,27 +76,25 @@ export default async function HomePage() {
         const axios = (await import("axios")).default;
         const baseURL = process.env.API_BASE_URL || "http://backend:8000/api/v1";
 
-        if (hasKiwoomAccount) {
-          // 관심종목 체결량 상위 5
-          try {
-            const favorites = await axios.get(`${baseURL}/market/favorites`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            const sorted = (favorites.data?.items || [])
-              .filter((item: any) => item.volume !== null && item.volume !== undefined)
-              .sort((a: any, b: any) => (b.volume || 0) - (a.volume || 0))
-              .slice(0, 5);
-            marketStocks = sorted.map((item: any) => ({
-              id: item.stockCode,
-              name: item.stockName,
-              tag: item.theme ?? item.stockCode,
-              change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
-              price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
-              volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
-            }));
-          } catch (error) {
-            console.warn("관심종목 시황 조회 실패, 전체 상위로 대체:", error);
-          }
+        // 관심종목 체결량 상위 5
+        try {
+          const favorites = await axios.get(`${baseURL}/market/favorites`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const sorted = (favorites.data?.items || [])
+            .filter((item: any) => item.volume !== null && item.volume !== undefined)
+            .sort((a: any, b: any) => (b.volume || 0) - (a.volume || 0))
+            .slice(0, 5);
+          marketStocks = sorted.map((item: any) => ({
+            id: item.stockCode,
+            name: item.stockName,
+            tag: item.theme ?? item.stockCode,
+            change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+            price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
+            volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+          }));
+        } catch (error) {
+          console.warn("관심종목 시황 조회 실패, 전체 상위로 대체:", error);
         }
 
         // 관심종목 없거나 로그인만 한 경우: 전체 체결량 상위

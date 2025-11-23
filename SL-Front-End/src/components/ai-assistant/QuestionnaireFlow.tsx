@@ -70,11 +70,11 @@ function QuestionCard({ question, selectedOptionId, onSelect, isCompleted, isLoc
               className={`
                 w-full max-w-[1000px] p-5 rounded-[12px] border-[0.5px] transition-all text-left shadow-elev-card-soft
                 ${isLocked
-                  ? "cursor-not-allowed opacity-70"
+                  ? "cursor-not-allowed"
                   : "cursor-pointer"
                 }
                 ${isSelected
-                  ? "border-brand-purple bg-brand-purple/5"
+                  ? "border-brand-purple bg-brand-purple/10"
                   : "border-[#C8C8C8] bg-[#1822340D] hover:border-brand-purple hover:bg-[#FFFFFF33]"
                 }
               `}
@@ -159,21 +159,21 @@ function ProgressBar({ current, total }: ProgressBarProps) {
   const clampedPercentage = Math.min(100, Math.max(0, percentage));
 
   return (
-    <div className="sticky top-0 z-10 py-4 mb-0 backdrop-blur-md">
-      <div className="max-w-[1000px] mx-auto rounded-[12px] pb-5 px-0">
-        <div className="flex items-center justify-between text-[1rem] font-normal uppercase text-muted mb-3">
+    <div className="sticky top-0 z-10 pt-2 mb-2">
+      <div className="max-w-[1000px] mx-auto rounded-[12px] border border-white bg-white/90 p-5">
+        <div className="flex items-center justify-between text-[1rem] font-semibold uppercase tracking-wide text-muted mb-2">
           <span>투자 성향 설문 진행률</span>
-          <span className="text-brand-purple font-semibold">
+          <span className="text-brand-purple font-semibold text-[1rem]">
             {current}/{total} · {Math.round(clampedPercentage)}%
           </span>
         </div>
         <div className="relative h-3 rounded-full bg-[#e0e4ff]">
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#b590ff] via-[#8f6dff] to-[#5a3dee] transition-all duration-500"
+            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#b590ff] via-[#8f6dff] to-[#5a3dee] shadow-[0_8px_20px_rgba(90,61,222,0.35)] transition-all duration-500"
             style={{ width: `${clampedPercentage}%` }}
           />
           <div
-            className="absolute -top-1 h-5 w-5 rounded-full border-2 border-white bg-[#5a3dee] transition-all duration-500"
+            className="absolute -top-1 h-5 w-5 rounded-full border-2 border-white bg-[#5a3dee] shadow-[0_10px_25px_rgba(90,61,222,0.35)] transition-all duration-500"
             style={{ left: `${clampedPercentage}%`, transform: "translateX(-50%)" }}
           />
         </div>

@@ -17,6 +17,8 @@ from app.schemas.auto_trading import (
     AutoTradingActivateResponse,
     AutoTradingDeactivateRequest,
     AutoTradingDeactivateResponse,
+    AutoTradingStrategyNameUpdateRequest,
+    AutoTradingStrategyNameUpdateResponse,
     AutoTradingStatusResponse,
     AutoTradingStrategyResponse,
     LivePositionResponse,
@@ -130,6 +132,58 @@ async def check_deactivation_conditions(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="비활성화 조건 확인에 실패했습니다."
+        )
+
+
+@router.patch("/strategies/{strategy_id}/name", response_model=AutoTradingStrategyNameUpdateResponse)
+async def update_strategy_name(
+    strategy_id: UUID,
+    request: AutoTradingStrategyNameUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    자동매매 전략 이름 수정
+    - 활성/비활성 상관없이 전략 이름 변경 가능
+    """
+    try:
+        from sqlalchemy import select, and_
+        from app.models.auto_trading import AutoTradingStrategy
+
+        # 전략 조회 및 권한 확인
+        query = select(AutoTradingStrategy).where(
+            and_(
+                AutoTradingStrategy.strategy_id == strategy_id,
+                AutoTradingStrategy.user_id == current_user.user_id
+            )
+        )
+        result = await db.execute(query)
+        strategy = result.scalar_one_or_none()
+
+        if not strategy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="자동매매 전략을 찾을 수 없습니다."
+            )
+
+        # 이름 업데이트
+        strategy.strategy_name = request.strategy_name
+        await db.commit()
+        await db.refresh(strategy)
+
+        return AutoTradingStrategyNameUpdateResponse(
+            message="전략 이름이 성공적으로 변경되었습니다.",
+            strategy_id=strategy.strategy_id,
+            strategy_name=strategy.strategy_name
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"전략 이름 수정 실패: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="전략 이름 수정에 실패했습니다."
         )
 
 

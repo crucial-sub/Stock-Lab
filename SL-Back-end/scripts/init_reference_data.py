@@ -1,6 +1,6 @@
 """
 백테스트 참조 데이터 초기화 스크립트
-54개 팩터 + 카테고리 + 테스트 사용자 삽입
+55개 팩터 + 카테고리 + 테스트 사용자 삽입
 """
 import asyncio
 import sys
@@ -154,6 +154,7 @@ async def init_reference_data():
                 ('DISTANCE_FROM_52W_LOW', 'MOMENTUM', '52주 최저가 대비', 'Distance from 52W Low', '현재가와 52주 최저가의 거리', 'percentage', '(현재가 - 52주최저가) / 52주최저가 × 100', 'market_data', 'daily', 6),
                 ('RELATIVE_STRENGTH', 'MOMENTUM', '상대강도', 'Relative Strength', '시장 대비 초과 수익률', 'percentage', '개별종목 수익률 - 시장 수익률', 'market_data', 'daily', 7),
                 ('VOLUME_MOMENTUM', 'MOMENTUM', '거래량 모멘텀', 'Volume Momentum', '거래량 증가율', 'percentage', '(현재거래량 - 과거평균거래량) / 과거평균거래량 × 100', 'market_data', 'daily', 8),
+                ('CHANGE_RATE', 'MOMENTUM', '등락률', 'Change Rate (DoD)', '전일 대비 등락률(%)', 'percentage', '(금일종가 - 전일종가) / 전일종가 × 100', 'market_data', 'daily', 9),
 
                 # 안정성 지표 (STABILITY) - 8개
                 ('DEBT_TO_EQUITY', 'STABILITY', '부채비율', 'Debt to Equity', '부채총계를 자기자본으로 나눈 비율', 'ratio', '부채총계 / 자기자본', 'financial_statement', 'quarterly', 1),

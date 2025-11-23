@@ -36,6 +36,7 @@ interface AIHelperSidebarProps {
   onSellConditionsAdd?: (conditions: any[]) => void;
   currentBuyConditions?: BuyConditionUI[];
   currentSellConditions?: SellConditionUI[];
+  onConditionsApplied?: () => void;
 }
 
 /**
@@ -47,12 +48,14 @@ function AIHelperMessage({
   onSellConditionsAdd,
   onBuyApplied,
   onSellApplied,
+  onConditionsApplied,
 }: {
   message: Message;
   onBuyConditionsAdd?: (conditions: any[]) => void;
   onSellConditionsAdd?: (conditions: any[]) => void;
   onBuyApplied?: () => void;
   onSellApplied?: () => void;
+  onConditionsApplied?: () => void;
 }) {
   const isUser = message.role === "user";
 
@@ -64,6 +67,7 @@ function AIHelperMessage({
       }));
       onBuyConditionsAdd(normalized);
       onBuyApplied?.();
+      onConditionsApplied?.();
     }
   };
 
@@ -75,6 +79,7 @@ function AIHelperMessage({
       }));
       onSellConditionsAdd(normalized);
       onSellApplied?.();
+      onConditionsApplied?.();
     }
   };
 
@@ -184,7 +189,8 @@ export function AIHelperSidebar({
   onBuyConditionsAdd,
   onSellConditionsAdd,
   currentBuyConditions = [],
-  currentSellConditions = []
+  currentSellConditions = [],
+  onConditionsApplied,
 }: AIHelperSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string>("");
@@ -255,28 +261,27 @@ export function AIHelperSidebar({
 
         // AI 응답 메시지 추가
         const backtestConditions: any = response.backtest_conditions || {};
-        const buyConditions = backtestConditions.buy || backtestConditions || [];
-        const sellConditions = backtestConditions.sell || [];
+        const buyConditions = Array.isArray(backtestConditions)
+          ? backtestConditions
+          : Array.isArray(backtestConditions.buy)
+            ? backtestConditions.buy
+            : [];
+        const sellConditions = Array.isArray(backtestConditions.sell)
+          ? backtestConditions.sell
+          : [];
 
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-           content: response.answer,
-           backtestConditionsBuy: buyConditions,
-           backtestConditionsSell: sellConditions,
+            content: response.answer,
+            backtestConditionsBuy: buyConditions,
+            backtestConditionsSell: sellConditions,
             appliedBuy: false,
             appliedSell: false,
           },
         ]);
 
-        // 자동 적용: 응답에 조건이 있으면 즉시 추가
-        if (buyConditions.length > 0) {
-          onApplyBuy(buyConditions);
-        }
-        if (sellConditions.length > 0) {
-          onApplySell(sellConditions);
-        }
       } catch (error) {
         console.error("Failed to send message:", error);
         setMessages((prev) => [
@@ -320,6 +325,7 @@ export function AIHelperSidebar({
                 message={message}
                 onBuyConditionsAdd={onBuyConditionsAdd}
                 onSellConditionsAdd={onSellConditionsAdd}
+                onConditionsApplied={() => setPanelMode?.("summary")}
                 onBuyApplied={() =>
                   setMessages((prev) =>
                     prev.map((m, i) =>

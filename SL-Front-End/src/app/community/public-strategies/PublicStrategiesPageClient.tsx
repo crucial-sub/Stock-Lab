@@ -261,9 +261,16 @@ export function PublicStrategiesPageClient() {
                   >
                     <div className="flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[1.25rem] font-semibold text-black">
+                        <button
+                          onClick={() => {
+                            if (item.sessionId) {
+                              router.push(`/quant/result/${item.sessionId}`);
+                            }
+                          }}
+                          className="text-[1.25rem] font-semibold text-black hover:text-brand-purple transition-colors cursor-pointer text-left"
+                        >
                           {item.strategyName}
-                        </p>
+                        </button>
                         <span className="text-[0.75rem] text-muted">
                           by. {item.ownerName || (item.isAnonymous ? "익명" : "알 수 없음")},
                         </span>

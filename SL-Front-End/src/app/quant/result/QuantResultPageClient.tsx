@@ -32,8 +32,11 @@ import {
 } from "@/hooks/useBacktestQuery";
 import { mockBacktestResult } from "@/mocks/backtestResult";
 import { strategyApi } from "@/lib/api/strategy";
+import { communityApi } from "@/lib/api/community";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 
 interface QuantResultPageClientProps {
   backtestId: string;
@@ -53,8 +56,10 @@ export function QuantResultPageClient({
   const [hasEditedName, setHasEditedName] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editInputValue, setEditInputValue] = useState("");
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const queryClient = useQueryClient();
   const previousStatusRef = useRef<string | undefined>(undefined);
+  const router = useRouter();
 
   // Mock 모드 체크
   const isMockMode = backtestId.startsWith("mock");
@@ -94,6 +99,8 @@ export function QuantResultPageClient({
     (item) => item.sessionId === backtestId,
   );
   const strategyId = currentStrategyMeta?.strategyId;
+  const isOwner = currentStrategyMeta !== undefined;
+  const isPublic = currentStrategyMeta?.isPublic || false;
 
   const resolvedStrategyName =
     currentStrategyMeta?.strategyName ||
@@ -158,8 +165,8 @@ export function QuantResultPageClient({
     onError: (error: any) => {
       alert(
         error?.response?.data?.detail ||
-          error?.message ||
-          "백테스트 이름을 수정하지 못했습니다.",
+        error?.message ||
+        "백테스트 이름을 수정하지 못했습니다.",
       );
     },
   });
@@ -189,6 +196,71 @@ export function QuantResultPageClient({
     }
 
     updateNameMutation.mutate(nextName);
+  };
+
+  // 전략 복제 핸들러
+  const handleClone = async () => {
+    try {
+      await communityApi.cloneStrategy(backtestId);
+      alert("전략이 성공적으로 복제되었습니다.");
+      router.push("/quant");
+    } catch (error: any) {
+      alert(
+        error?.response?.data?.detail ||
+        error?.message ||
+        "전략 복제에 실패했습니다."
+      );
+    }
+  };
+
+  // 전략 공유 토글 핸들러
+  const handleToggleShare = () => {
+    if (isPublic) {
+      // 공유 해제
+      if (confirm("전략 공유를 해제하시겠습니까?")) {
+        handleShareConfirm({ description: "", isAnonymous: false });
+      }
+    } else {
+      // 공유 설정 모달 열기
+      setIsShareModalOpen(true);
+    }
+  };
+
+  // 공유 설정 확인 핸들러
+  const handleShareConfirm = async (params: {
+    description: string;
+    isAnonymous: boolean;
+  }) => {
+    if (!strategyId) {
+      alert("전략 ID를 찾을 수 없습니다.");
+      return;
+    }
+
+    try {
+      await strategyApi.updateSharingSettings(strategyId, {
+        isPublic: !isPublic,
+        isAnonymous: params.isAnonymous,
+      });
+      // description은 별도로 업데이트
+      if (params.description) {
+        await strategyApi.updateStrategy(strategyId, {
+          description: params.description,
+        });
+      }
+      alert(
+        isPublic
+          ? "전략 공유가 해제되었습니다."
+          : "전략이 성공적으로 공유되었습니다."
+      );
+      setIsShareModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["myStrategies"] });
+    } catch (error: any) {
+      alert(
+        error?.response?.data?.detail ||
+        error?.message ||
+        "전략 공유 설정에 실패했습니다."
+      );
+    }
   };
 
   // Mock 데이터 또는 실제 데이터 사용
@@ -345,6 +417,10 @@ export function QuantResultPageClient({
           onChangeEditValue={setEditInputValue}
           onSaveEdit={handleSaveEdit}
           onCancelEdit={handleCancelEdit}
+          isOwner={isOwner}
+          isPublic={isPublic}
+          onClone={handleClone}
+          onToggleShare={handleToggleShare}
         />
 
         {/* 통계 섹션 */}
@@ -392,6 +468,16 @@ export function QuantResultPageClient({
           />
         )}
       </div>
+
+      {/* 공유 설정 모달 */}
+      <PortfolioShareModal
+        isOpen={isShareModalOpen}
+        portfolioName={displayStrategyName}
+        initialDescription=""
+        initialIsAnonymous={false}
+        onClose={() => setIsShareModalOpen(false)}
+        onConfirm={handleShareConfirm}
+      />
     </div>
   );
 }

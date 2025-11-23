@@ -299,7 +299,8 @@ async def get_current_user_info(
         is_active=current_user.is_active,
         is_superuser=current_user.is_superuser,
         created_at=current_user.created_at,
-        has_kiwoom_account=has_kiwoom
+        has_kiwoom_account=has_kiwoom,
+        ai_recommendation_block=current_user.ai_recommendation_block
     )
 
 
@@ -518,4 +519,34 @@ async def delete_account(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="회원탈퇴 처리 중 오류가 발생했습니다"
+        )
+
+
+@router.patch("/update-ai-recommendation", response_model=UserResponse)
+async def update_ai_recommendation(
+    block: bool = True,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    AI 추천 블록 설정 변경
+
+    Args:
+        block: 블록 여부 (True: 블록, False: 해제)
+        current_user: 현재 로그인한 유저
+        db: 데이터베이스 세션
+
+    Returns:
+        UserResponse: 업데이트된 유저 정보
+    """
+    current_user.ai_recommendation_block = block
+    try:
+        await db.commit()
+        await db.refresh(current_user)
+        return current_user
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="설정 변경 중 오류가 발생했습니다"
         )

@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
+import { Icon } from '@/components/common/Icon';
 
 /**
  * AI 어시스턴트 2차 사이드바
@@ -80,13 +80,13 @@ export function SecondarySidebar({
           .join(" ")}
         aria-label={isOpen ? "채팅 내역 닫기" : "채팅 내역 열기"}
       >
-        <div className="relative w-full h-full">
-          <Image
+        <div className="relative w-full h-full text-muted">
+          <Icon
             src={isOpen ? "/icons/arrow_left.svg" : "/icons/arrow_right.svg"}
             alt=""
-            fill
-            className="object-contain transition-opacity duration-300"
-            aria-hidden="true"
+            className="transition-opacity duration-300"
+            color="rgb(var(--color-gray-400))"
+            size="100%"
           />
         </div>
       </button>
@@ -104,32 +104,44 @@ export function SecondarySidebar({
           .join(" ")}
       >
         {/* 버튼 그룹 */}
-        <div className="flex gap-2 mb-3 flex-shrink-0">
+        <div className="flex flex-col gap-2 mb-4 flex-shrink-0">
           {onNewChat && (
             <button
               type="button"
               onClick={onNewChat}
-              className="flex-1 h-[38px] rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand-dark transition-colors"
+              className="w-full flex items-center gap-2 text-start pl-3 pt-2 pb-1.5 rounded-[12px] text-gray-400 text-[1rem] font-normal hover:text-white hover:font-semibold hover:bg-sidebar-item-sub-active transition-colors"
             >
-              새 채팅
+              <span className="-mt-1 inline-flex">
+                <Icon
+                  src="/icons/add.svg"
+                  alt=""
+                  color="currentColor"
+                  size={16}
+                />
+              </span>
+              새 채팅 추가하기
             </button>
+
           )}
-          {onDeleteAll && chatHistory.length > 0 && (
+          {onDeleteAll && (
             <button
               type="button"
               onClick={onDeleteAll}
-              className="w-[38px] h-[38px] rounded-lg bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition-colors flex items-center justify-center"
-              title="전체 삭제"
+              className="w-full flex items-center gap-2 text-start pl-3 pt-2 pb-1.5 rounded-[12px] text-price-up/80 text-[1rem] font-normal hover:text-price-up hover:font-semibold hover:bg-[#FF646433] transition-colors"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="w-5 h-5"
-              >
-                <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
-              </svg>
+              <span className="-mt-1 inline-flex">
+                <Icon
+                  src="/icons/delete.svg"
+                  alt=""
+                  color="currentColor"
+                  size={16}
+                />
+              </span>
+              전체 채팅 삭제하기
             </button>
+          )}
+          {onDeleteAll && (
+            <div className="h-px w-full bg-[#FFFFFF1D] rounded-full mt-2" />
           )}
         </div>
 

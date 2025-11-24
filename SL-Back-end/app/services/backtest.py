@@ -3081,7 +3081,10 @@ class BacktestEngine:
                 position_value=float(stock_value),
                 daily_return=float(daily_return),
                 cumulative_return=float(current_return),
-                progress_percent=progress_percentage
+                progress_percent=progress_percentage,
+                current_mdd=float(current_mdd),
+                buy_count=daily_buy_count,
+                sell_count=total_sell_count
             )
 
             # 🚀 초고속: DB UPDATE 제거 (시뮬레이션 완료 후 bulk insert)
@@ -3276,16 +3279,43 @@ class BacktestEngine:
         # 📡 WebSocket 완료 메시지 전송
         final_portfolio_value = daily_snapshots[-1]['portfolio_value'] if daily_snapshots else initial_capital
         final_return = ((final_portfolio_value - initial_capital) / initial_capital) * 100
+        total_sell_trades = len([e for e in executions if e['side'] == 'SELL'])
+
+        # 📊 연환산 수익률 및 일 평균 수익률 계산
+        total_days = (end_date - start_date).days
+        years = total_days / 365.0
+
+        # CAGR (연평균 복리 수익률): (최종값/초기값)^(1/년수) - 1
+        cagr = (((float(final_portfolio_value) / float(initial_capital)) ** (1 / years)) - 1) * 100 if years > 0 else 0
+
+        # 일 평균 수익률 (연간 252 거래일 기준): (1 + CAGR)^(1/252) - 1
+        daily_avg_return = ((1 + cagr / 100) ** (1 / 252) - 1) * 100
+
+        # 📝 AI 요약 생성 (마크다운 형식)
+        summary = self._generate_backtest_summary(
+            initial_capital=float(initial_capital),
+            final_value=float(final_portfolio_value),
+            total_return=float(final_return),
+            max_drawdown=float(current_mdd),
+            total_trades=total_sell_trades,
+            simulation_time=bulk_insert_elapsed,
+            start_date=start_date,
+            end_date=end_date,
+            daily_snapshots=daily_snapshots
+        )
 
         await ws_manager.send_completion(
             backtest_id=str(backtest_id),
             statistics={
                 'final_value': float(final_portfolio_value),
                 'total_return': float(final_return),
+                'annualized_return': float(cagr),
+                'daily_avg_return': float(daily_avg_return),
                 'max_drawdown': float(current_mdd),
-                'total_trades': len([e for e in executions if e['side'] == 'SELL']),
+                'total_trades': total_sell_trades,
                 'simulation_time': bulk_insert_elapsed
-            }
+            },
+            summary=summary
         )
 
         return {
@@ -3298,6 +3328,126 @@ class BacktestEngine:
             'rebalance_dates': rebalance_dates,
             'position_history': position_history
         }
+
+    def _generate_backtest_summary(
+        self,
+        initial_capital: float,
+        final_value: float,
+        total_return: float,
+        max_drawdown: float,
+        total_trades: int,
+        simulation_time: float,
+        start_date: date,
+        end_date: date,
+        daily_snapshots: List[Dict]
+    ) -> str:
+        """
+        백테스트 결과 요약 생성 (마크다운 형식)
+
+        Args:
+            initial_capital: 초기 투자 금액
+            final_value: 최종 포트폴리오 가치
+            total_return: 총 수익률 (%)
+            max_drawdown: 최대 낙폭 (%)
+            total_trades: 총 거래 횟수
+            simulation_time: 시뮬레이션 소요 시간 (초)
+            start_date: 백테스트 시작일
+            end_date: 백테스트 종료일
+            daily_snapshots: 일별 스냅샷 데이터
+
+        Returns:
+            마크다운 형식의 백테스트 요약 텍스트
+        """
+        # 백테스트 기간 계산
+        total_days = (end_date - start_date).days
+
+        # 수익/손실 판단
+        profit_or_loss = "수익" if total_return >= 0 else "손실"
+        performance_emoji = "📈" if total_return >= 0 else "📉"
+
+        # 연환산 수익률 계산 (단순 연환산)
+        years = total_days / 365.0
+        annualized_return = (total_return / years) if years > 0 else 0
+
+        # 변동성 계산 (일별 수익률의 표준편차)
+        if len(daily_snapshots) > 1:
+            daily_returns = []
+            for i in range(1, len(daily_snapshots)):
+                prev_value = float(daily_snapshots[i-1]['portfolio_value'])
+                curr_value = float(daily_snapshots[i]['portfolio_value'])
+                daily_return = ((curr_value - prev_value) / prev_value) * 100
+                daily_returns.append(daily_return)
+
+            import statistics
+            volatility = statistics.stdev(daily_returns) if len(daily_returns) > 1 else 0
+            annualized_volatility = volatility * (252 ** 0.5)  # 연환산 변동성
+        else:
+            volatility = 0
+            annualized_volatility = 0
+
+        # 샤프 비율 계산 (무위험 수익률 0% 가정)
+        sharpe_ratio = (annualized_return / annualized_volatility) if annualized_volatility > 0 else 0
+
+        # 마크다운 요약 생성
+        summary = f"""### {performance_emoji} 백테스트 결과 요약
+
+#### 📊 핵심 성과 지표
+- **총 수익률**: {total_return:+.2f}% ({profit_or_loss})
+- **최종 자산**: {final_value:,.0f}원 (초기 자산: {initial_capital:,.0f}원)
+- **순손익**: {final_value - initial_capital:+,.0f}원
+
+#### 📉 위험 지표
+- **최대 낙폭 (MDD)**: {max_drawdown:.2f}%
+- **연환산 변동성**: {annualized_volatility:.2f}%
+- **샤프 비율**: {sharpe_ratio:.2f}
+
+#### 📅 백테스트 정보
+- **테스트 기간**: {start_date.strftime('%Y년 %m월 %d일')} ~ {end_date.strftime('%Y년 %m월 %d일')} ({total_days}일)
+- **총 거래 횟수**: {total_trades}회
+- **시뮬레이션 소요 시간**: {simulation_time:.2f}초
+
+#### 💡 종합 평가
+"""
+
+        # 수익률 평가
+        if total_return >= 20:
+            summary += "- ✅ **우수한 수익률**: 목표 대비 높은 수익을 달성했습니다.\n"
+        elif total_return >= 10:
+            summary += "- ✅ **양호한 수익률**: 안정적인 수익을 기록했습니다.\n"
+        elif total_return >= 0:
+            summary += "- ⚠️ **보통 수익률**: 소폭의 수익을 기록했습니다.\n"
+        else:
+            summary += "- ⚠️ **손실 발생**: 전략 재검토가 필요합니다.\n"
+
+        # MDD 평가
+        if abs(max_drawdown) <= 10:
+            summary += "- ✅ **낮은 리스크**: MDD가 양호한 수준입니다.\n"
+        elif abs(max_drawdown) <= 20:
+            summary += "- ⚠️ **중간 리스크**: MDD 관리가 필요합니다.\n"
+        else:
+            summary += "- ⚠️ **높은 리스크**: 손실 폭이 큰 편입니다. 리스크 관리 전략 보완이 필요합니다.\n"
+
+        # 샤프 비율 평가
+        if sharpe_ratio >= 1.5:
+            summary += "- ✅ **우수한 위험 대비 수익**: 샤프 비율이 매우 좋습니다.\n"
+        elif sharpe_ratio >= 1.0:
+            summary += "- ✅ **양호한 위험 대비 수익**: 샤프 비율이 양호합니다.\n"
+        elif sharpe_ratio >= 0.5:
+            summary += "- ⚠️ **보통 위험 대비 수익**: 샤프 비율이 보통 수준입니다.\n"
+        else:
+            summary += "- ⚠️ **낮은 위험 대비 수익**: 리스크 대비 수익이 낮습니다.\n"
+
+        # 거래 빈도 평가
+        if total_trades == 0:
+            summary += "- ⚠️ **거래 없음**: 매수/매도 조건을 재검토하세요.\n"
+        elif total_trades < 10:
+            summary += "- ⚠️ **낮은 거래 빈도**: 거래 기회가 제한적입니다.\n"
+        elif total_trades < 50:
+            summary += "- ✅ **적절한 거래 빈도**: 균형잡힌 거래 빈도입니다.\n"
+        else:
+            summary += "- ⚠️ **높은 거래 빈도**: 과도한 거래로 수수료 부담이 클 수 있습니다.\n"
+
+        return summary
 
     async def _execute_sells(
         self,

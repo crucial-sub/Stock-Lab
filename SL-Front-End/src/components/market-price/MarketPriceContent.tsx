@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Icon } from "@/components/common/Icon";
 import { StockDetailModal } from "@/components/modal/StockDetailModal";
@@ -31,6 +32,17 @@ const marketTabs: { label: string; sortBy?: SortBy; type: TabType }[] = [
 
 const columnTemplate = "grid grid-cols-[2fr,1fr,1fr,1fr,1fr,1fr] gap-4";
 
+const DEFAULT_MARKET_TAB =
+  marketTabs.find((tab) => tab.sortBy === "market_cap") || marketTabs[0];
+
+const findTabByParam = (param: string | null) => {
+  if (!param) return null;
+  if (param === "favorite" || param === "recent") {
+    return marketTabs.find((tab) => tab.type === param) ?? null;
+  }
+  return marketTabs.find((tab) => tab.sortBy === param) ?? null;
+};
+
 type MarketRow = {
   rank: number;
   name: string;
@@ -45,11 +57,11 @@ type MarketRow = {
 };
 
 export function MarketPriceContent() {
-  // 기본 탭을 시가총액 순으로 설정 (로그인 불필요)
-  const [selectedTab, setSelectedTab] = useState(
-    marketTabs.find((tab) => tab.sortBy === "market_cap") || marketTabs[0],
-  );
-  const [selectedRow, setSelectedRow] = useState<MarketRow | null>(null);
+  const searchParams = useSearchParams();
+  const initialTab = findTabByParam(searchParams.get("tab")) ?? DEFAULT_MARKET_TAB;
+
+  const [selectedTab, setSelectedTab] = useState(initialTab);
+  const [selectedStock, setSelectedStock] = useState<{ name: string; code: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [userId, setUserId] = useState<string | undefined>(undefined);
 
@@ -83,6 +95,20 @@ export function MarketPriceContent() {
   const addFavoriteMutation = useAddFavoriteMutation();
   const removeFavoriteMutation = useRemoveFavoriteMutation();
   const addRecentViewedMutation = useAddRecentViewedMutation();
+
+  useEffect(() => {
+    const queryTab = findTabByParam(searchParams.get("tab"));
+    if (queryTab && queryTab !== selectedTab) {
+      setSelectedTab(queryTab);
+    }
+  }, [searchParams, selectedTab]);
+
+  useEffect(() => {
+    const stockCode = searchParams.get("stockCode");
+    if (!stockCode) return;
+    const stockName = searchParams.get("stockName") ?? stockCode;
+    setSelectedStock({ name: stockName, code: stockCode });
+  }, [searchParams]);
 
   // 현재 탭에 따라 적절한 쿼리 선택
   const currentQuery =
@@ -201,7 +227,7 @@ export function MarketPriceContent() {
 
   const handleRowClick = (row: MarketRow) => {
     addRecentViewedMutation.mutate(row.code);
-    setSelectedRow(row);
+    setSelectedStock({ name: row.name, code: row.code });
   };
 
   // 로그인 필요 여부 체크
@@ -415,10 +441,10 @@ export function MarketPriceContent() {
       </div>
 
       <StockDetailModal
-        isOpen={!!selectedRow}
-        onClose={() => setSelectedRow(null)}
-        stockName={selectedRow?.name || ""}
-        stockCode={selectedRow?.code || ""}
+        isOpen={!!selectedStock}
+        onClose={() => setSelectedStock(null)}
+        stockName={selectedStock?.name || ""}
+        stockCode={selectedStock?.code || ""}
       />
     </>
   );

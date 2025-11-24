@@ -14,7 +14,7 @@ export function useTradeTargetSelection(
   selectedStockCount: number = 0,
   totalStockCount: number = 0,
 ) {
-  const { setTradeTargets } = useBacktestConfigStore();
+  const { trade_targets, setTradeTargets } = useBacktestConfigStore();
   const individualStocksRef = useRef<string[]>(individualStocks);
 
   // individualStocks 참조 업데이트
@@ -28,13 +28,19 @@ export function useTradeTargetSelection(
   );
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // industries가 로드되면 모두 선택 상태로 초기화 (최초 1회만)
+  // 초기 선택 상태 설정: 백테스트 설정에 이미 선택된 테마가 있으면 그걸로, 아니면 전체 선택
   useEffect(() => {
-    if (industries.length > 0 && !isInitialized) {
+    if (isInitialized) return;
+    if (trade_targets.selected_themes && trade_targets.selected_themes.length > 0) {
+      setSelectedIndustries(new Set(trade_targets.selected_themes));
+      setIsInitialized(true);
+      return;
+    }
+    if (industries.length > 0) {
       setSelectedIndustries(new Set(industries));
       setIsInitialized(true);
     }
-  }, [industries, isInitialized]);
+  }, [industries, isInitialized, trade_targets.selected_themes]);
 
   // 전체선택 여부 확인
   const isAllIndustriesSelected = industries.every((ind) =>
@@ -46,13 +52,15 @@ export function useTradeTargetSelection(
     const themes = Array.from(selectedIndustries);
     const allSelected = industries.every((ind) => selectedIndustries.has(ind));
 
-    setTradeTargets({
-      use_all_stocks: allSelected && individualStocksRef.current.length === 0,
-      selected_universes: [], // 유니버스는 사용하지 않음
-      selected_themes: themes, // 산업을 테마로 전달
-      selected_stocks: individualStocksRef.current, // 개별 선택된 종목
-      selected_stock_count: selectedStockCount, // 선택된 종목 수 (ref 대신 직접 사용)
-      total_stock_count: totalStockCount, // 전체 종목 수 (ref 대신 직접 사용)
+    setTradeTargets((prevTargets) => {
+      return {
+        ...prevTargets,
+        use_all_stocks: allSelected && individualStocksRef.current.length === 0,
+        selected_themes: themes, // 산업을 테마로 전달
+        selected_stocks: individualStocksRef.current, // 개별 선택된 종목
+        selected_stock_count: selectedStockCount,
+        total_stock_count: totalStockCount,
+      };
     });
   }, [
     selectedIndustries,

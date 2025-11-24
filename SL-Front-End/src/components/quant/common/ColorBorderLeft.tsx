@@ -1,5 +1,5 @@
 type Props = {
-  conditionType: "buy" | "sell" | "target";
+  conditionType: "buy" | "sell" | "target" | "none";
 };
 
 const ColorBorderLeft = ({ conditionType }: Props) => {

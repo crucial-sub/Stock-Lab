@@ -159,3 +159,52 @@
     min-height: 100vh;
   }
 }
+
+@layer components {
+  @keyframes usage-tip-marquee {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .usage-tip-track {
+    display: flex;
+    gap: 1rem;
+    width: max-content;
+    animation: usage-tip-marquee 60s linear infinite;
+    will-change: transform;
+  }
+
+  .usage-tip-wrapper::before,
+  .usage-tip-wrapper::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 80px;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+    background: transparent;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .usage-tip-wrapper::before {
+    left: 0;
+  }
+
+  .usage-tip-wrapper::after {
+    right: 0;
+  }
+
+  .usage-tip-wrapper:hover .usage-tip-track {
+    animation-play-state: paused;
+  }
+
+  .usage-tip-card {
+    flex-shrink: 0;
+  }
+}

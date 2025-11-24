@@ -30,7 +30,6 @@ export interface Themes {
 /** 백테스트 실행 요청 타입 */
 export interface BacktestRunRequest {
   /* 기본 설정*/
-  user_id: string; // 사용자 식별자
   strategy_name: string; // 전략 이름
   is_day_or_month: string; // 백테스트 데이터 기준 ("일봉" | "월봉")
   start_date: string; // 투자 시작일 YYYYMMDD
@@ -87,7 +86,6 @@ export interface BacktestRunRequest {
   /* 매매 대상 */
   trade_targets: {
     use_all_stocks: boolean; // 전체 종목을 그대로 쓸지 여부(true면 아래 선택 목록 무시하거나 참고만 함)
-    selected_universes: string[]; // 선택한 유니버스 코드 목록 e.g. ["KOSPI_LARGE", "KOSPI_MID"]
     selected_themes: string[]; // 선택한 테마 ID/코드 목록
     selected_stocks: string[]; // 개별로 지정한 종목 코드 목록 e.g. ["005930", "207940"]
     // UI 전용 필드 (백엔드 요청에는 포함되지 않음)
@@ -177,6 +175,8 @@ export interface BacktestResult {
   createdAt: string;
   /** 완료 시간 */
   completedAt?: string;
+  /** AI 분석 요약 (마크다운 형식) */
+  summary?: string;
 }
 
 /** 전략 팩터 설정 */
@@ -197,6 +197,8 @@ export interface TradingRuleSettings {
   rebalanceDay?: number;
   positionSizing?: string;
   maxPositions?: number;
+  minHoldDays?: number;
+  maxHoldDays?: number;
   minPositionWeight?: number;
   maxPositionWeight?: number;
   stopLossPct?: number;

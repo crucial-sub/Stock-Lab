@@ -17,37 +17,40 @@
 
 import type { Message } from "@/types/message";
 import { MessageRenderer } from "./MessageRenderer";
+import { AITypingIndicator } from "./AITypingIndicator";
 
 interface ChatHistoryProps {
   messages: Message[];
+  /** AI 응답 대기 중 여부 (타이핑 인디케이터 표시) */
+  isWaitingForAI?: boolean;
+  /** 백테스트 시작 콜백 */
+  onBacktestStart?: (
+    strategyName: string,
+    config: {
+      investmentAmount: number;
+      startDate: string;
+      endDate: string;
+    }
+  ) => void;
 }
 
 /**
  * 채팅 히스토리를 렌더링하는 컴포넌트
  * (스크롤은 부모 컴포넌트에서 관리)
  */
-export function ChatHistory({ messages }: ChatHistoryProps) {
-  /**
-   * 메시지가 없을 때 빈 상태 표시
-   */
-  if (messages.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <p className="text-muted text-sm">
-          아직 메시지가 없습니다. AI에게 질문을 시작해보세요!
-        </p>
-      </div>
-    );
-  }
-
+export function ChatHistory({ messages, isWaitingForAI = false, onBacktestStart }: ChatHistoryProps) {
   return (
     <div className="py-6 space-y-6">
       {messages.map((message) => (
         <MessageRenderer
           key={message.id}
           message={message}
+          onBacktestStart={onBacktestStart}
         />
       ))}
+
+      {/* AI 응답 대기 중일 때 타이핑 인디케이터 표시 */}
+      {isWaitingForAI && <AITypingIndicator />}
     </div>
   );
 }

@@ -11,3 +11,20 @@ operator_map:
   "동일": "=="
   "between": "between"
   "사이": "between"
+
+factor_units:
+  # Raw 스케일 (소수로 축소되면 100배 보정)
+  PER: raw
+  PBR: raw
+  PSR: raw
+  PEG: raw
+
+  # Percent 스케일 (0.x면 100배 보정)
+  ROE: percent
+  ROA: percent
+  OperatingProfitMargin: percent
+  ProfitMargin: percent
+  EPSGrowthRate: percent
+  RevenueGrowthRate: percent
+  DividendYield: percent
+  DebtRatio: percent

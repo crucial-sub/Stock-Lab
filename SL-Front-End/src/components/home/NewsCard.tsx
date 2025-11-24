@@ -4,19 +4,20 @@ export type NewsCardProps = NewsItem;
 
 export function NewsCard({
   title,
-  stock_code,
-  stock_name,
+  stockCode,
+  tickerLabel,
   content,
+  llm_summary,
   source,
-  date,
+  publishedAt,
 }: NewsCardProps) {
-  const contentText = content || "";
+  const contentText = llm_summary || content || "";
   const summary =
     contentText && contentText.length > 180
       ? `${contentText.slice(0, 180)}…`
       : contentText;
-  const displayDate = date?.display ?? date?.iso ?? "";
-  const stockLabel = stock_name;
+  const displayDate = publishedAt;
+  const stockLabel = tickerLabel;
 
   return (
     <article className="flex w-full flex-col rounded-sm bg-white px-5 py-5 shadow-card hover:shadow-lg transition">
@@ -24,9 +25,9 @@ export function NewsCard({
         <span className="rounded-full border border-border-default px-3 py-1 font-medium text-text-strong">
           {stockLabel}
         </span>
-        {stock_code && (
+        {stockCode && (
           <span className="rounded-full border border-border-default px-3 py-1 font-medium text-text-muted">
-            {stock_code}
+            {stockCode}
           </span>
         )}
       </div>

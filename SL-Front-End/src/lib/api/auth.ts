@@ -20,6 +20,7 @@ export interface UserResponse {
   created_at: string;
   updated_at?: string;
   has_kiwoom_account?: boolean;
+  ai_recommendation_block?: boolean;
 }
 
 export interface Token {
@@ -91,7 +92,7 @@ export const authApi = {
    */
   getCurrentUserServer: async (token: string): Promise<UserResponse> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000";
+    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
     const response = await axios.get<UserResponse>(
       `${baseURL}/api/v1/auth/me`,
       {
@@ -119,6 +120,36 @@ export const authApi = {
       "/auth/update-nickname",
       null,
       { params: { new_nickname: newNickname } }
+    );
+    return response.data;
+  },
+
+  /**
+   * 비밀번호 변경
+   */
+  updatePassword: async (data: { current_password: string; new_password: string }): Promise<{ message: string; email: string }> => {
+    const response = await axiosInstance.patch("/auth/update-password", data);
+    return response.data;
+  },
+
+  /**
+   * 회원탈퇴
+   */
+  deleteAccount: async (data: { email: string; password: string; phone_number: string }): Promise<{ message: string; email: string }> => {
+    const response = await axiosInstance.delete("/auth/delete-account", {
+      data
+    });
+    return response.data;
+  },
+
+  /**
+   * AI 추천 블록 설정 변경
+   */
+  updateAIRecommendation: async (block: boolean): Promise<UserResponse> => {
+    const response = await axiosInstance.patch<UserResponse>(
+      "/auth/update-ai-recommendation",
+      null,
+      { params: { block } }
     );
     return response.data;
   },

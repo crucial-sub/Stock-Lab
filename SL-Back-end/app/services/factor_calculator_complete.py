@@ -379,6 +379,64 @@ class CompleteFactorCalculator:
         merged['ROE'] = merged.apply(lambda row: _safe_ratio(row.get('당기순이익'), row.get('자본총계')) * 100 if _safe_ratio(row.get('당기순이익'), row.get('자본총계')) is not None else None, axis=1)
         merged['ROA'] = merged.apply(lambda row: _safe_ratio(row.get('당기순이익'), row.get('자산총계')) * 100 if _safe_ratio(row.get('당기순이익'), row.get('자산총계')) is not None else None, axis=1)
         merged['DEBT_RATIO'] = merged.apply(lambda row: _safe_ratio(row.get('부채총계'), row.get('자본총계')) * 100 if _safe_ratio(row.get('부채총계'), row.get('자본총계')) is not None else None, axis=1)
+        # PSR: Price to Sales Ratio = 시가총액 / 매출액
+        merged['PSR'] = merged.apply(lambda row: _safe_ratio(row['market_cap'], row.get('매출액')), axis=1)
+
+        # Phase 3 가치 팩터
+        # PCR: Price to Cashflow Ratio = 시가총액 / 영업활동현금흐름
+        merged['PCR'] = merged.apply(lambda row: _safe_ratio(row['market_cap'], row.get('영업활동현금흐름')), axis=1)
+        # EARNINGS_YIELD: 이익수익률 = 1/PER = 당기순이익 / 시가총액 * 100
+        merged['EARNINGS_YIELD'] = merged.apply(
+            lambda row: _safe_ratio(row.get('당기순이익'), row['market_cap']) * 100
+            if _safe_ratio(row.get('당기순이익'), row['market_cap']) is not None else None, axis=1
+        )
+        # BOOK_TO_MARKET: PBR의 역수 = 자본총계 / 시가총액
+        merged['BOOK_TO_MARKET'] = merged.apply(lambda row: _safe_ratio(row.get('자본총계'), row['market_cap']), axis=1)
+        # MARKET_CAP: 시가총액 (이미 있음)
+        merged['MARKET_CAP'] = merged['market_cap']
+
+        # EV 관련 팩터 (Enterprise Value = 시가총액 + 부채 - 현금)
+        def _calc_ev_factors(row):
+            market_cap = row.get('market_cap')
+            total_debt = row.get('부채총계')
+            cash = row.get('현금및현금성자산', 0)
+            if market_cap is None or total_debt is None:
+                return None, None
+            ev = float(market_cap) + float(total_debt) - float(cash or 0)
+            return ev, ev
+
+        merged['EV_SALES'] = merged.apply(
+            lambda row: _safe_ratio(_calc_ev_factors(row)[0], row.get('매출액'))
+            if _calc_ev_factors(row)[0] is not None else None, axis=1
+        )
+        # EV_EBITDA: EV / EBITDA (EBITDA = 영업이익 + 감가상각비, 단순화: 영업이익으로 근사)
+        merged['EV_EBITDA'] = merged.apply(
+            lambda row: _safe_ratio(_calc_ev_factors(row)[0], row.get('영업이익'))
+            if _calc_ev_factors(row)[0] is not None else None, axis=1
+        )
+
+        # 추가 가치 팩터 (5개)
+        # PEG: PER / earnings_growth_1y ratio
+        # 성장률 데이터는 growth_factors에서 계산되므로 여기서는 placeholder
+        merged['PEG'] = None  # Will be calculated later with growth data
+
+        # EV_FCF: Enterprise Value / Free Cash Flow
+        merged['EV_FCF'] = merged.apply(
+            lambda row: self._calculate_ev_fcf(row, _calc_ev_factors), axis=1
+        )
+
+        # DIVIDEND_YIELD: 배당수익률 = (주당배당금 / 현재가) * 100
+        # 배당 데이터 없으므로 None
+        merged['DIVIDEND_YIELD'] = None
+
+        # CAPE_RATIO: Cyclically Adjusted PE (Shiller PE)
+        # 10년 평균 EPS 대신 3년 평균으로 근사
+        merged['CAPE_RATIO'] = None  # Will be calculated with multi-year data
+
+        # PTBV: Price to Tangible Book Value = 시가총액 / (자본총계 - 무형자산)
+        merged['PTBV'] = merged.apply(
+            lambda row: self._calculate_ptbv(row), axis=1
+        )
 
         # 거래량 팩터
         recent_window = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=20)]
@@ -402,16 +460,45 @@ class CompleteFactorCalculator:
         )
         momentum.name = 'MOM_3M'
 
+        # CHANGE_RATE: 일별 변화율 (전일 대비)
+        latest_prices = price_df[price_df['trade_date'] == pd.Timestamp(snapshot_date.date())]
+        prev_date = pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=1)
+        previous_prices = price_df[price_df['trade_date'] <= prev_date].sort_values('trade_date').groupby('stock_code').tail(1)
+
+        change_rate = latest_prices.merge(
+            previous_prices[['stock_code', 'close_price']],
+            on='stock_code',
+            how='left',
+            suffixes=('_curr', '_prev')
+        )
+        change_rate['CHANGE_RATE'] = change_rate.apply(
+            lambda row: ((row['close_price_curr'] - row['close_price_prev']) / row['close_price_prev']) * 100
+            if pd.notna(row.get('close_price_prev')) and row.get('close_price_prev', 0) > 0 else None,
+            axis=1
+        )
+        change_rate_series = change_rate.set_index('stock_code')['CHANGE_RATE']
+
         # 변동성
         pct_returns = price_df.sort_values('trade_date').groupby('stock_code')['close_price'].pct_change()
         price_df = price_df.assign(daily_return=pct_returns)
-        vol_window = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=90)]
-        volatility = vol_window.groupby('stock_code')['daily_return'].std().rename('VOLATILITY_90')
+
+        # Phase 3: Multiple volatility windows
+        vol_window_20 = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=20)]
+        volatility_20 = vol_window_20.groupby('stock_code')['daily_return'].std().rename('VOLATILITY_20D')
+
+        vol_window_60 = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=60)]
+        volatility_60 = vol_window_60.groupby('stock_code')['daily_return'].std().rename('VOLATILITY_60D')
+
+        vol_window_90 = price_df[price_df['trade_date'] >= pd.Timestamp(snapshot_date.date()) - pd.Timedelta(days=90)]
+        volatility = vol_window_90.groupby('stock_code')['daily_return'].std().rename('VOLATILITY_90D')
 
         # merge
         merged = merged.merge(avg_trading, left_on='stock_code', right_index=True, how='left')
         merged = merged.merge(turnover, left_on='stock_code', right_index=True, how='left')
         merged = merged.merge(momentum, left_on='stock_code', right_index=True, how='left')
+        merged = merged.merge(change_rate_series, left_on='stock_code', right_index=True, how='left')
+        merged = merged.merge(volatility_20, left_on='stock_code', right_index=True, how='left')
+        merged = merged.merge(volatility_60, left_on='stock_code', right_index=True, how='left')
         merged = merged.merge(volatility, left_on='stock_code', right_index=True, how='left')
 
         merged['date'] = snapshot_date
@@ -471,6 +558,65 @@ class CompleteFactorCalculator:
             if _safe_ratio(row.get('영업활동현금흐름'), row.get('매출액')) is not None else None, axis=1
         )
 
+        # ROIC: Return on Invested Capital = (NOPAT / 투하자본) * 100
+        # NOPAT = 영업이익 * (1 - 세율), 세율 = 법인세비용 / (당기순이익 + 법인세비용)
+        # 투하자본 = 자본총계 + 유무이자부채 (간소화: 자본총계 + 부채총계)
+        result['ROIC'] = latest.apply(
+            lambda row: self._calculate_roic(row), axis=1
+        )
+
+        # INVENTORY_TURNOVER: 재고자산회전율 = 매출원가 / 평균재고자산
+        # 평균재고자산이 없으므로 현재 재고자산으로 근사
+        result['INVENTORY_TURNOVER'] = latest.apply(
+            lambda row: _safe_ratio(row.get('매출원가'), row.get('재고자산')), axis=1
+        )
+
+        # === NEW: Valuation Factors (5개) ===
+
+        # GRAHAM_NUMBER: Graham Number = sqrt(22.5 * EPS * BVPS)
+        result['GRAHAM_NUMBER'] = latest.apply(
+            lambda row: self._calculate_graham_number(row), axis=1
+        )
+
+        # GREENBLATT_RANK: Greenblatt Rank (placeholder - needs ranking data)
+        result['GREENBLATT_RANK'] = None
+
+        # MAGIC_FORMULA: Magic Formula (placeholder - needs ranking data)
+        result['MAGIC_FORMULA'] = None
+
+        # PRICE_TO_FCF: Price to FCF = Market Cap / Free Cash Flow
+        result['PRICE_TO_FCF'] = latest.apply(
+            lambda row: self._calculate_price_to_fcf(row), axis=1
+        )
+
+        # PS_RATIO: Same as PSR (already exists)
+        result['PS_RATIO'] = latest.apply(
+            lambda row: _safe_ratio(row.get('시가총액'), row.get('매출액')), axis=1
+        )
+
+        # === NEW: Composite Factors (3개) ===
+
+        # ENTERPRISE_YIELD: Enterprise Yield = EBIT / EV * 100
+        result['ENTERPRISE_YIELD'] = latest.apply(
+            lambda row: self._calculate_enterprise_yield(row), axis=1
+        )
+
+        # PIOTROSKI_F_SCORE: Piotroski F-Score (9 criteria, 0-9 points)
+        result['PIOTROSKI_F_SCORE'] = latest.apply(
+            lambda row: self._calculate_piotroski_score(row), axis=1
+        )
+
+        # SHAREHOLDER_YIELD: Shareholder Yield = (Dividend Yield + Buyback Yield) * 100
+        result['SHAREHOLDER_YIELD'] = None  # No dividend/buyback data
+
+        # === NEW: Dividend Factors (2개) ===
+
+        # DIVIDEND_GROWTH_3Y: 3-year dividend growth (CAGR)
+        result['DIVIDEND_GROWTH_3Y'] = None  # No dividend data
+
+        # DIVIDEND_GROWTH_YOY: YoY dividend growth
+        result['DIVIDEND_GROWTH_YOY'] = None  # No dividend data
+
         return result
 
     async def _calculate_growth_factors(
@@ -512,18 +658,44 @@ class CompleteFactorCalculator:
                 row['EARNINGS_GROWTH_1Y'] = _calc_growth(latest.get('당기순이익'), previous.get('당기순이익'))
                 row['ASSET_GROWTH_1Y'] = _calc_growth(latest.get('자산총계'), previous.get('자산총계'))
                 row['EQUITY_GROWTH_1Y'] = _calc_growth(latest.get('자본총계'), previous.get('자본총계'))
+                # OPERATING_INCOME_GROWTH: 영업이익 성장률
+                row['OPERATING_INCOME_GROWTH'] = _calc_growth(latest.get('영업이익'), previous.get('영업이익'))
+                # GROSS_PROFIT_GROWTH: 매출총이익 성장률 = (매출액 - 매출원가) 성장률
+                latest_gp = (latest.get('매출액', 0) or 0) - (latest.get('매출원가', 0) or 0)
+                previous_gp = (previous.get('매출액', 0) or 0) - (previous.get('매출원가', 0) or 0)
+                row['GROSS_PROFIT_GROWTH'] = _calc_growth(latest_gp if latest_gp > 0 else None, previous_gp if previous_gp > 0 else None)
 
-            # 3년 CAGR (Compound Annual Growth Rate)
-            if two_year_ago is not None:
-                rev_2y = two_year_ago.get('매출액')
+            # 3년 CAGR (Compound Annual Growth Rate) - 3년 데이터 사용
+            three_year_ago = stock_data.iloc[3] if len(stock_data) > 3 else None
+            if three_year_ago is not None:
+                # REVENUE_GROWTH_3Y: 3년 매출 성장률 = ((현재 - 3년전) / 3년전) * 100
+                rev_3y = three_year_ago.get('매출액')
                 rev_curr = latest.get('매출액')
-                if rev_2y and rev_curr and rev_2y > 0:
-                    row['REVENUE_GROWTH_3Y'] = (((rev_curr / rev_2y) ** (1/2)) - 1) * 100
+                if rev_3y and rev_curr and rev_3y > 0:
+                    row['REVENUE_GROWTH_3Y'] = ((rev_curr - rev_3y) / rev_3y) * 100
 
-                earn_2y = two_year_ago.get('당기순이익')
+                # EARNINGS_GROWTH_3Y: 3년 순이익 성장률 = ((현재 - 3년전) / 3년전) * 100
+                earn_3y = three_year_ago.get('당기순이익')
                 earn_curr = latest.get('당기순이익')
-                if earn_2y and earn_curr and earn_2y > 0:
-                    row['EARNINGS_GROWTH_3Y'] = (((earn_curr / earn_2y) ** (1/2)) - 1) * 100
+                if earn_3y and earn_curr and earn_3y > 0:
+                    row['EARNINGS_GROWTH_3Y'] = ((earn_curr - earn_3y) / earn_3y) * 100
+
+            # OCF_GROWTH_1Y: Operating Cash Flow 1-year growth
+            if previous is not None:
+                row['OCF_GROWTH_1Y'] = _calc_growth(latest.get('영업활동현금흐름'), previous.get('영업활동현금흐름'))
+
+                # BOOK_VALUE_GROWTH_1Y: Book value per share 1-year growth
+                # BPS = 자본총계 / 발행주식수 (간소화: 자본총계 성장률로 근사)
+                row['BOOK_VALUE_GROWTH_1Y'] = _calc_growth(latest.get('자본총계'), previous.get('자본총계'))
+
+            # SUSTAINABLE_GROWTH_RATE: 지속가능성장률 = ROE * (1 - 배당성향)
+            # 배당 데이터가 없으므로 ROE * 0.7로 근사 (유보율 70% 가정)
+            net_income = latest.get('당기순이익')
+            total_equity = latest.get('자본총계')
+            if net_income and total_equity and total_equity > 0:
+                roe = (float(net_income) / float(total_equity)) * 100
+                # 배당성향 30% 가정 (유보율 70%)
+                row['SUSTAINABLE_GROWTH_RATE'] = roe * 0.7
 
             result_list.append(row)
 
@@ -535,7 +707,7 @@ class CompleteFactorCalculator:
         date: datetime,
         price_df: pd.DataFrame
     ) -> pd.DataFrame:
-        """고급 모멘텀 팩터 (추가 7개)"""
+        """고급 모멘텀 팩터 (추가 7개) + 추가 기술적 지표 (22개) + 40개 신규 팩터"""
         if price_df.empty:
             return pd.DataFrame()
 
@@ -552,6 +724,7 @@ class CompleteFactorCalculator:
                 continue
 
             current_price = latest.iloc[0]['close_price']
+            latest_prices = stock_prices[stock_prices['trade_date'] <= pd.Timestamp(date.date())]
 
             def _calc_momentum(days_ago):
                 target_date = pd.Timestamp(date.date()) - pd.Timedelta(days=days_ago)
@@ -565,8 +738,19 @@ class CompleteFactorCalculator:
 
             row = {'stock_code': stock_code}
             row['MOMENTUM_1M'] = _calc_momentum(20)
+            row['MOMENTUM_3M'] = _calc_momentum(60)
             row['MOMENTUM_6M'] = _calc_momentum(120)
             row['MOMENTUM_12M'] = _calc_momentum(240)
+
+            # === 40 NEW FACTORS ===
+
+            # Momentum factors (6개): RETURN_1M, RETURN_3M, RETURN_6M, RETURN_12M, RET_3D, RET_8D
+            row['RETURN_1M'] = _calc_momentum(20)  # Same as MOMENTUM_1M
+            row['RETURN_3M'] = _calc_momentum(60)  # Same as MOMENTUM_3M
+            row['RETURN_6M'] = _calc_momentum(120)  # Same as MOMENTUM_6M
+            row['RETURN_12M'] = _calc_momentum(240)  # Same as MOMENTUM_12M
+            row['RET_3D'] = _calc_momentum(3)  # 3-day return
+            row['RET_8D'] = _calc_momentum(8)  # 8-day return
 
             # 52주 고가/저가 대비 거리
             week_52 = stock_prices[stock_prices['trade_date'] >= pd.Timestamp(date.date()) - pd.Timedelta(days=365)]
@@ -580,6 +764,332 @@ class CompleteFactorCalculator:
                     row['DISTANCE_FROM_52W_LOW'] = ((current_price - low_52w) / low_52w) * 100
                 if high_52w > low_52w:
                     row['PRICE_POSITION'] = ((current_price - low_52w) / (high_52w - low_52w)) * 100
+                    row['WEEK_52_POSITION'] = ((current_price - low_52w) / (high_52w - low_52w)) * 100  # NEW: same as PRICE_POSITION
+
+                # NEW: DAYS_FROM_52W_HIGH and DAYS_FROM_52W_LOW
+                high_52w_date = week_52[week_52['high_price'] == high_52w]['trade_date'].max()
+                low_52w_date = week_52[week_52['low_price'] == low_52w]['trade_date'].max()
+                row['DAYS_FROM_52W_HIGH'] = (pd.Timestamp(date.date()) - high_52w_date).days if pd.notna(high_52w_date) else None
+                row['DAYS_FROM_52W_LOW'] = (pd.Timestamp(date.date()) - low_52w_date).days if pd.notna(low_52w_date) else None
+
+            # === 22개 기술적 지표 추가 ===
+
+            # Moving Averages (5개)
+            if len(latest_prices) >= 5:
+                row['MA_5'] = latest_prices.tail(5)['close_price'].mean()
+            if len(latest_prices) >= 20:
+                row['MA_20'] = latest_prices.tail(20)['close_price'].mean()
+            if len(latest_prices) >= 60:
+                row['MA_60'] = latest_prices.tail(60)['close_price'].mean()
+            if len(latest_prices) >= 120:
+                row['MA_120'] = latest_prices.tail(120)['close_price'].mean()
+            if len(latest_prices) >= 250:
+                row['MA_250'] = latest_prices.tail(250)['close_price'].mean()
+
+            # PRICE_VS_MA20: 주가 vs 20일선 괴리율
+            if len(latest_prices) >= 20:
+                ma_20 = latest_prices.tail(20)['close_price'].mean()
+                if ma_20 > 0:
+                    row['PRICE_VS_MA20'] = ((current_price - ma_20) / ma_20) * 100
+
+            # ATR (Average True Range) - 14일
+            if len(latest_prices) >= 15:
+                recent_14 = latest_prices.tail(15)
+                high = recent_14['high_price'].values
+                low = recent_14['low_price'].values
+                close = recent_14['close_price'].values
+
+                # True Range 계산
+                tr_list = []
+                for i in range(1, len(high)):
+                    hl = high[i] - low[i]
+                    hc = abs(high[i] - close[i-1])
+                    lc = abs(low[i] - close[i-1])
+                    tr_list.append(max(hl, hc, lc))
+
+                if tr_list:
+                    row['ATR'] = sum(tr_list) / len(tr_list)
+
+            # ADX (Average Directional Index) - 14일
+            if len(latest_prices) >= 28:
+                recent_28 = latest_prices.tail(28)
+                high = recent_28['high_price'].values
+                low = recent_28['low_price'].values
+                close = recent_28['close_price'].values
+
+                # +DM, -DM 계산
+                plus_dm = []
+                minus_dm = []
+                for i in range(1, len(high)):
+                    up_move = high[i] - high[i-1]
+                    down_move = low[i-1] - low[i]
+
+                    if up_move > down_move and up_move > 0:
+                        plus_dm.append(up_move)
+                        minus_dm.append(0)
+                    elif down_move > up_move and down_move > 0:
+                        plus_dm.append(0)
+                        minus_dm.append(down_move)
+                    else:
+                        plus_dm.append(0)
+                        minus_dm.append(0)
+
+                # ATR 계산
+                tr_list = []
+                for i in range(1, len(high)):
+                    hl = high[i] - low[i]
+                    hc = abs(high[i] - close[i-1])
+                    lc = abs(low[i] - close[i-1])
+                    tr_list.append(max(hl, hc, lc))
+
+                if tr_list and len(plus_dm) >= 14:
+                    avg_plus_dm = sum(plus_dm[-14:]) / 14
+                    avg_minus_dm = sum(minus_dm[-14:]) / 14
+                    atr = sum(tr_list[-14:]) / 14
+
+                    if atr > 0:
+                        plus_di = (avg_plus_dm / atr) * 100
+                        minus_di = (avg_minus_dm / atr) * 100
+
+                        if (plus_di + minus_di) > 0:
+                            dx = abs(plus_di - minus_di) / (plus_di + minus_di) * 100
+                            row['ADX'] = dx  # 간소화 버전 (실제로는 DX의 이동평균)
+
+            # Aroon Up/Down (25일)
+            if len(latest_prices) >= 25:
+                recent_25 = latest_prices.tail(25)
+                high_prices = recent_25['high_price'].values
+                low_prices = recent_25['low_price'].values
+
+                # 최고가 위치
+                periods_since_high = 24 - np.argmax(high_prices)
+                row['AROON_UP'] = ((25 - periods_since_high) / 25) * 100
+
+                # 최저가 위치
+                periods_since_low = 24 - np.argmin(low_prices)
+                row['AROON_DOWN'] = ((25 - periods_since_low) / 25) * 100
+
+            # CCI (Commodity Channel Index) - 20일
+            if len(latest_prices) >= 20:
+                recent_20 = latest_prices.tail(20)
+                typical_price = (recent_20['high_price'] + recent_20['low_price'] + recent_20['close_price']) / 3
+                sma_tp = typical_price.mean()
+                mean_deviation = (typical_price - sma_tp).abs().mean()
+
+                if mean_deviation > 0:
+                    current_tp = (latest.iloc[0]['high_price'] + latest.iloc[0]['low_price'] + current_price) / 3
+                    row['CCI'] = (current_tp - sma_tp) / (0.015 * mean_deviation)
+
+            # MFI (Money Flow Index) - 14일
+            if len(latest_prices) >= 15 and 'volume' in latest_prices.columns:
+                recent_15 = latest_prices.tail(15)
+                typical_price = (recent_15['high_price'] + recent_15['low_price'] + recent_15['close_price']) / 3
+                money_flow = typical_price * recent_15['volume']
+
+                positive_flow = 0
+                negative_flow = 0
+                for i in range(1, len(typical_price)):
+                    if typical_price.iloc[i] > typical_price.iloc[i-1]:
+                        positive_flow += money_flow.iloc[i]
+                    elif typical_price.iloc[i] < typical_price.iloc[i-1]:
+                        negative_flow += money_flow.iloc[i]
+
+                if negative_flow > 0:
+                    money_ratio = positive_flow / negative_flow
+                    row['MFI'] = 100 - (100 / (1 + money_ratio))
+
+            # Williams %R - 14일
+            if len(latest_prices) >= 14:
+                recent_14 = latest_prices.tail(14)
+                highest_high = recent_14['high_price'].max()
+                lowest_low = recent_14['low_price'].min()
+
+                if highest_high > lowest_low:
+                    row['WILLIAMS_R'] = ((highest_high - current_price) / (highest_high - lowest_low)) * -100
+
+            # Ultimate Oscillator (7, 14, 28일)
+            if len(latest_prices) >= 29:
+                def calc_bp_tr(prices):
+                    bp_list = []
+                    tr_list = []
+                    for i in range(1, len(prices)):
+                        close_curr = prices.iloc[i]['close_price']
+                        low_curr = prices.iloc[i]['low_price']
+                        high_curr = prices.iloc[i]['high_price']
+                        close_prev = prices.iloc[i-1]['close_price']
+
+                        bp = close_curr - min(low_curr, close_prev)
+                        tr = max(high_curr, close_prev) - min(low_curr, close_prev)
+
+                        bp_list.append(bp)
+                        tr_list.append(tr)
+
+                    return bp_list, tr_list
+
+                recent_29 = latest_prices.tail(29)
+                bp_list, tr_list = calc_bp_tr(recent_29)
+
+                if len(bp_list) >= 28 and len(tr_list) >= 28:
+                    avg7_bp = sum(bp_list[-7:]) if sum(tr_list[-7:]) == 0 else sum(bp_list[-7:]) / sum(tr_list[-7:])
+                    avg14_bp = sum(bp_list[-14:]) if sum(tr_list[-14:]) == 0 else sum(bp_list[-14:]) / sum(tr_list[-14:])
+                    avg28_bp = sum(bp_list[-28:]) if sum(tr_list[-28:]) == 0 else sum(bp_list[-28:]) / sum(tr_list[-28:])
+
+                    row['ULTIMATE_OSCILLATOR'] = 100 * ((4*avg7_bp + 2*avg14_bp + avg28_bp) / 7)
+
+            # TRIX (14일)
+            if len(latest_prices) >= 42:  # 14*3 for triple EMA
+                prices = latest_prices.tail(42)['close_price']
+
+                # First EMA
+                ema1 = prices.ewm(span=14, adjust=False).mean()
+                # Second EMA
+                ema2 = ema1.ewm(span=14, adjust=False).mean()
+                # Third EMA
+                ema3 = ema2.ewm(span=14, adjust=False).mean()
+
+                if len(ema3) >= 2:
+                    trix = ((ema3.iloc[-1] - ema3.iloc[-2]) / ema3.iloc[-2]) * 100
+                    row['TRIX'] = trix
+
+            # CMF (Chaikin Money Flow) - 20일
+            if len(latest_prices) >= 20 and 'volume' in latest_prices.columns:
+                recent_20 = latest_prices.tail(20)
+
+                mf_volume_list = []
+                for idx, price_row in recent_20.iterrows():
+                    high = price_row['high_price']
+                    low = price_row['low_price']
+                    close = price_row['close_price']
+                    volume = price_row['volume']
+
+                    if high != low:
+                        mf_multiplier = ((close - low) - (high - close)) / (high - low)
+                        mf_volume = mf_multiplier * volume
+                        mf_volume_list.append(mf_volume)
+
+                if mf_volume_list and recent_20['volume'].sum() > 0:
+                    row['CMF'] = sum(mf_volume_list) / recent_20['volume'].sum()
+
+            # OBV (On-Balance Volume)
+            if len(latest_prices) >= 2 and 'volume' in latest_prices.columns:
+                obv = 0
+                for i in range(1, len(latest_prices)):
+                    if latest_prices.iloc[i]['close_price'] > latest_prices.iloc[i-1]['close_price']:
+                        obv += latest_prices.iloc[i]['volume']
+                    elif latest_prices.iloc[i]['close_price'] < latest_prices.iloc[i-1]['close_price']:
+                        obv -= latest_prices.iloc[i]['volume']
+
+                row['OBV'] = obv
+
+            # VWAP (Volume Weighted Average Price)
+            if len(latest_prices) >= 1 and 'volume' in latest_prices.columns:
+                typical_price = (latest_prices['high_price'] + latest_prices['low_price'] + latest_prices['close_price']) / 3
+                vwap_data = (typical_price * latest_prices['volume']).sum() / latest_prices['volume'].sum()
+                row['VWAP'] = vwap_data
+
+            # === NEW: Risk & Volatility Factors (10개) ===
+
+            # Historical Volatility (2개)
+            if len(latest_prices) >= 20:
+                returns_20 = latest_prices.tail(20)['close_price'].pct_change()
+                row['HISTORICAL_VOLATILITY_20'] = returns_20.std() * np.sqrt(252)
+
+            if len(latest_prices) >= 60:
+                returns_60 = latest_prices.tail(60)['close_price'].pct_change()
+                row['HISTORICAL_VOLATILITY_60'] = returns_60.std() * np.sqrt(252)
+
+            # Parkinson Volatility
+            if len(latest_prices) >= 20:
+                recent_20 = latest_prices.tail(20)
+                parkinson_var = np.mean(np.log(recent_20['high_price'] / recent_20['low_price'])**2)
+                row['PARKINSON_VOLATILITY'] = np.sqrt(parkinson_var / (4 * np.log(2))) if parkinson_var > 0 else None
+
+            # Downside Volatility (negative returns only)
+            if len(latest_prices) >= 20:
+                returns = latest_prices.tail(20)['close_price'].pct_change()
+                negative_returns = returns[returns < 0]
+                row['DOWNSIDE_VOLATILITY'] = negative_returns.std() if len(negative_returns) > 0 else 0
+
+            # Max Drawdown
+            if len(latest_prices) >= 20:
+                prices = latest_prices.tail(20)['close_price']
+                cummax = prices.expanding().max()
+                drawdown = (prices - cummax) / cummax
+                row['MAX_DRAWDOWN'] = drawdown.min() * 100 if len(drawdown) > 0 else 0
+
+            # Sharpe Ratio (assume risk-free rate = 2%)
+            if len(latest_prices) >= 20:
+                returns = latest_prices.tail(20)['close_price'].pct_change()
+                avg_return = returns.mean() * 252  # Annualized
+                volatility = returns.std() * np.sqrt(252)
+                risk_free_rate = 0.02
+                row['SHARPE_RATIO'] = (avg_return - risk_free_rate) / volatility if volatility > 0 else None
+
+            # Sortino Ratio (using downside volatility)
+            if len(latest_prices) >= 20:
+                returns = latest_prices.tail(20)['close_price'].pct_change()
+                avg_return = returns.mean() * 252
+                negative_returns = returns[returns < 0]
+                downside_std = negative_returns.std() * np.sqrt(252) if len(negative_returns) > 0 else None
+                risk_free_rate = 0.02
+                row['SORTINO_RATIO'] = (avg_return - risk_free_rate) / downside_std if downside_std and downside_std > 0 else None
+
+            # === NEW: Microstructure Factors (5개) ===
+
+            # Amihud Illiquidity
+            if len(latest_prices) >= 20 and 'volume' in latest_prices.columns:
+                recent_20 = latest_prices.tail(20)
+                returns = recent_20['close_price'].pct_change()
+                dollar_volume = recent_20['close_price'] * recent_20['volume']
+                illiquidity = (returns.abs() / dollar_volume).mean()
+                row['AMIHUD_ILLIQUIDITY'] = illiquidity * 1e6  # Scale up for readability
+
+            # Ease of Movement (EMV)
+            if len(latest_prices) >= 2 and 'volume' in latest_prices.columns:
+                recent = latest_prices.tail(2)
+                if len(recent) == 2:
+                    curr = recent.iloc[1]
+                    prev = recent.iloc[0]
+                    mid_point = (curr['high_price'] + curr['low_price']) / 2
+                    prev_mid = (prev['high_price'] + prev['low_price']) / 2
+                    distance_moved = mid_point - prev_mid
+                    box_ratio = (curr['volume'] / 1e6) / (curr['high_price'] - curr['low_price']) if (curr['high_price'] - curr['low_price']) > 0 else 0
+                    row['EASE_OF_MOVEMENT'] = distance_moved / box_ratio if box_ratio > 0 else 0
+
+            # Force Index
+            if len(latest_prices) >= 2 and 'volume' in latest_prices.columns:
+                recent = latest_prices.tail(2)
+                if len(recent) == 2:
+                    price_change = recent.iloc[1]['close_price'] - recent.iloc[0]['close_price']
+                    volume = recent.iloc[1]['volume']
+                    row['FORCE_INDEX'] = price_change * volume
+
+            # Intraday Volatility
+            if 'high_price' in latest.iloc[0] and 'low_price' in latest.iloc[0]:
+                row['INTRADAY_VOLATILITY'] = ((latest.iloc[0]['high_price'] - latest.iloc[0]['low_price']) / latest.iloc[0]['close_price']) * 100
+
+            # Volume Price Trend
+            if len(latest_prices) >= 20 and 'volume' in latest_prices.columns:
+                vpt = 0
+                for i in range(1, len(latest_prices.tail(20))):
+                    prev_close = latest_prices.iloc[i-1]['close_price']
+                    curr_close = latest_prices.iloc[i]['close_price']
+                    volume = latest_prices.iloc[i]['volume']
+                    pct_change = (curr_close - prev_close) / prev_close if prev_close > 0 else 0
+                    vpt += volume * pct_change
+                row['VOLUME_PRICE_TREND'] = vpt
+
+            # === NEW: Composite Factors (3개) ===
+            # Will be calculated in financial factors section
+
+            # === NEW: Duplicate/Alias Factors (9개) ===
+            row['DEBTRATIO'] = row.get('DEBT_RATIO')  # Alias
+            row['DIVIDENDYIELD'] = row.get('DIVIDEND_YIELD')  # Alias
+            row['EARNINGS_GROWTH'] = row.get('EARNINGS_GROWTH_1Y')  # Alias
+            row['OPERATING_INCOME_GROWTH_YOY'] = row.get('OPERATING_INCOME_GROWTH')  # Alias (already exists)
+            row['PEG_RATIO'] = row.get('PEG')  # Alias
+            row['REVENUE_GROWTH'] = row.get('REVENUE_GROWTH_1Y')  # Alias
+            row['SMA'] = row.get('MA_20')  # Alias to MA_20
 
             result_list.append(row)
 
@@ -634,18 +1144,21 @@ class CompleteFactorCalculator:
         )
 
         # WORKING_CAPITAL_RATIO: 운전자본비율 = (유동자산 - 유동부채) / 자산총계 * 100
-        result['WORKING_CAPITAL_RATIO'] = latest.apply(
-            lambda row: _safe_ratio(
+        def calc_working_capital(row):
+            ratio = _safe_ratio(
                 (row.get('유동자산', 0) - row.get('유동부채', 0)),
                 row.get('자산총계')
-            ) * 100 if row.get('자산총계', 0) > 0 else None, axis=1
-        )
+            )
+            return ratio * 100 if ratio is not None else None
+
+        result['WORKING_CAPITAL_RATIO'] = latest.apply(calc_working_capital, axis=1)
 
         # EQUITY_RATIO: 자기자본비율 = 자본총계 / 자산총계 * 100
-        result['EQUITY_RATIO'] = latest.apply(
-            lambda row: _safe_ratio(row.get('자본총계'), row.get('자산총계')) * 100
-            if _safe_ratio(row.get('자본총계'), row.get('자산총계')) is not None else None, axis=1
-        )
+        def calc_equity_ratio(row):
+            ratio = _safe_ratio(row.get('자본총계'), row.get('자산총계'))
+            return ratio * 100 if ratio is not None else None
+
+        result['EQUITY_RATIO'] = latest.apply(calc_equity_ratio, axis=1)
 
         # ALTMAN_Z_SCORE: 알트만 Z스코어 (간소화 버전)
         # Z = 1.2*X1 + 1.4*X2 + 3.3*X3 + 0.6*X4 + 1.0*X5
@@ -680,7 +1193,7 @@ class CompleteFactorCalculator:
 
             row = {'stock_code': stock_code}
 
-            # RSI 계산 (14일)
+            # RSI 계산 (14일) - RSI_14와 동일
             if len(latest_prices) >= 15:
                 recent_14 = latest_prices.tail(15)
                 price_changes = recent_14['close_price'].diff()
@@ -690,7 +1203,9 @@ class CompleteFactorCalculator:
                 avg_loss = losses.mean()
                 if avg_loss != 0:
                     rs = avg_gain / avg_loss
-                    row['RSI_14'] = 100 - (100 / (1 + rs))
+                    rsi_val = 100 - (100 / (1 + rs))
+                    row['RSI_14'] = rsi_val
+                    row['RSI'] = rsi_val  # RSI와 RSI_14는 동일
 
             # Bollinger Band Position
             if len(latest_prices) >= 20:
@@ -700,6 +1215,8 @@ class CompleteFactorCalculator:
                 current = latest_prices.iloc[-1]['close_price']
                 if std_20 > 0:
                     row['BOLLINGER_POSITION'] = (current - ma_20) / (2 * std_20)
+                    # Phase 3: BOLLINGER_WIDTH = (upper - lower) / ma = (4 * std) / ma
+                    row['BOLLINGER_WIDTH'] = (4 * std_20 / ma_20) * 100 if ma_20 > 0 else None
 
             # Stochastic Oscillator (14일)
             if len(latest_prices) >= 14:
@@ -719,6 +1236,14 @@ class CompleteFactorCalculator:
                 if avg_vol_prev > 0:
                     row['VOLUME_ROC'] = ((avg_vol_recent - avg_vol_prev) / avg_vol_prev) * 100
 
+            # Phase 3: VOLUME_RATIO_20D: 현재 거래량 / 20일 평균 거래량
+            if len(latest_prices) >= 20:
+                recent_20 = latest_prices.tail(20)
+                avg_vol = recent_20['volume'].mean()
+                current_vol = latest_prices.iloc[-1]['volume']
+                if avg_vol > 0:
+                    row['VOLUME_RATIO_20D'] = (current_vol / avg_vol) * 100
+
             # PRICE_TO_MA_20: 주가 / 20일 이동평균
             if len(latest_prices) >= 20:
                 recent_20 = latest_prices.tail(20)
@@ -727,8 +1252,46 @@ class CompleteFactorCalculator:
                 if ma_20 > 0:
                     row['PRICE_TO_MA_20'] = (current / ma_20) * 100
 
-            # MACD는 EMA 계산이 복잡하여 보류
-            row['MACD_SIGNAL'] = None
+            # Phase 3: MACD (간소화된 버전, SMA 사용)
+            if len(latest_prices) >= 26:
+                ema_12 = latest_prices.tail(26)['close_price'].ewm(span=12, adjust=False).mean().iloc[-1]
+                ema_26 = latest_prices.tail(26)['close_price'].ewm(span=26, adjust=False).mean().iloc[-1]
+                macd_line = ema_12 - ema_26
+                row['MACD'] = macd_line
+
+                # MACD Signal (9-day EMA of MACD)
+                if len(latest_prices) >= 34:  # Need more data for signal line
+                    macd_series = latest_prices.tail(34)['close_price'].ewm(span=12, adjust=False).mean() - \
+                                  latest_prices.tail(34)['close_price'].ewm(span=26, adjust=False).mean()
+                    signal_line = macd_series.ewm(span=9, adjust=False).mean().iloc[-1]
+                    row['MACD_SIGNAL'] = signal_line
+                    row['MACD_HISTOGRAM'] = macd_line - signal_line
+                else:
+                    row['MACD_SIGNAL'] = None
+                    row['MACD_HISTOGRAM'] = None
+            else:
+                row['MACD_SIGNAL'] = None
+                row['MACD_HISTOGRAM'] = None
+
+            # RELATIVE_STRENGTH: Relative strength vs market (3개월 기준)
+            # 시장 데이터가 없으므로 절대 수익률로 근사 (3개월)
+            if len(latest_prices) >= 60:
+                price_3m_ago = latest_prices.iloc[-60]['close_price'] if len(latest_prices) >= 60 else latest_prices.iloc[0]['close_price']
+                current_price = latest_prices.iloc[-1]['close_price']
+                if price_3m_ago > 0:
+                    stock_return = ((current_price - price_3m_ago) / price_3m_ago) * 100
+                    row['RELATIVE_STRENGTH'] = stock_return  # 절대 수익률로 근사
+
+            # VOLUME_MOMENTUM: Volume trend = (최근20일 평균거래량 / 과거60일 평균거래량) * 100
+            if len(latest_prices) >= 60:
+                recent_20_vol = latest_prices.tail(20)['volume'].mean()
+                past_60_vol = latest_prices.tail(60)['volume'].mean()
+                if past_60_vol > 0:
+                    row['VOLUME_MOMENTUM'] = (recent_20_vol / past_60_vol) * 100
+
+            # BETA: Market beta (volatility vs market)
+            # 시장 데이터가 없으므로 None
+            row['BETA'] = None  # Requires market index data
 
             result_list.append(row)
 
@@ -788,7 +1351,206 @@ class CompleteFactorCalculator:
         # RETENTION_RATIO: 유보율 (배당 데이터 필요)
         result['RETENTION_RATIO'] = None
 
+        # FCF_YIELD: 잉여현금흐름 수익률 = FCF / 시가총액 * 100
+        # FCF = 영업활동현금흐름 - 투자활동현금흐름
+        result['FCF_YIELD'] = latest.apply(
+            lambda row: self._calculate_fcf_yield(row), axis=1
+        )
+
         return result
+
+    def _calculate_fcf_yield(self, row) -> float:
+        """FCF_YIELD 계산 헬퍼"""
+        try:
+            ocf = row.get('영업활동현금흐름')
+            icf = row.get('투자활동현금흐름')
+            market_cap = row.get('market_cap')
+
+            if ocf is None or icf is None or market_cap is None or market_cap == 0:
+                return None
+
+            # FCF = 영업활동현금흐름 - 투자활동현금흐름 (투자는 음수이므로 빼기)
+            # 투자활동현금흐름이 음수면 절댓값 취해서 빼기
+            fcf = float(ocf) - abs(float(icf))
+            fcf_yield = (fcf / float(market_cap)) * 100
+
+            return fcf_yield
+        except:
+            return None
+
+    def _calculate_roic(self, row) -> float:
+        """ROIC 계산 헬퍼"""
+        try:
+            operating_income = row.get('영업이익')
+            net_income = row.get('당기순이익')
+            tax_expense = row.get('법인세비용')
+            total_equity = row.get('자본총계')
+            total_debt = row.get('부채총계')
+
+            if operating_income is None or total_equity is None:
+                return None
+
+            # 세율 계산: 법인세비용 / (당기순이익 + 법인세비용)
+            tax_rate = 0
+            if tax_expense and net_income and (net_income + tax_expense) > 0:
+                tax_rate = float(tax_expense) / (float(net_income) + float(tax_expense))
+
+            # NOPAT = 영업이익 * (1 - 세율)
+            nopat = float(operating_income) * (1 - tax_rate)
+
+            # 투하자본 = 자본총계 + 부채총계
+            invested_capital = float(total_equity)
+            if total_debt:
+                invested_capital += float(total_debt)
+
+            if invested_capital == 0:
+                return None
+
+            return (nopat / invested_capital) * 100
+        except:
+            return None
+
+    def _calculate_ev_fcf(self, row, ev_calc_func) -> float:
+        """EV_FCF 계산 헬퍼"""
+        try:
+            ev, _ = ev_calc_func(row)
+            if ev is None:
+                return None
+
+            ocf = row.get('영업활동현금흐름')
+            icf = row.get('투자활동현금흐름')
+
+            if ocf is None or icf is None:
+                return None
+
+            # FCF = 영업활동현금흐름 - 투자활동현금흐름
+            fcf = float(ocf) - abs(float(icf))
+
+            if fcf == 0:
+                return None
+
+            return ev / fcf
+        except:
+            return None
+
+    def _calculate_ptbv(self, row) -> float:
+        """PTBV 계산 헬퍼"""
+        try:
+            market_cap = row.get('market_cap')
+            total_equity = row.get('자본총계')
+            intangible_assets = row.get('무형자산', 0)
+
+            if market_cap is None or total_equity is None:
+                return None
+
+            # 유형자산 = 자본총계 - 무형자산
+            tangible_book_value = float(total_equity) - float(intangible_assets or 0)
+
+            if tangible_book_value == 0:
+                return None
+
+            return float(market_cap) / tangible_book_value
+        except:
+            return None
+
+    def _calculate_graham_number(self, row) -> float:
+        """Graham Number 계산 헬퍼"""
+        try:
+            net_income = row.get('당기순이익')
+            total_equity = row.get('자본총계')
+            listed_shares = row.get('listed_shares', 1)
+
+            if net_income is None or total_equity is None or listed_shares == 0:
+                return None
+
+            eps = float(net_income) / float(listed_shares)
+            bvps = float(total_equity) / float(listed_shares)
+
+            if eps > 0 and bvps > 0:
+                return np.sqrt(22.5 * eps * bvps)
+            return None
+        except:
+            return None
+
+    def _calculate_price_to_fcf(self, row) -> float:
+        """Price to FCF 계산 헬퍼"""
+        try:
+            market_cap = row.get('market_cap')
+            ocf = row.get('영업활동현금흐름')
+            icf = row.get('투자활동현금흐름')
+
+            if market_cap is None or ocf is None or icf is None:
+                return None
+
+            fcf = float(ocf) - abs(float(icf))
+            if fcf == 0:
+                return None
+
+            return float(market_cap) / fcf
+        except:
+            return None
+
+    def _calculate_enterprise_yield(self, row) -> float:
+        """Enterprise Yield 계산 헬퍼"""
+        try:
+            market_cap = row.get('market_cap')
+            total_debt = row.get('부채총계')
+            cash = row.get('현금및현금성자산', 0)
+            operating_income = row.get('영업이익')
+
+            if market_cap is None or total_debt is None or operating_income is None:
+                return None
+
+            ev = float(market_cap) + float(total_debt) - float(cash or 0)
+            if ev == 0:
+                return None
+
+            return (float(operating_income) / ev) * 100
+        except:
+            return None
+
+    def _calculate_piotroski_score(self, row) -> int:
+        """Piotroski F-Score 계산 헬퍼 (9 criteria, 0-9 points)"""
+        try:
+            score = 0
+
+            # 1. ROA > 0
+            net_income = row.get('당기순이익')
+            total_assets = row.get('자산총계')
+            if net_income and total_assets and float(net_income) > 0 and float(total_assets) > 0:
+                score += 1
+
+            # 2. Operating Cash Flow > 0
+            ocf = row.get('영업활동현금흐름')
+            if ocf and float(ocf) > 0:
+                score += 1
+
+            # 3. OCF > Net Income (quality of earnings)
+            if ocf and net_income and float(ocf) > float(net_income):
+                score += 1
+
+            # 4. Current Ratio increasing (need previous data - simplified)
+            current_assets = row.get('유동자산')
+            current_liabilities = row.get('유동부채')
+            if current_assets and current_liabilities and float(current_liabilities) > 0:
+                if float(current_assets) / float(current_liabilities) > 1:
+                    score += 1
+
+            # 5. Debt/Assets decreasing (need previous data - simplified)
+            total_debt = row.get('부채총계')
+            if total_debt and total_assets:
+                debt_ratio = float(total_debt) / float(total_assets)
+                if debt_ratio < 0.5:
+                    score += 1
+
+            # 6-9. Simplified criteria (need multi-year data)
+            # For now, give partial score if company is profitable
+            if net_income and float(net_income) > 0:
+                score += 2  # Simplified for missing historical data
+
+            return score
+        except:
+            return 0
 
     def _attach_ranks(self, df: pd.DataFrame) -> pd.DataFrame:
         """각 팩터별 랭킹 계산"""
@@ -800,15 +1562,20 @@ class CompleteFactorCalculator:
             'ROE', 'ROA', 'MOM_3M', 'AVG_TRADING_VALUE', 'TURNOVER_RATE',
             'GPM', 'OPM', 'NPM', 'ASSET_TURNOVER', 'EQUITY_MULTIPLIER',
             'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y', 'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y',
-            'MOMENTUM_1M', 'MOMENTUM_6M', 'MOMENTUM_12M', 'DISTANCE_FROM_52W_LOW',
+            'MOMENTUM_1M', 'MOMENTUM_3M', 'MOMENTUM_6M', 'MOMENTUM_12M', 'DISTANCE_FROM_52W_LOW',
             'CURRENT_RATIO', 'QUICK_RATIO', 'INTEREST_COVERAGE', 'EQUITY_RATIO',
-            'RSI_14', 'PRICE_POSITION'
+            'RSI_14', 'PRICE_POSITION',
+            # 15개 추가 팩터
+            'ROIC', 'INVENTORY_TURNOVER', 'OCF_GROWTH_1Y', 'BOOK_VALUE_GROWTH_1Y',
+            'SUSTAINABLE_GROWTH_RATE', 'RELATIVE_STRENGTH', 'VOLUME_MOMENTUM', 'DIVIDEND_YIELD'
         ]
 
         # 낮을수록 좋은 팩터 (하강 정렬)
         lower_better = [
             'PER', 'PBR', 'DEBT_RATIO', 'VOLATILITY_90',
-            'DEBT_TO_EQUITY', 'LEVERAGE', 'ACCRUALS_RATIO'
+            'DEBT_TO_EQUITY', 'LEVERAGE', 'ACCRUALS_RATIO',
+            # 15개 추가 팩터 중 낮을수록 좋은 것
+            'PEG', 'EV_FCF', 'CAPE_RATIO', 'PTBV'
         ]
 
         for col in higher_better:
@@ -826,3 +1593,43 @@ class CompleteFactorCalculator:
             df['COMPOSITE_RANK'] = df['COMPOSITE_SCORE'].rank(ascending=True, method='dense')
 
         return df
+
+    async def get_factor_data_for_date(
+        self,
+        date: datetime,
+        factor_names: Optional[List[str]] = None
+    ) -> pd.DataFrame:
+        """특정 날짜의 팩터 데이터 조회"""
+
+        # 모든 활성 종목 가져오기
+        stock_codes = await self._get_active_stocks(date)
+
+        # 모든 팩터 계산
+        all_factors = await self.calculate_all_factors(stock_codes, date)
+
+        # 특정 팩터만 필터링 (요청된 경우)
+        if factor_names:
+            columns_to_keep = ['stock_code', 'stock_name'] + factor_names
+            columns_to_keep = [col for col in columns_to_keep if col in all_factors.columns]
+            all_factors = all_factors[columns_to_keep]
+
+        # 날짜 컬럼 추가
+        all_factors['date'] = date
+
+        return all_factors
+
+    async def _get_active_stocks(self, date: datetime) -> List[str]:
+        """활성 종목 리스트 조회"""
+        from sqlalchemy import text
+
+        query = text("""
+        SELECT DISTINCT c.stock_code
+        FROM stock_prices sp
+        JOIN companies c ON sp.company_id = c.company_id
+        WHERE sp.trade_date = :date
+        AND sp.volume > 0
+        AND sp.close_price > 0
+        """)
+
+        result = await self.db.execute(query, {"date": date.date()})
+        return [row[0] for row in result.fetchall()]

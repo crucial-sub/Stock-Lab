@@ -208,6 +208,15 @@ class SimulationSession(Base):
         comment="사용자 참조 ID"
     )
 
+    # 복제 추적
+    source_session_id = Column(
+        String(36),
+        ForeignKey("simulation_sessions.session_id"),
+        nullable=True,
+        index=True,
+        comment="원본 세션 ID (복제된 경우)"
+    )
+
     session_name = Column(String(200), nullable=True, comment="세션명")
     start_date = Column(Date, nullable=False, comment="시뮬레이션 시작일")
     end_date = Column(Date, nullable=False, comment="시뮬레이션 종료일")
@@ -259,6 +268,8 @@ class SimulationSession(Base):
         Index('idx_simulation_sessions_status', 'status'),
         Index('idx_simulation_sessions_strategy_date', 'strategy_id', 'start_date', 'end_date'),
         Index('idx_simulation_sessions_user_created', 'user_id', 'created_at'),  # 마이페이지용
+        Index('idx_simulation_sessions_user_status_created', 'user_id', 'status', 'created_at'),  # 페이지네이션 최적화
+        Index('idx_simulation_sessions_strategy_status_completed', 'strategy_id', 'status', 'completed_at'),  # 랭킹 쿼리 최적화
         Index('idx_simulation_sessions_public_created', 'is_public', 'created_at'),  # 랭킹용
         Index('idx_simulation_sessions_share_url', 'share_url'),  # 공유 URL 조회
         {"comment": "시뮬레이션 세션 테이블"}

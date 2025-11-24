@@ -8,29 +8,22 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import time
 import logging
-from logging.handlers import RotatingFileHandler
-import os
+import json
 
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history, investment_strategy, universes
 from app.api.v1 import industries, realtime
 from app.services.auto_trading_scheduler import start_scheduler, stop_scheduler
 
 settings = get_settings()
 
-# 로깅 설정
-os.makedirs("logs", exist_ok=True)
+# 로깅 설정 (콘솔 출력만 사용)
 logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        RotatingFileHandler(
-            settings.LOG_FILE,
-            maxBytes=10*1024*1024,  # 10MB
-            backupCount=5
-        ),
         logging.StreamHandler()
     ]
 )
@@ -82,7 +75,7 @@ async def lifespan(app: FastAPI):
 
     # DB 초기화 (개발 환경에서만)
     if settings.DEBUG:
-        # await init_db()  # 주의: 테이블 재생성
+        await init_db()  # 주의: 테이블 재생성
         logger.info("Database initialized (dev mode)")
 
     # 자동매매 스케줄러 시작
@@ -91,6 +84,21 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Auto trading scheduler started")
     except Exception as e:
         logger.error(f"❌ Failed to start scheduler: {e}")
+
+    # 🔥 캐시 워밍 (옵션: 서버 시작 시 백그라운드에서 실행)
+    if settings.ENABLE_CACHE_WARMING:
+        try:
+            import asyncio
+            from app.services.cache_warmer import run_cache_warming
+
+            logger.info("🔥 Starting cache warming in background...")
+            # 백그라운드 태스크로 실행 (서버 시작을 블로킹하지 않음)
+            asyncio.create_task(run_cache_warming())
+            logger.info("✅ Cache warming task created")
+        except Exception as e:
+            logger.error(f"❌ Failed to start cache warming: {e}")
+    else:
+        logger.info("⚠️ Cache warming disabled via ENABLE_CACHE_WARMING")
 
     yield
 
@@ -136,14 +144,32 @@ app = FastAPI(
 )
 
 # CORS 설정
+# NOTE: `json` already imported at module level.
+def _parse_cors_origins(value):
+    if value == "*":
+        return ["*"]
+    if isinstance(value, list):
+        return value
+
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return parsed
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+cors_origins = _parse_cors_origins(settings.BACKEND_CORS_ORIGINS)
+logger.info(f"CORS origins configured: {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=False if "*" in cors_origins else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # 요청 로깅 미들웨어
 @app.middleware("http")
@@ -249,6 +275,12 @@ app.include_router(
 )
 
 app.include_router(
+    investment_strategy.router,
+    prefix=f"{settings.API_V1_PREFIX}/investment-strategies",
+    tags=["Investment Strategy"]
+)
+
+app.include_router(
     realtime.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Realtime"]
@@ -258,6 +290,12 @@ app.include_router(
     community.router,
     prefix=f"{settings.API_V1_PREFIX}/community",
     tags=["Community"]
+)
+
+app.include_router(
+    universes.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Universes"]
 )
 
 # Root 엔드포인트

@@ -1,28 +1,33 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { DiscussionPreviewSection } from "@/components/community";
 import {
   HighlightsSection,
   MarketInsightSection,
   PerformanceChartSection,
   StatsOverviewSection,
 } from "@/components/home/auth";
+import { FloatingChatWidget } from "@/components/home/FloatingChatWidget";
 import {
-  GuestCommunityPreviewSection,
   GuestMarketInsightSection,
   GuestPortfolioSection,
 } from "@/components/home/guest";
+import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
+import { authApi } from "@/lib/api/auth";
+import { marketQuoteApi } from "@/lib/api/market-quote";
+import { fetchLatestNews } from "@/lib/api/news";
 import type {
-  GuestCommunityPost,
   GuestMarketIndex,
-  GuestMarketNews,
   GuestMarketStock,
-  GuestPortfolioCardData,
   HomeCommunityHighlight,
   HomePortfolioHighlight,
   HomeStatCardData,
   MarketNews,
   MarketStock,
 } from "@/types";
+import type { AccountPerformanceChart } from "@/types/kiwoom";
 
 /**
  * 홈 페이지 클라이언트 컴포넌트
@@ -38,110 +43,166 @@ interface DashboardData {
   active_strategy_count: number;
   total_positions: number;
   total_trades_today: number;
+  total_allocated_capital: number; // 자동매매에 할당된 총 금액
+}
+
+export interface KiwoomAccountData {
+  cash?: {
+    balance?: string | number;
+    withdrawable?: string | number;
+    orderable?: string | number;
+  };
+  holdings?: {
+    tot_evlt_amt?: string | number;
+    tot_evlt_pl?: string | number;
+    tot_prft_rt?: string | number;
+    tot_pur_amt?: string | number;
+  };
 }
 
 interface HomePageClientProps {
   userName: string;
   isLoggedIn: boolean;
   hasKiwoomAccount: boolean;
+  aiRecommendationBlock: boolean;
+  kiwoomAccountData: KiwoomAccountData | null;
+  performanceChartData: AccountPerformanceChart | null;
   dashboardData: DashboardData;
+  marketStocksInitial: MarketStock[];
+  marketNewsInitial: MarketNews[];
 }
 
-const guestPortfolioMock: GuestPortfolioCardData[] = [
-  {
-    rank: 1,
-    name: "Portfolio Name",
-    organization: "FMJS",
-    returnRate: 1323,
-    highlight: "gold",
-  },
-  {
-    rank: 2,
-    name: "Portfolio Name",
-    organization: "FMJS",
-    returnRate: 1323,
-    highlight: "silver",
-  },
-  {
-    rank: 3,
-    name: "Portfolio Name",
-    organization: "FMJS",
-    returnRate: 1323,
-    highlight: "bronze",
-  },
-  {
-    rank: 4,
-    name: "Portfolio Name",
-    organization: "FMJS",
-    returnRate: 1323,
-  },
-  {
-    rank: 5,
-    name: "Portfolio Name",
-    organization: "FMJS",
-    returnRate: 1323,
-  },
-];
+const parseNumericValue = (value?: string | number): number => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (!value) return 0;
+
+  const cleaned = value.toString().replace(/[,%\s]/g, "");
+  const parsed = Number.parseFloat(cleaned);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const formatCurrencyWithSign = (value: number): string => {
+  if (Math.abs(value) < 1e-8) {
+    return "0원";
+  }
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toLocaleString()}원`;
+};
+
+const formatPercentWithSign = (value: number): string => {
+  const normalized = Number(value.toFixed(2));
+  if (Math.abs(normalized) < 1e-8) {
+    return "0.00%";
+  }
+  const prefix = normalized > 0 ? "+" : "";
+  return `${prefix}${normalized.toFixed(2)}%`;
+};
 
 const guestMarketIndexes: GuestMarketIndex[] = [
-  { label: "KOSPI", value: "4,089.25", change: "+22.4%" },
-  { label: "KOSDAQ", value: "906.24", change: "+22.4%" },
+  { label: "KOSPI", value: "-", change: "+0.00%" },
+  { label: "KOSDAQ", value: "-", change: "+0.00%" },
 ];
 
-const guestMarketStocks: GuestMarketStock[] = Array.from({ length: 3 }).map(
-  (_, index) => ({
-    id: `stock-${index}`,
-    name: "크래프톤",
-    tag: "IT",
-    change: "+22.4%",
-    price: "226,000원",
-    volume: "113억",
-  }),
+type UsageTip = {
+  title: string;
+  description: string;
+  accent: string;
+};
+
+const usageTips: UsageTip[] = [
+  {
+    title: "관심 전략 저장",
+    description: "회원가입 후 마음에 드는 전략을 저장하고 알림을 받아보세요.",
+    accent: "bg-[#FDECEF] text-[#E2506E] border-[0.5px] border-[#E2506E]",
+  },
+  {
+    title: "키움 계좌 연동",
+    description:
+      "모의투자 계좌를 연동하면 자동 매매와 실계좌 시뮬레이션이 가능해요.",
+    accent: "bg-[#EAF5FF] text-[#2B7DDD] border-[0.5px] border-[#2B7DDD]",
+  },
+  {
+    title: "전략 비교",
+    description:
+      "성과 차트를 통해 지난 30일간의 전략 성과를 한눈에 비교할 수 있어요.",
+    accent: "bg-[#F2ECFE] text-[#6C40B5] border-[0.5px] border-[#6C40B5]",
+  },
+  {
+    title: "시장 인사이트",
+    description:
+      "테마와 종목을 실시간으로 분석해 드립니다. 맞춤형 뉴스도 확인해보세요.",
+    accent: "bg-[#FFF4E6] text-[#D8862B] border-[0.5px] border-[#D8862B]",
+  },
+  {
+    title: "커뮤니티 참여",
+    description:
+      "전략 운영 꿀팁과 투자 일지를 공유하며 트레이더들과 소통해 보세요.",
+    accent: "bg-[#ECFDF3] text-[#1C8757] border-[0.5px] border-[#1C8757]",
+  },
+  {
+    title: "AI 도우미",
+    description:
+      "AI에게 전략 설계와 리밸런싱을 물어보세요. 실시간 답변을 제공합니다.",
+    accent: "bg-[#EAF2FF] text-[#3A64CB] border-[0.5px] border-[#3A64CB]",
+  },
+];
+
+const UsageTipsSection = ({ tips }: { tips: UsageTip[] }) => (
+  <section className="flex w-full flex-col gap-4">
+    <div className="flex flex-col gap-1">
+      <span className="text-[1.5rem] font-semibold">Stock-Lab 사용 Tip</span>
+    </div>
+    <div className="usage-tip-wrapper relative overflow-hidden">
+      <div className="usage-tip-track">
+        {[...tips, ...tips].map((tip, index) => (
+          <article
+            key={`${tip.title}-${index}`}
+            className="usage-tip-card my-1 group relative min-w-[280px] max-w-[320px] rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] p-5 shadow-elev-card-soft transition-colors duration-300 hover:bg-white/20"
+          >
+            <div
+              className={`inline-flex items-center rounded-full px-3 pt-1 pb-0.5 text-xs font-semibold ${tip.accent}`}
+            >
+              ✔︎ TIP
+            </div>
+            <h3 className="mt-4 text-[1rem] font-semibold text-body">
+              {tip.title}
+            </h3>
+            <p className="mt-1 text-[0.875rem] font-normal text-muted">
+              {tip.description}
+            </p>
+            <div className="mt-5 h-0.5 w-20 rounded-full bg-gradient-to-r from-[#FF8FB1] via-[#A08BFF] to-[#5EB7FF] opacity-75 transition-opacity duration-300 group-hover:opacity-100" />
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
 );
 
-const guestMarketNews: GuestMarketNews[] = Array.from({ length: 5 }).map(
-  (_, index) => ({
-    id: `news-${index}`,
-    title: "크래프톤 정글의 SW-AI랩 신규 런칭, 차세대 AI 교육...",
-    badge: "크래프톤",
-  }),
-);
-
-const guestCommunityPosts: GuestCommunityPost[] = Array.from({ length: 3 }).map(
-  (_, index) => ({
-    id: `post-${index}`,
-    title: "게시물 이름은 이렇게 들어갑니다.",
-    preview:
-      "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
-    author: "FMJS",
-    date: "2025.12.31 19:00",
-    tag: "태그",
-    views: "999+",
-    likes: "999+",
-    comments: "999+",
-  }),
-);
-
-const buildAuthenticatedStats = (dashboardData: DashboardData): HomeStatCardData[] => {
-  const totalAssets = Number(dashboardData.total_assets) || 0;
-  const totalReturn = Number(dashboardData.total_return) || 0;
-  const totalProfit = Number(dashboardData.total_profit) || 0;
+const buildAuthenticatedStats = (
+  dashboardData: DashboardData,
+  kiwoomAccountData: KiwoomAccountData | null,
+): HomeStatCardData[] => {
+  // 자동매매 대시보드 데이터 우선 사용 (활성 전략이 있는 경우)
   const activeCount = Number(dashboardData.active_strategy_count) || 0;
+  const totalAssets = parseNumericValue(dashboardData.total_assets);
+  const totalReturn = parseNumericValue(dashboardData.total_return);
+  const totalProfit = parseNumericValue(dashboardData.total_profit);
 
   return [
     {
       id: "asset",
-      title: "총 자산",
+      title: "총 모의 자산",
       value: `${totalAssets.toLocaleString()}원`,
-      change: `${totalProfit >= 0 ? '+' : ''}${totalProfit.toLocaleString()}원`,
-      badge: `${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%`,
+      change: formatCurrencyWithSign(totalProfit),
+      badge: activeCount > 0 ? "자동매매 활성" : undefined,
     },
     {
-      id: "profit",
+      id: "return",
       title: "수익률",
-      value: `${totalProfit.toLocaleString()}원`,
-      change: `${totalAssets.toLocaleString()}원`,
-      badge: "누적",
+      value: formatPercentWithSign(totalReturn),
+      change: "포트폴리오 전체 기준",
     },
     {
       id: "active",
@@ -152,128 +213,235 @@ const buildAuthenticatedStats = (dashboardData: DashboardData): HomeStatCardData
   ];
 };
 
-const authPortfolios: HomePortfolioHighlight[] = [
-  { id: "auth-port-1", name: "Portfolio Name", returnRate: 1323, rank: 1 },
-  { id: "auth-port-2", name: "Portfolio Name", returnRate: 1323, rank: 2 },
-  { id: "auth-port-3", name: "Portfolio Name", returnRate: 1323, rank: 3 },
-];
-
-const authCommunityHighlights: HomeCommunityHighlight[] = [
-  {
-    id: "auth-comm-1",
-    title: "게시물 이름은 이렇게 들어갑니다.",
-    preview:
-      "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
-    tag: "태그",
-    views: "999+",
-    likes: "999+",
-    comments: "999+",
-  },
-  {
-    id: "auth-comm-2",
-    title: "게시물 이름은 이렇게 들어갑니다.",
-    preview:
-      "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
-    tag: "태그",
-    views: "999+",
-    likes: "999+",
-    comments: "999+",
-  },
-  {
-    id: "auth-comm-3",
-    title: "게시물 이름은 이렇게 들어갑니다.",
-    preview:
-      "게시물 내용 미리보기가 들어갑니다. 두 줄 이상으로 길어질 경우에는 ...으로 처리할 수 있습니다.",
-    tag: "태그",
-    views: "999+",
-    likes: "999+",
-    comments: "999+",
-  },
-];
-
-const MarketStocks: MarketStock[] = Array.from({ length: 5 }).map(
-  (_, index) => ({
-    id: `stock-${index}`,
-    name: "크래프톤",
-    tag: "IT",
-    change: "+22.4%",
-    price: "226,000원",
-    volume: "113억",
-  }),
-);
-
-const MarketNews: MarketNews[] = Array.from({ length: 5 }).map(
-  (_, index) => ({
-    id: `news-${index}`,
-    title: "크래프톤 정글의 SW-AI랩 신규 런칭, 차세대 AI 교육...",
-    badge: "크래프톤",
-  }),
-);
-
 export function HomePageClient({
   userName,
   isLoggedIn,
   hasKiwoomAccount,
+  aiRecommendationBlock,
+  kiwoomAccountData,
+  performanceChartData,
   dashboardData,
+  marketStocksInitial,
+  marketNewsInitial,
 }: HomePageClientProps) {
+  const router = useRouter();
+  const [isAssistantCtaDismissed, setIsAssistantCtaDismissed] = useState(
+    aiRecommendationBlock,
+  );
+  const normalizeStock = useCallback(
+    (item: MarketStock): MarketStock => ({
+      ...item,
+      tag: item.tag || "테마 정보 없음",
+    }),
+    [],
+  );
+
+  const [marketStocks, setMarketStocks] = useState<MarketStock[]>(() =>
+    (marketStocksInitial || []).map(normalizeStock),
+  );
+  const [guestMarketStocks, setGuestMarketStocks] = useState<
+    GuestMarketStock[]
+  >(() =>
+    (marketStocksInitial || []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      tag: item.tag || "테마 정보 없음",
+      change: item.change,
+      price: item.price,
+      volume: item.volume,
+    })),
+  );
+  const [marketNews, setMarketNews] = useState<MarketNews[]>(
+    () => marketNewsInitial || [],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTopVolume = async () => {
+      // 관심종목 기준 (로그인)
+      if (isLoggedIn) {
+        try {
+          const favorites = await marketQuoteApi.getFavorites();
+          const sortedByVolume = favorites.items
+            .filter((item) => item.volume !== null && item.volume !== undefined)
+            .sort((a, b) => (b.volume || 0) - (a.volume || 0))
+            .slice(0, 5);
+
+          if (sortedByVolume.length && isMounted) {
+            const mapped = sortedByVolume.map((item) => ({
+              id: item.stockCode,
+              name: item.stockName,
+              tag: item.theme ?? item.stockCode,
+              change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+              price: item.currentPrice
+                ? `${item.currentPrice.toLocaleString()}원`
+                : "-",
+              volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+            }));
+            setMarketStocks(mapped.map(normalizeStock));
+            return;
+          }
+        } catch (error) {
+          console.warn(
+            "관심종목 기준 시황 조회 실패, 전체 상위로 대체:",
+            error,
+          );
+        }
+      }
+
+      // 로그인 안 됐거나 관심 5종 부족 시: 전체 종목 체결량 상위
+      try {
+        const topVolume = await marketQuoteApi.getMarketQuotes({
+          sortBy: "volume",
+          sortOrder: "desc",
+          page: 1,
+          pageSize: 3,
+        });
+        if (isMounted) {
+          const mapped = topVolume.items.map((item) => ({
+            id: item.code,
+            name: item.name,
+            tag: item.theme ?? item.code,
+            change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+            price: item.price ? `${item.price.toLocaleString()}원` : "-",
+            volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+          }));
+          const normalized = mapped.map(normalizeStock);
+          setMarketStocks(normalized);
+          setGuestMarketStocks(normalized);
+        }
+      } catch (error) {
+        console.warn("전체 종목 시황 조회 실패:", error);
+      }
+    };
+
+    fetchTopVolume();
+    return () => {
+      isMounted = false;
+    };
+  }, [isLoggedIn, normalizeStock]);
+
+  // 최신 뉴스 5개 (백엔드 정렬: id desc 가정)
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        const newsList = await fetchLatestNews(5);
+        setMarketNews(
+          newsList.slice(0, 5).map((item) => ({
+            id: item.id,
+            title: item.title,
+            badge: item.tickerLabel || item.stockCode || "뉴스",
+          })),
+        );
+      } catch (error) {
+        console.warn("주요 시황 뉴스 조회 실패:", error);
+      }
+    };
+
+    // 서버에서 내려준 초기 값이 없을 때만 호출
+    if (!marketNews.length) {
+      fetchNews();
+    }
+  }, [marketNews.length]);
+
+  const authenticatedStats = buildAuthenticatedStats(
+    dashboardData,
+    kiwoomAccountData,
+  );
+  const portfolioHighlights: HomePortfolioHighlight[] = [];
+  const communityHighlights: HomeCommunityHighlight[] = [];
+  const hasHighlights =
+    portfolioHighlights.length > 0 && communityHighlights.length > 0;
+  const hasPerformanceChartData = Boolean(performanceChartData);
+  const handleAssistantCtaClick = useCallback(() => {
+    router.push("/ai-assistant?autoStart=questionnaire");
+  }, [router]);
+  const handleAssistantCtaDismiss = useCallback(async () => {
+    setIsAssistantCtaDismissed(true);
+    try {
+      await authApi.updateAIRecommendation(true);
+    } catch (error) {
+      console.error("Failed to update AI recommendation block:", error);
+    }
+  }, []);
+
   if (!isLoggedIn) {
     return (
-      <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
-        <div className="flex w-full max-w-[1000px] flex-col gap-10">
-          <GuestPortfolioSection portfolios={guestPortfolioMock} />
-          <GuestMarketInsightSection
-            indexes={guestMarketIndexes}
-            stocks={guestMarketStocks}
-            news={guestMarketNews}
-          />
-          <GuestCommunityPreviewSection posts={guestCommunityPosts} />
+      <>
+        <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
+          <div className="flex w-full max-w-[1000px] flex-col gap-10">
+            <GuestPortfolioSection />
+            <GuestMarketInsightSection
+              indexes={guestMarketIndexes}
+              stocks={guestMarketStocks}
+              news={marketNews}
+            />
+            <UsageTipsSection tips={usageTips} />
+            <DiscussionPreviewSection limit={3} />
+          </div>
         </div>
-      </div>
+        <FloatingChatWidget />
+      </>
     );
   }
 
-  const authenticatedStats = buildAuthenticatedStats(dashboardData);
-
   return (
-    <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
-      <div className="flex w-full max-w-[1000px] flex-col gap-10">
-        <div className="text-[2rem] font-semibold text-text-body">
-          안녕하세요, {userName}님
-        </div>
+    <>
+      <div className="flex flex-col items-center px-10 pt-[120px] pb-20">
+        <div className="flex w-full max-w-[1000px] flex-col gap-10">
+          <div className="text-[2rem] font-semibold text-text-body">
+            안녕하세요, {userName}님
+          </div>
 
-        {/* 계좌 연동 안내 */}
-        {!hasKiwoomAccount && (
-          <div className="bg-bg-surface rounded-lg shadow-card p-6 border-2 border-accent-primary">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-text-title mb-2">
-                  증권사 계좌 연동이 필요합니다
-                </h3>
-                <p className="text-text-body">
-                  자동매매 기능을 사용하려면 키움증권 모의투자 계좌를 연동해주세요.
-                </p>
+          {isLoggedIn && !isAssistantCtaDismissed && (
+            <div className="mt-[-20px] flex w-full flex-col">
+              <StrategyCard
+                question="퀀트 투자나 주식 투자가 처음이신가요?"
+                description={`처음이시라면, 성향을 파악하고 AI 추천 전략으로 시작해보세요!`}
+                size="large"
+                onClick={handleAssistantCtaClick}
+              />
+              <div className="mt-[0.25rem] flex justify-end">
+                <span className="mr-[0.25rem] text-[0.75rem] font-normal text-muted">
+                  필요가 없으시다면,
+                </span>
+                <button
+                  type="button"
+                  className="text-[0.75rem] font-semibold text-brand-purple hover:underline"
+                  onClick={handleAssistantCtaDismiss}
+                >
+                  다시 보지 않기
+                </button>
               </div>
+            </div>
+          )}
+
+          <StatsOverviewSection stats={authenticatedStats} />
+          {!hasKiwoomAccount && (
+            <p className="mt-[-24px] text-[0.875rem] font-normal text-muted">
+              증권사 계좌 연동이 되어있지 않습니다.{" "}
               <a
                 href="/mypage"
-                className="px-6 py-3 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/90 transition-colors font-semibold whitespace-nowrap"
+                className="font-semibold text-brand-purple hover:underline"
               >
-                증권사 계좌 연동하기
+                키움증권 모의투자 계좌를 연동
               </a>
-            </div>
-          </div>
-        )}
-
-        <StatsOverviewSection stats={authenticatedStats} />
-        <PerformanceChartSection />
-        <MarketInsightSection
-          stocks={MarketStocks}
-          news={MarketNews}
-        />
-        <HighlightsSection
-          portfolios={authPortfolios}
-          posts={authCommunityHighlights}
-        />
+              하면 자동매매를 이용할 수 있습니다.
+            </p>
+          )}
+          <MarketInsightSection stocks={marketStocks} news={marketNews} />
+          <UsageTipsSection tips={usageTips} />
+          {hasHighlights && (
+            <HighlightsSection
+              portfolios={portfolioHighlights}
+              posts={communityHighlights}
+            />
+          )}
+          <DiscussionPreviewSection limit={3} className="mt-4" />
+        </div>
       </div>
-    </div>
+      <FloatingChatWidget />
+    </>
   );
 }

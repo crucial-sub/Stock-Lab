@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@/components/common/Icon";
+import { getTagStyle } from "@/components/community/tagStyles";
 
 export interface FreeBoardPostCardProps {
   tag: string;
@@ -27,23 +28,26 @@ export function FreeBoardPostCard({
   comments,
   onClick,
 }: FreeBoardPostCardProps) {
+  const tagStyle = getTagStyle(tag);
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-[12px] border border-[#18223414] bg-[#1822340D] p-5 text-left transition hover:border-brand-purple hover:shadow-[0_4px_20px_rgba(0,0,0,0.08)]"
+      className="w-full rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] p-5 text-left transition hover:shadow-elev-card-soft"
     >
-      <div className="flex items-center gap-2 text-sm text-[#646464]">
-        <span className="rounded-[4px] bg-white/40 px-2 py-0.5 text-xs font-semibold text-[#646464]">
+      <div className="flex items-center gap-3 text-[#646464]">
+        <span
+          className={`rounded-[4px] border px-[10px] pt-0.5 text-[0.75rem] font-normal ${tagStyle.background} ${tagStyle.text} ${tagStyle.border}`}
+        >
           {tag}
         </span>
-        <span className="text-sm text-[#646464]">
-          by. {author} · {date}
+        <span className="text-[0.875rem] text-muted">
+          by. {author}, {date}
         </span>
       </div>
 
-      <p className="mt-2 text-lg font-semibold text-black">{title}</p>
-      <p className="mt-1 text-sm text-[#646464] line-clamp-2">{preview}</p>
+      <p className="mt-3 text-[1.25rem] font-semibold text-black">{title}</p>
+      <p className="mt-1 text-[1rem] font-semibold text-muted line-clamp-2">{preview}</p>
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-[#646464]">
         <Metric icon="/icons/visibility.svg" label={formatCount(views)} />

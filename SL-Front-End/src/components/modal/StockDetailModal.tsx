@@ -78,18 +78,18 @@ export function StockDetailModal({
       aria-labelledby="stock-detail-modal-title"
     >
       <div
-        className="relative rounded-[8px] max-h-[70vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative rounded-[12px] max-h-[70vh] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ zIndex: 100000 }}
         onClick={(event) => event.stopPropagation()}
       >
         {/* 모달 헤더 */}
-        <div className="relative flex items-center shadow-header bg-white px-[0.5rem] py-[0.8rem]">
-          <h2
+        <div className="relative flex items-center shadow-header bg-white px-[0.5rem] py-[0.75rem] shadow-elev-card-soft">
+          <span
             id="stock-detail-modal-title"
-            className="absolute left-1/2 -translate-x-1/2 text-[0.9rem] font-normal text-text-strong"
+            className="absolute left-1/2 -translate-x-1/2 text-[0.875rem] font-normal text-strong"
           >
             {stockName} 종목 정보
-          </h2>
+          </span>
           <button
             type="button"
             className="mr-[0.25rem] ml-auto flex h-3 w-3 rounded-full bg-[#FF6464]"
@@ -105,3 +105,4 @@ export function StockDetailModal({
     document.body,
   );
 }
+

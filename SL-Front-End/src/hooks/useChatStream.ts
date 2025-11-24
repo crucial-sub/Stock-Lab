@@ -12,12 +12,50 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import type {
-  SSEEventUnion,
-  SSEConnectionState,
-  SSEConnectionOptions,
-  SSEConnectionError,
-} from "@/types/sse";
+
+/**
+ * SSE 이벤트 타입 정의
+ */
+type SSEEventUnion =
+  | { type: "stream_start"; messageId: string }
+  | { type: "stream_chunk"; content: string }
+  | { type: "stream_end" }
+  | { type: "ui_language"; data: any }
+  | { type: "error"; message: string; code?: string };
+
+/**
+ * SSE 연결 상태
+ */
+type SSEConnectionState =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "streaming"
+  | "complete"
+  | "error"
+  | "reconnecting";
+
+/**
+ * SSE 연결 옵션
+ */
+interface SSEConnectionOptions {
+  /** 자동 재연결 여부 */
+  autoReconnect?: boolean;
+  /** 최대 재연결 시도 횟수 */
+  maxReconnectAttempts?: number;
+  /** 재연결 간격 (ms) */
+  reconnectInterval?: number;
+  /** 타임아웃 (ms) */
+  timeout?: number;
+}
+
+/**
+ * SSE 연결 에러
+ */
+interface SSEConnectionError extends Error {
+  code?: string;
+  retryable?: boolean;
+}
 
 /**
  * useChatStream 반환 타입
@@ -71,7 +109,7 @@ export function useChatStream(
     autoReconnect = true,
     maxReconnectAttempts = 3,
     reconnectInterval = 1000,
-    timeout = 60000, // 60초
+    timeout = 120000, // 60초
   } = options;
 
   // 상태 관리
@@ -125,9 +163,6 @@ export function useChatStream(
 
         setTimeout(() => {
           if (currentMessageRef.current) {
-            console.log(
-              `[useChatStream] 재연결 시도 중 (${reconnectCountRef.current}/${maxReconnectAttempts})...`
-            );
             sendMessage(currentMessageRef.current);
           }
         }, reconnectInterval * reconnectCountRef.current); // 지수 백오프
@@ -151,7 +186,6 @@ export function useChatStream(
 
         switch (data.type) {
           case "stream_start":
-            console.log("[useChatStream] 스트리밍 시작:", data.messageId);
             setContent("");
             setIsStreaming(true);
             setConnectionState("streaming");
@@ -160,12 +194,10 @@ export function useChatStream(
 
           case "stream_chunk":
             // 즉시 렌더링 (인위적 딜레이 없음)
-            console.log("[useChatStream] stream_chunk:", JSON.stringify(data.content));
             setContent((prev) => prev + data.content);
             break;
 
           case "stream_end":
-            console.log("[useChatStream] 스트리밍 완료");
             setIsStreaming(false);
             setConnectionState("complete");
             closeConnection();
@@ -173,7 +205,6 @@ export function useChatStream(
 
           case "ui_language":
             // UI Language 데이터는 별도 처리 필요 (상위 컴포넌트에서 처리)
-            console.log("[useChatStream] UI Language 이벤트 수신:", data.data);
             break;
 
           case "error":
@@ -212,10 +243,13 @@ export function useChatStream(
       currentMessageRef.current = message;
 
       // SSE 엔드포인트 URL 생성
-      const baseUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL || window.location.origin;
+      const baseUrl = process.env.NEXT_PUBLIC_CHATBOT_API_URL ||
+                      process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api/v1', '') ||
+                      window.location.origin.replace(':3000', ':8003');
       const url = new URL("/api/v1/chat/stream", baseUrl);
       url.searchParams.set("sessionId", sessionId);
       url.searchParams.set("message", message);
+      url.searchParams.set("clientType", "assistant");
 
       try {
         // EventSource 생성
@@ -224,7 +258,6 @@ export function useChatStream(
 
         // 연결 성공
         eventSource.onopen = () => {
-          console.log("[useChatStream] SSE 연결 성공");
           setConnectionState("connected");
         };
 
@@ -235,7 +268,7 @@ export function useChatStream(
         eventSource.onerror = (event) => {
           console.error("[useChatStream] SSE 연결 에러:", event);
           const connectionError = new Error(
-            "서버와의 연결이 끊어졌습니다."
+            "네트워크 연결이 불안정합니다. 인터넷 연결을 확인하고 다시 시도해주세요."
           ) as SSEConnectionError;
           connectionError.retryable = true;
           handleError(connectionError);
@@ -245,14 +278,18 @@ export function useChatStream(
         timeoutIdRef.current = setTimeout(() => {
           console.error("[useChatStream] 타임아웃 발생");
           handleError(
-            new Error(`응답 시간이 초과되었습니다 (${timeout / 1000}초)`),
+            new Error(
+              `AI 응답 시간이 초과되었습니다 (${timeout / 1000}초). 질문이 복잡하거나 서버가 바쁠 수 있습니다. 잠시 후 다시 시도해주세요.`
+            ),
             false
           );
         }, timeout);
       } catch (err) {
         console.error("[useChatStream] EventSource 생성 에러:", err);
         handleError(
-          new Error("서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
+          new Error(
+            "서버와 연결할 수 없습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요."
+          ),
           false
         );
       }
@@ -264,7 +301,6 @@ export function useChatStream(
    * 스트리밍 중단 함수
    */
   const abort = useCallback(() => {
-    console.log("[useChatStream] 사용자에 의한 중단");
     closeConnection();
     setConnectionState("idle");
   }, [closeConnection]);
@@ -274,7 +310,6 @@ export function useChatStream(
    */
   const retry = useCallback(() => {
     if (currentMessageRef.current) {
-      console.log("[useChatStream] 수동 재시도 시작");
       reconnectCountRef.current = 0;
       sendMessage(currentMessageRef.current);
     }

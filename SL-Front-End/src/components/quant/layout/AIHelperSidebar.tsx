@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { AISearchInput } from "@/components/home/ui";
 import { sendChatMessage } from "@/lib/api/chatbot";
+import { useAIHelperStore } from "@/stores/aiHelperStore";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,6 +12,7 @@ interface Message {
   backtestConditionsSell?: any[];
   appliedBuy?: boolean;
   appliedSell?: boolean;
+  backtestConfig?: any;
 }
 
 interface BuyConditionUI {
@@ -34,8 +36,11 @@ interface SellConditionUI {
 interface AIHelperSidebarProps {
   onBuyConditionsAdd?: (conditions: any[]) => void;
   onSellConditionsAdd?: (conditions: any[]) => void;
+  onBacktestConfigApply?: (config: any) => void;
+  onResetConditions?: () => void;
   currentBuyConditions?: BuyConditionUI[];
   currentSellConditions?: SellConditionUI[];
+  onConditionsApplied?: () => void;
 }
 
 /**
@@ -47,27 +52,72 @@ function AIHelperMessage({
   onSellConditionsAdd,
   onBuyApplied,
   onSellApplied,
+  onConditionsApplied,
+  onBacktestConfigApply,
+  onResetConditions,
 }: {
   message: Message;
   onBuyConditionsAdd?: (conditions: any[]) => void;
   onSellConditionsAdd?: (conditions: any[]) => void;
   onBuyApplied?: () => void;
   onSellApplied?: () => void;
+  onConditionsApplied?: () => void;
+  onBacktestConfigApply?: (config: any) => void;
+  onResetConditions?: () => void;
 }) {
   const isUser = message.role === "user";
+  const configAppliedRef = useRef(false);
+  const resetAppliedRef = useRef(false);
+
+  const applyBacktestConfigOnce = () => {
+    if (configAppliedRef.current) return;
+    if (message.backtestConfig && onBacktestConfigApply) {
+      onBacktestConfigApply(message.backtestConfig);
+      configAppliedRef.current = true;
+    }
+  };
+
+  const resetConditionsOnce = () => {
+    if (resetAppliedRef.current) return;
+    if (onResetConditions) {
+      onResetConditions();
+      resetAppliedRef.current = true;
+    }
+  };
 
   const handleAddBuyConditions = () => {
     if (message.backtestConditionsBuy && message.backtestConditionsBuy.length > 0 && onBuyConditionsAdd) {
-      onBuyConditionsAdd(message.backtestConditionsBuy);
+      resetConditionsOnce();
+      const normalized = message.backtestConditionsBuy.map((cond) => ({
+        ...cond,
+        subFactorName: cond?.subFactorName || "기본값",
+      }));
+      onBuyConditionsAdd(normalized);
+      applyBacktestConfigOnce();
       onBuyApplied?.();
+      onConditionsApplied?.();
     }
   };
 
   const handleAddSellConditions = () => {
     if (message.backtestConditionsSell && message.backtestConditionsSell.length > 0 && onSellConditionsAdd) {
-      onSellConditionsAdd(message.backtestConditionsSell);
+      resetConditionsOnce();
+      const normalized = message.backtestConditionsSell.map((cond) => ({
+        ...cond,
+        subFactorName: cond?.subFactorName || "기본값",
+      }));
+      onSellConditionsAdd(normalized);
+      applyBacktestConfigOnce();
       onSellApplied?.();
+      onConditionsApplied?.();
     }
+  };
+
+  const handleApplyBoth = () => {
+    resetConditionsOnce();
+    applyBacktestConfigOnce();
+    handleAddBuyConditions();
+    handleAddSellConditions();
   };
 
   // 간단한 마크다운 변환 함수
@@ -107,31 +157,56 @@ function AIHelperMessage({
         </div>
 
         {/* 조건 추가 버튼 - 매수/매도 분리 */}
-        {!isUser && (message.backtestConditionsBuy?.length || message.backtestConditionsSell?.length) ? (
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={handleAddBuyConditions}
-              disabled={message.appliedBuy || !message.backtestConditionsBuy?.length}
-              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-                message.appliedBuy
-                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  : "bg-red-500 hover:bg-red-600 text-white"
-              }`}
-            >
-              {message.appliedBuy ? "매수 적용됨" : "매수 조건에 추가"}
-            </button>
-            <button
-              onClick={handleAddSellConditions}
-              disabled={message.appliedSell || !message.backtestConditionsSell?.length}
-              className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
-                message.appliedSell
-                  ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600 text-white"
-              }`}
-            >
-              {message.appliedSell ? "매도 적용됨" : "매도 조건에 추가"}
-            </button>
-          </div>
+        {!isUser ? (
+          (() => {
+            const hasBuy = Array.isArray(message.backtestConditionsBuy) && message.backtestConditionsBuy.length > 0;
+            const hasSell = Array.isArray(message.backtestConditionsSell) && message.backtestConditionsSell.length > 0;
+            if (!hasBuy && !hasSell) return null;
+            const bothApplied = message.appliedBuy && message.appliedSell;
+            return (
+              <div className="mt-3 flex gap-2">
+                {hasBuy && (
+                  <button
+                    onClick={handleAddBuyConditions}
+                    disabled={message.appliedBuy}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      message.appliedBuy
+                        ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                        : "bg-red-500 hover:bg-red-600 text-white"
+                    }`}
+                  >
+                    {message.appliedBuy ? "매수 적용됨" : "매수 조건에 추가"}
+                  </button>
+                )}
+                {hasSell && (
+                  <button
+                    onClick={handleAddSellConditions}
+                    disabled={message.appliedSell}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      message.appliedSell
+                        ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                        : "bg-blue-500 hover:bg-blue-600 text-white"
+                    }`}
+                  >
+                    {message.appliedSell ? "매도 적용됨" : "매도 조건에 추가"}
+                  </button>
+                )}
+                {hasBuy && hasSell && (
+                  <button
+                    onClick={handleApplyBoth}
+                    disabled={bothApplied}
+                    className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      bothApplied
+                        ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                        : "bg-green-600 hover:bg-green-700 text-white"
+                    }`}
+                  >
+                    {bothApplied ? "매수·매도 적용됨" : "매수·매도 한번에 적용"}
+                  </button>
+                )}
+              </div>
+            );
+          })()
         ) : null}
       </div>
     </div>
@@ -145,12 +220,19 @@ function AIHelperMessage({
 export function AIHelperSidebar({
   onBuyConditionsAdd,
   onSellConditionsAdd,
+  onBacktestConfigApply,
+  onResetConditions,
   currentBuyConditions = [],
-  currentSellConditions = []
+  currentSellConditions = [],
+  onConditionsApplied,
 }: AIHelperSidebarProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [sessionId, setSessionId] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(false);
+  const messages = useAIHelperStore((s) => s.messages);
+  const addMessage = useAIHelperStore((s) => s.addMessage);
+  const updateMessage = useAIHelperStore((s) => s.updateMessage);
+  const sessionId = useAIHelperStore((s) => s.sessionId);
+  const setSessionId = useAIHelperStore((s) => s.setSessionId);
+  const isLoading = useAIHelperStore((s) => s.isLoading);
+  const setIsLoading = useAIHelperStore((s) => s.setIsLoading);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // 메시지 추가 시 자동 스크롤
@@ -165,7 +247,7 @@ export function AIHelperSidebar({
       if (isLoading) return;
 
       // 사용자 메시지 추가
-      setMessages((prev) => [...prev, { role: "user", content: value }]);
+      addMessage({ role: "user", content: value });
       setIsLoading(true);
 
       try {
@@ -210,49 +292,43 @@ export function AIHelperSidebar({
         const response = await sendChatMessage({
           message: contextMessage,
           session_id: sessionId || undefined,
+          client_type: "ai_helper",
         });
 
         setSessionId(response.session_id);
 
         // AI 응답 메시지 추가
-        const backtestConditions = response.backtest_conditions || {};
-        const buyConditions = backtestConditions.buy || backtestConditions || [];
-        const sellConditions = backtestConditions.sell || [];
+        const backtestConditions: any = response.backtest_conditions || {};
+        const buyConditions = Array.isArray(backtestConditions)
+          ? backtestConditions
+          : Array.isArray(backtestConditions.buy)
+            ? backtestConditions.buy
+            : [];
+        const sellConditions = Array.isArray(backtestConditions.sell)
+          ? backtestConditions.sell
+          : [];
 
-        // intent가 backtest_configuration이면 기본 조건 자동 적용
-        const isAutoApply = response.intent === "backtest_configuration";
-        if (isAutoApply && buyConditions.length > 0) {
-            onBuyConditionsAdd?.(buyConditions);
-        }
-        if (isAutoApply && sellConditions.length > 0) {
-            onSellConditionsAdd?.(sellConditions);
-        }
+        addMessage({
+          role: "assistant",
+          content: response.answer,
+          backtestConditionsBuy: buyConditions,
+          backtestConditionsSell: sellConditions,
+          appliedBuy: false,
+          appliedSell: false,
+          backtestConfig: response.backtest_config,
+        });
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: response.answer,
-            backtestConditionsBuy: buyConditions,
-            backtestConditionsSell: sellConditions,
-            appliedBuy: isAutoApply && buyConditions.length > 0,
-            appliedSell: isAutoApply && sellConditions.length > 0,
-          },
-        ]);
       } catch (error) {
         console.error("Failed to send message:", error);
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "메시지 전송에 실패했습니다. 다시 시도해주세요.",
-          },
-        ]);
+        addMessage({
+          role: "assistant",
+          content: "메시지 전송에 실패했습니다. 다시 시도해주세요.",
+        });
       } finally {
         setIsLoading(false);
       }
     },
-    [sessionId, isLoading, currentBuyConditions, currentSellConditions, onBuyConditionsAdd, onSellConditionsAdd]
+    [sessionId, isLoading, currentBuyConditions, currentSellConditions, addMessage, setSessionId, setIsLoading]
   );
 
   return (
@@ -282,20 +358,10 @@ export function AIHelperSidebar({
                 message={message}
                 onBuyConditionsAdd={onBuyConditionsAdd}
                 onSellConditionsAdd={onSellConditionsAdd}
-                onBuyApplied={() =>
-                  setMessages((prev) =>
-                    prev.map((m, i) =>
-                      i === index ? { ...m, appliedBuy: true } : m
-                    )
-                  )
-                }
-                onSellApplied={() =>
-                  setMessages((prev) =>
-                    prev.map((m, i) =>
-                      i === index ? { ...m, appliedSell: true } : m
-                    )
-                  )
-                }
+                onBacktestConfigApply={onBacktestConfigApply}
+                onConditionsApplied={onConditionsApplied}
+                onBuyApplied={() => updateMessage(index, { appliedBuy: true })}
+                onSellApplied={() => updateMessage(index, { appliedSell: true })}
               />
             ))}
           </div>

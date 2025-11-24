@@ -133,7 +133,7 @@ async def _run_backtest_async(
     max_buy_value: Optional[float],
     max_daily_stock: Optional[int]
 ):
-    """비동기 백테스트 실행"""
+    """비동기 백테스트 실행 (항상 초고속 모드)"""
 
     async with AsyncSessionLocal() as db:
         try:

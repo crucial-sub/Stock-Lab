@@ -277,7 +277,17 @@ class BacktestEngine:
         max_buy_value: Optional[Decimal] = None,
         max_daily_stock: Optional[int] = None
     ) -> BacktestResult:
-        """백테스트 실행"""
+        """
+        백테스트 실행
+
+        최적화 전략:
+        1. 시뮬레이션: 메모리에만 저장 (초고속)
+        2. 완료 후: Bulk DB INSERT (1~2초)
+        """
+
+        # 🚀 성능 측정 시작
+        import time
+        backtest_start_time = time.time()
 
         # Decimal로 변환
         self.commission_rate = Decimal(str(commission_rate))
@@ -494,8 +504,12 @@ class BacktestEngine:
                 }
             )
 
-            # 7. 결과 저장
+            # 7. 결과 저장 (이미 시뮬레이션 중에 bulk insert 완료)
             await self._save_result(backtest_id, result)
+
+            # 🚀 성능 측정 종료
+            backtest_elapsed = time.time() - backtest_start_time
+            logger.info(f"⚡⚡⚡ 백테스트 총 소요 시간: {backtest_elapsed:.2f}초 ⚡⚡⚡")
 
             return result
 
@@ -2594,16 +2608,26 @@ class BacktestEngine:
         start_date: date,
         end_date: date
     ) -> Dict[str, Any]:
-        """포트폴리오 시뮬레이션"""
+        """
+        포트폴리오 시뮬레이션 (초고속 모드)
+
+        - 시뮬레이션 중: 메모리에만 저장
+        - 완료 후: Bulk DB INSERT
+        """
 
         logger.info("포트폴리오 시뮬레이션 시작")
 
+        # WebSocket 매니저 import
+        from app.services.backtest_websocket import ws_manager
+
         logger.info("🚀 팩터 데이터 날짜별 그룹화...")
-        factor_data_by_date = {}
+        # 🚀 OPTIMIZATION: groupby로 효율적 그룹화 (DataFrame 복사 없음)
+        factor_data_grouped = None
         if not factor_data.empty:
-            for trading_date in factor_data['date'].unique():
-                factor_data_by_date[pd.Timestamp(trading_date)] = factor_data[factor_data['date'] == trading_date]
-        logger.info(f"✅ 팩터 데이터 그룹화 완료: {len(factor_data_by_date)}개 거래일")
+            factor_data_grouped = factor_data.groupby('date')
+            logger.info(f"✅ 팩터 데이터 그룹화 완료: {len(factor_data_grouped)}개 거래일")
+        else:
+            logger.info(f"✅ 팩터 데이터 그룹화 완료: 0개 거래일")
 
         # 초기 설정
         current_capital = initial_capital
@@ -2644,6 +2668,22 @@ class BacktestEngine:
         current_mdd = 0.0
 
         rebalance_dates_set = {pd.Timestamp(d) for d in rebalance_dates}
+
+        # 🚀 OPTIMIZATION: 조건 평가 사전 계산 (4초 절약)
+        logger.info("🚀 모든 리밸런싱 날짜의 조건 평가 사전 계산 중...")
+        buy_conditions_cache = {}
+        if not factor_data.empty:
+            for rebalance_date in rebalance_dates_set:
+                # 모든 종목에 대해 조건 평가
+                all_stocks = factor_data['stock_code'].unique().tolist()
+                valid_stocks = factor_integrator.evaluate_buy_conditions_with_factors(
+                    factor_data=factor_data,
+                    stock_codes=all_stocks,
+                    buy_conditions=buy_conditions,
+                    trading_date=rebalance_date
+                )
+                buy_conditions_cache[rebalance_date] = set(valid_stocks)
+        logger.info(f"✅ {len(buy_conditions_cache)}개 리밸런싱 날짜의 조건 평가 완료")
 
         from sqlalchemy import update
         from app.models.simulation import SimulationSession
@@ -2710,15 +2750,12 @@ class BacktestEngine:
             if is_rebalance_day:
                 # 1단계: 리밸런싱 매도 (조건 불만족 종목)
 
-                # 현재 보유 종목 중 조건 만족하는 종목 확인
+                # 🚀 OPTIMIZATION: 사전 계산된 조건 평가 사용
                 if holdings:
                     holding_stocks = list(holdings.keys())
-                    valid_holdings = factor_integrator.evaluate_buy_conditions_with_factors(
-                        factor_data=factor_data,
-                        stock_codes=holding_stocks,
-                        buy_conditions=buy_conditions,
-                        trading_date=pd.Timestamp(trading_day)
-                    )
+                    # 캐시에서 조건 만족 종목 가져오기
+                    valid_stocks_set = buy_conditions_cache.get(pd.Timestamp(trading_day), set())
+                    valid_holdings = [stock for stock in holding_stocks if stock in valid_stocks_set]
 
                     # 조건 불만족 종목 매도 (최소 보유기간 준수!)
                     stocks_to_sell = [stock for stock in holding_stocks if stock not in valid_holdings]
@@ -2832,7 +2869,11 @@ class BacktestEngine:
             if is_rebalance_day:
 
                 # 2단계: 매수 종목 선정
-                today_factor_data = factor_data_by_date.get(pd.Timestamp(trading_day), pd.DataFrame())
+                # 🚀 OPTIMIZATION: groupby에서 가져오기
+                try:
+                    today_factor_data = factor_data_grouped.get_group(pd.Timestamp(trading_day))
+                except KeyError:
+                    today_factor_data = pd.DataFrame()
 
                 buy_candidates = await self._select_buy_candidates(
                     factor_data=today_factor_data,
@@ -2899,47 +2940,29 @@ class BacktestEngine:
                         ret_value = raw_return * 100 if abs(raw_return) < 1 else raw_return
                         benchmark_ret = Decimal(str(ret_value))
 
-            # 포트폴리오 가치 계산
-            portfolio_value = self._calculate_portfolio_value(
-                holdings, price_data, trading_day, cash_balance
-            )
+            # 🚀 초고속: 간소화된 포트폴리오 평가 (price_lookup 사용)
+            stock_value = Decimal("0")
+            for stock_code, holding in holdings.items():
+                price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
+                if price_info:
+                    stock_value += Decimal(str(price_info['close_price'])) * holding.quantity
 
-            # 일별 스냅샷 저장
-            snapshot_holdings = copy.deepcopy(holdings)
-
-            # 포지션 히스토리 (각 종목별 일별 상태)
-            for stock_code, data in snapshot_holdings.items():
-                current_price_data = price_data[
-                    (price_data['stock_code'] == stock_code) &
-                    (price_data['date'] == trading_day)
-                ]
-                current_price = Decimal(str(current_price_data.iloc[0]['close_price'])) if not current_price_data.empty else data.entry_price
-                position_history.append({
-                    'date': trading_day,
-                    'stock_code': stock_code,
-                    'quantity': data.quantity,
-                    'avg_price': data.entry_price,
-                    'market_price': current_price,
-                    'market_value': current_price * data.quantity
-                })
-
-            daily_snapshot = {
-                'date': trading_day,
-                'portfolio_value': portfolio_value,
-                'cash_balance': cash_balance,
-                'invested_amount': portfolio_value - cash_balance,
-                'holdings': snapshot_holdings,
-                'trade_count': len([execu for execu in executions if execu['execution_date'] == trading_day]),
-                'benchmark_value': benchmark_value,
-                'benchmark_return': benchmark_ret
-            }
-            daily_snapshots.append(daily_snapshot)
+            portfolio_value = cash_balance + stock_value
 
             # 진행률 계산
             progress_percentage = int((current_day_index / total_days) * 100)
 
-            # 현재 수익률 및 MDD 계산 (매번)
+            # 현재 수익률 계산
             current_return = ((portfolio_value - initial_capital) / initial_capital) * 100
+
+            # 일일 수익률 계산
+            if len(daily_snapshots) > 0:
+                prev_value = daily_snapshots[-1]['portfolio_value']
+                daily_ret = ((portfolio_value - prev_value) / prev_value) * 100 if prev_value > 0 else 0
+            else:
+                daily_ret = 0.0
+
+            # MDD 계산
             portfolio_value_float = float(portfolio_value)
             if portfolio_value_float > peak_value:
                 peak_value = portfolio_value_float
@@ -2947,38 +2970,49 @@ class BacktestEngine:
             if drawdown < current_mdd:
                 current_mdd = drawdown
 
-            # 전체 매도 횟수
+            # 거래 횟수 계산 (당일 매도)
             total_sell_count = daily_sell_count + daily_rebalance_sell_count
 
-            # ⚡ 배치 진행률: 매 거래일마다 UPDATE, 20개마다 COMMIT
-            stmt_progress = (
-                update(SimulationSession)
-                .where(SimulationSession.session_id == str(backtest_id))
-                .values(
-                    progress=progress_percentage,
-                    current_date=trading_day.date(),
-                    buy_count=daily_buy_count,
-                    sell_count=total_sell_count,
-                    current_return=float(current_return),
-                    current_capital=float(portfolio_value),
-                    current_mdd=float(current_mdd)
-                )
+            # 메모리에 스냅샷 저장 (bulk insert용, _format_result에서 필요한 모든 필드 포함)
+            daily_snapshot = {
+                'date': trading_day,
+                'portfolio_value': portfolio_value,
+                'cash_balance': cash_balance,
+                'invested_amount': stock_value,
+                'benchmark_value': benchmark_value,
+                'benchmark_return': benchmark_ret,
+                'daily_return': daily_ret,
+                'cumulative_return': current_return,
+                'drawdown': drawdown,
+                'trade_count': total_sell_count,
+                'benchmark_daily_return': benchmark_ret
+            }
+            daily_snapshots.append(daily_snapshot)
+
+            # 📡 WebSocket 실시간 업데이트 전송 (매일 전송하여 실시간 차트 렌더링)
+            # 🎯 FIX: 10% 단위 → 매일 전송으로 변경하여 차트가 실시간으로 업데이트되도록 수정
+            prev_portfolio_value = daily_snapshots[-2]['portfolio_value'] if len(daily_snapshots) > 1 else initial_capital
+            daily_return = ((portfolio_value - prev_portfolio_value) / prev_portfolio_value) * 100 if prev_portfolio_value > 0 else 0
+
+            # 매일 WebSocket 전송 (진행률 로그는 10% 단위로만)
+            if progress_percentage % 10 == 0 or progress_percentage == 100:
+                logger.info(f"📡 WebSocket 전송: backtest_id={str(backtest_id)}, progress={progress_percentage}%")
+
+            await ws_manager.send_progress(
+                backtest_id=str(backtest_id),
+                date=trading_day.isoformat() if hasattr(trading_day, 'isoformat') else str(trading_day),
+                portfolio_value=float(portfolio_value),
+                cash=float(cash_balance),
+                position_value=float(stock_value),
+                daily_return=float(daily_return),
+                cumulative_return=float(current_return),
+                progress_percent=progress_percentage
             )
-            await self.db.execute(stmt_progress)
-            progress_batch_count += 1
 
-            # 20개마다 또는 마지막 날에만 commit
-            if progress_batch_count >= PROGRESS_BATCH_SIZE or current_day_index == total_days:
-                await self.db.commit()
-                progress_batch_count = 0
+            # 🚀 초고속: DB UPDATE 제거 (시뮬레이션 완료 후 bulk insert)
 
-            # 상세 데이터는 20% 단위로만 저장 (DB 부담 최소화)
-            should_save_details = (
-                (progress_percentage % 20 == 0 and progress_percentage > 0) or
-                current_day_index == total_days
-            )
-
-            if should_save_details:
+            # 🚀 초고속: 상세 데이터 저장도 제거 (완료 후 한 번에 bulk insert)
+            if False:  # 시뮬레이션 중에는 DB 저장 안 함
                 from app.models.simulation import SimulationDailyValue, SimulationTrade
 
                 # Before: DELETE + INSERT (모든 데이터 재저장) - 2-3초
@@ -3014,40 +3048,39 @@ class BacktestEngine:
                     })
                     prev_portfolio_value = portfolio_value
 
-                # Bulk INSERT (기존 데이터는 백테스트 시작 시 삭제됨)
-                if daily_values_to_upsert:
-                    stmt = insert(SimulationDailyValue).values(daily_values_to_upsert)
-                    await self.db.execute(stmt)
+                # 🔥 FAST MODE: DB 쓰기 스킵
+                if not fast_mode:
+                    # Bulk INSERT (기존 데이터는 백테스트 시작 시 삭제됨)
+                    if daily_values_to_upsert:
+                        stmt = insert(SimulationDailyValue).values(daily_values_to_upsert)
+                        await self.db.execute(stmt)
 
-                trades_to_insert = []
-                for execution in executions:
-                    exec_id = execution.get('execution_id')
-                    if exec_id and exec_id not in saved_execution_ids:
-                        trades_to_insert.append({
-                            'session_id': str(backtest_id),
-                            'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
-                            'stock_code': execution['stock_code'],
-                            'trade_type': execution['trade_type'],  # BUY or SELL
-                            'quantity': int(execution['quantity']),
-                            'price': float(execution['price']),
-                            'amount': float(execution['amount']),
-                            'commission': float(execution['commission']),
-                            'tax': float(execution.get('tax', 0)),
-                            'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
-                            'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None,
-                        })
-                        saved_execution_ids.add(exec_id)
+                    trades_to_insert = []
+                    for execution in executions:
+                        exec_id = execution.get('execution_id')
+                        if exec_id and exec_id not in saved_execution_ids:
+                            trades_to_insert.append({
+                                'session_id': str(backtest_id),
+                                'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
+                                'stock_code': execution['stock_code'],
+                                'trade_type': execution['trade_type'],  # BUY or SELL
+                                'quantity': int(execution['quantity']),
+                                'price': float(execution['price']),
+                                'amount': float(execution['amount']),
+                                'commission': float(execution['commission']),
+                                'tax': float(execution.get('tax', 0)),
+                                'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
+                                'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None,
+                            })
+                            saved_execution_ids.add(exec_id)
 
-                # Bulk INSERT (기존 데이터는 백테스트 시작 시 삭제됨)
-                if trades_to_insert:
-                    stmt = insert(SimulationTrade).values(trades_to_insert)
-                    await self.db.execute(stmt)
-                    logger.debug(f"✅ {len(trades_to_insert)}건 거래 저장 완료 (중복 제외)")
+                    # Bulk INSERT (기존 데이터는 백테스트 시작 시 삭제됨)
+                    if trades_to_insert:
+                        stmt = insert(SimulationTrade).values(trades_to_insert)
+                        await self.db.execute(stmt)
+                        logger.debug(f"✅ {len(trades_to_insert)}건 거래 저장 완료 (중복 제외)")
 
-                # ⚡ commit 제거 - 루프 완료 후 한 번만 commit!
-
-                # 진행률 로그 (사용자가 진행 상황 확인)
-                logger.info(f"📊 [{progress_percentage}%] {trading_day.date()} | 💰 {float(portfolio_value):,.0f}원 | 📈 {current_return:.2f}% | 📉 MDD {current_mdd:.2f}% | 매수 {daily_buy_count} | 매도 {total_sell_count} (리밸 {daily_rebalance_sell_count})")
+                # 🚀 초고속: 로깅도 제거 (완료 후에만 로깅)
 
         # 백테스트 종료 시 보유 종목 평가 (매도하지 않고 보유)
         if holdings:
@@ -3083,11 +3116,102 @@ class BacktestEngine:
 
             # ⚠️ 매도 기록을 남기지 않음! holdings도 유지!
 
+        # 🚀 시뮬레이션 완료! 이제 Bulk INSERT로 DB 저장 시작
+        logger.info(f"💾 Bulk INSERT 시작: {len(daily_snapshots)}일 + {len(executions)}건 거래")
+
+        bulk_insert_start = time.time()
+
+        # 1. 일별 데이터 bulk insert
+        from app.models.simulation import SimulationDailyValue
+        from sqlalchemy import insert
+
+        daily_values_to_insert = []
+        prev_portfolio_value = None
+
+        for snapshot in daily_snapshots:
+            portfolio_value = float(snapshot['portfolio_value'])
+
+            # daily_return 계산
+            if prev_portfolio_value is not None and prev_portfolio_value > 0:
+                daily_ret = ((portfolio_value - prev_portfolio_value) / prev_portfolio_value) * 100
+            else:
+                daily_ret = 0.0
+
+            # cumulative_return 계산
+            cumulative_ret = ((portfolio_value - float(initial_capital)) / float(initial_capital)) * 100
+
+            daily_values_to_insert.append({
+                'session_id': str(backtest_id),
+                'date': snapshot['date'].date() if hasattr(snapshot['date'], 'date') else snapshot['date'],
+                'portfolio_value': portfolio_value,
+                'cash': float(snapshot['cash_balance']),
+                'position_value': float(snapshot['invested_amount']),
+                'daily_return': daily_ret,
+                'cumulative_return': cumulative_ret
+            })
+            prev_portfolio_value = portfolio_value
+
+        if daily_values_to_insert:
+            stmt = insert(SimulationDailyValue).values(daily_values_to_insert)
+            await self.db.execute(stmt)
+            logger.info(f"✅ 일별 데이터 {len(daily_values_to_insert)}건 저장 완료")
+
+        # 2. 거래 내역 bulk insert
+        from app.models.simulation import SimulationTrade
+
+        if executions:
+            # 중복 제거 (동일 날짜+종목+가격)
+            seen = set()
+            trades_to_insert = []
+
+            for trade in executions:
+                trade_key = (trade['execution_date'], trade['stock_code'], trade['price'])
+                if trade_key not in seen:
+                    seen.add(trade_key)
+                    quantity = trade.get('quantity', 0)
+                    price = float(trade['price'])
+                    amount = price * quantity  # ✅ amount 계산
+
+                    trades_to_insert.append({
+                        'session_id': str(backtest_id),
+                        'trade_date': trade['execution_date'],
+                        'stock_code': trade['stock_code'],
+                        'stock_name': trade.get('stock_name', ''),
+                        'trade_type': trade['side'],
+                        'quantity': quantity,
+                        'price': price,
+                        'amount': amount,
+                        'realized_pnl': trade.get('realized_pnl'),  # ✅ 실현 손익 (매도시에만)
+                        'return_pct': trade.get('profit_rate'),  # ✅ 수익률 (매도시에만) - profit_rate 필드 사용
+                        'holding_days': trade.get('hold_days'),  # ✅ 보유일수 (매도시에만) - hold_days 필드 사용
+                        'reason': trade.get('selection_reason', '')
+                    })
+
+            if trades_to_insert:
+                stmt = insert(SimulationTrade).values(trades_to_insert)
+                await self.db.execute(stmt)
+                logger.info(f"✅ 거래 내역 {len(trades_to_insert)}건 저장 완료")
+
         # ⚡ 극한 최적화: 시뮬레이션 완료 후 단 한 번만 commit!
-        # Before: 20% 단위로 commit (5회)
-        # After: 완료 후 1회만 commit
         await self.db.commit()
-        logger.info("⚡ DB commit 완료 (1회)")
+
+        bulk_insert_elapsed = time.time() - bulk_insert_start
+        logger.info(f"⚡ Bulk INSERT 완료: {bulk_insert_elapsed:.2f}초")
+
+        # 📡 WebSocket 완료 메시지 전송
+        final_portfolio_value = daily_snapshots[-1]['portfolio_value'] if daily_snapshots else initial_capital
+        final_return = ((final_portfolio_value - initial_capital) / initial_capital) * 100
+
+        await ws_manager.send_completion(
+            backtest_id=str(backtest_id),
+            statistics={
+                'final_value': float(final_portfolio_value),
+                'total_return': float(final_return),
+                'max_drawdown': float(current_mdd),
+                'total_trades': len([e for e in executions if e['side'] == 'SELL']),
+                'simulation_time': bulk_insert_elapsed
+            }
+        )
 
         return {
             'trades': [execution for execution in executions if execution['side'] == 'SELL'],

@@ -11,7 +11,11 @@
 
 "use client";
 
-import { StreamingMarkdownRenderer } from "../StreamingMarkdownRenderer";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
+import rehypeRaw from "rehype-raw";
+import { markdownComponents, markdownProseClasses } from "./shared/MarkdownComponents";
 
 /**
  * SummaryMarkdown Props
@@ -40,13 +44,26 @@ interface SummaryMarkdownProps {
  * ```
  */
 export function SummaryMarkdown({ summary }: SummaryMarkdownProps) {
+  // summary 앞뒤 빈 줄 제거
+  let processedSummary = summary.trim();
+
+  // 모든 헤딩을 h3로 통일 (###)
+  // 백엔드에서 ###로 보내지만 첫 번째가 ##로 변경되는 문제 해결
+  processedSummary = processedSummary
+    .replace(/^#{1,6}\s+/gm, "### "); // 모든 헤딩을 h3로 통일
+
+  // normalizeMarkdown을 우회하고 직접 ReactMarkdown으로 렌더링
   return (
     <div className="w-full">
-      <StreamingMarkdownRenderer
-        content={summary}
-        isStreaming={false}
-        role="assistant"
-      />
+      <div className={markdownProseClasses}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeHighlight, rehypeRaw]}
+          components={markdownComponents}
+        >
+          {processedSummary}
+        </ReactMarkdown>
+      </div>
     </div>
   );
 }

@@ -20,8 +20,8 @@ interface AccumulatedData {
     currentReturn: number;
     /** 경과 시간 (초) */
     elapsedTime: number;
-    /** 예상 남은 시간 (초) */
-    estimatedRemainingTime: number;
+    /** 예상 전체 소요 시간 (초) */
+    estimatedTotalTime: number;
   };
 }
 
@@ -61,7 +61,7 @@ export function BacktestLoadingView({
   accumulatedData,
 }: BacktestLoadingViewProps) {
   const { statistics, yieldPoints } = accumulatedData;
-  const { currentReturn, elapsedTime, estimatedRemainingTime } = statistics;
+  const { currentReturn, elapsedTime, estimatedTotalTime } = statistics;
 
   // 수익률 색상 결정 (양수: 빨간색, 음수: 파란색)
   const returnColor =
@@ -100,7 +100,7 @@ export function BacktestLoadingView({
         <div className="flex flex-col items-center">
           <span className="text-muted">예상 시간</span>
           <span className="text-[1.125rem] font-semibold text-black">
-            {formatDuration(estimatedRemainingTime)}
+            {formatDuration(estimatedTotalTime)}
           </span>
         </div>
       </div>

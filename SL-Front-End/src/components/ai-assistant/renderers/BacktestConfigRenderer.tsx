@@ -288,7 +288,7 @@ export function BacktestConfigRenderer({
     !errors.investmentAmount && !errors.startDate && !errors.endDate;
 
   return (
-    <div className="flex justify-start mb-6">
+    <div className="flex justify-start mb-20">
       <div className="w-full rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] p-5 shadow-elev-card-soft">
         {/* 헤더 */}
         <span className="text-[1.25rem] font-semibold text-black">
@@ -347,11 +347,10 @@ export function BacktestConfigRenderer({
                       key={preset.id}
                       type="button"
                       onClick={() => handlePresetSelect(preset)}
-                      className={`rounded-full px-4 py-2 text-[0.875rem] font-normal text-muted transition ${
-                        isActive
-                          ? "bg-brand-purple text-white font-semibold"
-                          : "bg-white/40 border-[0.5px] border-[#18223433] text-muted font-normal hover:bg-white/80"
-                      }`}
+                      className={`rounded-full px-4 py-2 text-[0.875rem] font-normal text-muted transition ${isActive
+                        ? "bg-brand-purple text-white font-semibold"
+                        : "bg-white/40 border-[0.5px] border-[#18223433] text-muted font-normal hover:bg-white/80"
+                        }`}
                     >
                       {preset.label}
                     </button>

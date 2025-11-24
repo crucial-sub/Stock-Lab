@@ -11,8 +11,8 @@
 
 "use client";
 
-import { useState } from "react";
 import { savePortfolio } from "@/lib/api/backtest";
+import { useState } from "react";
 
 /**
  * SavePortfolioButton Props
@@ -81,7 +81,7 @@ export function SavePortfolioButton({ backtestId }: SavePortfolioButtonProps) {
         onClick={handleSave}
         disabled={loading || success}
         className={[
-          "px-6 py-3 rounded-lg font-medium text-white transition-all duration-200",
+          "px-6 py-3 rounded-lg font-medium text-white transition-all duration-200 mb-6",
           loading || success
             ? "bg-gray-400 cursor-not-allowed"
             : "bg-brand-purple hover:bg-brand-purple-dark active:scale-95",

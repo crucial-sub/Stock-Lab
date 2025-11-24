@@ -315,9 +315,9 @@ async def _run_backtest_async(
 
             # 2.5 백테스트 요약 생성 및 저장
             total_profit = final_capital - float(initial_capital)
-            summary = f"""## 백테스트 결과 요약
+            summary = f"""
 
-### 📊 주요 성과 지표
+### ✨ 주요 성과 지표
 - **총 수익률**: {final_return:.2f}%
 - **연환산 수익률**: {annualized_return:.2f}%
 - **최대 낙폭(MDD)**: {max_drawdown:.2f}%
@@ -330,7 +330,7 @@ async def _run_backtest_async(
 - **총 수익금**: {total_profit:,.0f}원
 
 ### 💡 주요 인사이트
-백테스트 기간 동안 전략이 안정적으로 수행되었으며, 리스크 관리가 효과적으로 작동했습니다.
+- 백테스트 기간 동안 전략이 안정적으로 수행되었으며, 리스크 관리가 효과적으로 작동했습니다.
 """
 
             # description 필드에 요약 저장

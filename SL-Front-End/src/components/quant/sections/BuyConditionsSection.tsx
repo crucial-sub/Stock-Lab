@@ -1,6 +1,3 @@
-import Image from "next/image";
-import { useEffect, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { Title, UnderlineInput } from "@/components/common";
 import { FactorSelectionModal } from "@/components/quant/FactorSelectionModal";
 import {
@@ -11,6 +8,9 @@ import {
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 /**
  * 매수 조건식 설정 섹션
@@ -266,11 +266,10 @@ export function BuyConditionsSection() {
               <button
                 type="button"
                 onClick={() => setIsAutoLogic(!isAutoLogic)}
-                className={`px-3 py-1 rounded-md text-sm transition-colors ${
-                  isAutoLogic
-                    ? "bg-accent-primary text-white"
-                    : "bg-gray-200 text-text-neutral hover:bg-gray-300"
-                }`}
+                className={`px-3 py-1 rounded-md text-sm transition-colors ${isAutoLogic
+                  ? "bg-price-up text-white"
+                  : "bg-price-up-soft hover:bg-gray-300"
+                  }`}
               >
                 {isAutoLogic ? "🤖 자동" : "✏️ 수동"}
               </button>
@@ -286,9 +285,8 @@ export function BuyConditionsSection() {
                 }
               }}
               disabled={isAutoLogic}
-              className={`w-[31.25rem] ${
-                isAutoLogic ? "bg-gray-50 cursor-not-allowed" : ""
-              }`}
+              className={`w-[31.25rem] ${isAutoLogic ? "bg-gray-50 cursor-not-allowed" : ""
+                }`}
             />
             {isAutoLogic && buyConditionsUI.length > 0 && (
               <p className="text-sm text-text-neutral mt-2">
@@ -306,11 +304,10 @@ export function BuyConditionsSection() {
                   <button
                     type="button"
                     onClick={() => setPriorityOrder("desc")}
-                    className={`${
-                      priority_order === "desc"
-                        ? "text-text-strong"
-                        : "text-tag-neutral"
-                    }`}
+                    className={`${priority_order === "desc"
+                      ? "text-text-strong"
+                      : "text-tag-neutral"
+                      }`}
                   >
                     높은 값부터
                   </button>
@@ -319,20 +316,18 @@ export function BuyConditionsSection() {
                     alt=""
                     width={16}
                     height={16}
-                    className={`${
-                      priority_order === "desc" ? "opacity-100" : "opacity-30"
-                    }`}
+                    className={`${priority_order === "desc" ? "opacity-100" : "opacity-30"
+                      }`}
                   />
                 </div>
                 <div className="flex justify-center items-center">
                   <button
                     type="button"
                     onClick={() => setPriorityOrder("asc")}
-                    className={`${
-                      priority_order === "asc"
-                        ? "text-text-strong"
-                        : "text-tag-neutral"
-                    }`}
+                    className={`${priority_order === "asc"
+                      ? "text-text-strong"
+                      : "text-tag-neutral"
+                      }`}
                   >
                     낮은 값부터
                   </button>
@@ -341,9 +336,8 @@ export function BuyConditionsSection() {
                     alt=""
                     width={16}
                     height={16}
-                    className={`${
-                      priority_order === "asc" ? "opacity-100" : "opacity-30"
-                    }`}
+                    className={`${priority_order === "asc" ? "opacity-100" : "opacity-30"
+                      }`}
                   />
                 </div>
               </div>

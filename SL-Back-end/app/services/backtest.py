@@ -1989,21 +1989,31 @@ class BacktestEngine:
 
             # EPS_GROWTH_QOQ (EPS 분기 대비 성장률)
             # 최근 2개 분기 데이터 가져오기
-            recent_quarters = stock_data.filter(
-                (pl.col('available_date') <= calc_date) &
-                (pl.col('reprt_code').is_in(['11013', '11012', '11014']))  # 1Q, 반기, 3Q (11011 연간 제외)
-            ).sort('available_date', descending=True).head(2)
+            # 🔧 FIX: stock_data -> financial_dict[stock] 또는 financial_pl 사용
+            if financial_dict is not None:
+                stock_financial_data = financial_dict[stock]
+            else:
+                stock_financial_data = financial_pl.filter(pl.col('stock_code') == stock)
 
-            if len(recent_quarters) >= 2:
-                latest_q = recent_quarters.head(1)
-                prev_q = recent_quarters.tail(1)
-                if '당기순이익' in latest_q.columns and '당기순이익' in prev_q.columns:
-                    latest_income = latest_q.select('당기순이익').to_pandas().iloc[0, 0]
-                    prev_income = prev_q.select('당기순이익').to_pandas().iloc[0, 0]
-                    if latest_income and prev_income and prev_income != 0:
-                        if prev_income > 0:
-                            qoq_growth = ((float(latest_income) / float(prev_income)) - 1) * 100
-                            entry['EPS_GROWTH_QOQ'] = qoq_growth
+            # report_code 컬럼 존재 여부 확인 (reprt_code 또는 report_code)
+            report_col = 'report_code' if 'report_code' in stock_financial_data.columns else 'reprt_code' if 'reprt_code' in stock_financial_data.columns else None
+
+            if report_col is not None:
+                recent_quarters = stock_financial_data.filter(
+                    (pl.col('available_date') <= calc_date) &
+                    (pl.col(report_col).is_in(['11013', '11012', '11014']))  # 1Q, 반기, 3Q (11011 연간 제외)
+                ).sort('available_date', descending=True).head(2)
+
+                if len(recent_quarters) >= 2:
+                    latest_q = recent_quarters.head(1)
+                    prev_q = recent_quarters.tail(1)
+                    if '당기순이익' in latest_q.columns and '당기순이익' in prev_q.columns:
+                        latest_income = latest_q.select('당기순이익').to_pandas().iloc[0, 0]
+                        prev_income = prev_q.select('당기순이익').to_pandas().iloc[0, 0]
+                        if latest_income and prev_income and prev_income != 0:
+                            if prev_income > 0:
+                                qoq_growth = ((float(latest_income) / float(prev_income)) - 1) * 100
+                                entry['EPS_GROWTH_QOQ'] = qoq_growth
 
         return factors
 
@@ -3034,12 +3044,13 @@ class BacktestEngine:
             else:
                 daily_ret = 0.0
 
-            # MDD 계산
+            # MDD 계산 (양수로 통일: 낙폭의 절대값)
             portfolio_value_float = float(portfolio_value)
             if portfolio_value_float > peak_value:
                 peak_value = portfolio_value_float
-            drawdown = ((portfolio_value_float - peak_value) / peak_value) * 100
-            if drawdown < current_mdd:
+            # 🔧 FIX: drawdown을 양수로 계산 (최대값 - 현재값) / 최대값
+            drawdown = ((peak_value - portfolio_value_float) / peak_value) * 100
+            if drawdown > current_mdd:
                 current_mdd = drawdown
 
             # 거래 횟수 계산 (당일 매도)
@@ -4382,12 +4393,13 @@ class BacktestEngine:
         downside_volatility = 0 if np.isnan(downside_vol_val) or np.isinf(downside_vol_val) else downside_vol_val
 
         # 샤프 비율
-        risk_free_rate = 0.02  # 2% 무위험 수익률
-        sharpe_val = (annualized_return - risk_free_rate) / volatility if volatility > 0 else 0
+        # 🔧 FIX: 단위 통일 - annualized_return은 % 단위이므로 risk_free_rate도 % 단위로 변환
+        risk_free_rate_pct = 2.0  # 2% 무위험 수익률 (% 단위)
+        sharpe_val = (annualized_return - risk_free_rate_pct) / volatility if volatility > 0 else 0
         sharpe_ratio = 0 if np.isnan(sharpe_val) or np.isinf(sharpe_val) else sharpe_val
 
         # 소르티노 비율
-        sortino_val = (annualized_return - risk_free_rate) / downside_volatility if downside_volatility > 0 else 0
+        sortino_val = (annualized_return - risk_free_rate_pct) / downside_volatility if downside_volatility > 0 else 0
         sortino_ratio = 0 if np.isnan(sortino_val) or np.isinf(sortino_val) else sortino_val
 
         # 칼마 비율

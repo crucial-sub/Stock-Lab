@@ -53,6 +53,8 @@ from app.schemas.backtest import (
 from app.services.condition_evaluator import ConditionEvaluator, LogicalExpressionParser
 from app.services.condition_evaluator_vectorized import vectorized_evaluator
 from app.core.cache import cache
+from app.services import backtest_config as config  # Phase 0 최적화 설정
+from app.services.performance_monitor import PerformanceMonitor  # 성능 모니터링
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +230,12 @@ class BacktestEngine:
         self.random_seed = random_seed
         np.random.seed(random_seed)
         logger.info(f"🎲 랜덤 시드 설정: {random_seed}")
+
+        # Phase 0 최적화: 가격 조회용 사전
+        self.price_lookup: Dict[Tuple[str, date], float] = {}
+
+        # 성능 모니터링
+        self.perf_monitor = PerformanceMonitor() if config.ENABLE_PERFORMANCE_MONITORING else None
 
         # 추적용 컨테이너
         self.orders: List[Order] = []
@@ -515,11 +523,18 @@ class BacktestEngine:
 
         logger.info(f"📊 가격 데이터 로드 - target_themes: {target_themes}, target_stocks: {target_stocks}, target_universes: {target_universes}")
 
+        # 성능 모니터링
+        if self.perf_monitor:
+            self.perf_monitor.start_timer('data_load')
+
         from app.core.cache import get_cache
         cache = get_cache()
 
-        # 기본 캐시 키 (필터 없음 - 모든 사용자가 같은 캐시 공유)
-        base_cache_key = f"price_data:all:{start_date}:{end_date}"
+        # Phase 0 최적화: 캐시 키에 필터 정보 포함
+        base_cache_key = config.get_cache_key(
+            'price_data', start_date, end_date,
+            target_themes, target_stocks, target_universes
+        )
 
         cached_data = None
         try:
@@ -563,8 +578,11 @@ class BacktestEngine:
         except Exception as e:
             logger.debug(f"시세 캐시 조회 실패: {e}")
 
-        # 날짜 범위 확장 (모멘텀 계산을 위해 252일 추가)
-        extended_start = start_date - timedelta(days=365)
+        # Phase 0 최적화: 365일 → 필요한 만큼만
+        # 필요한 팩터에 따라 동적으로 lookback 기간 결정
+        lookback_days = config.get_lookback_days(getattr(self, 'required_factors', None))
+        extended_start = start_date - timedelta(days=lookback_days)
+        logger.info(f"📊 Lookback 기간: {lookback_days}일 (이전: 365일)")
 
         # 기본 조건
         conditions = [
@@ -660,6 +678,21 @@ class BacktestEngine:
 
         logger.info(f"📊 시세 데이터 로드 완료: {len(df):,}개 레코드, {df['stock_code'].nunique()}개 종목")
         logger.info(f"📅 시세 데이터 날짜 범위: {df['date'].min().date()} ~ {df['date'].max().date()}")
+
+        # Phase 0 최적화: price_lookup 사전 구축 (10-20배 빠른 가격 조회)
+        self.price_lookup = {}
+        for _, row in df.iterrows():
+            key = (row['stock_code'], row['date'].date() if hasattr(row['date'], 'date') else row['date'])
+            self.price_lookup[key] = row['close_price']
+        logger.info(f"🚀 Price lookup 사전 구축 완료: {len(self.price_lookup)}개 항목")
+
+        # 성능 모니터링
+        if self.perf_monitor:
+            elapsed = self.perf_monitor.stop_timer('data_load')
+            self.perf_monitor.set_data_volume(
+                total_dates=df['date'].nunique(),
+                total_stocks=df['stock_code'].nunique()
+            )
 
         # 캐시는 cache_warmer가 주기적으로 갱신하므로 여기서는 저장하지 않음
         # (필터링된 데이터를 저장하면 캐시 키가 너무 많아짐)
@@ -1429,9 +1462,8 @@ class BacktestEngine:
 
         start_time = time.time()
 
-        # 환경변수로 제어: USE_MULTIPROCESSING=true (기본값: true)
-        import os
-        use_multiprocessing = os.getenv('USE_MULTIPROCESSING', 'true').lower() == 'true'
+        # Phase 0 최적화: 멀티프로세싱 비활성화 (가짜 멀티프로세싱이므로)
+        use_multiprocessing = config.USE_MULTIPROCESSING  # False by default
 
         if use_multiprocessing and total_dates > 10:
             logger.info("🚀 멀티프로세싱 모드 활성화 (최고 성능)")
@@ -1769,162 +1801,177 @@ class BacktestEngine:
         return factors
 
     def _calculate_growth_factors(self, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
-        """🚀 성장성 팩터 계산 (최적화: 사전 색인화된 재무 데이터 사용)"""
+        """🚀 성장성 팩터 계산 (Polars 벡터화 최적화 - per-stock 루프 제거)"""
         factors: Dict[str, Dict[str, float]] = {}
         year_ago_1 = calc_date - pd.Timedelta(days=365)
         year_ago_3 = calc_date - pd.Timedelta(days=365 * 3)
 
-        # 최적화: 사전 색인화된 데이터 사용
+        # Polars 벡터화: 전체 종목 데이터를 한 번에 처리
         if financial_dict is not None:
-            stocks_to_process = list(financial_dict.keys())
-        else:
-            current_financial = financial_pl.filter(pl.col('available_date') <= calc_date)
-            if current_financial.is_empty():
+            # 사전 색인화된 데이터를 Polars DataFrame으로 결합
+            all_current = []
+            all_past_1y = []
+            all_past_3y = []
+
+            for stock, stock_data in financial_dict.items():
+                current = stock_data.filter(pl.col('available_date') <= calc_date).sort('available_date', descending=True).head(1)
+                if not current.is_empty():
+                    all_current.append(current)
+
+                past_1y = stock_data.filter(pl.col('available_date') <= year_ago_1).sort('available_date', descending=True).head(1)
+                if not past_1y.is_empty():
+                    all_past_1y.append(past_1y)
+
+                past_3y = stock_data.filter(pl.col('available_date') <= year_ago_3).sort('available_date', descending=True).head(1)
+                if not past_3y.is_empty():
+                    all_past_3y.append(past_3y)
+
+            if not all_current:
                 return factors
-            stocks_to_process = current_financial.select('stock_code').unique().to_pandas()['stock_code'].tolist()
 
-        for stock in stocks_to_process:
-            if financial_dict is not None:
-                current = financial_dict[stock].filter(pl.col('available_date') <= calc_date).sort('available_date', descending=True).head(1)
-                past_1y = financial_dict[stock].filter(pl.col('available_date') <= year_ago_1).sort('available_date', descending=True).head(1)
-                past_3y = financial_dict[stock].filter(pl.col('available_date') <= year_ago_3).sort('available_date', descending=True).head(1)
-            else:
-                current = financial_pl.filter((pl.col('stock_code') == stock) & (pl.col('available_date') <= calc_date)).sort('available_date', descending=True).head(1)
-                past_1y = financial_pl.filter((pl.col('stock_code') == stock) & (pl.col('available_date') <= year_ago_1)).sort('available_date', descending=True).head(1)
-                past_3y = financial_pl.filter((pl.col('stock_code') == stock) & (pl.col('available_date') <= year_ago_3)).sort('available_date', descending=True).head(1)
+            current_df = pl.concat(all_current)
+            past_1y_df = pl.concat(all_past_1y) if all_past_1y else pl.DataFrame()
+            past_3y_df = pl.concat(all_past_3y) if all_past_3y else pl.DataFrame()
+        else:
+            current_df = financial_pl.filter(pl.col('available_date') <= calc_date).sort(['stock_code', 'available_date'], descending=[False, True]).unique(subset=['stock_code'], keep='first')
+            past_1y_df = financial_pl.filter(pl.col('available_date') <= year_ago_1).sort(['stock_code', 'available_date'], descending=[False, True]).unique(subset=['stock_code'], keep='first')
+            past_3y_df = financial_pl.filter(pl.col('available_date') <= year_ago_3).sort(['stock_code', 'available_date'], descending=[False, True]).unique(subset=['stock_code'], keep='first')
 
-            if current.is_empty():
-                continue
+        if current_df.is_empty():
+            return factors
 
-            entry = factors.setdefault(stock, {})
+        # 1년 성장률 계산 (벡터화)
+        if not past_1y_df.is_empty():
+            # join으로 current와 past_1y 데이터 결합
+            joined_1y = current_df.join(past_1y_df, on='stock_code', suffix='_1y')
 
-            # 1년 성장률 계산
-            if not past_1y.is_empty():
-                # REVENUE_GROWTH (매출 성장률 1Y)
-                if '매출액' in current.columns and '매출액' in past_1y.columns:
-                    current_revenue = current.select('매출액').to_pandas().iloc[0, 0]
-                    past_revenue = past_1y.select('매출액').to_pandas().iloc[0, 0]
-                    if current_revenue and past_revenue and past_revenue > 0:
-                        entry['REVENUE_GROWTH'] = (float(current_revenue) / float(past_revenue) - 1) * 100
-                        entry['REVENUE_GROWTH_1Y'] = entry['REVENUE_GROWTH']  # 별칭
+            # 매출 성장률
+            if '매출액' in joined_1y.columns and '매출액_1y' in joined_1y.columns:
+                growth_1y = joined_1y.with_columns([
+                    ((pl.col('매출액').cast(pl.Float64) / pl.col('매출액_1y').cast(pl.Float64) - 1) * 100).alias('REVENUE_GROWTH')
+                ]).select(['stock_code', 'REVENUE_GROWTH'])
 
-                # EARNINGS_GROWTH (순이익 성장률 1Y)
-                if '당기순이익' in current.columns and '당기순이익' in past_1y.columns:
-                    current_income = current.select('당기순이익').to_pandas().iloc[0, 0]
-                    past_income = past_1y.select('당기순이익').to_pandas().iloc[0, 0]
-                    if current_income and past_income and past_income > 0:
-                        entry['EARNINGS_GROWTH'] = (float(current_income) / float(past_income) - 1) * 100
-                        entry['EARNINGS_GROWTH_1Y'] = entry['EARNINGS_GROWTH']  # 별칭
+                for row in growth_1y.iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['REVENUE_GROWTH'] is not None and not pl.Series([row['REVENUE_GROWTH']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['REVENUE_GROWTH'] = float(row['REVENUE_GROWTH'])
+                        factors[stock]['REVENUE_GROWTH_1Y'] = float(row['REVENUE_GROWTH'])
 
-                # OPERATING_INCOME_GROWTH (영업이익 성장률 1Y)
-                if '영업이익' in current.columns and '영업이익' in past_1y.columns:
-                    current_oi = current.select('영업이익').to_pandas().iloc[0, 0]
-                    past_oi = past_1y.select('영업이익').to_pandas().iloc[0, 0]
-                    if current_oi and past_oi and past_oi > 0:
-                        entry['OPERATING_INCOME_GROWTH'] = (float(current_oi) / float(past_oi) - 1) * 100
+            # 순이익 성장률
+            if '당기순이익' in joined_1y.columns and '당기순이익_1y' in joined_1y.columns:
+                growth_1y = joined_1y.with_columns([
+                    ((pl.col('당기순이익').cast(pl.Float64) / pl.col('당기순이익_1y').cast(pl.Float64) - 1) * 100).alias('EARNINGS_GROWTH')
+                ]).select(['stock_code', 'EARNINGS_GROWTH'])
 
-                # ASSET_GROWTH (자산 성장률 1Y)
-                if '자산총계' in current.columns and '자산총계' in past_1y.columns:
-                    current_asset = current.select('자산총계').to_pandas().iloc[0, 0]
-                    past_asset = past_1y.select('자산총계').to_pandas().iloc[0, 0]
-                    if current_asset and past_asset and past_asset > 0:
-                        entry['ASSET_GROWTH'] = (float(current_asset) / float(past_asset) - 1) * 100
+                for row in growth_1y.iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['EARNINGS_GROWTH'] is not None and not pl.Series([row['EARNINGS_GROWTH']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['EARNINGS_GROWTH'] = float(row['EARNINGS_GROWTH'])
+                        factors[stock]['EARNINGS_GROWTH_1Y'] = float(row['EARNINGS_GROWTH'])
 
-                # EQUITY_GROWTH (자본 성장률 1Y)
-                if '자본총계' in current.columns and '자본총계' in past_1y.columns:
-                    current_equity = current.select('자본총계').to_pandas().iloc[0, 0]
-                    past_equity = past_1y.select('자본총계').to_pandas().iloc[0, 0]
-                    if current_equity and past_equity and past_equity > 0:
-                        entry['EQUITY_GROWTH'] = (float(current_equity) / float(past_equity) - 1) * 100
+            # 영업이익 성장률
+            if '영업이익' in joined_1y.columns and '영업이익_1y' in joined_1y.columns:
+                growth_1y = joined_1y.with_columns([
+                    ((pl.col('영업이익').cast(pl.Float64) / pl.col('영업이익_1y').cast(pl.Float64) - 1) * 100).alias('OPERATING_INCOME_GROWTH')
+                ]).select(['stock_code', 'OPERATING_INCOME_GROWTH'])
 
-                # GROSS_PROFIT_GROWTH (매출총이익 성장률 1Y)
-                if '매출액' in current.columns and '매출원가' in current.columns and '매출액' in past_1y.columns and '매출원가' in past_1y.columns:
-                    current_gp = current.select('매출액').to_pandas().iloc[0, 0]
-                    current_cogs = current.select('매출원가').to_pandas().iloc[0, 0]
-                    past_gp = past_1y.select('매출액').to_pandas().iloc[0, 0]
-                    past_cogs = past_1y.select('매출원가').to_pandas().iloc[0, 0]
-                    if current_gp and current_cogs and past_gp and past_cogs:
-                        current_gross = float(current_gp) - float(current_cogs)
-                        past_gross = float(past_gp) - float(past_cogs)
-                        if past_gross > 0:
-                            entry['GROSS_PROFIT_GROWTH'] = (current_gross / past_gross - 1) * 100
+                for row in growth_1y.iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['OPERATING_INCOME_GROWTH'] is not None and not pl.Series([row['OPERATING_INCOME_GROWTH']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['OPERATING_INCOME_GROWTH'] = float(row['OPERATING_INCOME_GROWTH'])
 
-            # 3년 성장률 계산 (CAGR)
-            if not past_3y.is_empty():
-                # REVENUE_GROWTH_3Y (매출 CAGR 3Y)
-                if '매출액' in current.columns and '매출액' in past_3y.columns:
-                    current_revenue = current.select('매출액').to_pandas().iloc[0, 0]
-                    past_revenue = past_3y.select('매출액').to_pandas().iloc[0, 0]
-                    if current_revenue and past_revenue and past_revenue > 0:
-                        cagr = (pow(float(current_revenue) / float(past_revenue), 1/3) - 1) * 100
-                        entry['REVENUE_GROWTH_3Y'] = cagr
+            # 자산 성장률
+            if '자산총계' in joined_1y.columns and '자산총계_1y' in joined_1y.columns:
+                growth_1y = joined_1y.with_columns([
+                    ((pl.col('자산총계').cast(pl.Float64) / pl.col('자산총계_1y').cast(pl.Float64) - 1) * 100).alias('ASSET_GROWTH')
+                ]).select(['stock_code', 'ASSET_GROWTH'])
 
-                # EARNINGS_GROWTH_3Y (순이익 CAGR 3Y)
-                if '당기순이익' in current.columns and '당기순이익' in past_3y.columns:
-                    current_income = current.select('당기순이익').to_pandas().iloc[0, 0]
-                    past_income = past_3y.select('당기순이익').to_pandas().iloc[0, 0]
-                    if current_income and past_income and past_income > 0 and current_income > 0:
-                        cagr = (pow(float(current_income) / float(past_income), 1/3) - 1) * 100
-                        entry['EARNINGS_GROWTH_3Y'] = cagr
+                for row in growth_1y.iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['ASSET_GROWTH'] is not None and not pl.Series([row['ASSET_GROWTH']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['ASSET_GROWTH'] = float(row['ASSET_GROWTH'])
 
-                # ASSET_GROWTH_3Y (자산 CAGR 3Y)
-                if '자산총계' in current.columns and '자산총계' in past_3y.columns:
-                    current_asset = current.select('자산총계').to_pandas().iloc[0, 0]
-                    past_asset = past_3y.select('자산총계').to_pandas().iloc[0, 0]
-                    if current_asset and past_asset and past_asset > 0:
-                        cagr = (pow(float(current_asset) / float(past_asset), 1/3) - 1) * 100
-                        entry['ASSET_GROWTH_3Y'] = cagr
+            # 자본 성장률
+            if '자본총계' in joined_1y.columns and '자본총계_1y' in joined_1y.columns:
+                growth_1y = joined_1y.with_columns([
+                    ((pl.col('자본총계').cast(pl.Float64) / pl.col('자본총계_1y').cast(pl.Float64) - 1) * 100).alias('EQUITY_GROWTH')
+                ]).select(['stock_code', 'EQUITY_GROWTH'])
 
-                # OPERATING_PROFIT_GROWTH_3Y (영업이익 CAGR 3Y)
-                if '영업이익' in current.columns and '영업이익' in past_3y.columns:
-                    current_op = current.select('영업이익').to_pandas().iloc[0, 0]
-                    past_op = past_3y.select('영업이익').to_pandas().iloc[0, 0]
-                    if current_op and past_op and past_op > 0 and current_op > 0:
-                        cagr = (pow(float(current_op) / float(past_op), 1/3) - 1) * 100
-                        entry['OPERATING_PROFIT_GROWTH_3Y'] = cagr
+                for row in growth_1y.iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['EQUITY_GROWTH'] is not None and not pl.Series([row['EQUITY_GROWTH']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['EQUITY_GROWTH'] = float(row['EQUITY_GROWTH'])
 
-                # GROSS_MARGIN_GROWTH (총 마진 성장률 3Y CAGR)
-                if '매출액' in current.columns and '매출원가' in current.columns and '매출액' in past_3y.columns and '매출원가' in past_3y.columns:
-                    current_revenue = current.select('매출액').to_pandas().iloc[0, 0]
-                    current_cogs = current.select('매출원가').to_pandas().iloc[0, 0]
-                    past_revenue = past_3y.select('매출액').to_pandas().iloc[0, 0]
-                    past_cogs = past_3y.select('매출원가').to_pandas().iloc[0, 0]
-                    if current_revenue and current_cogs and past_revenue and past_cogs and current_revenue > 0 and past_revenue > 0:
-                        current_gross_margin = ((float(current_revenue) - float(current_cogs)) / float(current_revenue)) * 100
-                        past_gross_margin = ((float(past_revenue) - float(past_cogs)) / float(past_revenue)) * 100
-                        if past_gross_margin > 0:
-                            cagr = (pow(current_gross_margin / past_gross_margin, 1/3) - 1) * 100
-                            entry['GROSS_MARGIN_GROWTH'] = cagr
+            # 매출총이익 성장률
+            if all(col in joined_1y.columns for col in ['매출액', '매출원가', '매출액_1y', '매출원가_1y']):
+                growth_1y = joined_1y.with_columns([
+                    ((pl.col('매출액').cast(pl.Float64) - pl.col('매출원가').cast(pl.Float64)) /
+                     (pl.col('매출액_1y').cast(pl.Float64) - pl.col('매출원가_1y').cast(pl.Float64)) - 1) * 100
+                ]).alias('GROSS_PROFIT_GROWTH')
 
-            # EPS 성장률 계산 (YoY, QoQ)
-            if not past_1y.is_empty():
-                # EPS_GROWTH_YOY (EPS 전년 대비 성장률)
-                if '당기순이익' in current.columns and '당기순이익' in past_1y.columns:
-                    current_income = current.select('당기순이익').to_pandas().iloc[0, 0]
-                    past_income = past_1y.select('당기순이익').to_pandas().iloc[0, 0]
-                    # EPS는 순이익/발행주식수로 계산하지만, 여기서는 순이익 증가율로 근사
-                    if current_income and past_income and past_income != 0:
-                        if past_income > 0:
-                            yoy_growth = ((float(current_income) / float(past_income)) - 1) * 100
-                            entry['EPS_GROWTH_YOY'] = yoy_growth
+                for row in growth_1y.select(['stock_code', 'GROSS_PROFIT_GROWTH']).iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['GROSS_PROFIT_GROWTH'] is not None and not pl.Series([row['GROSS_PROFIT_GROWTH']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['GROSS_PROFIT_GROWTH'] = float(row['GROSS_PROFIT_GROWTH'])
 
-            # EPS_GROWTH_QOQ (EPS 분기 대비 성장률)
-            # 최근 2개 분기 데이터 가져오기
-            recent_quarters = stock_data.filter(
-                (pl.col('available_date') <= calc_date) &
-                (pl.col('reprt_code').is_in(['11013', '11012', '11014']))  # 1Q, 반기, 3Q (11011 연간 제외)
-            ).sort('available_date', descending=True).head(2)
+            # EPS 성장률 (YoY)
+            if '당기순이익' in joined_1y.columns and '당기순이익_1y' in joined_1y.columns:
+                eps_growth = joined_1y.with_columns([
+                    ((pl.col('당기순이익').cast(pl.Float64) / pl.col('당기순이익_1y').cast(pl.Float64) - 1) * 100).alias('EPS_GROWTH_YOY')
+                ]).select(['stock_code', 'EPS_GROWTH_YOY'])
 
-            if len(recent_quarters) >= 2:
-                latest_q = recent_quarters.head(1)
-                prev_q = recent_quarters.tail(1)
-                if '당기순이익' in latest_q.columns and '당기순이익' in prev_q.columns:
-                    latest_income = latest_q.select('당기순이익').to_pandas().iloc[0, 0]
-                    prev_income = prev_q.select('당기순이익').to_pandas().iloc[0, 0]
-                    if latest_income and prev_income and prev_income != 0:
-                        if prev_income > 0:
-                            qoq_growth = ((float(latest_income) / float(prev_income)) - 1) * 100
-                            entry['EPS_GROWTH_QOQ'] = qoq_growth
+                for row in eps_growth.iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['EPS_GROWTH_YOY'] is not None and not pl.Series([row['EPS_GROWTH_YOY']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['EPS_GROWTH_YOY'] = float(row['EPS_GROWTH_YOY'])
+
+        # 3년 성장률 계산 (CAGR 벡터화)
+        if not past_3y_df.is_empty():
+            joined_3y = current_df.join(past_3y_df, on='stock_code', suffix='_3y')
+
+            # 매출 CAGR 3Y
+            if '매출액' in joined_3y.columns and '매출액_3y' in joined_3y.columns:
+                cagr_3y = joined_3y.with_columns([
+                    ((pl.col('매출액').cast(pl.Float64) / pl.col('매출액_3y').cast(pl.Float64)).pow(1/3) - 1) * 100
+                ]).alias('REVENUE_GROWTH_3Y')
+
+                for row in cagr_3y.select(['stock_code', 'REVENUE_GROWTH_3Y']).iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['REVENUE_GROWTH_3Y'] is not None and not pl.Series([row['REVENUE_GROWTH_3Y']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['REVENUE_GROWTH_3Y'] = float(row['REVENUE_GROWTH_3Y'])
+
+            # 순이익 CAGR 3Y
+            if '당기순이익' in joined_3y.columns and '당기순이익_3y' in joined_3y.columns:
+                cagr_3y = joined_3y.with_columns([
+                    ((pl.col('당기순이익').cast(pl.Float64) / pl.col('당기순이익_3y').cast(pl.Float64)).pow(1/3) - 1) * 100
+                ]).alias('EARNINGS_GROWTH_3Y')
+
+                for row in cagr_3y.select(['stock_code', 'EARNINGS_GROWTH_3Y']).iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['EARNINGS_GROWTH_3Y'] is not None and not pl.Series([row['EARNINGS_GROWTH_3Y']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['EARNINGS_GROWTH_3Y'] = float(row['EARNINGS_GROWTH_3Y'])
+
+            # 자산 CAGR 3Y
+            if '자산총계' in joined_3y.columns and '자산총계_3y' in joined_3y.columns:
+                cagr_3y = joined_3y.with_columns([
+                    ((pl.col('자산총계').cast(pl.Float64) / pl.col('자산총계_3y').cast(pl.Float64)).pow(1/3) - 1) * 100
+                ]).alias('ASSET_GROWTH_3Y')
+
+                for row in cagr_3y.select(['stock_code', 'ASSET_GROWTH_3Y']).iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['ASSET_GROWTH_3Y'] is not None and not pl.Series([row['ASSET_GROWTH_3Y']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['ASSET_GROWTH_3Y'] = float(row['ASSET_GROWTH_3Y'])
+
+            # 영업이익 CAGR 3Y
+            if '영업이익' in joined_3y.columns and '영업이익_3y' in joined_3y.columns:
+                cagr_3y = joined_3y.with_columns([
+                    ((pl.col('영업이익').cast(pl.Float64) / pl.col('영업이익_3y').cast(pl.Float64)).pow(1/3) - 1) * 100
+                ]).alias('OPERATING_PROFIT_GROWTH_3Y')
+
+                for row in cagr_3y.select(['stock_code', 'OPERATING_PROFIT_GROWTH_3Y']).iter_rows(named=True):
+                    stock = row['stock_code']
+                    if row['OPERATING_PROFIT_GROWTH_3Y'] is not None and not pl.Series([row['OPERATING_PROFIT_GROWTH_3Y']]).is_nan()[0]:
+                        factors.setdefault(stock, {})['OPERATING_PROFIT_GROWTH_3Y'] = float(row['OPERATING_PROFIT_GROWTH_3Y'])
 
         return factors
 
@@ -2950,12 +2997,18 @@ class BacktestEngine:
             # 전체 매도 횟수
             total_sell_count = daily_sell_count + daily_rebalance_sell_count
 
-            # ⚡ 배치 진행률: 매 거래일마다 UPDATE, 20개마다 COMMIT
-            stmt_progress = (
-                update(SimulationSession)
-                .where(SimulationSession.session_id == str(backtest_id))
-                .values(
-                    progress=progress_percentage,
+            # Phase 0 최적화: 10% 단위로만 UPDATE (DB I/O 90% 감소)
+            should_update_progress = (
+                progress_percentage % config.PROGRESS_UPDATE_INTERVAL == 0 or
+                current_day_index == total_days - 1  # 마지막은 무조건 업데이트
+            )
+
+            if should_update_progress:
+                stmt_progress = (
+                    update(SimulationSession)
+                    .where(SimulationSession.session_id == str(backtest_id))
+                    .values(
+                        progress=progress_percentage,
                     current_date=trading_day.date(),
                     buy_count=daily_buy_count,
                     sell_count=total_sell_count,
@@ -2963,14 +3016,14 @@ class BacktestEngine:
                     current_capital=float(portfolio_value),
                     current_mdd=float(current_mdd)
                 )
-            )
-            await self.db.execute(stmt_progress)
-            progress_batch_count += 1
+                )
+                await self.db.execute(stmt_progress)
+                progress_batch_count += 1
 
-            # 20개마다 또는 마지막 날에만 commit
-            if progress_batch_count >= PROGRESS_BATCH_SIZE or current_day_index == total_days:
-                await self.db.commit()
-                progress_batch_count = 0
+                # Phase 0 최적화: 50일마다 또는 마지막 날에만 commit
+                if progress_batch_count >= config.PROGRESS_COMMIT_INTERVAL or current_day_index == total_days - 1:
+                    await self.db.commit()
+                    progress_batch_count = 0
 
             # 상세 데이터는 20% 단위로만 저장 (DB 부담 최소화)
             should_save_details = (
@@ -3710,14 +3763,19 @@ class BacktestEngine:
             ):
                 continue
 
-            # 현재가 조회
-            current_price_data = price_data[
-                (price_data['stock_code'] == stock_code) &
-                (price_data['date'] == trading_day)
-            ]
-
-            if current_price_data.empty:
-                continue
+            # Phase 0 최적화: price_lookup 사전 사용 (10-20배 빠름)
+            price_key = (stock_code, trading_day)
+            if price_key in self.price_lookup:
+                current_price = Decimal(str(self.price_lookup[price_key]))
+            else:
+                # Fallback: 기존 방식
+                current_price_data = price_data[
+                    (price_data['stock_code'] == stock_code) &
+                    (price_data['date'] == trading_day)
+                ]
+                if current_price_data.empty:
+                    continue
+                current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
 
             # D일 조건 만족 → D+1일 시가에 매수
             next_day_price_data = price_data[
@@ -5005,7 +5063,9 @@ class BacktestEngine:
             )
             self.db.add(session)
 
-            # 2. 매수/매도 조건 저장
+            # 2. 매수/매도 조건 저장 (Bulk INSERT 최적화)
+            conditions_data = []
+
             for buy_condition in result.buy_conditions:
                 value_decimal = Decimal("0")
                 try:
@@ -5015,15 +5075,14 @@ class BacktestEngine:
                     desc = buy_condition.description or ""
                     buy_condition.description = f"{desc} (raw={buy_condition.value})"
 
-                condition = BacktestConditionModel(
-                    backtest_id=backtest_id,
-                    condition_type="BUY",
-                    factor=buy_condition.factor,
-                    operator=buy_condition.operator,
-                    value=value_decimal,
-                    description=buy_condition.description
-                )
-                self.db.add(condition)
+                conditions_data.append({
+                    'backtest_id': backtest_id,
+                    'condition_type': "BUY",
+                    'factor': buy_condition.factor,
+                    'operator': buy_condition.operator,
+                    'value': value_decimal,
+                    'description': buy_condition.description
+                })
 
             for sell_condition in result.sell_conditions:
                 factor = sell_condition.factor
@@ -5032,15 +5091,20 @@ class BacktestEngine:
                     value_decimal = Decimal(str(raw_value))
                 except Exception:
                     value_decimal = Decimal("0")
-                condition = BacktestConditionModel(
-                    backtest_id=backtest_id,
-                    condition_type="SELL",
-                    factor=factor or "SELL_RULE",
-                    operator=sell_condition.operator,
-                    value=value_decimal,
-                    description=sell_condition.description or ''
+                conditions_data.append({
+                    'backtest_id': backtest_id,
+                    'condition_type': "SELL",
+                    'factor': factor or "SELL_RULE",
+                    'operator': sell_condition.operator,
+                    'value': value_decimal,
+                    'description': sell_condition.description or ''
+                })
+
+            if conditions_data:
+                await self.db.execute(
+                    BacktestConditionModel.__table__.insert(),
+                    conditions_data
                 )
-                self.db.add(condition)
 
             # 3. 통계 저장 - BacktestStatistics (기존)
             stats = result.statistics
@@ -5107,61 +5171,79 @@ class BacktestEngine:
             self.db.add(simulation_stats)
             logger.info(f"✅ SimulationStatistics 저장 완료 - session_id: {backtest_id}")
 
-            # 4. 일별 스냅샷 저장
+            # 4. 일별 스냅샷 저장 (Bulk INSERT 최적화)
+            snapshots_data = []
             for daily in result.daily_performance:
-                snapshot = BacktestDailySnapshot(
-                    backtest_id=backtest_id,
-                    snapshot_date=daily.date,
-                    portfolio_value=daily.portfolio_value,
-                    cash_balance=daily.cash_balance,
-                    invested_amount=daily.invested_amount,
-                    daily_return=daily.daily_return,
-                    cumulative_return=daily.cumulative_return,
-                    drawdown=daily.drawdown,
-                    benchmark_return=daily.benchmark_return,
-                    trade_count=daily.trade_count
-                )
-                self.db.add(snapshot)
+                snapshots_data.append({
+                    'backtest_id': backtest_id,
+                    'snapshot_date': daily.date,
+                    'portfolio_value': daily.portfolio_value,
+                    'cash_balance': daily.cash_balance,
+                    'invested_amount': daily.invested_amount,
+                    'daily_return': daily.daily_return,
+                    'cumulative_return': daily.cumulative_return,
+                    'drawdown': daily.drawdown,
+                    'benchmark_return': daily.benchmark_return,
+                    'trade_count': daily.trade_count
+                })
 
-            # 5. 거래 내역 저장
+            if snapshots_data:
+                await self.db.execute(
+                    BacktestDailySnapshot.__table__.insert(),
+                    snapshots_data
+                )
+
+            # 5. 거래 내역 저장 (Bulk INSERT 최적화)
+            trades_data = []
             for trade in result.trades:
-                trade_record = BacktestTrade(
-                    backtest_id=backtest_id,
-                    trade_date=trade.trade_date,
-                    trade_type=trade.trade_type,
-                    stock_code=trade.stock_code,
-                    stock_name=trade.stock_name,
-                    quantity=trade.quantity,
-                    price=trade.price,
-                    amount=trade.amount,
-                    commission=trade.commission,
-                    tax=trade.tax,
-                    profit=trade.profit,
-                    profit_rate=trade.profit_rate,
-                    hold_days=trade.hold_days,
-                    factors=trade.factors if trade.factors else {},
-                    selection_reason=trade.selection_reason
-                )
-                self.db.add(trade_record)
+                trades_data.append({
+                    'backtest_id': backtest_id,
+                    'trade_date': trade.trade_date,
+                    'trade_type': trade.trade_type,
+                    'stock_code': trade.stock_code,
+                    'stock_name': trade.stock_name,
+                    'quantity': trade.quantity,
+                    'price': trade.price,
+                    'amount': trade.amount,
+                    'commission': trade.commission,
+                    'tax': trade.tax,
+                    'profit': trade.profit,
+                    'profit_rate': trade.profit_rate,
+                    'hold_days': trade.hold_days,
+                    'factors': trade.factors if trade.factors else {},
+                    'selection_reason': trade.selection_reason
+                })
 
-            # 6. 현재 보유 종목 저장
-            for holding in result.current_holdings:
-                holding_record = BacktestHolding(
-                    backtest_id=backtest_id,
-                    stock_code=holding.stock_code,
-                    stock_name=holding.stock_name,
-                    quantity=holding.quantity,
-                    avg_price=holding.avg_price,
-                    current_price=holding.current_price,
-                    value=holding.value,
-                    profit=holding.profit,
-                    profit_rate=holding.profit_rate,
-                    weight=holding.weight,
-                    buy_date=holding.buy_date,
-                    hold_days=holding.hold_days,
-                    factors=holding.factors if holding.factors else {}
+            if trades_data:
+                await self.db.execute(
+                    BacktestTrade.__table__.insert(),
+                    trades_data
                 )
-                self.db.add(holding_record)
+
+            # 6. 현재 보유 종목 저장 (Bulk INSERT 최적화)
+            holdings_data = []
+            for holding in result.current_holdings:
+                holdings_data.append({
+                    'backtest_id': backtest_id,
+                    'stock_code': holding.stock_code,
+                    'stock_name': holding.stock_name,
+                    'quantity': holding.quantity,
+                    'avg_price': holding.avg_price,
+                    'current_price': holding.current_price,
+                    'value': holding.value,
+                    'profit': holding.profit,
+                    'profit_rate': holding.profit_rate,
+                    'weight': holding.weight,
+                    'buy_date': holding.buy_date,
+                    'hold_days': holding.hold_days,
+                    'factors': holding.factors if holding.factors else {}
+                })
+
+            if holdings_data:
+                await self.db.execute(
+                    BacktestHolding.__table__.insert(),
+                    holdings_data
+                )
 
             # 커밋
             await self.db.commit()

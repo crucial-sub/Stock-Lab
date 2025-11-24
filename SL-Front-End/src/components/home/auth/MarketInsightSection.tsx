@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { StockDetailModal } from "@/components/modal/StockDetailModal";
-import { Title } from "@/components/common/Title";
 import type {
   MarketNews,
   MarketStock,
 } from "@/types";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface MarketInsightSectionProps {
   stocks: MarketStock[];
@@ -51,7 +50,7 @@ export function MarketInsightSection({
                 key={stock.id}
                 role="button"
                 tabIndex={0}
-                className="flex cursor-pointer items-center justify-between border-t border-[#18223433] px-1 py-3 first:border-t-0 hover:bg-white/5"
+                className="grid cursor-pointer grid-cols-[minmax(0,1.4fr)_0.3fr_0.95fr_1fr] items-center gap-2 border-t border-[#18223433] px-1 py-3 first:border-t-0 hover:bg-white/5"
                 onClick={() => handleStockClick(stock)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -60,19 +59,20 @@ export function MarketInsightSection({
                   }
                 }}
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-[1rem] font-semibold text-text-body">
+                <div className="min-w-0">
+                  <span className="whitespace-normal break-keep text-[1rem] font-semibold text-text-body">
                     {stock.name}
                   </span>
-                  <span className="rounded-full bg-brand-purple px-3 pt-0.5 text-[0.75rem] font-semibold text-white">
-                    {stock.tag}
-                  </span>
                 </div>
-                <div className="flex items-center gap-4 text-[1rem] font-normal text-text-muted">
-                  <span className="text-price-up">{stock.change}</span>
-                  <span>{stock.price}</span>
-                  <span>{stock.volume}</span>
-                </div>
+                <span className="text-[0.95rem] font-normal text-price-up">
+                  {stock.change}
+                </span>
+                <span className="text-right text-[0.95rem] font-normal text-text-muted">
+                  {stock.price}
+                </span>
+                <span className="text-right text-[0.95rem] font-normal text-text-muted">
+                  {stock.volume}
+                </span>
               </div>
             ))}
           </div>

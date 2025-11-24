@@ -2,7 +2,7 @@
 자동매매 모델
 - 모의투자 계좌 전용
 """
-from sqlalchemy import Column, String, Boolean, Integer, DECIMAL, TIMESTAMP, ForeignKey, Text, Date, Time
+from sqlalchemy import Column, String, Boolean, Integer, DECIMAL, TIMESTAMP, ForeignKey, Text, Date, Time, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -118,6 +118,11 @@ class LivePosition(Base):
 
     # Relationships
     strategy = relationship("AutoTradingStrategy", back_populates="positions")
+
+    __table_args__ = (
+        Index('idx_live_positions_strategy_stock', 'strategy_id', 'stock_code'),  # selectinload 최적화
+        {"comment": "실시간 보유 종목 테이블"}
+    )
 
 
 class LiveTrade(Base):

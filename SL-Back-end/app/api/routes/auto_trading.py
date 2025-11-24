@@ -286,13 +286,18 @@ async def get_my_auto_trading_strategies(
     """
     try:
         from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
         from app.models.auto_trading import AutoTradingStrategy, LivePosition
         from app.services.kiwoom_service import KiwoomService
         from decimal import Decimal
 
-        query = select(AutoTradingStrategy).where(
-            AutoTradingStrategy.user_id == current_user.user_id
-        ).order_by(AutoTradingStrategy.created_at.desc())
+        # N+1 쿼리 해결: selectinload로 positions를 한 번에 로드
+        query = (
+            select(AutoTradingStrategy)
+            .options(selectinload(AutoTradingStrategy.positions))
+            .where(AutoTradingStrategy.user_id == current_user.user_id)
+            .order_by(AutoTradingStrategy.created_at.desc())
+        )
 
         result = await db.execute(query)
         strategies = result.scalars().all()
@@ -308,12 +313,8 @@ async def get_my_auto_trading_strategies(
                     if not strategy.is_active:
                         continue
 
-                    # 이 전략의 보유 종목 조회
-                    positions_query = select(LivePosition).where(
-                        LivePosition.strategy_id == strategy.strategy_id
-                    )
-                    positions_result = await db.execute(positions_query)
-                    positions = positions_result.scalars().all()
+                    # positions는 이미 로드되어 있음 (추가 쿼리 없음)
+                    positions = strategy.positions
 
                     strategy_stock_codes = {pos.stock_code for pos in positions}
                     strategy_eval_sum = Decimal("0")

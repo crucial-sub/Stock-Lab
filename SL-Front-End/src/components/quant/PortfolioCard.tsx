@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { type MouseEvent } from "react";
+import { memo, type MouseEvent } from "react";
 
 /**
  * 포트폴리오 카드
@@ -49,7 +49,7 @@ interface PortfolioCardProps {
   isRenaming?: boolean;
 }
 
-export function PortfolioCard({
+const PortfolioCardComponent = ({
   id,
   strategyId,
   title,
@@ -68,7 +68,7 @@ export function PortfolioCard({
   onEditSubmit,
   onEditCancel,
   isRenaming = false,
-}: PortfolioCardProps) {
+}: PortfolioCardProps) => {
   // 수익률 포맷팅
   const formatProfitRate = (rate: number) => {
     const sign = rate >= 0 ? "+" : "";
@@ -204,4 +204,11 @@ export function PortfolioCard({
       </div>
     </div>
   );
-}
+};
+
+/**
+ * PortfolioCard with React.memo for performance optimization
+ * - Prevents unnecessary re-renders when parent re-renders but props haven't changed
+ * - Especially important in lists where multiple cards are rendered
+ */
+export const PortfolioCard = memo(PortfolioCardComponent);

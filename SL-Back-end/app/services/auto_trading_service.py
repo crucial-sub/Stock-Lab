@@ -1338,21 +1338,14 @@ class AutoTradingService:
         strategies_result = await db.execute(strategies_query)
         active_strategies = strategies_result.scalars().all()
 
-        if not active_strategies:
-            return {
-                "total_assets": Decimal("0"),
-                "total_return": Decimal("0"),
-                "total_profit": Decimal("0"),
-                "active_strategy_count": 0,
-                "total_positions": 0,
-                "total_trades_today": 0,
-                "total_allocated_capital": Decimal("0")
-            }
-
         # 2. 전체 통계 계산 - 먼저 할당 자본 계산
-        total_allocated_capital = sum(s.allocated_capital for s in active_strategies)
+        total_allocated_capital = Decimal("0")
+        if active_strategies:
+            total_allocated_capital = sum(s.allocated_capital for s in active_strategies)
+            
         total_current_value = Decimal("0")
         total_positions_count = 0
+        total_trades_today = 0
 
         # 키움 API를 통한 실제 평가액 조회 시도 (전체 계좌 정보)
         from app.models.user import User

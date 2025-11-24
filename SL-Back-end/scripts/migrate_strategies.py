@@ -153,15 +153,24 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             # TODO: 매출 CAGR(3Y), 영업이익 CAGR(3Y) 구현 가능 여부 확인(계산 비용까지 포함해서)
         },
         "peter_lynch": {
+            # 🚀 벡터화 평가 활성화: expression + conditions 형식
+            "expression": "A and B and C and D and E and F",  # AND 로직
+            "conditions": [
+                {"id": "A", "factor": "PER", "operator": "<", "value": 40},  # PER < 40
+                {"id": "B", "factor": "PEG", "operator": ">", "value": 0},   # PEG > 0
+                {"id": "C", "factor": "PEG", "operator": "<", "value": 2.0}, # PEG < 2.0
+                {"id": "D", "factor": "DEBT_RATIO", "operator": "<", "value": 180},  # 부채비율 < 180%
+                {"id": "E", "factor": "ROE", "operator": ">", "value": 3},   # ROE > 3%
+                {"id": "F", "factor": "ROA", "operator": ">", "value": 0.5}, # ROA > 0.5%
+            ],
+            # UI 표시용 (하위 호환성)
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 40}, #PER < 40
-                {"name": "B", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0}, #PEG > 0
-                {"name": "C", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2.0}, #PEG < 2.0
-                # 재고/매출 조건 제외 (계산 불가)
-                {"name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 180}, # 부채비율 < 180%
-                {"name": "E", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 3}, # ROE > 3%
-                {"name": "F", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 0.5}, # ROA > 0.5%
-                # 배당수익률 조건 제외  (계산 불가)
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 40},
+                {"name": "B", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0},
+                {"name": "C", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2.0},
+                {"name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 180},
+                {"name": "E", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 3},
+                {"name": "F", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 0.5},
             ],
             "priority_factor": "기본값({PEG})",
             "priority_order": "asc",
@@ -189,6 +198,13 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
                 "sell_price_offset": 0
             },
             "condition_sell": {
+                # 🚀 벡터화 평가 활성화: expression + conditions 형식
+                "expression": "A or B",  # OR 로직
+                "conditions": [
+                    {"id": "A", "factor": "PEG", "operator": ">", "value": 2.5},  # PEG > 2.5
+                    {"id": "B", "factor": "DEBT_RATIO", "operator": ">", "value": 200},  # 부채비율 > 200%
+                ],
+                # UI 표시용 (하위 호환성)
                 "sell_conditions": [
                     {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 2.5},
                     {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 200}
@@ -554,6 +570,16 @@ async def migrate_strategies():
                 strategy_id,
                 strategy_data.get("conditions", [])
             )
+
+            # 🔍 디버그: 피터린치 설정 확인
+            if strategy_id == "peter_lynch":
+                print("\n" + "=" * 80)
+                print("🔍 디버그: 피터린치 backtest_config")
+                print("=" * 80)
+                print(f"expression: {backtest_config.get('expression')}")
+                print(f"conditions: {backtest_config.get('conditions')}")
+                print(f"buy_conditions (first 2): {backtest_config.get('buy_conditions', [])[:2]}")
+                print("=" * 80 + "\n")
 
             # 기존 전략 확인
             result = await db.execute(

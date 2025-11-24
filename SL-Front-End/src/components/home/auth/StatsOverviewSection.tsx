@@ -1,12 +1,13 @@
 "use client";
 
+import { memo } from "react";
 import type { HomeStatCardData } from "@/types";
 
 interface StatsOverviewSectionProps {
   stats: HomeStatCardData[];
 }
 
-export function StatsOverviewSection({ stats }: StatsOverviewSectionProps) {
+const StatsOverviewSectionComponent = ({ stats }: StatsOverviewSectionProps) => {
   const splitValue = (value: string) => {
     const match = value.match(/^([+-]?[0-9,.\s]+)(.*)$/);
     if (!match) {
@@ -88,4 +89,10 @@ export function StatsOverviewSection({ stats }: StatsOverviewSectionProps) {
       </div>
     </section>
   );
-}
+};
+
+/**
+ * StatsOverviewSection with React.memo
+ * - Prevents re-renders when stats data hasn't changed
+ */
+export const StatsOverviewSection = memo(StatsOverviewSectionComponent);

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { memo } from "react";
 
 /**
  * 새로 만들기 카드
@@ -10,7 +11,7 @@ import Link from "next/link";
  * 클릭하면 전략 생성 페이지로 이동합니다.
  */
 
-export function CreatePortfolioCard() {
+const CreatePortfolioCardComponent = () => {
   return (
     <Link
       href="/quant/new" // TODO: 전략 생성 페이지 경로로 변경
@@ -33,4 +34,10 @@ export function CreatePortfolioCard() {
       </span>
     </Link>
   );
-}
+};
+
+/**
+ * CreatePortfolioCard with React.memo
+ * - Prevents re-renders when rendered alongside PortfolioCard list
+ */
+export const CreatePortfolioCard = memo(CreatePortfolioCardComponent);

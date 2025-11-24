@@ -7,10 +7,11 @@ export function NewsCard({
   stockCode,
   tickerLabel,
   content,
+  llm_summary,
   source,
   publishedAt,
 }: NewsCardProps) {
-  const contentText = content || "";
+  const contentText = llm_summary || content || "";
   const summary =
     contentText && contentText.length > 180
       ? `${contentText.slice(0, 180)}…`

@@ -72,7 +72,7 @@ export interface Strategy {
   summary: string;
   description: string;
   tags: string[];
-  matchScore: number; // 0-100, 태그 일치도
+  matchScore?: number; // 0-100, 태그 일치도 (전략 추천 시 계산)
   conditions: Condition[];
 }
 
@@ -82,6 +82,29 @@ export interface Condition {
 }
 
 // 백테스트 결과 메시지
+// 백테스트 설정 메시지
+export interface BacktestConfigMessage extends BaseMessage {
+  type: "backtest_config";
+  strategyId: string;
+  strategyName: string;
+}
+
+export interface BacktestConfig {
+  investmentAmount: number;  // 투자 금액 (만원 단위)
+  startDate: string;         // YYYY-MM-DD
+  endDate: string;           // YYYY-MM-DD
+}
+
+// 백테스트 실행 메시지
+export interface BacktestExecutionMessage extends BaseMessage {
+  type: "backtest_execution";
+  backtestId: string;
+  strategyId: string;
+  strategyName: string;
+  userName?: string; // 선택적 필드 (미래에 사용자 정보를 추가할 수 있음)
+  config: BacktestConfig;
+}
+
 export interface BacktestResultMessage extends BaseMessage {
   type: "backtest_result";
   backtestId: string;
@@ -122,4 +145,6 @@ export type Message =
   | QuestionMessage
   | UserSelectionMessage
   | StrategyRecommendationMessage
+  | BacktestConfigMessage
+  | BacktestExecutionMessage
   | BacktestResultMessage;

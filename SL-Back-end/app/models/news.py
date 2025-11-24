@@ -23,8 +23,11 @@ class NewsArticle(Base):
     stock_code = Column(String(20), nullable=True, comment="종목 코드")
     title = Column(Text, nullable=True, comment="뉴스 제목")
     content = Column(Text, nullable=True, comment="뉴스 본문")
+    llm_summary = Column(Text, nullable=True, comment="LLM 생성 요약")
+    
     source = Column(String(100), nullable=True, comment="뉴스 출처")
     link = Column(Text, nullable=True, comment="뉴스 원문 링크")
+    media_domain = Column(String(50), nullable=True, comment="언론사 도메인/코드")
 
     # Dates
     news_date = Column(Date, nullable=True, comment="기사 발행일")

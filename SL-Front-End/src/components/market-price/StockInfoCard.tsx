@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Icon } from "@/components/common/Icon";
 import { type CompanyInfoResponse, companyApi } from "@/lib/api/company";
 import { StockPriceChart } from "./StockPriceChart";
 
@@ -9,7 +10,7 @@ interface StockInfoCardProps {
   code: string;
 }
 
-const periodTabs = ["30일", "90일", "120일", "180일", "1년", "2년", "3년"];
+const periodTabs = ["30일", "90일", "180일", "1년", "2년", "3년"];
 
 /**
  * 기간 텍스트를 일 단위 숫자로 변환
@@ -136,10 +137,17 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
     },
   ];
 
+  const dailyChangeRateRaw =
+    basicInfo.changeRate1d ?? basicInfo.fluctuationRate ?? null;
+  const formattedDailyChangeRate =
+    dailyChangeRateRaw !== null && dailyChangeRateRaw !== undefined
+      ? dailyChangeRateRaw.toFixed(2)
+      : "0.00";
+
   return (
-    <article className="flex flex-col min-w-[50rem] gap-[1.25rem] bg-white p-[2rem] text-text-strong">
+    <article className="flex flex-col min-w-[45rem] gap-5 bg-white p-8 text-strong">
       <header className="text-start">
-        <p className="text-[0.8rem] text-text-muted font-normal">
+        <p className="text-[0.75rem] font-normal text-muted">
           {basicInfo.marketType || "코스피"} | {code}
         </p>
         <h2 className="text-[1.5rem] font-semibold">{name}</h2>
@@ -151,17 +159,17 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         <p
           className={`font-semibold ${
             (basicInfo.changevs1d || 0) > 0
-              ? "text-brand-primary"
+              ? "text-price-up"
               : (basicInfo.changevs1d || 0) < 0
-                ? "text-accent-primary"
+                ? "text-price-down"
                 : "text-text-muted"
           }`}
         >
           {basicInfo.changevs1d
-            ? `${basicInfo.changevs1d > 0 ? "+" : ""}${basicInfo.changevs1d.toLocaleString()}원 (${basicInfo.fluctuationRate?.toFixed(2) || 0}%)`
-            : "0원 (0%)"}
+            ? `${basicInfo.changevs1d > 0 ? "+" : ""}${basicInfo.changevs1d.toLocaleString()}원 (${formattedDailyChangeRate}%)`
+            : `0원 (${formattedDailyChangeRate}%)`}
         </p>
-        <p className="pt-[0.25rem] text-[0.8rem] text-text-muted font-normal">
+        <p className="pt-[0.25rem] text-[0.75rem] text-muted font-normal">
           {basicInfo.tradeDate
             ? new Date(basicInfo.tradeDate).toLocaleDateString("ko-KR", {
                 year: "numeric",
@@ -172,17 +180,17 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
           기준
         </p>
       </header>
-      <div className="flex flex-wrap justify-center gap-3">
+      <div className="flex flex-wrap justify-center gap-2">
         {periodTabs.map((tab) => {
           const isActive = tab === activePeriod;
           return (
             <button
               key={tab}
               type="button"
-              className={`rounded-[8px] px-[0.75rem] py-[0.25rem] text-[1rem] font-normal transition ${
+              className={`rounded-full px-[0.75rem] pt-[0.25rem] pb-[0.15rem] text-[0.875rem] font-normal transition ${
                 isActive
-                  ? "bg-brand-primary text-white font-semibold"
-                  : "text-text-body font-normal"
+                  ? "bg-brand-purple text-white font-semibold"
+                  : "text-muted font-normal"
               }`}
               onClick={() => setActivePeriod(tab)}
             >
@@ -197,20 +205,20 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         isRising={(basicInfo.changevs1d || 0) >= 0}
       />
       <Divider />
-      <p className="text-[1rem] text-start font-semibold">
+      <p className="text-[1.25rem] text-start font-semibold">
         주가가 일주일 전에 비해{" "}
         <span
           className={
             changeStats[0].value.includes("+")
-              ? "text-brand-primary"
-              : "text-accent-primary"
+              ? "text-price-up"
+              : "text-price-down"
           }
         >
           {changeStats[0].value.match(/[-+]?[0-9,.]+%/gu)?.[0] ?? "-"}
         </span>{" "}
-        {changeStats[0].value.includes("+") ? "증가했어요 🚀" : "감소했어요 🥲"}
+        {changeStats[0].value.includes("+") ? "증가했어요 😊" : "감소했어요 🥲"}
       </p>
-      <div className="grid md:grid-cols-3 pt-[0.5rem]">
+      <div className="grid md:grid-cols-3 pt-[12px]">
         {changeStats.map((stat, index) => {
           const alignment =
             index === 0
@@ -220,16 +228,16 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
                 : "items-end text-right";
           const isPositive = stat.value.includes("+");
           const valueColor = isPositive
-            ? "text-brand-primary"
-            : "text-[#007DFC]";
+            ? "text-price-up "
+            : "text-price-down";
 
           return (
             <div
               key={stat.label}
               className={`flex flex-col gap-1 ${alignment}`}
             >
-              <span className="text-sm text-[#A0A0A0]">{stat.label}</span>
-              <span className={`text-base font-semibold ${valueColor}`}>
+              <span className="text-[0.875rem] font-normal text-muted">{stat.label}</span>
+              <span className={`text-[1.125rem] font-semibold ${valueColor}`}>
                 {stat.value}
               </span>
             </div>
@@ -239,16 +247,52 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
 
       <Divider />
       <section className="rounded-[8px] bg-white">
-        <SectionHeader title="종목 진단 점수" helper="?" />
+        <SectionHeader
+          title="종목 진단 점수"
+          helper={
+            <span className="group relative inline-flex items-center">
+              <Icon
+                src="/icons/help.svg"
+                alt="도움말"
+                size={20}
+                color="#C8C8C8"
+                className="cursor-help"
+              />
+              <span className="pointer-events-none absolute left-full top-1/2 z-10 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-full bg-[#f0f0f0] px-5 pt-1.5 pb-1 text-[0.75rem] text-black leading-[1.25] opacity-0 transition-all duration-200 ease-out group-hover:translate-x-3 group-hover:opacity-100">
+                종목을 시가총액 크기에 맞춰 6개의 유니버스로 구분하고
+                <br/>
+                각 유니버스별 종목의 모멘텀 점수와 펀더멘탈 점수를 상대평가하여 산출해낸 점수
+              </span>
+            </span>
+          }
+        />
         <div className="py-[1rem] flex items-center justify-center">
           <p className="text-text-muted">종목 진단 점수는 준비 중입니다.</p>
         </div>
       </section>
 
       <Divider />
-      <section className="rounded-[8px]">
-        <SectionHeader title="개요" />
-        <p className="pt-[0.25rem] text-[0.8rem] font-normal text-text-muted">
+      <section>
+        <SectionHeader
+          title="개요"
+          helper={
+            <span className="group relative inline-flex items-center">
+              <Icon
+                src="/icons/help.svg"
+                alt="도움말"
+                size={20}
+                color="#C8C8C8"
+                className="cursor-help"
+              />
+              <span className="pointer-events-none absolute left-full top-1/2 z-10 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-full bg-[#f0f0f0] px-5 pt-1.5 pb-1 text-[0.75rem] text-black leading-[1.25] opacity-0 transition-all duration-200 ease-out group-hover:translate-x-3 group-hover:opacity-100">
+                시가총액 : 회사의 규모 <br/>
+                PSR : 회사가 돈을 잘 버는지 알려주는 지수, 시가총액 / 매출액 <br/>
+                PBR : 회사가 갖고있는 돈에 대해 알려주는 지수, 주가 / 주당순자산가치
+              </span>
+            </span>
+          }
+        />
+        <p className="pt-[0.25rem] text-[0.75rem] font-normal text-muted">
           {basicInfo.industry || "산업 정보 없음"}
         </p>
         <div className="pt-[1rem] grid md:grid-cols-3">
@@ -264,10 +308,10 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
                 key={stat.label}
                 className={`flex flex-col gap-1 ${alignment}`}
               >
-                <p className="text-[0.8rem] font-normal text-text-muted">
+                <p className="text-[0.75rem] font-normal text-muted">
                   {stat.label}
                 </p>
-                <p className="text-[1.2rem] font-semibold text-text-strong">
+                <p className="text-[1.125rem] font-semibold text-strong">
                   {stat.value}
                 </p>
               </div>
@@ -278,7 +322,24 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
 
       <Divider />
       <section className="pt-[1rem]">
-        <SectionHeader title="수급점수" />
+        <SectionHeader
+          title="수급점수"
+          helper={
+            <span className="group relative inline-flex items-center">
+              <Icon
+                src="/icons/help.svg"
+                alt="도움말"
+                size={20}
+                color="#C8C8C8"
+                className="cursor-help"
+              />
+              <span className="pointer-events-none absolute left-full top-1/2 z-10 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-full bg-[#f0f0f0] px-5 pt-1.5 pb-1 text-[0.75rem] text-black leading-[1.25] opacity-0 transition-all duration-200 ease-out group-hover:translate-x-3 group-hover:opacity-100">
+                외국인과 기관의 수급 강도를 점수화한 것<br/>
+                점수가 높을수록 최근 수급이 상대적으로 강해졌다는 의미
+              </span>
+            </span>
+          }
+        />
         <p className="pt-[0.25rem] text-[0.8rem] font-normal text-text-muted">
           수급점수는 준비 중입니다.
         </p>
@@ -290,9 +351,9 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
 function Divider() {
   return (
     <div
-      className="h-[1rem] w-full"
+      className="h-[1rem] my-2 w-full"
       style={{
-        backgroundColor: "var(--color-bg-app)",
+        backgroundColor: "#F8F8F8",
         marginLeft: "-2rem",
         marginRight: "-2rem",
         width: "calc(100% + 4rem)",
@@ -303,14 +364,21 @@ function Divider() {
 
 interface SectionHeaderProps {
   title: string;
-  helper?: string;
+  helper?: ReactNode;
 }
 
 function SectionHeader({ title, helper }: SectionHeaderProps) {
+  const helperNode =
+    typeof helper === "string" ? (
+      <span className="text-sm text-[#A0A0A0]">{helper}</span>
+    ) : (
+      helper
+    );
+
   return (
     <div className="flex items-center gap-2">
-      <h3 className="text-xl font-semibold text-[#000000]">{title}</h3>
-      {helper && <span className="text-sm text-[#A0A0A0]">{helper}</span>}
+      <h3 className="text-[1.25rem] font-semibold text-[#000000]">{title}</h3>
+      {helper ? helperNode : null}
     </div>
   );
 }

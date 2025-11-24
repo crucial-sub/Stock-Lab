@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
+from app.core.config import settings
 from app.models.auto_trading import AutoTradingStrategy
 from app.models.user import User
 from app.services.auto_trading_service import AutoTradingService
@@ -23,6 +24,50 @@ logger = logging.getLogger(__name__)
 scheduler: AsyncIOScheduler | None = None
 
 
+async def update_all_position_hold_days():
+    """
+    모든 보유 포지션의 hold_days 업데이트 (영업일 기준)
+    """
+    from app.models.auto_trading import LivePosition
+    from app.utils.date_utils import count_business_days
+    from datetime import date
+
+    logger.info("🔄 보유 포지션 hold_days 업데이트 중...")
+
+    async with AsyncSessionLocal() as db:
+        try:
+            # 모든 보유 포지션 조회
+            positions_query = select(LivePosition)
+            positions_result = await db.execute(positions_query)
+            positions = positions_result.scalars().all()
+
+            if not positions:
+                logger.info("   보유 포지션 없음")
+                return
+
+            today = date.today()
+            updated_count = 0
+
+            for position in positions:
+                # 영업일 기준으로 hold_days 계산
+                business_days = count_business_days(position.buy_date, today)
+                old_days = position.hold_days
+                position.hold_days = business_days
+
+                if old_days != business_days:
+                    updated_count += 1
+                    logger.debug(
+                        f"   {position.stock_code}: {old_days}일 -> {business_days}일 (매수일: {position.buy_date})"
+                    )
+
+            await db.commit()
+            logger.info(f"✅ hold_days 업데이트 완료: {updated_count}/{len(positions)}개 변경됨")
+
+        except Exception as e:
+            logger.error(f"❌ hold_days 업데이트 실패: {e}", exc_info=True)
+            await db.rollback()
+
+
 async def select_stocks_for_active_strategies():
     """
     모든 활성화된 자동매매 전략에 대해 종목 선정 (오전 7시 실행)
@@ -30,6 +75,9 @@ async def select_stocks_for_active_strategies():
     logger.info("=" * 80)
     logger.info("🔍 [오전 7시] 자동매매 종목 선정 시작")
     logger.info("=" * 80)
+
+    # 1. 먼저 모든 포지션의 hold_days 업데이트
+    await update_all_position_hold_days()
 
     async with AsyncSessionLocal() as db:
         try:
@@ -210,7 +258,6 @@ def start_scheduler():
     )
 
     # 오전 9시: 매수/매도 실행 (월~금)
-    logger.info("   - 새벽 3시: 캐시 워밍 (매일)")
     scheduler.add_job(
         execute_trades_for_active_strategies,
         trigger=CronTrigger(
@@ -224,25 +271,28 @@ def start_scheduler():
         replace_existing=True
     )
 
+    if settings.ENABLE_CACHE_WARMING:
+        # 새벽 3시: 캐시 워밍 (매일)
+        scheduler.add_job(
+            run_cache_warming_job,
+            trigger=CronTrigger(
+                hour=3,
+                minute=0,
+                timezone="Asia/Seoul"
+            ),
+            id="cache_warming_3am",
+            name="새벽 3시 캐시 워밍",
+            replace_existing=True
+        )
+
     scheduler.start()
 
-    # 새벽 3시: 캐시 워밍 (매일)
-    scheduler.add_job(
-        run_cache_warming_job,
-        trigger=CronTrigger(
-            hour=3,
-            minute=0,
-            timezone="Asia/Seoul"
-        ),
-        id="cache_warming_3am",
-        name="새벽 3시 캐시 워밍",
-        replace_existing=True
-    )
     logger.info("=" * 80)
     logger.info("🚀 자동매매 스케줄러 시작")
     logger.info("   - 오전 7시: 종목 선정 (월~금)")
     logger.info("   - 오전 9시: 매수/매도 실행 (월~금)")
-    logger.info("   - 새벽 3시: 캐시 워밍 (매일)")
+    if settings.ENABLE_CACHE_WARMING:
+        logger.info("   - 새벽 3시: 캐시 워밍 (매일)")
     logger.info("=" * 80)
 
 
@@ -286,6 +336,8 @@ async def run_cache_warming_job():
     """
     캐시 워밍 작업 (매일 새벽 3시 실행)
     """
+    if not settings.ENABLE_CACHE_WARMING:
+        logger.info("⏸️  Cache warming job skipped (disabled)")
+        return
     from app.services.cache_warmer import run_cache_warming
     await run_cache_warming()
-

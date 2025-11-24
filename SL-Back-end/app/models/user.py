@@ -31,6 +31,9 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
+    # AI 추천받기 차단
+    ai_recommendation_block = Column(Boolean, default=False, nullable=False)
+
     # Relationships
     simulation_sessions = relationship("SimulationSession", back_populates="user", lazy="selectin")
     community_posts = relationship("CommunityPost", back_populates="user")

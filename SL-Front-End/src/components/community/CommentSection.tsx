@@ -52,11 +52,11 @@ export function CommentSection({
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="댓글을 입력하세요"
-          className="w-full min-h-[100px] px-4 py-3 text-base text-body bg-surface border border-surface rounded-lg resize-none focus:outline-none focus:border-brand-purple"
+          className="w-full min-h-[2rem] px-4 py-3 text-base text-body bg-surface border border-surface rounded-[12px] resize-none focus:outline-none focus:border-brand-purple"
         />
         <button
           onClick={handleSubmit}
-          className="self-end px-6 py-2 text-base font-semibold text-white bg-brand-purple rounded-lg hover:opacity-90 transition"
+          className="self-end px-6 py-2 text-base font-semibold text-white bg-brand-purple rounded-[12px] hover:opacity-80 transition"
         >
           댓글 작성
         </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Title } from "@/components/common/Title";
+import { useRouter } from "next/navigation";
 import type {
   GuestMarketIndex,
   GuestMarketNews,
@@ -18,11 +18,26 @@ export function GuestMarketInsightSection({
   stocks,
   news,
 }: GuestMarketInsightSectionProps) {
+  const router = useRouter();
+
+  const handleStockClick = (stock: GuestMarketStock) => {
+    const params = new URLSearchParams({
+      tab: "volume",
+      stockCode: stock.id,
+      stockName: stock.name,
+    });
+    router.push(`/market-price?${params.toString()}`);
+  };
+
+  const handleNewsClick = (item: GuestMarketNews) => {
+    router.push(`/news?newsId=${item.id}`);
+  };
+
   return (
     <section className="flex w-full flex-col gap-5">
       <div className="flex flex-col gap-1">
         <div className="flex items-baseline gap-3">
-          <Title>주요 시황</Title>
+          <span className="text-[1.5rem] font-semibold">주요 시황</span>
           <span className="text-[0.75rem] font-normal text-muted">
             {new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}, 체결량 순
           </span>
@@ -30,7 +45,7 @@ export function GuestMarketInsightSection({
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#18223405] shadow-elev-card p-5">
+        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5">
           <div className="grid md:grid-cols-2">
             {indexes.map((item) => (
               <div key={item.label} className="flex flex-col gap-4">
@@ -51,7 +66,16 @@ export function GuestMarketInsightSection({
             {stocks.map((stock) => (
               <div
                 key={stock.id}
-                className="flex items-center justify-between border-t border-[#18223433] px-1 py-3 first:border-t-0"
+                role="button"
+                tabIndex={0}
+                className="flex cursor-pointer items-center justify-between border-t border-[#18223433] px-1 py-3 first:border-t-0 hover:bg-white/5"
+                onClick={() => handleStockClick(stock)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleStockClick(stock);
+                  }
+                }}
               >
                 <div className="flex items-center gap-3">
                   <span className="text-[1rem] font-semibold text-text-body">
@@ -71,12 +95,21 @@ export function GuestMarketInsightSection({
           </div>
         </article>
 
-        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#18223405] shadow-elev-card p-5">
+        <article className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5">
           <div className="flex flex-col">
             {news.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between border-t border-[#18223433] py-3 first:border-t-0"
+                role="button"
+                tabIndex={0}
+                className="flex cursor-pointer items-center justify-between border-t border-[#18223433] py-3 first:border-t-0 hover:bg-white/5"
+                onClick={() => handleNewsClick(item)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleNewsClick(item);
+                  }
+                }}
               >
                 <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-base font-normal text-text-body">
                   {item.title}

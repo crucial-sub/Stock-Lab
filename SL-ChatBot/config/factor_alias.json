@@ -21,5 +21,11 @@
   "salesgrowth": "SalesGrowth",
   "rn_dexpens ratio": "RNDExpenseRatio",
   "rndexpensratio": "RNDExpenseRatio",
-  "epsgrowth": "EPSGrowth"
+  "epsgrowth": "EPSGrowth",
+  "ret_1d": "RET_1D",
+  "ret_5d": "RET_5D",
+  "1일수익률": "RET_1D",
+  "5일수익률": "RET_5D",
+  "price_change_1d": "PRICE_CHANGE_1D",
+  "price_change_5d": "PRICE_CHANGE_5D"
 }

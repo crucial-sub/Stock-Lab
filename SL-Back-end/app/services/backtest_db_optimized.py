@@ -56,6 +56,9 @@ class OptimizedDBManager:
                     'date', 'open_price', 'high_price', 'low_price', 'close_price',
                     'volume', 'trading_value', 'market_cap', 'listed_shares'
                 ]
+            # CHANGE_RATE 계산용으로 전일 종가가 필요하므로 close_price는 강제 포함
+            if 'close_price' not in required_columns:
+                required_columns.append('close_price')
 
             # 모멘텀 계산용 날짜 범위 (필요한 만큼만)
             extended_start = start_date - timedelta(days=300)  # 365일 → 300일로 단축
@@ -132,8 +135,14 @@ class OptimizedDBManager:
             # 데이터 타입 최적화
             df['date'] = pd.to_datetime(df['date'])
 
+            # 등락률(전일 대비 %) 계산
+            df = df.sort_values(['stock_code', 'date'])
+            df['prev_close'] = df.groupby('stock_code')['close_price'].shift(1)
+            df['CHANGE_RATE'] = ((df['close_price'] - df['prev_close']) / df['prev_close'] * 100).where(df['prev_close'] > 0)
+            df = df.drop(columns=['prev_close'])
+
             # 메모리 최적화: float64 → float32
-            numeric_columns = ['close_price', 'volume', 'trading_value', 'market_cap', 'listed_shares']
+            numeric_columns = ['close_price', 'volume', 'trading_value', 'market_cap', 'listed_shares', 'CHANGE_RATE']
             for col in numeric_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')
@@ -150,7 +159,8 @@ class OptimizedDBManager:
         self,
         start_date: date,
         end_date: date,
-        required_accounts: List[str] = None
+        required_accounts: List[str] = None,
+        target_stocks: List[str] = None
     ) -> pd.DataFrame:
         """
         재무 데이터 최적화 로드
@@ -166,9 +176,13 @@ class OptimizedDBManager:
             # 필수 계정과목
             if required_accounts is None:
                 required_accounts = [
-                    '매출액', '영업이익', '당기순이익',
+                    # 매출액 (연도별로 다른 이름으로 저장됨)
+                    '매출액', '영업수익', '수익(매출액)',
+                    '영업이익', '당기순이익',
                     '자산총계', '자본총계', '부채총계',
-                    '유동자산', '유동부채', '현금및현금성자산'
+                    '유동자산', '유동부채', '현금및현금성자산',
+                    # 매출원가 (매출총이익 계산에 필요)
+                    '매출원가'
                 ]
 
             # 손익계산서 + 재무상태표 통합 쿼리
@@ -253,6 +267,23 @@ class OptimizedDBManager:
                     return pd.Timestamp(year, 12, 31)
 
             financial_pivot['report_date'] = financial_pivot.apply(make_report_date, axis=1)
+
+            # 🔥 필터링: 선택한 종목만 (DB 로드 이후 필터링)
+            if target_stocks and not financial_pivot.empty:
+                before_count = len(financial_pivot)
+                before_stocks = financial_pivot['stock_code'].nunique()
+                financial_pivot = financial_pivot[financial_pivot['stock_code'].isin(target_stocks)]
+                after_count = len(financial_pivot)
+                after_stocks = financial_pivot['stock_code'].nunique()
+                logger.info(f"🎯 재무 데이터 필터링: {before_count}건({before_stocks}종목) → {after_count}건({after_stocks}종목)")
+            # 매출액 컬럼 정규화 (여러 이름으로 저장된 매출액을 '매출액'으로 통일)
+            revenue_columns = ['매출액', '영업수익', '수익(매출액)']
+            if '매출액' not in financial_pivot.columns:
+                for col in revenue_columns:
+                    if col in financial_pivot.columns and col != '매출액':
+                        financial_pivot['매출액'] = financial_pivot[col]
+                        logger.info(f"매출액 컬럼 정규화: '{col}' → '매출액'")
+                        break
 
             logger.info(f"Loaded financial data for {financial_pivot['stock_code'].nunique()} companies (optimized)")
 

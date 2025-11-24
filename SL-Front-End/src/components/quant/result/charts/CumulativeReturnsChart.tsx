@@ -49,6 +49,19 @@ export function CumulativeReturnsChart({
           minGridDistance: 50,
         }),
         tooltip: am5.Tooltip.new(root, {}),
+        // 날짜 형식: YYYY.MM 또는 YYYY.MM.DD
+        dateFormats: {
+          day: "yyyy.MM.dd",
+          week: "yyyy.MM.dd",
+          month: "yyyy.MM",
+          year: "yyyy",
+        },
+        periodChangeDateFormats: {
+          day: "yyyy.MM.dd",
+          week: "yyyy.MM.dd",
+          month: "yyyy.MM",
+          year: "yyyy",
+        },
       }),
     );
 

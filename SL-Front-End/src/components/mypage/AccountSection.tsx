@@ -3,14 +3,17 @@
 import { useState, useCallback, useEffect } from "react";
 import { KiwoomConnectModal } from "@/components/modal/KiwoomConnectModal";
 import { kiwoomApi } from "@/lib/api/kiwoom";
+import { autoTradingApi } from "@/lib/api/auto-trading";
 import { formatAmount, formatPercent, getProfitColor } from "@/lib/formatters";
 
 export function AccountSection() {
   const [isKiwoomConnected, setIsKiwoomConnected] = useState(false);
   const [isKiwoomModalOpen, setIsKiwoomModalOpen] = useState(false);
   const [accountBalance, setAccountBalance] = useState<unknown>(null);
+  const [allocatedCapital, setAllocatedCapital] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   const fetchAccountBalance = async () => {
     setIsLoading(true);
@@ -18,6 +21,14 @@ export function AccountSection() {
     try {
       const response = await kiwoomApi.getAccountBalance();
       setAccountBalance(response.data);
+
+      // 자동매매 할당 금액 조회
+      try {
+        const dashboardData = await autoTradingApi.getPortfolioDashboard();
+        setAllocatedCapital(Number(dashboardData.total_allocated_capital) || 0);
+      } catch (err) {
+        console.warn("자동매매 할당 금액 조회 실패:", err);
+      }
     } catch (err: unknown) {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
@@ -50,26 +61,69 @@ export function AccountSection() {
     fetchAccountBalance();
   };
 
-  return (
-    <div className="quant-shell mb-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-text-body">연동 계좌 관리</h2>
+  const handleDisconnect = async () => {
+    const confirmed = window.confirm(
+      "키움증권 연동을 해제하시겠습니까?\n\n해제 시 자동매매 기능을 사용할 수 없습니다.\n활성화된 자동매매 전략이 있다면 먼저 비활성화해주세요."
+    );
 
-        {!isKiwoomConnected && (
+    if (!confirmed) return;
+
+    try {
+      setIsDisconnecting(true);
+      await kiwoomApi.deleteCredentials();
+      setIsKiwoomConnected(false);
+      setAccountBalance(null);
+      setAllocatedCapital(0);
+      alert("키움증권 연동이 해제되었습니다.");
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "연동 해제에 실패했습니다.";
+      alert(errorMessage);
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
+
+  return (
+    <section className="rounded-[12px] p-7 shadow-elev-card backdrop-blur bg-[#1822340D]">
+      <div className="flex flex-wrap items-center justify-between">
+        <div>
+          <p className="text-[0.75rem] font-normal uppercase tracking-widest text-[#646464]">Account</p>
+          <h2 className="text-[1.5rem] font-semibold text-[#000000]">연동 계좌 관리</h2>
+        </div>
+        {!isKiwoomConnected ? (
           <button
             onClick={() => setIsKiwoomModalOpen(true)}
-            className="px-6 py-2 bg-button-primary-soft text-brand rounded-md hover:bg-brand hover:text-base-0 transition-colors"
+            className="rounded-full bg-[#AC64FF] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-brand-purple/80"
           >
             계좌 연동하기
           </button>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={fetchAccountBalance}
+              disabled={isLoading || isDisconnecting}
+              className="rounded-full bg-[#5d6bf5] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#5d6bf5]/80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoading ? "조회 중..." : "새로고침"}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={isLoading || isDisconnecting}
+              className="rounded-full bg-[#FF6464] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#FF6464]/80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isDisconnecting ? "해제 중..." : "연동 해제"}
+            </button>
+          </div>
         )}
       </div>
 
       {!isKiwoomConnected ? (
-        <div className="p-12 text-center">
-          <div className="mb-4">
+        <div className="mt-8 rounded-[12px] border border-dashed border-[#C8C8C8] bg-[#ffffffCC] p-10 text-center text-muted">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-elev-card-soft">
             <svg
-              className="mx-auto h-16 w-16 text-text-muted"
+              className="h-8 w-8 text-[#9097c2]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -77,111 +131,104 @@ export function AccountSection() {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                strokeWidth={1.5}
+                d="M15 7v4h4m1 0a8 8 0 11-8-8 8 8 0 018 8z"
               />
             </svg>
           </div>
-          <p className="text-text-muted text-lg mb-4">
-            키움증권 연동이 필요합니다
-          </p>
-          <p className="text-text-muted text-sm">
-            증권사 연동 후 실시간 계좌 잔고를 확인할 수 있습니다
-          </p>
+          <p className="text-[1.125rem] font-semibold text-[#000000]">키움증권 연동이 필요합니다</p>
+          <p className="mt-2 text-[0.875rem]">증권사 연동 후 실시간 계좌 잔고와 수익률을 한눈에 확인할 수 있습니다.</p>
         </div>
       ) : (
-        <div className="p-6">
-          <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse" />
-              <span className="text-sm text-text-body font-medium">
-                키움증권 연동됨 (모의투자)
-              </span>
-            </div>
-            <button
-              onClick={fetchAccountBalance}
-              disabled={isLoading}
-              className="px-4 py-2 bg-button-primary-soft text-brand text-sm rounded-md hover:bg-brand hover:text-base-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? "조회 중..." : "새로고침"}
-            </button>
+        <div className="mt-8 space-y-6">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="rounded-full bg-[#eff2ff] px-4 py-1 font-semibold text-[#5d6bf5]">
+              키움증권
+            </span>
+            <span className="rounded-full bg-[#e1fbef] px-4 py-1 font-semibold text-[#28b77c]">
+              연동됨 (모의투자)
+            </span>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-price-up border border-price-down rounded-md">
-              <p className="text-sm text-price-down">{error}</p>
+            <div className="rounded-2xl border border-[#ffb3be] bg-[#fff1f3] p-4 text-sm text-[#d8435d]">
+              {error}
             </div>
           )}
 
           {isLoading ? (
             <div className="py-12 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand mx-auto" />
-              <p className="mt-4 text-text-muted">잔고 정보를 불러오는 중...</p>
-            </div>
-          ) : accountBalance ? (
-            <div className="space-y-6">
-              {/* 예수금 섹션 */}
-              <div className="bg-base-soft-blue p-6 rounded-lg border border-brand-soft">
-                <h3 className="text-lg font-bold text-text-body mb-4">예수금</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-base-0 p-4 rounded-md shadow-elev-card-soft">
-                    <p className="text-xs text-text-muted mb-1">예수금</p>
-                    <p className="text-xl font-bold text-text-body">
-                      {formatAmount((accountBalance as { cash?: { balance?: string | number } }).cash?.balance || 0)}원
-                    </p>
-                  </div>
-                  <div className="bg-base-0 p-4 rounded-md shadow-elev-card-soft">
-                    <p className="text-xs text-text-muted mb-1">출금가능금액</p>
-                    <p className="text-xl font-bold text-positive">
-                      {formatAmount((accountBalance as { cash?: { withdrawable?: string | number } }).cash?.withdrawable || 0)}원
-                    </p>
-                  </div>
-                  <div className="bg-base-0 p-4 rounded-md shadow-elev-card-soft">
-                    <p className="text-xs text-text-muted mb-1">주문가능금액</p>
-                    <p className="text-xl font-bold text-brand">
-                      {formatAmount((accountBalance as { cash?: { orderable?: string | number } }).cash?.orderable || 0)}원
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 보유 종목 요약 */}
-              <div className="bg-base-0 p-6 rounded-lg border border-surface shadow-elev-card-soft">
-                <h3 className="text-lg font-bold text-text-body mb-4">보유 종목 요약</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-3 bg-surface rounded-md">
-                    <p className="text-xs text-text-muted mb-1">총 평가금액</p>
-                    <p className="text-lg font-bold text-text-body">
-                      {formatAmount((accountBalance as { holdings?: { tot_evlt_amt?: string | number } }).holdings?.tot_evlt_amt || 0)}원
-                    </p>
-                  </div>
-                  <div className="p-3 bg-surface rounded-md">
-                    <p className="text-xs text-text-muted mb-1">총 평가손익</p>
-                    <p className={`text-lg font-bold ${getProfitColor((accountBalance as { holdings?: { tot_evlt_pl?: string | number } }).holdings?.tot_evlt_pl || 0)}`}>
-                      {formatAmount((accountBalance as { holdings?: { tot_evlt_pl?: string | number } }).holdings?.tot_evlt_pl || 0)}원
-                    </p>
-                  </div>
-                  <div className="p-3 bg-surface rounded-md">
-                    <p className="text-xs text-text-muted mb-1">총 수익률</p>
-                    <p className={`text-lg font-bold ${getProfitColor((accountBalance as { holdings?: { tot_prft_rt?: string | number } }).holdings?.tot_prft_rt || 0)}`}>
-                      {formatPercent((accountBalance as { holdings?: { tot_prft_rt?: string | number } }).holdings?.tot_prft_rt || 0)}%
-                    </p>
-                  </div>
-                  <div className="p-3 bg-surface rounded-md">
-                    <p className="text-xs text-text-muted mb-1">총 매입금액</p>
-                    <p className="text-lg font-bold text-text-body">
-                      {formatAmount((accountBalance as { holdings?: { tot_pur_amt?: string | number } }).holdings?.tot_pur_amt || 0)}원
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-[#c4cbff] border-t-[#6f7bff]" />
+              <p className="mt-4 text-sm text-[#6d749b]">잔고 정보를 불러오는 중...</p>
             </div>
           ) : (
-            <div className="py-12 text-center">
-              <p className="text-text-muted">
-                잔고 정보를 불러오려면 새로고침 버튼을 클릭하세요
-              </p>
-            </div>
+            <>
+              <div className="rounded-3xl border border-[#dee4f6] bg-[#f8faff] p-5 shadow-[0_10px_30px_rgba(32,38,74,0.08)]">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#98a0c6]">
+                  예수금
+                </p>
+                <p className="mt-2 text-2xl font-bold text-[#1f2143]">
+                  {formatAmount(
+                    (accountBalance as { cash?: { balance?: string | number } }).cash?.balance || 0
+                  )}
+                  원
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <div className="rounded-3xl border border-[#d6def8] bg-white p-5 shadow-[0_10px_25px_rgba(32,38,74,0.08)]">
+                  <p className="text-xs font-medium text-[#9da5c9]">평가액</p>
+                  <p className="mt-2 text-xl font-bold text-[#1f2143]">
+                    {(() => {
+                      const totEvltAmt = (accountBalance as { holdings?: { tot_evlt_amt?: string | number } }).holdings?.tot_evlt_amt || 0;
+                      const cashBalance = (accountBalance as { cash?: { balance?: string | number } }).cash?.balance || 0;
+
+                      const parseValue = (val: string | number): number => {
+                        if (typeof val === "string") {
+                          return Number.parseInt(val.replace(/,/g, ""), 10) || 0;
+                        }
+                        return val || 0;
+                      };
+
+                      // 전체 평가액에서 자동매매 할당 금액 제외
+                      const totalEval = parseValue(totEvltAmt) + parseValue(cashBalance);
+                      return formatAmount(totalEval - allocatedCapital);
+                    })()}
+                    원
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-[#d6def8] bg-white p-5 shadow-[0_10px_25px_rgba(32,38,74,0.08)]">
+                  <p className="text-xs font-medium text-[#9da5c9]">평가손익</p>
+                  <p
+                    className={`mt-2 text-xl font-bold ${getProfitColor(
+                      (accountBalance as { holdings?: { tot_evlt_pl?: string | number } }).holdings
+                        ?.tot_evlt_pl || 0
+                    )}`}
+                  >
+                    {formatAmount(
+                      (accountBalance as { holdings?: { tot_evlt_pl?: string | number } }).holdings
+                        ?.tot_evlt_pl || 0
+                    )}
+                    원
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-[#d6def8] bg-white p-5 shadow-[0_10px_25px_rgba(32,38,74,0.08)]">
+                  <p className="text-xs font-medium text-[#9da5c9]">수익률</p>
+                  <p
+                    className={`mt-2 text-xl font-bold ${getProfitColor(
+                      (accountBalance as { holdings?: { tot_prft_rt?: string | number } }).holdings
+                        ?.tot_prft_rt || 0
+                    )}`}
+                  >
+                    {formatPercent(
+                      (accountBalance as { holdings?: { tot_prft_rt?: string | number } }).holdings
+                        ?.tot_prft_rt || 0
+                    )}
+                    %
+                  </p>
+                </div>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -191,6 +238,6 @@ export function AccountSection() {
         onClose={() => setIsKiwoomModalOpen(false)}
         onSuccess={handleKiwoomSuccess}
       />
-    </div>
+    </section>
   );
 }

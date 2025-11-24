@@ -49,7 +49,13 @@ services:
     container_name: sl_backend
     env_file:
       - ./SL-Back-end/.env.local
-    # All environment variables are managed in .env.local
+    environment:
+      # AWS RDS 연결 (SSH 터널을 통한 접속: localhost:5433)
+      DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db
+      DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db
+      # Redis 설정은 .env.local에서 관리
+      # 로컬: redis:6379 (Docker 컨테이너)
+      # 프로덕션(EC2): clustercfg.sl-redis-cl.lvbc9o.apn2.cache.amazonaws.com:6379
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -64,6 +70,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # Next.js Frontend
   frontend:
@@ -83,6 +91,31 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - quant_network
+    restart: unless-stopped
+
+  # Chatbot Service
+  chatbot:
+    build:
+      context: ./SL-ChatBot
+      dockerfile: ./chatbot/Dockerfile
+    container_name: sl_chatbot
+    environment:
+      PORT: ${PORT:-8003}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      AWS_KB_ID: ${AWS_KB_ID}
+      RETRIEVER_TYPE: ${RETRIEVER_TYPE:-aws_kb}
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "${CHATBOT_PORT:-8003}:8003"
+    volumes:
+      - ./SL-ChatBot/chatbot/src:/app/src
+      - ./SL-ChatBot/api:/app/api
+      - ./SL-ChatBot/config:/app/config
+      - ./SL-ChatBot/prompts:/app/prompts
     networks:
       - quant_network
     restart: unless-stopped

@@ -72,32 +72,29 @@ class VectorizedConditionEvaluator:
             conditions = buy_expression.get('conditions', [])
 
             if not expression or not conditions:
-                self.logger.warning("조건식 또는 조건 리스트가 비어 있음")
-                return []
+                self.logger.debug("조건식 또는 조건 리스트가 비어 있음 - 폴백 모드 사용")
+                return self._evaluate_fallback(date_data, expression, conditions)
 
             # 4. 🚀 벡터화 평가: Pandas query 사용
             query_str = self._build_vectorized_query(expression, conditions)
 
-            if not query_str:
-                self.logger.warning("쿼리 생성 실패")
-                return []
+            if not query_str or query_str.strip() in ['', '|', '&']:
+                self.logger.debug("쿼리 생성 실패 또는 빈 쿼리 - 폴백 모드 사용")
+                return self._evaluate_fallback(date_data, expression, conditions)
 
             # 5. 한 번에 모든 종목 평가!
-            # 🚀 PERFORMANCE: 로깅 제거 (2,922번 호출 → 0번)
-            # self.logger.debug(f"🚀 벡터화 쿼리 실행: {query_str}")
-
             try:
+                self.logger.debug(f"🔍 생성된 쿼리: {query_str[:200]}...")  # 처음 200자만 출력
                 selected = date_data.query(query_str)
                 selected_stocks = selected['stock_code'].tolist()
-
-                # 🚀 PERFORMANCE: 로깅 제거 (2,922번 호출 → 0번)
-                # self.logger.info(f"✅ 벡터화 평가 완료: {len(selected_stocks)}/{len(date_data)}개 종목 선택")
-
+                self.logger.debug(f"✅ 벡터화 평가 성공: {len(selected_stocks)}개 종목 선택")
                 return selected_stocks
 
             except Exception as e:
                 # query 실패 시 폴백 (기존 방식)
-                self.logger.warning(f"벡터화 쿼리 실패 ({e}), 폴백 사용")
+                self.logger.warning(f"❌ 벡터화 쿼리 실패 ({e})")
+                self.logger.warning(f"   실패한 쿼리: {query_str[:500]}")  # 처음 500자 출력
+                self.logger.warning(f"   폴백 모드 사용")
                 return self._evaluate_fallback(date_data, expression, conditions)
 
         except Exception as e:
@@ -118,9 +115,22 @@ class VectorizedConditionEvaluator:
             {"id": "A0", "factor": "ROE", "operator": ">", "value": 15},
             {"id": "A1", "factor": "PBR", "operator": "<", "value": 2}
         ]
+        또는
+        conditions: [
+            {"name": "A", "factor": "ROE", "operator": ">", "value": 15},
+            {"name": "B", "factor": "PBR", "operator": "<", "value": 2}
+        ]
         →
         "(ROE > 15) and (PBR < 2)"
         """
+        if not expression or not expression.strip():
+            self.logger.warning("⚠️ expression이 비어있음 - 빈 쿼리 반환")
+            return ""
+
+        if not conditions or len(conditions) == 0:
+            self.logger.warning("⚠️ conditions가 비어있음 - 빈 쿼리 반환")
+            return ""
+
         # 캐시 키 생성
         cache_key = f"{expression}:{str(conditions)}"
 
@@ -131,15 +141,44 @@ class VectorizedConditionEvaluator:
         condition_map = {}
 
         for cond in conditions:
-            cond_id = cond.get('id', '')
+            # 'id' 또는 'name' 필드 지원
+            cond_id = cond.get('id') or cond.get('name', '')
+
+            if not cond_id:
+                self.logger.warning(f"조건에 id/name 필드가 없음: {cond}")
+                continue
+
             factor = cond.get('factor', '').upper()
             operator = cond.get('operator', '>')
             value = cond.get('value', 0)
 
+            # 팩터명이 없으면 exp_left_side에서 추출 시도
+            if not factor and 'exp_left_side' in cond:
+                import re
+                match = re.search(r'\{([^}]+)\}', cond['exp_left_side'])
+                if match:
+                    factor = match.group(1).upper()
+                else:
+                    self.logger.warning(f"팩터명 추출 실패: {cond}")
+                    continue
+
             # NaN 처리: factor가 NaN이 아닌 경우만
-            condition_str = f"({factor}.notna() and {factor} {operator} {value})"
+            try:
+                # 특수문자가 없으면 직접 사용
+                if factor.isidentifier():
+                    condition_str = f"({factor}.notna() & ({factor} {operator} {value}))"
+                else:
+                    # 특수문자가 있는 경우 @ 변수 사용
+                    condition_str = f"(@{factor}.notna() & (@{factor} {operator} {value}))"
+            except:
+                # 폴백: 간단한 형식
+                condition_str = f"({factor}.notna() & ({factor} {operator} {value}))"
 
             condition_map[cond_id] = condition_str
+
+        if not condition_map:
+            self.logger.warning("⚠️ 유효한 조건이 하나도 생성되지 않음 - 빈 쿼리 반환")
+            return ""
 
         # expression에서 조건 ID를 실제 조건으로 치환
         query_str = expression
@@ -147,7 +186,23 @@ class VectorizedConditionEvaluator:
         for cond_id, condition_str in condition_map.items():
             # 단어 경계를 고려하여 치환
             import re
-            query_str = re.sub(r'\b' + cond_id + r'\b', condition_str, query_str)
+            query_str = re.sub(r'\b' + re.escape(cond_id) + r'\b', condition_str, query_str)
+
+        # 'and' → '&', 'or' → '|', 'not' → '~'
+        # 단어 경계를 고려하여 치환 (변수명 안의 and/or는 치환하지 않음)
+        query_str = re.sub(r'\band\b', '&', query_str)
+        query_str = re.sub(r'\bor\b', '|', query_str)
+        query_str = re.sub(r'\bnot\b', '~', query_str)
+
+        for cond_id in condition_map.keys():
+            if re.search(r'\b' + re.escape(cond_id) + r'\b', query_str):
+                self.logger.warning(f"⚠️ 조건 ID '{cond_id}'가 치환되지 않고 남아있음 - expression과 conditions 불일치")
+                # 경고만 하고 계속 진행 (부분 일치일 수 있음)
+
+        stripped_query = query_str.strip()
+        if not stripped_query or stripped_query in ['', '|', '&', '~', '||', '&&']:
+            self.logger.warning(f"⚠️ 빈 쿼리 생성됨: '{query_str}' (원본 expression: '{expression}')")
+            return ""
 
         # 캐시 저장
         self._condition_cache[cache_key] = query_str
@@ -165,7 +220,12 @@ class VectorizedConditionEvaluator:
         """
         selected_stocks = []
 
-        condition_map = {c['id']: c for c in conditions}
+        # 'id' 또는 'name' 필드로 매핑
+        condition_map = {}
+        for c in conditions:
+            cond_id = c.get('id') or c.get('name', '')
+            if cond_id:
+                condition_map[cond_id] = c
 
         for _, row in date_data.iterrows():
             stock_code = row['stock_code']
@@ -177,8 +237,15 @@ class VectorizedConditionEvaluator:
                 operator = cond.get('operator', '>')
                 threshold = cond.get('value', 0)
 
+                # 팩터명이 없으면 exp_left_side에서 추출 시도
+                if not factor and 'exp_left_side' in cond:
+                    import re
+                    match = re.search(r'\{([^}]+)\}', cond['exp_left_side'])
+                    if match:
+                        factor = match.group(1).upper()
+
                 # 팩터 값 가져오기
-                if factor in row.index:
+                if factor and factor in row.index:
                     factor_value = row[factor]
 
                     # NaN 체크

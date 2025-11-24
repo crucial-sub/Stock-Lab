@@ -16,3 +16,6 @@ __pycache__/
 
 # SSH config
 .ssh/
+
+# Serena MCP local config
+/.serena/

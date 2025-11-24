@@ -138,7 +138,7 @@ export function Dropdown({
       {/* 드롭다운 메뉴 */}
       {isOpen && (
         <div
-          className={`absolute z-10 ${currentVariant.menu} bg-bg-surface border border-border-default rounded-md shadow-lg max-h-60 overflow-y-auto`}
+          className={`absolute z-20 ${currentVariant.menu} bg-base-0 border border-surface rounded-md shadow-elev-card-soft max-h-60 overflow-y-auto`}
         >
           {options.map((option) => (
             <button
@@ -148,10 +148,10 @@ export function Dropdown({
                 onChange(option.value);
                 setIsOpen(false);
               }}
-              className={`w-full text-left ${currentVariant.option} hover:bg-bg-muted transition-colors ${
+              className={`w-full text-left ${currentVariant.option} transition-colors ${
                 option.value === value
-                  ? "bg-bg-muted text-accent-primary"
-                  : "text-text-body"
+                  ? "bg-surface text-brand"
+                  : "text-body hover:bg-surface"
               }`}
             >
               {option.label}

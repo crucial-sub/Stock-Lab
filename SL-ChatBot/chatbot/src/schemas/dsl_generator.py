@@ -1,11 +1,12 @@
 """
-퀀트 전략 DSL 파서 유틸리티 (한국어 버전)
+퀀트 전략 DSL 파서 유틸리티 
 한국어/영어 자연어 → JSON 조건 DSL 변환
 """
 
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, List, Optional, Dict
 from pathlib import Path
@@ -21,7 +22,15 @@ logging.basicConfig(level="INFO")
 # AWS Bedrock 설정
 # ==============================
 BEDROCK_REGION = os.getenv("BEDROCK_REGION", "ap-northeast-2")
-BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-sonnet-20240229-v1:0")
+BEDROCK_MODEL_ID = os.getenv(
+    "BEDROCK_MODEL_ID",
+    "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+)
+BEDROCK_INFERENCE_PROFILE_ID = (
+    os.getenv("BEDROCK_INFERENCE_PROFILE_ID")
+    or os.getenv("BEDROCK_INFERENCE_PROFILE_ARN")
+    or "arn:aws:bedrock:ap-northeast-2:749559064959:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+)
 
 # ==============================
 # Claude 시스템 프롬프트 (한국어)
@@ -53,17 +62,21 @@ DSL 스키마:
   ]
 }
 
-사용 가능한 팩터 (화이트리스트):
-PER, PBR, PSR, PCR, PEG,
-ROE, ROA, EPS, EBITDA, OperatingProfitMargin, DebtRatio, DividendYield,
-SMA, EMA, RSI, MACD,
-MOMENTUM_3M, MOMENTUM_6M, MOMENTUM_12M,
-VOLATILITY_20D, VOLATILITY_60D,
-TURNOVER_RATE_20D, VOLUME_MA_20,
-PRICE_CHANGE_1D, PRICE_CHANGE_5D
+사용 가능한 팩터:
+- 기본 재무/기술/모멘텀 팩터: PER, PBR, PSR, PCR, PEG, ROE, ROA, EPS, EBITDA, OperatingProfitMargin, DebtRatio, DividendYield,
+  SMA, EMA, RSI, MACD, MOMENTUM_3M/6M/12M, VOLATILITY_20D/60D, TURNOVER_RATE_20D, VOLUME_MA_20
+- 수익률/가격 변화 팩터: RET_[N]D (N일 수익률), PRICE_CHANGE_[N]D (N일 가격 변화)
+  - N은 1, 3, 5, 7, 10, 20, 60 등 어떤 숫자도 가능
+  - 예: RET_3D, RET_10D, PRICE_CHANGE_7D
+- 그 외 입력된 팩터명도 그대로 허용 (화이트리스트에 없어도 반환)
 
 사용 가능한 연산자:
 >, <, >=, <=, ==
+
+중요 규칙:
+- "N일동안 X% 오르면" → RET_[N]D >= X (X는 소수, 예: 0.05 = 5%, 0.10 = 10%)
+- "N일 전 대비 X% 상승" → RET_[N]D >= X (동일)
+- 퍼센트는 항상 소수로 변환 (5% → 0.05, 10% → 0.10)
 
 예시:
 입력: "PER 10 이하"
@@ -80,6 +93,36 @@ PRICE_CHANGE_1D, PRICE_CHANGE_5D
     }
   ]
 }
+
+입력: "3일동안 8% 이상 오르면 매수"
+출력:
+{
+  "conditions": [
+    {
+      "factor": "RET_3D",
+      "params": [],
+      "operator": ">=",
+      "right_factor": null,
+      "right_params": [],
+      "value": 0.08
+    }
+  ]
+}
+
+입력: "10일동안 10% 이상 오르면 매수"
+출력:
+{
+  "conditions": [
+    {
+      "factor": "RET_10D",
+      "params": [],
+      "operator": ">=",
+      "right_factor": null,
+      "right_params": [],
+      "value": 0.10
+    }
+  ]
+}
 """
 
 # ======================================
@@ -88,6 +131,8 @@ PRICE_CHANGE_1D, PRICE_CHANGE_5D
 _bedrock_client = None
 _factor_alias_map: Dict[str, str] = {}
 _operator_map: Dict[str, str] = {}
+_known_factors: set[str] = set()
+_factor_units: Dict[str, str] = {}  # factor -> unit(raw|percent|ratio)
 
 def get_bedrock_client():
     global _bedrock_client
@@ -96,9 +141,13 @@ def get_bedrock_client():
     return _bedrock_client
 
 
+def _normalize_factor_key(value: str) -> str:
+    return re.sub(r"\s+", "", value).lower()
+
+
 def _load_alias_and_operator_maps():
-    """Load factor alias and operator map from config files (with safe fallback)."""
-    global _factor_alias_map, _operator_map
+    """Load factor alias, operator map, and factor units from config files (with safe fallback)."""
+    global _factor_alias_map, _operator_map, _factor_units
     # factor alias
     factor_path = Path("/app/config/factor_alias.json")
     if not factor_path.exists():
@@ -117,8 +166,53 @@ def _load_alias_and_operator_maps():
             import yaml  # local import to avoid hard dependency elsewhere
             data = yaml.safe_load(op_path.read_text(encoding="utf-8")) or {}
             _operator_map = data.get("operator_map", {})
+            _factor_units = data.get("factor_units", {})
     except Exception as exc:
         logger.warning("operator_rules.yaml 로드 실패: %s", exc)
+
+
+def _load_known_factors():
+    """Load known factor identifiers from metadata."""
+    global _known_factors
+    if _known_factors:
+        return
+
+    meta_path = Path("/app/rag/documents/factors/metadata.json")
+    if not meta_path.exists():
+        meta_path = Path(__file__).parent.parent.parent / "rag" / "documents" / "factors" / "metadata.json"
+
+    if meta_path.exists():
+        try:
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            docs = data.get("documents", [])
+            for doc in docs:
+                for token in (
+                    [doc.get("id")]
+                    + (doc.get("subcategories") or [])
+                    + (doc.get("keywords") or [])
+                ):
+                    if isinstance(token, str) and token.strip():
+                        _known_factors.add(_normalize_factor_key(token))
+        except Exception as exc:
+            logger.warning("팩터 메타데이터 로드 실패: %s", exc)
+
+    # alias에서 사용하는 정식 팩터명도 추가
+    for target in _factor_alias_map.values():
+        if isinstance(target, str):
+            _known_factors.add(_normalize_factor_key(target))
+
+    # 기본 제공 팩터 (메타데이터 누락 대비)
+    defaults = [
+        "PER", "PBR", "PEG", "ROE", "ROA", "EPS",
+        "PRICE_CHANGE_1D", "PRICE_CHANGE_5D",
+        "RET_1D", "RET_5D",
+    ]
+    for token in defaults:
+        _known_factors.add(_normalize_factor_key(token))
+
+    # factor_units.yaml에 정의된 팩터도 알 수 있도록 추가
+    for key in _factor_units.keys():
+        _known_factors.add(_normalize_factor_key(key))
 
 # ======================================
 # DSL 스키마 모델
@@ -150,6 +244,8 @@ def _normalize_condition(cond: Dict[str, Any]) -> Dict[str, Any]:
     """factor/operator 정규화."""
     if not _factor_alias_map and not _operator_map:
         _load_alias_and_operator_maps()
+    if not _known_factors:
+        _load_known_factors()
 
     factor = cond.get("factor")
     if isinstance(factor, str):
@@ -161,6 +257,20 @@ def _normalize_condition(cond: Dict[str, Any]) -> Dict[str, Any]:
         key = op.lower().strip()
         cond["operator"] = _operator_map.get(op) or _operator_map.get(key) or op
 
+    normalized_factor_key = None
+    if isinstance(cond.get("factor"), str):
+        normalized_factor_key = _normalize_factor_key(cond["factor"])
+        factor_upper = cond["factor"].upper()
+
+        # RET_[N]D 또는 PRICE_CHANGE_[N]D 패턴은 자동 허용
+        is_dynamic_factor = (
+            re.match(r"^RET_\d+D$", factor_upper) or
+            re.match(r"^PRICE_CHANGE_\d+D$", factor_upper)
+        )
+
+        if _known_factors and not is_dynamic_factor and normalized_factor_key not in _known_factors:
+            raise ValueError(f"unknown_factor:{cond.get('factor')}")
+
     # between 처리: Claude가 value를 리스트로 주는 경우 대비
     if cond.get("operator") == "between" and isinstance(cond.get("value"), list) and len(cond["value"]) == 2:
         low, high = cond["value"]
@@ -168,7 +278,33 @@ def _normalize_condition(cond: Dict[str, Any]) -> Dict[str, Any]:
             {**{k: v for k, v in cond.items() if k != "value"}, "operator": ">", "value": low},
             {**{k: v for k, v in cond.items() if k != "value"}, "operator": "<", "value": high},
         ]
+
+    # 단위 방어: 팩터별 스케일 가드
+    val = cond.get("value")
+    unit = _factor_units.get(normalized_factor_key or "", "")
+    if isinstance(val, (int, float)):
+        cond["value"] = _guard_value_by_unit(unit, cond.get("factor"), val)
+
     return cond
+
+
+def _guard_value_by_unit(unit: str, factor: Any, value: float) -> float:
+    """팩터 단위 기반 스케일 보정."""
+    factor_upper = str(factor or "").upper()
+
+    # 수익률/가격 변화 계열: 퍼센트 입력(>=1)만 소수로 변환
+    if factor_upper.startswith(("RET_", "PRICE_CHANGE_")):
+        return value if abs(value) < 1 else value / 100.0
+
+    # percent 단위: 0<x<1이면 축소되었을 가능성 → 100배
+    if unit == "percent" and 0 < abs(value) < 1:
+        return round(value * 100, 6)
+
+    # raw 단위: 0<x<1이면 잘못 스케일된 값일 가능성 → 100배 (PER/PBR 등)
+    if unit == "raw" and 0 < abs(value) < 1:
+        return round(value * 100, 6)
+
+    return value
 
 # ======================================
 # Claude 호출
@@ -177,7 +313,7 @@ def call_claude_and_get_json(text: str) -> dict:
     """Bedrock 호출 + 간단한 재시도(Throttling 대비)."""
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 800,
+        "max_tokens": 2000,
         "temperature": 0.2,
         "system": CLAUDE_SYSTEM_PROMPT,
         "messages": [
@@ -194,12 +330,17 @@ def call_claude_and_get_json(text: str) -> dict:
         if wait:
             time.sleep(wait)
         try:
-            response = client.invoke_model(
-                modelId=BEDROCK_MODEL_ID,
-                contentType="application/json",
-                accept="application/json",
-                body=json.dumps(payload),
-            )
+            invoke_kwargs = {
+                "contentType": "application/json",
+                "accept": "application/json",
+                "body": json.dumps(payload),
+            }
+            if BEDROCK_INFERENCE_PROFILE_ID:
+                invoke_kwargs["inferenceProfileId"] = BEDROCK_INFERENCE_PROFILE_ID
+            else:
+                invoke_kwargs["modelId"] = BEDROCK_MODEL_ID
+
+            response = client.invoke_model(**invoke_kwargs)
 
             body = json.loads(response["body"].read())
             completion = body["content"][0]["text"]
@@ -228,7 +369,11 @@ def parse_strategy_text(text: str) -> StrategyResponse:
     conditions = claude_payload.get("conditions", [])
     normalized: List[Condition] = []
     for raw in conditions:
-        norm = _normalize_condition(raw)
+        try:
+            norm = _normalize_condition(raw)
+        except ValueError as exc:
+            logger.warning("지원하지 않는 팩터 조건 무시: %s", exc)
+            continue
         if isinstance(norm, list):
             # between 같은 경우 두 조건으로 확장
             for n in norm:

@@ -208,6 +208,15 @@ class SimulationSession(Base):
         comment="사용자 참조 ID"
     )
 
+    # 복제 추적
+    source_session_id = Column(
+        String(36),
+        ForeignKey("simulation_sessions.session_id"),
+        nullable=True,
+        index=True,
+        comment="원본 세션 ID (복제된 경우)"
+    )
+
     session_name = Column(String(200), nullable=True, comment="세션명")
     start_date = Column(Date, nullable=False, comment="시뮬레이션 시작일")
     end_date = Column(Date, nullable=False, comment="시뮬레이션 종료일")

@@ -64,34 +64,6 @@ class CommunityPost(Base):
         comment="게시글 유형 (STRATEGY_SHARE/BACKTEST_RESULT/DISCUSSION/QUESTION)"
     )
 
-    # 공유 대상 (선택적 - 전략이나 백테스트 결과 공유시)
-    strategy_id = Column(
-        String(36),
-        ForeignKey("portfolio_strategies.strategy_id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-        comment="공유할 전략 ID (선택)"
-    )
-    session_id = Column(
-        String(36),
-        ForeignKey("simulation_sessions.session_id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-        comment="공유할 백테스트 세션 ID (선택)"
-    )
-
-    # 전략 스냅샷 (게시 시점 정보 보존)
-    strategy_snapshot = Column(
-        JSON,
-        nullable=True,
-        comment="게시 시점 전략 정보 스냅샷 (strategy_name, strategy_type, buy_conditions, sell_conditions 등)"
-    )
-    session_snapshot = Column(
-        JSON,
-        nullable=True,
-        comment="게시 시점 백테스트 결과 스냅샷 (statistics, period, initial_capital 등)"
-    )
-
     # 공개 설정
     is_public = Column(Boolean, default=True, nullable=False, comment="공개 여부")
     is_anonymous = Column(Boolean, default=False, nullable=False, comment="익명 여부")
@@ -116,8 +88,6 @@ class CommunityPost(Base):
     __table_args__ = (
         Index('idx_community_posts_type', 'post_type', 'is_public', 'created_at'),
         Index('idx_community_posts_user', 'user_id', 'created_at'),
-        Index('idx_community_posts_strategy', 'strategy_id'),
-        Index('idx_community_posts_session', 'session_id'),
         {"comment": "커뮤니티 게시글 테이블"}
     )
 

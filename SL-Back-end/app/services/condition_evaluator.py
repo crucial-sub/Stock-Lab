@@ -139,8 +139,6 @@ class ConditionEvaluator:
         threshold = condition['value']
         value_type = condition.get('value_type', 'VALUE').upper()
 
-        self.logger.debug(f"🔍 [{stock_code}] 조건 평가 시작: {factor_name}({factor_key}) {op} {threshold}")
-
         # 팩터 값 추출
         try:
             stock_data = self._get_stock_slice(factor_data, stock_code, trading_date)

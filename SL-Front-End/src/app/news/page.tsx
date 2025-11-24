@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import type { NextPage } from "next";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Icon } from "@/components/common/Icon";
 import { NewsCard } from "@/components/news/NewsCard";
@@ -19,6 +20,7 @@ const NewsPage: NextPage = () => {
   const [filter, setFilter] = useState<string>("all");
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
   const [displayThemes, setDisplayThemes] = useState<string[]>([]);
+  const searchParams = useSearchParams();
 
   const debouncedKeyword = useDebounce(keyword, 300);
 
@@ -45,10 +47,25 @@ const NewsPage: NextPage = () => {
     isError,
   } = useNewsListQuery(newsParams);
 
+  const sortedNewsList = useMemo(() => {
+    return [...newsList].sort((a, b) => {
+      const aTime = new Date(a.publishedAt || "").getTime();
+      const bTime = new Date(b.publishedAt || "").getTime();
+      return bTime - aTime;
+    });
+  }, [newsList]);
+
   // 목록 데이터에서 직접 상세 뉴스 찾기 (이미 전체 데이터가 포함되어 있음)
   const selectedNews: NewsItem | undefined = selectedNewsId
     ? newsList.find((item: NewsItem) => item.id === selectedNewsId)
     : undefined;
+
+  useEffect(() => {
+    const newsIdParam = searchParams.get("newsId");
+    if (newsIdParam) {
+      setSelectedNewsId(newsIdParam);
+    }
+  }, [searchParams]);
 
   const handleToggleTheme = (theme: string) => {
     if (theme === "전체") {
@@ -149,7 +166,7 @@ const NewsPage: NextPage = () => {
 
         {!isLoading && !isError && (
           <div className="grid gap-4 md:grid-cols-2">
-            {newsList.map((item, index: number) => (
+            {sortedNewsList.map((item, index: number) => (
               <NewsCard
                 key={`${item.id}-${index}`}
                 id={item.id}

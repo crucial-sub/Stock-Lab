@@ -9,7 +9,7 @@
       "conditions": [
         {
           "condition": "시가총액 > 100억",
-          "conditionInfo": [
+          "condition_info": [
             "시가총액 = 주가 * 총 발행 주식 수",
             "회사의 시장가치"
           ]
@@ -25,69 +25,22 @@
       "conditions": [
         {
           "condition": "매출 CAGR(3Y) > 0",
-          "conditionInfo": ["최근 3년 매출의 연평균 증가율"]
+          "condition_info": ["최근 3년 매출의 연평균 증가율"]
         },
         {
           "condition": "영업이익 CAGR(3Y) > 0",
-          "conditionInfo": ["최근 3년 영업이익의 연평균 증가율"]
+          "condition_info": ["최근 3년 영업이익의 연평균 증가율"]
         },
         {
           "condition": "부채비율 < 100%",
-          "conditionInfo": [
+          "condition_info": [
             "부채비율 = (부채총액 ÷ 자기자본) * 100",
             "기업의 재무 안정성 지표"
           ]
         },
         {
           "condition": "ROE > 10%",
-          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
-        }
-      ]
-    },
-    {
-      "id": "benjamin_graham",
-      "name": "벤저민 그레이엄의 전략",
-      "summary": "가치투자의 기초를 닦은 벤저민 그레이엄식의 전략",
-      "description": "벤저민 그레이엄의 가치 투자 철학을 바탕으로, 안정성과 재무 건전성이 뛰어난 종목을 찾는 데 중점을 뒀어요. 기술 관련 기업을 제외하고 매출이 일정 규모 이상인 기업을 선정함으로써 시장에서의 안정성을 확보했어요. 높은 유동비율과 순유동자산이 장기부채를 초과하는 조건은 재무적으로 안정적인 구조를 의미하며, 과거 10년간의 EPS 성장률과 지속적인 흑자 기록은 안정적 성장의 신호로 볼 수 있어요.",
-      "tags": ["long_term", "style_value", "risk_low", "sector_traditional"],
-      "conditions": [
-        {
-          "condition": "기술 기업 제외",
-          "conditionInfo": ["기술 업종의 기업들을 조건에서 제외"]
-        },
-        {
-          "condition": "매출 > 1,000억원",
-          "conditionInfo": ["제품·서비스 판매로 벌어들인 총수익"]
-        },
-        {
-          "condition": "유동비율 > 200%",
-          "conditionInfo": [
-            "유동비율 = (유동자산 ÷ 유동부채) * 100",
-            "단기 채무 상환 능력"
-          ]
-        },
-        {
-          "condition": "순유동자산 > 장기부채",
-          "conditionInfo": [
-            "순유동자산 : 유동자산 - 유동부채; 단기적으로 사용 가능한 자산",
-            "장기부채 : 상환기간이 1년 이상 남은 부채"
-          ]
-        },
-        {
-          "condition": "EPS 5년 성장률 > 30%",
-          "conditionInfo": ["5년간 주당순이익(EPS) 연평균 성장률"]
-        },
-        {
-          "condition": "최근 5년간 흑자 기업",
-          "conditionInfo": ["연도별 순이익 / EPS가 5년 연속 > 0"]
-        },
-        {
-          "condition": "PER < 15",
-          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
-        },
-        {
-          "condition": "PBR*PER < 22",
-          "conditionInfo": ["주가순자산비율(PBR) * 주가수익비율(PER)"]
+          "condition_info": ["ROE = (순이익 ÷ 자기자본) * 100"]
         }
       ]
     },
@@ -100,37 +53,37 @@
       "conditions": [
         {
           "condition": "PER < 30",
-          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+          "condition_info": ["PER = 주가 ÷ 주당순이익(EPS)"]
         },
         {
           "condition": "0 < PEG < 1.8",
-          "conditionInfo": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
+          "condition_info": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
         },
         {
           "condition": "재고/매출 < 5%",
-          "conditionInfo": ["재고의 효율적 운용 정도"]
+          "condition_info": ["재고의 효율적 운용 정도"]
         },
         {
           "condition": "부채비율 < 150%",
-          "conditionInfo": [
+          "condition_info": [
             "부채비율 = (부채총액 ÷ 자기자본) * 100",
             "기업의 재무 안정성 지표"
           ]
         },
         {
           "condition": "ROE > 5%",
-          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+          "condition_info": ["ROE = (순이익 ÷ 자기자본) * 100"]
         },
         {
           "condition": "ROA > 1%",
-          "conditionInfo": [
+          "condition_info": [
             "ROA = (순이익 ÷ 총자산) x 100",
             "총자산 대비 순이익 비율"
           ]
         },
         {
           "condition": "배당수익률 > 3%",
-          "conditionInfo": [
+          "condition_info": [
             "배당수익률 = (주당 배당금 ÷ 주가) * 100",
             "투자 대비 배당 수익률"
           ]
@@ -146,47 +99,47 @@
       "conditions": [
         {
           "condition": "ROE > 15%",
-          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+          "condition_info": ["ROE = (순이익 ÷ 자기자본) * 100"]
         },
         {
           "condition": "장기부채비율 < 100%",
-          "conditionInfo": [
+          "condition_info": [
             "장기부채비율 = (장기부채 ÷ 총자산) * 100",
             "자산 중 장기부채 비중"
           ]
         },
         {
           "condition": "유동비율 > 1.5",
-          "conditionInfo": [
+          "condition_info": [
             "유동비율 = (유동자산 ÷ 유동부채) * 100",
             "단기 채무 상환 능력"
           ]
         },
         {
           "condition": "FCF > 0",
-          "conditionInfo": [
+          "condition_info": [
             "잉여현금흐름",
             "기업이 자유롭게 쓸 수 있는 현금"
           ]
         },
         {
           "condition": "PER < 17",
-          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+          "condition_info": ["PER = 주가 ÷ 주당순이익(EPS)"]
         },
         {
           "condition": "PBR < 1.5",
-          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+          "condition_info": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
         },
         {
           "condition": "부채비율 < 150%",
-          "conditionInfo": [
+          "condition_info": [
             "부채비율 = (부채총액 ÷ 자기자본) * 100",
             "기업의 재무 안정성 지표"
           ]
         },
         {
           "condition": "EPS 성장률 > 10%",
-          "conditionInfo": ["EPS의 전년 동기 대비 성장률"]
+          "condition_info": ["EPS의 전년 동기 대비 성장률"]
         }
       ]
     },
@@ -199,19 +152,19 @@
       "conditions": [
         {
           "condition": "EPS 성장률 (QoQ) > 18%",
-          "conditionInfo": ["EPS의 전 분기 대비 성장률"]
+          "condition_info": ["EPS의 전 분기 대비 성장률"]
         },
         {
           "condition": "EPS 성장률 > 18%",
-          "conditionInfo": ["EPS의 전년 동기 대비 성장률"]
+          "condition_info": ["EPS의 전년 동기 대비 성장률"]
         },
         {
           "condition": "ROE > 17%",
-          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+          "condition_info": ["ROE = (순이익 ÷ 자기자본) * 100"]
         },
         {
           "condition": "현재가 > 52주 신고가의 85%",
-          "conditionInfo": []
+          "condition_info": []
         }
       ]
     },
@@ -224,36 +177,36 @@
       "conditions": [
         {
           "condition": "ROIC > 13%",
-          "conditionInfo": [
+          "condition_info": [
             "ROIC = (세후영업이익(NOPAT) ÷ 투하자본) x 100",
             "투하자본으로 인한 이익률"
           ]
         },
         {
           "condition": "PER < 20",
-          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+          "condition_info": ["PER = 주가 ÷ 주당순이익(EPS)"]
         },
         {
           "condition": "PBR < 2",
-          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+          "condition_info": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
         },
         {
           "condition": "부채비율 > 150%",
-          "conditionInfo": [
+          "condition_info": [
             "부채비율 = (부채총액 ÷ 자기자본) * 100",
             "기업의 재무 안정성 지표"
           ]
         },
         {
           "condition": "FCF > 0",
-          "conditionInfo": [
+          "condition_info": [
             "잉여현금흐름",
             "기업이 자유롭게 쓸 수 있는 현금"
           ]
         },
         {
           "condition": "배당 수익률 > 2%",
-          "conditionInfo": [
+          "condition_info": [
             "배당수익률 = (주당 배당금 ÷ 주가) * 100",
             "투자 대비 배당 수익률"
           ]
@@ -269,37 +222,37 @@
       "conditions": [
         {
           "condition": "ROIC > 15%",
-          "conditionInfo": [
+          "condition_info": [
             "ROIC = (세후영업이익(NOPAT) ÷ 투하자본) x 100",
             "투하자본으로 인한 이익률"
           ]
         },
         {
           "condition": "PER < 10",
-          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+          "condition_info": ["PER = 주가 ÷ 주당순이익(EPS)"]
         },
         {
           "condition": "PBR < 1.5",
-          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+          "condition_info": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
         },
         {
           "condition": "ROE > 15%",
-          "conditionInfo": ["ROE = (순이익 ÷ 자기자본) * 100"]
+          "condition_info": ["ROE = (순이익 ÷ 자기자본) * 100"]
         },
         {
           "condition": "매출 성장률 > 15%",
-          "conditionInfo": ["매출액의 전년 동기 대비 성장률"]
+          "condition_info": ["매출액의 전년 동기 대비 성장률"]
         },
         {
           "condition": "부채비율 < 50%",
-          "conditionInfo": [
+          "condition_info": [
             "부채비율 = (부채총액 ÷ 자기자본) * 100",
             "기업의 재무 안정성 지표"
           ]
         },
         {
           "condition": "유동비율 > 2",
-          "conditionInfo": [
+          "condition_info": [
             "유동비율 = (유동자산 ÷ 유동부채) * 100",
             "단기 채무 상환 능력"
           ]
@@ -315,29 +268,29 @@
       "conditions": [
         {
           "condition": "EV/EBITDA < 8",
-          "conditionInfo": [
+          "condition_info": [
             "EV/EBITDA = 기업가치(EV) ÷ 세전영업이익(EBITDA)",
             "기업 인수 시 투자원금 회수가능 연수"
           ]
         },
         {
           "condition": "ROIC < 10%",
-          "conditionInfo": [
+          "condition_info": [
             "ROIC = (세후영업이익(NOPAT) ÷ 투하자본) x 100",
             "투하자본으로 인한 이익률"
           ]
         },
         {
           "condition": "PBR < 1.5",
-          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
+          "condition_info": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
         },
         {
           "condition": "PSR < 1.5",
-          "conditionInfo": ["PSR = 주가 ÷ 주당매출액", "주가매출비율"]
+          "condition_info": ["PSR = 주가 ÷ 주당매출액", "주가매출비율"]
         },
         {
           "condition": "0 < PEG < 1",
-          "conditionInfo": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
+          "condition_info": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
         }
       ]
     },
@@ -350,19 +303,19 @@
       "conditions": [
         {
           "condition": "0 < PEG < 2",
-          "conditionInfo": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
+          "condition_info": ["PEG = PER ÷ EPS성장률", "성장 대비 주가수준"]
         },
         {
           "condition": "PSR < 20",
-          "conditionInfo": ["PSR = 주가 ÷ 주당매출액", "주가매출비율"]
+          "condition_info": ["PSR = 주가 ÷ 주당매출액", "주가매출비율"]
         },
         {
           "condition": "매출 성장률 > 20%",
-          "conditionInfo": ["매출액의 전년 동기 대비 성장률"]
+          "condition_info": ["매출액의 전년 동기 대비 성장률"]
         },
         {
           "condition": "유동비율 > 2",
-          "conditionInfo": [
+          "condition_info": [
             "유동비율 = (유동자산 ÷ 유동부채) * 100",
             "단기 채무 상환 능력"
           ]
@@ -378,112 +331,32 @@
       "conditions": [
         {
           "condition": "PER < 15",
-          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
+          "condition_info": ["PER = 주가 ÷ 주당순이익(EPS)"]
         },
         {
           "condition": "ROIC > 15%",
-          "conditionInfo": [
+          "condition_info": [
             "ROIC = (세후영업이익(NOPAT) ÷ 투하자본) x 100",
             "투하자본으로 인한 이익률"
           ]
         },
         {
           "condition": "부채비율 < 50%",
-          "conditionInfo": [
+          "condition_info": [
             "부채비율 = (부채총액 ÷ 자기자본) * 100",
             "기업의 재무 안정성 지표"
           ]
         },
         {
           "condition": "총 마진 성장률 > 3%",
-          "conditionInfo": ["총이익(매출-매출원가)의 전년 동기 대비 성장률"]
+          "condition_info": ["총이익(매출-매출원가)의 전년 동기 대비 성장률"]
         },
         {
           "condition": "FCF > 시가총액의 5%",
-          "conditionInfo": [
+          "condition_info": [
             "잉여현금흐름",
             "기업이 자유롭게 쓸 수 있는 현금"
           ]
-        }
-      ]
-    },
-    {
-      "id": "undervalued_dividend",
-      "name": "저평가 배당주",
-      "summary": "배당과 시세차익을 동시에 고려한 배당 종목",
-      "description": "장기적인 관점에서 배당과 기업을 성장성을 모두 갖춘 배당주를 찾고자 하는 투자자를 위한 종목들이에요. 현재 배당수익률이 과거보다 높은 종목을 통해, 현재 주가가 비교적 저평가 되어 있다는 점을 알 수 있어요.",
-      "tags": ["long_term", "style_value", "style_dividend", "risk_low", "prefer_dividend"],
-      "conditions": [
-        {
-          "condition": "배당수익률 > 과거 5년 평균",
-          "conditionInfo": [
-            "현금 배당 수익률 = (1주당 현금배당금 ÷ 주가) * 100"
-          ]
-        },
-        {
-          "condition": "FCF > 0",
-          "conditionInfo": [
-            "잉여현금흐름",
-            "기업이 자유롭게 쓸 수 있는 현금"
-          ]
-        },
-        {
-          "condition": "EPS 성장률 > 5%",
-          "conditionInfo": ["EPS의 전년 동기 대비 성장률"]
-        },
-        {
-          "condition": "배당금 성장 연수 >= 3년",
-          "conditionInfo": ["배당금이 연속 증가한 연수"]
-        },
-        {
-          "condition": "배당성향 > 30%",
-          "conditionInfo": [
-            "배당성향 = 배당금 ÷ 순이익 * 100",
-            "이익 중 배당금 지급 비율"
-          ]
-        },
-        {
-          "condition": "PBR < 1",
-          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
-        },
-        {
-          "condition": "PER < 20",
-          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
-        }
-      ]
-    },
-    {
-      "id": "long_term_dividend",
-      "name": "장기 고배당주",
-      "summary": "장기 투자에 적합한 배당 종목",
-      "description": "꾸준히 배당을 받을 수 있는 안정적인 종목을 찾는 투자자들을 위한 종목들이에요. 배당수익률이 4% 이상으로, 비교적 높은 배당을 제공하는 종목을 위주로 찾아봤어요. PER와 PBR 비율은 기업이 수익성과 자산 대비 기업이 얼마나 적정하게 평가되었는지를 파악하는 지표로, 저평가된 종목을 찾는 기준으로 활용되었어요.",
-      "tags": ["long_term", "style_dividend", "risk_low", "prefer_dividend", "sector_traditional"],
-      "conditions": [
-        {
-          "condition": "배당수익률 >= 4%",
-          "conditionInfo": [
-            "배당수익률 = (주당 배당금 ÷ 주가) * 100",
-            "투자 대비 배당 수익률"
-          ]
-        },
-        {
-          "condition": "PER < 20",
-          "conditionInfo": ["PER = 주가 ÷ 주당순이익(EPS)"]
-        },
-        {
-          "condition": "PBR < 1.5",
-          "conditionInfo": ["PBR = 주가 ÷ 주당순자산", "주가순자산비율"]
-        },
-        {
-          "condition": "부채 비율 < 66%",
-          "conditionInfo": [
-            "부채비율 = (부채총액 ÷ 자기자본) * 100",
-            "기업의 재무 안정성 지표"
-          ]
-        },
-        {
-          "condition": "영업이익 CAGR(3Y) >= 3%",
-          "conditionInfo": ["최근 3년 영업이익의 연평균 증가율"]
         }
       ]
     }

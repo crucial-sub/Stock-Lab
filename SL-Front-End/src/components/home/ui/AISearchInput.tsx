@@ -74,7 +74,7 @@ export function AISearchInput({
           "flex-1 h-full px-5",
           "bg-transparent",
           "text-body text-xl font-semibold",
-          "placeholder:text-muted placeholder:font-semibold",
+          "placeholder:text-muted/50 placeholder:font-normal",
           "outline-none",
           "rounded-lg",
           disabled && "cursor-not-allowed opacity-50",

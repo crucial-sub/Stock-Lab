@@ -1,7 +1,8 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChatHistory } from "@/components/ai-assistant/ChatHistory";
-import { ChatInterface } from "@/components/ai-assistant/ChatInterface";
 import { SecondarySidebar } from "@/components/ai-assistant/SecondarySidebar";
 import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { StreamingMarkdownRenderer } from "@/components/ai-assistant/StreamingMarkdownRenderer";
@@ -11,11 +12,19 @@ import { AISearchInput } from "@/components/home/ui";
 import { useChatStream } from "@/hooks/useChatStream";
 import { chatHistoryApi } from "@/lib/api/chat-history";
 import { sendChatMessage, type ChatResponse } from "@/lib/api/chatbot";
+import { runBacktest, type BacktestRunRequest } from "@/lib/api/backtest";
+import { getStrategyDetail } from "@/lib/api/investment-strategy";
 import { getAuthTokenFromCookie } from "@/lib/auth/token";
-import { useCallback, useEffect, useState, useRef } from "react";
-import type { Message, TextMessage, MarkdownMessage } from "@/types/message";
-import type { QuestionnaireAnswer } from "@/data/assistantQuestionnaire";
-import { QUESTIONNAIRE_CTA, QUESTIONNAIRE_START_BUTTON, createAnswer } from "@/data/assistantQuestionnaire";
+import type { QuestionnaireAnswer, Question } from "@/data/assistantQuestionnaire";
+import { createAnswer } from "@/data/assistantQuestionnaire";
+import type { StrategyDetail } from "@/types/investment-strategy";
+import type {
+  BacktestConfigMessage,
+  BacktestExecutionMessage,
+  MarkdownMessage,
+  Message,
+  TextMessage,
+} from "@/types/message";
 import { getTopRecommendations, type StrategyMatch } from "@/utils/strategyMatcher";
 
 // crypto.randomUUID polyfill (HTTP 환경 지원)
@@ -24,7 +33,7 @@ function generateUUID(): string {
     return crypto.randomUUID();
   }
   // Fallback: 간단한 UUID v4 생성
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
@@ -63,11 +72,12 @@ interface ChatSession {
   questionHistory?: Array<{
     questionId: string;
     selectedOptionId: string;
-    question: any;
+    question: string;
   }>;
   // 새로운 설문 시스템용
   questionnaireAnswers?: QuestionnaireAnswer[];
   strategyRecommendations?: StrategyMatch[];
+  selectedStrategy?: { id: string; name: string };
   currentQuestionStep?: number;
 }
 
@@ -89,22 +99,28 @@ interface AIAssistantPageClientProps {
     id: string;
     question: string;
   }[];
+  autoStartQuestionnaire?: boolean;
 }
 
 export function AIAssistantPageClient({
   largeSample,
   smallSample,
+  autoStartQuestionnaire = false,
 }: AIAssistantPageClientProps) {
+  const searchParams = useSearchParams();
   const [sessionId, setSessionId] = useState<string>("");
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [_isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [questionHistory, setQuestionHistory] = useState<Array<{
     questionId: string;
     selectedOptionId: string;
-    question: any;
+    question: string;
   }>>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const hasAutoStartedRef = useRef(false);
+  const shouldAutoStart =
+    autoStartQuestionnaire || searchParams.get("autoStart") === "questionnaire";
   const [currentMode, setCurrentMode] = useState<"initial" | "chat" | "questionnaire">("initial");
   const [lastRequestTime, setLastRequestTime] = useState<number>(0);
   const MIN_REQUEST_INTERVAL = 2000; // 최소 2초 간격
@@ -112,10 +128,10 @@ export function AIAssistantPageClient({
   // 새로운 설문 시스템 상태
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<QuestionnaireAnswer[]>([]);
   const [strategyRecommendations, setStrategyRecommendations] = useState<StrategyMatch[]>([]);
+  const [selectedStrategy, setSelectedStrategy] = useState<StrategyDetail | null>(null);
 
   // SSE 스트리밍 상태
-  const [streamingMessage, setStreamingMessage] = useState<string>("");
-  const [shouldStartStream, setShouldStartStream] = useState(false);
+  const [, setStreamingMessage] = useState<string>("");
 
   // 스크롤 컨테이너 ref (직접 제어용)
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -127,7 +143,6 @@ export function AIAssistantPageClient({
     connectionState,
     error: streamError,
     sendMessage: sendStreamMessage,
-    retry: retryStream,
   } = useChatStream(sessionId || "temp_session");
 
   // 세션 중복 제거 유틸리티 함수
@@ -145,7 +160,10 @@ export function AIAssistantPageClient({
   const saveChatSession = (sessionId: string, firstMessage: string) => {
     const newSession: ChatSession = {
       id: sessionId,
-      title: firstMessage.length > 20 ? firstMessage.substring(0, 20) + "..." : firstMessage,
+      title:
+        firstMessage.length > 20
+          ? `${firstMessage.substring(0, 20)}...`
+          : firstMessage,
       lastMessage: firstMessage,
       timestamp: Date.now(),
       messages: messages,
@@ -165,7 +183,6 @@ export function AIAssistantPageClient({
   const saveChatToDB = async (sessionId: string, title: string, msgs: Message[]) => {
     const token = getAuthTokenFromCookie();
     if (!token) {
-      console.log("No token, skipping DB save");
       return; // 로그인 안된 경우 저장 안함
     }
 
@@ -181,7 +198,6 @@ export function AIAssistantPageClient({
         }));
 
       if (validMessages.length === 0) {
-        console.log("No valid messages to save");
         return; // 저장할 메시지 없으면 스킵
       }
 
@@ -193,15 +209,9 @@ export function AIAssistantPageClient({
         messages: validMessages,
       };
 
-      console.log("Saving to DB:", JSON.stringify(requestData, null, 2));
-
       await chatHistoryApi.saveChat(requestData);
-      console.log("Chat saved to DB successfully:", sessionId);
     } catch (error) {
       console.error("Failed to save chat to DB:", error);
-      if (error instanceof Error) {
-        console.error("Error details:", error.message);
-      }
     }
   };
 
@@ -255,8 +265,6 @@ export function AIAssistantPageClient({
 
   // 채팅 세션 클릭 핸들러 - 이전 대화 불러오기
   const handleChatSessionClick = async (chatId: string) => {
-    console.log("Chat session clicked:", chatId);
-
     const session = chatSessions.find(s => s.id === chatId);
     if (!session) return;
 
@@ -284,8 +292,6 @@ export function AIAssistantPageClient({
         // 로컬 세션에서 설문 데이터 복원 (DB에는 저장 안 됨)
         setQuestionnaireAnswers(session.questionnaireAnswers || []);
         setStrategyRecommendations(session.strategyRecommendations || []);
-        console.log("Loaded messages from DB:", dbMessages.length);
-        console.log("Restored questionnaire data:", session.questionnaireAnswers?.length || 0, "answers");
       } catch (error) {
         console.error("Failed to load session from DB:", error);
         // 실패 시 로컬 세션 사용
@@ -307,10 +313,8 @@ export function AIAssistantPageClient({
     setStrategyRecommendations(session.strategyRecommendations || []);
   };
 
-  const handleLargeCardClick = () => {
+  const handleLargeCardClick = useCallback(() => {
     // 전략 추천 플로우 시작 (새로운 설문 시스템)
-    console.log("Starting strategy recommendation flow");
-
     // 세션 ID 생성
     const newSessionId = generateUUID();
     setSessionId(newSessionId);
@@ -332,14 +336,19 @@ export function AIAssistantPageClient({
 
     // 채팅 세션 저장
     saveChatSession(newSessionId, userMessage);
-  };
+  }, [saveChatSession]);
+
+  useEffect(() => {
+    if (shouldAutoStart && !hasAutoStartedRef.current) {
+      hasAutoStartedRef.current = true;
+      handleLargeCardClick();
+    }
+  }, [shouldAutoStart, handleLargeCardClick]);
 
   const handleSampleClick = async (strategyId: string) => {
     // small sample 카드 클릭 시 해당 전략에 대해 질문 - 채팅 모드로 전환
 
     const userMessage = smallSample.find((sample) => (sample.id === strategyId))?.question || "";
-
-    console.log(`Strategy ${strategyId} clicked:`, userMessage);
 
     // 세션 ID 생성 (없는 경우) - UUID 형식으로 생성
     if (!sessionId) {
@@ -358,12 +367,8 @@ export function AIAssistantPageClient({
   };
 
   const handleAISubmit = useCallback(async (value: string) => {
-    // AI 요청 처리
-    console.log("AI request:", value);
-
     // 이미 스트리밍 중이면 요청 무시
     if (isStreaming) {
-      console.log("Already streaming, ignoring request");
       return;
     }
 
@@ -400,6 +405,86 @@ export function AIAssistantPageClient({
     sendStreamMessage(value);
   }, [sessionId, isStreaming, lastRequestTime, currentMode, sendStreamMessage]);
 
+  /**
+   * 백테스트 시작 콜백
+   * BacktestConfigRenderer에서 백테스트가 시작될 때 호출되어 BacktestExecutionMessage를 메시지 히스토리에 추가
+   */
+  const handleBacktestStart = useCallback(async (
+    strategyName: string,
+    config: {
+      investmentAmount: number;
+      startDate: string;
+      endDate: string;
+    }
+  ) => {
+    if (!selectedStrategy) {
+      return;
+    }
+
+    try {
+      // 날짜 형식 변환: YYYY-MM-DD → YYYYMMDD
+      const formatDate = (dateStr: string) => dateStr.replace(/-/g, "");
+
+      // BacktestRunRequest 생성
+      const backtestRequest: BacktestRunRequest = {
+        // 전략 설정에서 가져오기
+        ...(selectedStrategy.backtest_config as BacktestRunRequest),
+        // 사용자 입력값으로 덮어쓰기
+        strategy_name: strategyName,
+        start_date: formatDate(config.startDate),
+        end_date: formatDate(config.endDate),
+        initial_investment: config.investmentAmount,
+      };
+
+      // POST /backtest/run 호출
+      const response = await runBacktest(backtestRequest);
+
+      // BacktestExecutionMessage 생성
+      const executionMessage: BacktestExecutionMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        type: "backtest_execution",
+        role: "assistant",
+        backtestId: response.backtestId,  // 실제 백테스트 ID
+        strategyId: selectedStrategy.id,
+        strategyName,
+        config: {
+          investmentAmount: config.investmentAmount,
+          startDate: config.startDate,
+          endDate: config.endDate,
+        },
+        createdAt: Date.now(),
+      };
+
+      // 메시지 히스토리에 추가
+      setMessages((prev) => {
+        const updatedMessages = [...prev, executionMessage];
+
+        // DB에 채팅 히스토리 저장 (비동기)
+        if (sessionId) {
+          saveChatToDB(
+            sessionId,
+            `${strategyName} 백테스트 실행`,
+            updatedMessages
+          );
+        }
+
+        return updatedMessages;
+      });
+
+      // 스크롤을 부드럽게 아래로 이동
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({
+            top: scrollContainerRef.current.scrollHeight,
+            behavior: "smooth",
+          });
+        }
+      }, 100);
+    } catch (error) {
+      console.error("Failed to start backtest:", error);
+    }
+  }, [selectedStrategy, sessionId]);
+
   // DB 또는 localStorage에서 채팅 세션 불러오기
   useEffect(() => {
     const loadChatSessions = async () => {
@@ -409,16 +494,28 @@ export function AIAssistantPageClient({
       if (token) {
         try {
           const dbSessions = await chatHistoryApi.getSessions(50, 0);
-          const formattedSessions: ChatSession[] = dbSessions.map(session => ({
-            id: session.session_id,
-            title: session.title,
-            lastMessage: session.last_message_preview || "",
-            timestamp: new Date(session.created_at).getTime(),
-            messages: [], // 세션 클릭 시 따로 불러옴
-            mode: session.mode as "initial" | "chat" | "questionnaire",
-          }));
+
+          // localStorage에서 questionnaire 데이터 가져오기 (DB에는 저장 안 됨)
+          const localSessions = getLocalSessions();
+          const localSessionsMap = new Map(localSessions.map(s => [s.id, s]));
+
+          const formattedSessions: ChatSession[] = dbSessions.map(session => {
+            const localSession = localSessionsMap.get(session.session_id);
+
+            return {
+              id: session.session_id,
+              title: session.title,
+              lastMessage: session.last_message_preview || "",
+              timestamp: new Date(session.created_at).getTime(),
+              messages: [], // 세션 클릭 시 따로 불러옴
+              mode: session.mode as "initial" | "chat" | "questionnaire",
+              // localStorage의 questionnaire 데이터 병합
+              questionnaireAnswers: localSession?.questionnaireAnswers || [],
+              strategyRecommendations: localSession?.strategyRecommendations || [],
+            };
+          });
+
           setChatSessions(dedupeSessions(formattedSessions));
-          console.log("Loaded chat sessions from DB:", formattedSessions.length);
         } catch (error) {
           console.error("Failed to load chat sessions from DB:", error);
           // DB 실패 시 localStorage에서 불러오기
@@ -430,15 +527,23 @@ export function AIAssistantPageClient({
       }
     };
 
-    const loadFromLocalStorage = () => {
+    const getLocalSessions = (): ChatSession[] => {
       const savedSessions = localStorage.getItem("ai-chat-sessions");
       if (savedSessions) {
         try {
-          setChatSessions(dedupeSessions(JSON.parse(savedSessions)));
-          console.log("Loaded chat sessions from localStorage");
+          return JSON.parse(savedSessions);
         } catch (error) {
-          console.error("Failed to load chat sessions from localStorage:", error);
+          console.error("Failed to parse localStorage sessions:", error);
+          return [];
         }
+      }
+      return [];
+    };
+
+    const loadFromLocalStorage = () => {
+      const sessions = getLocalSessions();
+      if (sessions.length > 0) {
+        setChatSessions(dedupeSessions(sessions));
       }
     };
 
@@ -466,7 +571,6 @@ export function AIAssistantPageClient({
   // SSE 스트리밍 완료 시 메시지 추가
   useEffect(() => {
     if (connectionState === "complete" && streamContent) {
-      console.log("Streaming complete, adding message:", streamContent);
       setMessages((prev) => [
         ...prev,
         createMarkdownMessage("assistant", streamContent),
@@ -513,7 +617,6 @@ export function AIAssistantPageClient({
     if (token) {
       try {
         await chatHistoryApi.deleteSession(chatId);
-        console.log("Chat deleted from DB:", chatId);
       } catch (error) {
         console.error("Failed to delete chat from DB:", error);
       }
@@ -543,7 +646,6 @@ export function AIAssistantPageClient({
         await Promise.all(
           chatSessions.map(session => chatHistoryApi.deleteSession(session.id))
         );
-        console.log("All chats deleted from DB");
       } catch (error) {
         console.error("Failed to delete all chats from DB:", error);
       }
@@ -560,10 +662,7 @@ export function AIAssistantPageClient({
     setQuestionHistory([]);
   };
 
-  const handleAnswerSelect = async (questionId: string, optionId: string, answerText: string) => {
-    // 설문조사 답변 전송
-    console.log("Answer selected:", questionId, optionId, answerText);
-
+  const _handleAnswerSelect = async (questionId: string, optionId: string, answerText: string) => {
     // 현재 질문을 히스토리에 저장 (다음 질문으로 넘어가기 전에)
     if (chatResponse?.ui_language?.type?.startsWith("questionnaire") && "question" in chatResponse.ui_language) {
       const question = chatResponse.ui_language.question;
@@ -588,13 +687,11 @@ export function AIAssistantPageClient({
           question_id: questionId,
           option_id: optionId,
         },
+        client_type: "assistant",
       });
 
       setSessionId(response.session_id);
       setChatResponse(response);
-
-      console.log("Response:", response);
-      console.log("UI Language:", response.ui_language);
     } catch (error) {
       console.error("Failed to send answer:", error);
     } finally {
@@ -603,9 +700,11 @@ export function AIAssistantPageClient({
   };
 
   // 새로운 설문 시스템용 핸들러
-  const handleQuestionnaireAnswerSelect = (questionId: string, optionId: string, answerText: string) => {
-    console.log("Questionnaire answer selected:", questionId, optionId, answerText);
-
+  const handleQuestionnaireAnswerSelect = (
+    questionId: string,
+    optionId: string,
+    _answerText: string,
+  ) => {
     // 답변을 상태에 저장
     const answer = createAnswer(questionId, optionId);
     if (answer) {
@@ -620,11 +719,8 @@ export function AIAssistantPageClient({
   };
 
   const handleQuestionnaireComplete = async (tags: string[]) => {
-    console.log("Questionnaire completed with tags:", tags);
-
     // 전략 매칭 알고리즘 실행
     const recommendations = getTopRecommendations(tags, 3);
-    console.log("Strategy recommendations:", recommendations);
 
     // 전략 추천 결과 저장 (메시지 추가 없음)
     setStrategyRecommendations(recommendations);
@@ -632,8 +728,6 @@ export function AIAssistantPageClient({
 
   // 설문조사 다시 시작 핸들러
   const handleQuestionnaireRestart = () => {
-    console.log("Restarting questionnaire");
-
     // 설문 관련 상태만 초기화 (메시지는 유지)
     setQuestionnaireAnswers([]);
     setStrategyRecommendations([]);
@@ -644,6 +738,54 @@ export function AIAssistantPageClient({
       ...prev,
       createMarkdownMessage("assistant", restartMessage),
     ]);
+  };
+
+  // 전략 선택 핸들러
+  const handleStrategySelect = async (strategyId: string, strategyName: string) => {
+    try {
+      // 전략 상세 정보 조회 (backtest_config 포함)
+      const strategyDetail = await getStrategyDetail(strategyId);
+
+      // 선택된 전략 저장
+      setSelectedStrategy(strategyDetail);
+
+      // BacktestConfigMessage를 messages 배열에 추가
+      const configMessage: BacktestConfigMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        type: "backtest_config",
+        role: "assistant",
+        strategyId,
+        strategyName,
+        createdAt: Date.now(),
+      };
+
+    setMessages((prev) => {
+      const updatedMessages = [...prev, configMessage];
+
+      // DB에 채팅 히스토리 저장 (비동기)
+      if (sessionId) {
+        saveChatToDB(
+          sessionId,
+          `${strategyName} 백테스트 설정`,
+          updatedMessages
+        );
+      }
+
+      return updatedMessages;
+    });
+
+    // 스크롤을 부드럽게 아래로 이동
+    setTimeout(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({
+          top: scrollContainerRef.current.scrollHeight,
+          behavior: "smooth",
+        });
+      }
+    }, 100);
+    } catch (error) {
+      console.error("Failed to select strategy:", error);
+    }
   };
 
   // 새 채팅 시작: 상태 초기화
@@ -681,10 +823,12 @@ export function AIAssistantPageClient({
               ref={scrollContainerRef}
               className="flex-1 overflow-y-auto mb-4 px-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             >
+              {/* 초기 메시지만 표시 (text, markdown) */}
               <div className="w-full max-w-[1000px] mx-auto mb-6">
                 <ChatHistory
-                  messages={messages}
+                  messages={messages.filter(m => m.type === 'text' || m.type === 'markdown')}
                   isWaitingForAI={false}
+                  onBacktestStart={handleBacktestStart}
                 />
               </div>
 
@@ -701,8 +845,19 @@ export function AIAssistantPageClient({
               {strategyRecommendations.length > 0 && (
                 <StrategyRecommendationRenderer
                   recommendations={strategyRecommendations}
+                  onSelectStrategy={handleStrategySelect}
                 />
               )}
+
+              {/* 백테스트 메시지만 표시 (backtest_config, backtest_execution) */}
+              {/* 전략 추천 아래에 배치되어 올바른 순서 보장 */}
+              <div className="w-full max-w-[1000px] mx-auto">
+                <ChatHistory
+                  messages={messages.filter(m => m.type === 'backtest_config' || m.type === 'backtest_execution')}
+                  isWaitingForAI={false}
+                  onBacktestStart={handleBacktestStart}
+                />
+              </div>
             </div>
           </div>
         ) : currentMode === "chat" ? (
@@ -711,7 +866,7 @@ export function AIAssistantPageClient({
             {/* 스크롤 가능한 메시지 영역 - 스크롤바 숨김 */}
             <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto mb-4 px-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+              className="flex-1 overflow-y-auto mb-4 px-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             >
               <div className="w-full max-w-[1000px] mx-auto">
                 <ChatHistory
@@ -721,6 +876,7 @@ export function AIAssistantPageClient({
                     connectionState === "connected" ||
                     (isStreaming && !streamContent)
                   }
+                  onBacktestStart={handleBacktestStart}
                 />
 
                 {/* SSE 스트리밍 중인 메시지 */}
@@ -728,6 +884,7 @@ export function AIAssistantPageClient({
                   <StreamingMarkdownRenderer
                     content={streamContent}
                     isStreaming={isStreaming}
+                    compactMaxBullets={3}
                     role="assistant"
                   />
                 )}
@@ -745,14 +902,14 @@ export function AIAssistantPageClient({
           </div>
         ) : (
           /* 초기 화면 */
-          <div className="flex flex-col items-center">
+          <div className="relative flex min-h-[100vh] w-full flex-col items-center">
             {/* 타이틀 */}
-            <h1 className="text-[32px] font-bold text-black text-center mb-[80px]">
+            <span className="text-[2rem] font-semibold text-black text-center mt-[5rem] mb-[20rem]">
               궁금한 내용을 AI에게 확인해보세요!
-            </h1>
+            </span>
 
             {/* 큰 카드 */}
-            <div className="w-full max-w-[1000px] mb-[112px]">
+            <div className="w-full max-w-[1000px] mb-[1.5rem]">
               <StrategyCard
                 question={largeSample.question}
                 description={largeSample.description}
@@ -762,7 +919,7 @@ export function AIAssistantPageClient({
             </div>
 
             {/* 작은 카드 그리드 (2x2) */}
-            <div className="grid grid-cols-2 gap-x-[40px] gap-y-[32px] mb-[114px]">
+            <div className="grid w-full max-w-[1000px] grid-cols-2 gap-x-[1.5rem] gap-y-[1.5rem] mb-[1rem] mx-auto">
               {smallSample.map((strategy) => (
                 <StrategyCard
                   key={strategy.id}
@@ -772,8 +929,10 @@ export function AIAssistantPageClient({
               ))}
             </div>
 
+            <div className="w-full max-w-[1000px] flex-1" />
+
             {/* AI 입력창 */}
-            <div className="w-full max-w-[1000px]">
+            <div className="sticky bottom-[0px] w-full max-w-[1000px] backdrop-blur-md py-4">
               <AISearchInput
                 placeholder="만들고 싶은 전략을 AI에게 요청하세요!"
                 onSubmit={handleAISubmit}

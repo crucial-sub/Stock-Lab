@@ -816,5 +816,3 @@ async function loadResults(sessionId) {
     drawChart(chartData);
 }
 ```
-
-이 구현 가이드는 젠포트 스타일의 퀀트 투자 시뮬레이션 시스템을 구축하는데 필요한 핵심 컴포넌트들을 제공합니다.

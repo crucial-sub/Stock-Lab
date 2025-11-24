@@ -59,89 +59,92 @@ export function PostCard({ post, isSelected, onToggleSelect, onDelete }: PostCar
   };
 
   return (
-    <div className="bg-base-0 border border-surface rounded-lg p-4 hover:shadow-elev-card transition-shadow">
-      {/* 첫 번째 줄: 태그, 제목, 날짜, 체크박스 */}
-      <div className="flex items-start mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+    <div className="rounded-[12px] border-[0.5px] border-[#C8C8C8] bg-[#FFFFFF80] p-5 shadow-elev-card-soft transition hover:translate-y-[-2px]">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-start">
+          <div className="flex-1">
             {post.tags && post.tags.length > 0 && (
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-0">
                 {post.tags.map((tag, index) => (
                   <span
-                    key={index}
-                    className="px-2 py-1 bg-brand-soft text-brand text-xs rounded-sm"
+                    key={`${tag}-${index}`}
+                    className="rounded-full mb-2 bg-brand-purple px-3 py-1 text-[0.75rem] font-normal text-[#FFFFFF]"
                   >
                     {tag}
                   </span>
                 ))}
               </div>
             )}
+            <h3 className="text-[1.25rem] font-semibold text-[#000000]">{post.title}</h3>
+            <p className="text-[0.75rem] text-muted">{formatDate(post.createdAt)}</p>
           </div>
-          <h3 className="text-lg font-semibold text-text-body mb-1">
-            {post.title}
-          </h3>
-          <p className="text-sm text-text-muted">
-            {formatDate(post.createdAt)}
-          </p>
+          <div className="flex items-center gap-2">
+            <label className="relative cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={onToggleSelect}
+                className="peer sr-only"
+              />
+              <Image
+                src="/icons/check-box-blank.svg"
+                alt="선택 안 됨"
+                width={24}
+                height={24}
+                className="peer-checked:hidden"
+              />
+              <Image
+                src="/icons/check-box_brand.svg"
+                alt="선택됨"
+                width={24}
+                height={24}
+                className="hidden peer-checked:block"
+              />
+            </label>
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#000000] transition hover:bg-[#e5e9ff]"
+              >
+                <Image src="/icons/more_vert.svg" alt="메뉴" width={20} height={20} />
+              </button>
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-32 rounded-[12px] border border-[#dbe3f5] bg-white p-1 shadow-elev-card-soft">
+                  <button
+                    onClick={handleEdit}
+                    className="w-full rounded-[8px] px-4 py-2 text-left text-sm text-[#000000] transition hover:bg-[#f3f5ff]"
+                  >
+                    수정
+                  </button>
+                  <button
+                    onClick={handleDeleteClick}
+                    className="w-full rounded-[8px] px-4 py-2 text-left text-sm text-price-up transition hover:bg-[#ff64641A]"
+                  >
+                    삭제
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={onToggleSelect}
-          className="w-5 h-5 cursor-pointer"
-        />
-      </div>
 
-      {/* 두 번째 줄: 내용 미리보기, 케밥 메뉴 */}
-      <div className="flex items-start mb-3">
-        <p className="flex-1 text-sm text-text-muted line-clamp-2">
+        <p className="text-[1rem] text-[#000000]">
           {post.contentPreview}
         </p>
-        <div className="relative ml-2" ref={menuRef}>
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="p-1 hover:bg-surface rounded transition-colors"
-          >
-            <Image
-              src="/icons/more_vert.svg"
-              alt="메뉴"
-              width={20}
-              height={20}
-            />
-          </button>
 
-          {isMenuOpen && (
-            <div className="absolute right-0 mt-1 w-32 bg-base-0 border border-surface rounded-lg shadow-elev-strong z-10">
-              <button
-                onClick={handleEdit}
-                className="w-full px-4 py-2 text-left text-sm text-text-body hover:bg-surface transition-colors"
-              >
-                수정
-              </button>
-              <button
-                onClick={handleDeleteClick}
-                className="w-full px-4 py-2 text-left text-sm text-price-down hover:bg-surface transition-colors"
-              >
-                삭제
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 세 번째 줄: 조회수, 좋아요수, 댓글수 */}
-      <div className="flex items-center gap-4 text-sm text-text-muted">
-        <div className="flex items-center gap-1">
-          <span>👁</span>
-          <span>{formatCount(post.viewCount)}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span>❤</span>
-          <span>{formatCount(post.likeCount)}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <span>💬</span>
-          <span>{formatCount(post.commentCount)}</span>
+        <div className="flex flex-wrap items-center gap-3 text-[0.875rem] text-muted">
+          <div className="flex items-center gap-1">
+            <Image src="/icons/visibility.svg" alt="조회수" width={18} height={18} />
+            <span>{formatCount(post.viewCount)}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Image src="/icons/favorite.svg" alt="좋아요" width={18} height={18} />
+            <span>{formatCount(post.likeCount)}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Image src="/icons/chat-bubble.svg" alt="댓글" width={18} height={18} />
+            <span>{formatCount(post.commentCount)}</span>
+          </div>
         </div>
       </div>
     </div>

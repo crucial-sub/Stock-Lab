@@ -96,6 +96,7 @@ class MarketQuoteService:
             select(
                 Company.stock_code,
                 Company.stock_name,
+                Company.industry,
                 Company.company_id,
                 StockPrice.close_price,
                 StockPrice.change_vs_1d,
@@ -168,6 +169,7 @@ class MarketQuoteService:
                 "rank": offset + idx + 1,  # 페이지 기준 순위 계산
                 "name": row.stock_name,
                 "code": row.stock_code,
+                "theme": row.industry,
                 "price": row.close_price or 0,
                 "change_amount": change_amount or 0,
                 "change_rate": fluctuation_rate,

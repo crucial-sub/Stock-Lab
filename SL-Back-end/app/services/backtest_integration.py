@@ -71,11 +71,15 @@ def integrate_optimizations(backtest_engine):
         """
         logger.debug("🚀 순차 데이터 로드 시작")
 
+        # 🔍 디버깅: target_stocks 확인
+        logger.info(f"🎯 전달받은 target_stocks: {len(target_stocks or [])}개 종목")
+        logger.info(f"🎯 전달받은 target_themes: {len(target_themes or [])}개 테마")
+
         # 캐시 키 생성 (테마/종목 이름 기반)
         themes_str = ','.join(sorted(target_themes or []))
         stocks_str = ','.join(sorted(target_stocks or []))
         price_cache_key = f"price_data:{start_date}:{end_date}:{themes_str}:{stocks_str}"
-        financial_cache_key = f"financial_data:{start_date}:{end_date}"
+        financial_cache_key = f"financial_data:{start_date}:{end_date}:{stocks_str}"  # 종목별 캐시
         stock_prices_cache_key = f"stock_prices:{start_date}:{end_date}:{stocks_str}"
 
         # 1. 가격 데이터 로드 (캐시 확인 → DB)
@@ -101,7 +105,9 @@ def integrate_optimizations(backtest_engine):
             cached_financial = await optimized_cache.get_price_data_cached(financial_cache_key)
             if cached_financial is None:
                 logger.debug("재무 데이터 캐시 미스 - DB 로드")
-                financial_data = await db_manager.load_financial_data_optimized(start_date, end_date)
+                financial_data = await db_manager.load_financial_data_optimized(start_date, end_date, target_stocks=target_stocks)
+                # 🔥 필터링은 load_financial_data_optimized() 내부에서 이미 수행됨
+
                 # 캐시 저장
                 if not financial_data.empty:
                     await optimized_cache.set_price_data_cached(financial_cache_key, financial_data)
@@ -185,11 +191,58 @@ def integrate_optimizations(backtest_engine):
         required_factors = backtest_engine._extract_required_factors(buy_conditions or [], priority_factor)
         if not required_factors:
             required_factors = {
-                'PER', 'PBR', 'ROE', 'ROA',
+                'PER', 'PBR', 'PSR', 'ROE', 'ROA', 'DEBT_RATIO',
                 'MOMENTUM_1M', 'MOMENTUM_3M', 'MOMENTUM_6M', 'MOMENTUM_12M',
                 'VOLATILITY', 'AVG_TRADING_VALUE', 'TURNOVER_RATE',
                 'BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'RSI', 'MACD',
-                'OPERATING_MARGIN', 'NET_MARGIN'
+                'OPERATING_MARGIN', 'NET_MARGIN', 'CHANGE_RATE',
+                'OPERATING_INCOME_GROWTH', 'GROSS_PROFIT_GROWTH',
+                'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y',
+                'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y',
+                # Phase 2-A 긴급 추가
+                'FCF_YIELD', 'CURRENT_RATIO',
+                # Phase 2 재무 팩터
+                'GPM', 'NPM', 'QUICK_RATIO', 'CASH_RATIO', 'DEBT_TO_EQUITY',
+                'EQUITY_RATIO', 'INTEREST_COVERAGE', 'WORKING_CAPITAL_RATIO',
+                'OCF_RATIO', 'ASSET_TURNOVER',
+                # Phase 3 팩터
+                'PCR', 'EARNINGS_YIELD', 'BOOK_TO_MARKET', 'EV_SALES', 'EV_EBITDA',
+                'VOLATILITY_20D', 'VOLATILITY_60D', 'VOLATILITY_90D',
+                'VOLUME_RATIO_20D', 'MARKET_CAP',
+                # Phase 2-B: 부분 구현 팩터 추가 (19개)
+                'OPM', 'QUALITY_SCORE', 'ACCRUALS_RATIO', 'ASSET_GROWTH_1Y',
+                'ALTMAN_Z_SCORE', 'EARNINGS_QUALITY',
+                'DISTANCE_FROM_52W_HIGH', 'DISTANCE_FROM_52W_LOW',
+                'RSI_14', 'MACD_SIGNAL', 'STOCHASTIC_14', 'VOLUME_ROC', 'PRICE_POSITION',
+                # NEW: 15 Missing Factors
+                'PEG', 'EV_FCF', 'DIVIDEND_YIELD', 'CAPE_RATIO', 'PTBV',
+                'ROIC', 'INVENTORY_TURNOVER',
+                'OCF_GROWTH_1Y', 'BOOK_VALUE_GROWTH_1Y', 'SUSTAINABLE_GROWTH_RATE',
+                'RELATIVE_STRENGTH', 'VOLUME_MOMENTUM', 'BETA',
+                # 22 Technical Indicators
+                'MA_5', 'MA_20', 'MA_60', 'MA_120', 'MA_250',  # Moving Averages (5)
+                'ADX', 'AROON_UP', 'AROON_DOWN', 'ATR', 'MACD_HISTOGRAM', 'PRICE_VS_MA20',  # Trend (6)
+                'CCI', 'MFI', 'ULTIMATE_OSCILLATOR', 'WILLIAMS_R', 'TRIX',  # Oscillators (5, RSI already exists)
+                'CMF', 'OBV', 'VWAP',  # Volume-based (3)
+                # === NEW: 40 Additional Factors ===
+                # Valuation (5)
+                'GRAHAM_NUMBER', 'GREENBLATT_RANK', 'MAGIC_FORMULA', 'PRICE_TO_FCF', 'PS_RATIO',
+                # Momentum (9)
+                'RETURN_1M', 'RETURN_3M', 'RETURN_6M', 'RETURN_12M', 'RET_3D', 'RET_8D',
+                'DAYS_FROM_52W_HIGH', 'DAYS_FROM_52W_LOW', 'WEEK_52_POSITION',
+                # Risk (4)
+                'DOWNSIDE_VOLATILITY', 'MAX_DRAWDOWN', 'SHARPE_RATIO', 'SORTINO_RATIO',
+                # Volatility (3)
+                'HISTORICAL_VOLATILITY_20', 'HISTORICAL_VOLATILITY_60', 'PARKINSON_VOLATILITY',
+                # Composite (3)
+                'ENTERPRISE_YIELD', 'PIOTROSKI_F_SCORE', 'SHAREHOLDER_YIELD',
+                # Microstructure (5)
+                'AMIHUD_ILLIQUIDITY', 'EASE_OF_MOVEMENT', 'FORCE_INDEX', 'INTRADAY_VOLATILITY', 'VOLUME_PRICE_TREND',
+                # Duplicate/Alias (7)
+                'DEBTRATIO', 'DIVIDENDYIELD', 'EARNINGS_GROWTH', 'OPERATING_INCOME_GROWTH_YOY',
+                'PEG_RATIO', 'REVENUE_GROWTH', 'SMA',
+                # Dividend (2)
+                'DIVIDEND_GROWTH_3Y', 'DIVIDEND_GROWTH_YOY'
             }
 
         logger.debug(f"필요 팩터: {len(required_factors)}개")

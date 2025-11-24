@@ -19,7 +19,9 @@ export default async function HomePage() {
 
   let userName = "게스트";
   let hasKiwoomAccount = false;
+  let aiRecommendationBlock = false;
   let kiwoomAccountData = null;
+  let performanceChartData = null;
   let marketStocks: MarketStock[] = [];
   let marketNews: MarketNews[] = [];
   let dashboardData = {
@@ -29,6 +31,7 @@ export default async function HomePage() {
     active_strategy_count: 0,
     total_positions: 0,
     total_trades_today: 0,
+    total_allocated_capital: 0,
   };
 
   if (isLoggedIn && token) {
@@ -37,6 +40,7 @@ export default async function HomePage() {
       const userInfo = await authApi.getCurrentUserServer(token);
       userName = userInfo.nickname || "사용자";
       hasKiwoomAccount = userInfo.has_kiwoom_account || false;
+      aiRecommendationBlock = userInfo.ai_recommendation_block || false;
 
       // 2. 키움 계좌 연동되어 있으면 잔고 조회
       if (hasKiwoomAccount) {
@@ -58,32 +62,39 @@ export default async function HomePage() {
       } catch (error) {
         console.warn("대시보드 데이터 조회 실패:", error);
       }
+
+      // 3-1. 성과 차트 데이터 가져오기 (계좌 연동된 경우에만)
+      if (hasKiwoomAccount) {
+        try {
+          performanceChartData = await kiwoomApi.getPerformanceChartServer(token, 30);
+        } catch (error) {
+          console.warn("성과 차트 데이터 조회 실패:", error);
+        }
+      }
       // 4. 시황/뉴스 데이터 서버 사이드로 미리 가져오기
       try {
         const axios = (await import("axios")).default;
-        const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000/api/v1";
+        const baseURL = process.env.API_BASE_URL || "http://backend:8000/api/v1";
 
-        if (hasKiwoomAccount) {
-          // 관심종목 체결량 상위 5
-          try {
-            const favorites = await axios.get(`${baseURL}/market/favorites`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            const sorted = (favorites.data?.items || [])
-              .filter((item: any) => item.volume !== null && item.volume !== undefined)
-              .sort((a: any, b: any) => (b.volume || 0) - (a.volume || 0))
-              .slice(0, 5);
-            marketStocks = sorted.map((item: any) => ({
-              id: item.stockCode,
-              name: item.stockName,
-              tag: item.stockCode,
-              change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
-              price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
-              volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
-            }));
-          } catch (error) {
-            console.warn("관심종목 시황 조회 실패, 전체 상위로 대체:", error);
-          }
+        // 관심종목 체결량 상위 5
+        try {
+          const favorites = await axios.get(`${baseURL}/market/favorites`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const sorted = (favorites.data?.items || [])
+            .filter((item: any) => item.volume !== null && item.volume !== undefined)
+            .sort((a: any, b: any) => (b.volume || 0) - (a.volume || 0))
+            .slice(0, 5);
+          marketStocks = sorted.map((item: any) => ({
+            id: item.stockCode,
+            name: item.stockName,
+            tag: item.theme ?? item.stockCode,
+            change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+            price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
+            volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
+          }));
+        } catch (error) {
+          console.warn("관심종목 시황 조회 실패, 전체 상위로 대체:", error);
         }
 
         // 관심종목 없거나 로그인만 한 경우: 전체 체결량 상위
@@ -100,7 +111,7 @@ export default async function HomePage() {
           marketStocks = (quotes.data?.items || []).map((item: any) => ({
             id: item.code,
             name: item.name,
-            tag: item.code,
+            tag: item.theme ?? item.code,
             change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
             price: item.price ? `${item.price.toLocaleString()}원` : "-",
             volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
@@ -125,14 +136,14 @@ export default async function HomePage() {
     // 게스트 사용자를 위해 서버에서 기본 시황/뉴스 가져오기
     try {
       const axios = (await import("axios")).default;
-      const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://sl_backend_dev:8000/api/v1";
+      const baseURL = process.env.API_BASE_URL || "http://backend:8000/api/v1";
       const quotes = await axios.get(`${baseURL}/market/quotes`, {
         params: { sort_by: "volume", sort_order: "desc", page: 1, page_size: 5 },
       });
       marketStocks = (quotes.data?.items || []).map((item: any) => ({
         id: item.code,
         name: item.name,
-        tag: item.code,
+        tag: item.theme ?? item.code,
         change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
         price: item.price ? `${item.price.toLocaleString()}원` : "-",
         volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
@@ -156,7 +167,9 @@ export default async function HomePage() {
       userName={userName}
       isLoggedIn={isLoggedIn}
       hasKiwoomAccount={hasKiwoomAccount}
+      aiRecommendationBlock={aiRecommendationBlock}
       kiwoomAccountData={kiwoomAccountData}
+      performanceChartData={performanceChartData}
       dashboardData={dashboardData}
       marketStocksInitial={marketStocks}
       marketNewsInitial={marketNews}

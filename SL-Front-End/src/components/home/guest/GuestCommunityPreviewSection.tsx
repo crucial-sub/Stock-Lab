@@ -27,7 +27,7 @@ export function GuestCommunityPreviewSection({
         {posts.map((post) => (
           <article
             key={post.id}
-            className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#18223405] shadow-elev-card p-5"
+            className="rounded-[12px] border-[0.5px] border-[#18223433] bg-[#1822340D] shadow-elev-card p-5"
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center justify-center rounded-[4px] border-[0.5px] border-[#007DFC] bg-[#EAF5FF] px-3 pt-0.5 text-[0.75rem] font-semibold text-[#007DFC]">

@@ -1,27 +1,39 @@
 "use client";
 
-import { use } from "react";
-import { PostDetailCard } from "@/components/community/PostDetailCard";
-import { CommentSection } from "@/components/community/CommentSection";
+import { use, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+import { Icon } from "@/components/common/Icon";
 import {
-  usePostDetailQuery,
+  FreeBoardCommentSection,
+  FreeBoardDetailCard,
+} from "@/components/community";
+import {
   useCommentsQuery,
-  useTogglePostLikeMutation,
   useCreateCommentMutation,
+  usePostDetailQuery,
+  useTogglePostLikeMutation,
 } from "@/hooks/useCommunityQuery";
 
-/**
- * 게시글 상세 페이지
- * - PostDetailCard와 CommentSection 결합
- */
-export default function PostDetailPage({
+export default function CommunityPostDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id: postId } = use(params);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const source = searchParams.get("source");
 
-  // API 연동
+  const handleBack = () => {
+    if (source === "create") {
+      router.push("/community/posts");
+    } else {
+      router.back();
+    }
+    router.refresh();
+  };
+
   const { data: post, isLoading: postLoading } = usePostDetailQuery(postId);
   const { data: commentsData, isLoading: commentsLoading } =
     useCommentsQuery(postId);
@@ -29,116 +41,100 @@ export default function PostDetailPage({
   const toggleLikeMutation = useTogglePostLikeMutation();
   const createCommentMutation = useCreateCommentMutation();
 
-  // 날짜 포맷팅 함수
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date
-      .toLocaleDateString("ko-KR", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-      .replace(/\. /g, ".")
-      .replace(/\.$/, "");
-  };
+  const formattedComments = useMemo(() => {
+    if (!commentsData?.comments) return [];
 
-  // 좋아요 토글 핸들러
-  const handleLike = () => {
-    toggleLikeMutation.mutate(postId);
-  };
-
-  // 댓글 작성 핸들러
-  const handleSubmitComment = (content: string) => {
-    createCommentMutation.mutate(
-      { postId, data: { content } },
-      {
-        onError: (error) => {
-          alert(`댓글 작성 실패: ${error.message}`);
-        },
-      }
-    );
-  };
-
-  // 댓글을 flat 구조로 변환 (재귀적으로 replies 포함)
-  const flattenComments = (
-    comments: Array<{
-      commentId: string;
-      content: string;
-      authorNickname: string | null;
-      createdAt: string;
-      replies: any[];
-    }>
-  ): Array<{
-    id: number;
-    author: string;
-    date: string;
-    content: string;
-  }> => {
-    const result: Array<{
-      id: number;
-      author: string;
-      date: string;
-      content: string;
-    }> = [];
-    let idCounter = 1;
-
-    const flatten = (commentList: typeof comments, depth = 0) => {
-      for (const comment of commentList) {
-        result.push({
-          id: idCounter++,
-          author: comment.authorNickname || "익명",
-          date: formatDate(comment.createdAt),
-          content: comment.content,
+    const flatten = (items: typeof commentsData.comments, acc: any[] = []) => {
+      items.forEach((item, index) => {
+        const commentKey = item.commentId || `temp-${acc.length + index}`;
+        acc.push({
+          id: commentKey,
+          author: item.authorNickname || "익명",
+          date: new Date(item.createdAt).toLocaleString("ko-KR", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          content: item.content,
         });
-        if (comment.replies && comment.replies.length > 0) {
-          flatten(comment.replies, depth + 1);
+        if (item.replies?.length) {
+          flatten(item.replies, acc);
         }
-      }
+      });
+      return acc;
     };
 
-    flatten(comments);
-    return result;
-  };
+    return flatten(commentsData.comments, []);
+  }, [commentsData]);
 
-  // 로딩 상태
   if (postLoading || commentsLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p className="text-lg text-muted">로딩 중...</p>
+      <div className="flex min-h-screen items-center justify-center text-[#646464]">
+        로딩 중...
       </div>
     );
   }
 
-  // 데이터 없음
   if (!post) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p className="text-lg text-muted">게시글을 찾을 수 없습니다.</p>
+      <div className="flex min-h-screen items-center justify-center text-[#646464]">
+        게시글을 찾을 수 없습니다.
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-[1200px] mx-auto">
-      <PostDetailCard
-        tag={post.tags?.[0] || "일반"}
-        title={post.title}
-        author={post.authorNickname || "익명"}
-        date={formatDate(post.createdAt)}
-        content={post.content}
-        views={post.viewCount}
-        likes={post.likeCount}
-        comments={post.commentCount}
-        isLiked={post.isLiked}
-        onLike={handleLike}
-      />
+    <section className="px-4 sm:px-8 lg:px-12 xl:px-16 2xl:px-20 py-[60px]">
+      <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-[24px]">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="self-start inline-flex items-center gap-1 text-[0.875rem] text-[#646464]"
+        >
+          <Icon
+            src="/icons/arrow_left.svg"
+            alt="뒤로가기"
+            size={20}
+            color="#646464"
+          />
+          돌아가기
+        </button>
 
-      <CommentSection
-        comments={flattenComments(commentsData?.comments || [])}
-        onSubmitComment={handleSubmitComment}
-      />
-    </div>
+        <FreeBoardDetailCard
+          tag={post.tags?.[0] || "일반"}
+          title={post.title}
+          author={post.authorNickname || "익명"}
+          date={new Date(post.createdAt).toLocaleString("ko-KR", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+          content={post.content}
+          views={post.viewCount}
+          likes={post.likeCount}
+          comments={post.commentCount}
+          isLiked={post.isLiked}
+          onLike={() => toggleLikeMutation.mutate(postId)}
+        />
+
+        <FreeBoardCommentSection
+          comments={formattedComments}
+          onSubmitComment={(content) =>
+            createCommentMutation.mutate(
+              { postId, data: { content } },
+              {
+                onError: (error) => {
+                  alert(`댓글 작성 실패: ${error.message}`);
+                },
+              },
+            )
+          }
+        />
+      </div>
+    </section>
   );
 }

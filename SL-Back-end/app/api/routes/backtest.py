@@ -4,7 +4,7 @@
 - 결과 조회
 - 상태 확인
 """
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from typing import List, Optional, Dict, Any
@@ -208,6 +208,7 @@ class BacktestTrade(BaseModel):
     sell_price: float = Field(..., serialization_alias="sellPrice")
     profit: float = Field(..., serialization_alias="profit")
     profit_rate: float = Field(..., serialization_alias="profitRate")
+    holding_days: int = Field(..., serialization_alias="holdingDays")  # ✅ 보유기간 추가
     buy_date: str = Field(..., serialization_alias="buyDate")
     sell_date: str = Field(..., serialization_alias="sellDate")
     weight: float = Field(..., serialization_alias="weight")
@@ -1074,6 +1075,7 @@ async def get_backtest_result(
                 sell_price=float(trade.price),
                 profit=float(trade.realized_pnl),
                 profit_rate=float(trade.return_pct) if trade.return_pct else 0,
+                holding_days=trade.holding_days if trade.holding_days else 0,  # ✅ 보유기간 추가
                 buy_date=buy_trade.trade_date.isoformat() if buy_trade else "",
                 sell_date=trade.trade_date.isoformat(),
                 weight=float(amount / initial_capital * 100) if initial_capital > 0 else 0,
@@ -1276,10 +1278,12 @@ async def get_backtest_trades(
         trade_list.append({
             "stockName": stock_name_map.get(sell_trade.stock_code, sell_trade.stock_code),
             "stockCode": sell_trade.stock_code,
+            "quantity": sell_trade.quantity,  # ✅ 수량 추가
             "buyPrice": float(buy_trade.price) if buy_trade else 0.0,
             "sellPrice": float(sell_trade.price),
             "profit": float(sell_trade.realized_pnl),
             "profitRate": float(sell_trade.return_pct) if sell_trade.return_pct else 0.0,
+            "holdingDays": sell_trade.holding_days if sell_trade.holding_days else 0,  # ✅ 보유기간 추가
             "buyDate": buy_trade.trade_date.isoformat() if buy_trade else "",
             "sellDate": sell_trade.trade_date.isoformat(),
             "weight": float(sell_trade.amount / session.initial_capital * 100) if session.initial_capital else 0.0,
@@ -1951,3 +1955,47 @@ async def clear_backtest_cache(
     except Exception as e:
         logger.error(f"캐시 클리어 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"캐시 클리어 실패: {str(e)}")
+
+
+@router.websocket("/ws/backtest/{backtest_id}")
+async def backtest_websocket(
+    websocket: WebSocket,
+    backtest_id: str
+):
+    """
+    백테스트 실시간 진행 상황 WebSocket
+
+    클라이언트는 백테스트 시작 후 이 엔드포인트에 연결하여
+    실시간으로 차트 데이터를 받을 수 있습니다.
+
+    메시지 타입:
+    - progress: 일별 포트폴리오 가치 업데이트
+    - trade: 거래 내역
+    - completed: 백테스트 완료
+    - error: 에러 발생
+    """
+    from app.services.backtest_websocket import ws_manager
+
+    try:
+        await ws_manager.connect(backtest_id, websocket)
+        logger.info(f"📡 백테스트 WebSocket 연결: {backtest_id}")
+
+        # 연결 유지 (클라이언트가 메시지를 보낼 수 있도록)
+        while True:
+            try:
+                # 클라이언트로부터 메시지 수신 (ping/pong)
+                data = await websocket.receive_text()
+
+                # ping 메시지에 대한 응답
+                if data == "ping":
+                    await websocket.send_json({"type": "pong"})
+
+            except WebSocketDisconnect:
+                logger.info(f"📡 백테스트 WebSocket 연결 해제: {backtest_id}")
+                break
+            except Exception as e:
+                logger.error(f"WebSocket 에러: {e}")
+                break
+
+    finally:
+        ws_manager.disconnect(backtest_id, websocket)

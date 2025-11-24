@@ -5,10 +5,12 @@
  * - 백테스트가 실행 중일 때 표시되는 UI
  * - 진행률, 통계, 차트 표시
  * - TradingActivityChart 재사용
+ * - WebSocket으로 실시간 데이터 수신
  */
 
 import { useRouter } from "next/navigation";
 import { TradingActivityChart } from "./TradingActivityChart";
+import { useBacktestWebSocket } from "@/hooks/useBacktestWebSocket";
 
 interface BacktestLoadingStateProps {
   backtestId: string;
@@ -35,18 +37,50 @@ export function BacktestLoadingState({
   backtestId,
   strategyName,
   status,
-  progress,
-  buyCount,
-  sellCount,
-  currentReturn,
-  currentCapital,
+  progress: initialProgress,
+  buyCount: initialBuyCount,
+  sellCount: initialSellCount,
+  currentReturn: initialCurrentReturn,
+  currentCapital: initialCurrentCapital,
   currentDate,
   currentMdd,
   startDate,
   endDate,
-  yieldPoints,
+  yieldPoints: initialYieldPoints,
 }: BacktestLoadingStateProps) {
   const router = useRouter();
+
+  // ✅ WebSocket으로 실시간 데이터 수신
+  // pending과 running 상태 모두에서 WebSocket 연결
+  const {
+    isConnected,
+    chartData,
+    progress: wsProgress,
+    isCompleted,
+    error: wsError,
+  } = useBacktestWebSocket(backtestId, true);
+
+  // WebSocket 데이터와 초기 props 데이터 병합
+  const progress = wsProgress > 0 ? wsProgress : initialProgress;
+  const yieldPoints = chartData.length > 0
+    ? chartData.map(point => ({
+        date: point.date,
+        cumulativeReturn: point.cumulativeReturn,
+        buyCount: undefined, // WebSocket에서는 제공하지 않음
+        sellCount: undefined,
+      }))
+    : initialYieldPoints;
+
+  console.log(`📡 [BacktestLoadingState] backtestId=${backtestId}, status=${status}`);
+  console.log(`📡 [BacktestLoadingState] WebSocket enabled=true (항상 연결)`);
+  console.log(`📡 [BacktestLoadingState] WebSocket 상태: connected=${isConnected}, progress=${wsProgress}%, dataPoints=${chartData.length}`);
+  console.log(`📡 [BacktestLoadingState] chartData:`, chartData);
+  console.log(`📡 [BacktestLoadingState] yieldPoints (최종):`, yieldPoints);
+  console.log(`📡 [BacktestLoadingState] yieldPoints 길이: WS=${chartData.length}, Props=${initialYieldPoints?.length || 0}, 최종=${yieldPoints?.length || 0}`);
+  console.log(`📡 [BacktestLoadingState] 차트 표시 조건: ${yieldPoints && yieldPoints.length > 0 ? '✅ 표시됨' : '❌ 숨겨짐'}`);
+  if (wsError) {
+    console.error(`❌ [BacktestLoadingState] WebSocket 에러:`, wsError);
+  }
 
   return (
     <div className="min-h-screen bg-bg-app py-6 px-6">

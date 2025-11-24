@@ -228,6 +228,8 @@ class BacktestYieldPoint(BaseModel):
     cumulative_return: float = Field(..., serialization_alias="cumulativeReturn")  # 누적 수익률
     value: float  # 차트용 (cumulative_return과 동일, 하위 호환성)
     daily_drawdown: float = Field(default=0, serialization_alias="dailyDrawdown")  # 일일 낙폭 (%)
+    benchmark_return: float = Field(default=0, serialization_alias="benchmarkReturn")  # 벤치마크 일일 수익률 (%)
+    benchmark_cum_return: float = Field(default=0, serialization_alias="benchmarkCumReturn")  # 벤치마크 누적 수익률 (%)
     buy_count: int = Field(default=0, serialization_alias="buyCount")  # 당일 매수 횟수
     sell_count: int = Field(default=0, serialization_alias="sellCount")  # 당일 매도 횟수
 
@@ -831,6 +833,11 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
             amount = float(trade.amount) if trade.amount else 0
             initial_capital = float(session.initial_capital) if session.initial_capital else 1
 
+            # 보유 기간 계산 (영업일 기준)
+            holding_days = 0
+            if buy_trade:
+                holding_days = (trade.trade_date - buy_trade.trade_date).days
+
             trade_list.append(BacktestTrade(
                 stock_name=trade.stock_name,  # 이미 테이블에 저장되어 있음
                 stock_code=trade.stock_code,
@@ -838,6 +845,7 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
                 sell_price=float(trade.price),
                 profit=float(trade.profit) if trade.profit else 0,
                 profit_rate=float(trade.profit_rate) if trade.profit_rate else 0,
+                holding_days=holding_days,
                 buy_date=buy_trade.trade_date.isoformat() if buy_trade else "",
                 sell_date=trade.trade_date.isoformat(),
                 weight=float(amount / initial_capital * 100) if initial_capital > 0 else 0,
@@ -856,7 +864,16 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
         elif trade.trade_type == "SELL":
             daily_trade_counts[trade_date]["sell"] += 1
 
-    # 수익률 포인트 변환 (매수/매도 횟수 포함)
+    # 벤치마크 누적 수익률 계산 (일일 수익률을 누적)
+    benchmark_cum_returns = []
+    cumulative_benchmark = 0.0
+    for snap in snapshots:
+        daily_benchmark = float(snap.benchmark_return) if snap.benchmark_return else 0
+        # 단순 누적 (복리 고려 시: (1 + cumulative/100) * (1 + daily/100) - 1)
+        cumulative_benchmark += daily_benchmark
+        benchmark_cum_returns.append(cumulative_benchmark)
+
+    # 수익률 포인트 변환 (매수/매도 횟수 + 벤치마크 데이터 포함)
     yield_points = [
         {
             "date": snap.snapshot_date.isoformat(),
@@ -866,10 +883,13 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
             "daily_return": float(snap.daily_return),
             "cumulative_return": float(snap.cumulative_return),
             "value": float(snap.cumulative_return),
+            "daily_drawdown": float(snap.drawdown) if hasattr(snap, 'drawdown') and snap.drawdown else 0,
+            "benchmark_return": float(snap.benchmark_return) if snap.benchmark_return else 0,
+            "benchmark_cum_return": benchmark_cum_returns[idx],
             "buy_count": daily_trade_counts[snap.snapshot_date.isoformat()]["buy"],
             "sell_count": daily_trade_counts[snap.snapshot_date.isoformat()]["sell"]
         }
-        for snap in snapshots
+        for idx, snap in enumerate(snapshots)
     ]
 
     # 유니버스 종목 조회 (BacktestSession에는 strategy_id가 없으므로 거래 종목에서 추론)
@@ -1037,6 +1057,15 @@ async def get_backtest_result(
     daily_result = await db.execute(daily_query)
     daily_values = daily_result.scalars().all()
 
+    # 🐛 DEBUG: Log daily values count
+    logger.info(f"🔍 Daily values query for session_id='{backtest_id}': found {len(daily_values)} records")
+    if len(daily_values) == 0:
+        # Try to query all sessions to see what exists
+        all_sessions_query = select(SimulationDailyValue.session_id).distinct()
+        all_sessions_result = await db.execute(all_sessions_query)
+        all_session_ids = [row[0] for row in all_sessions_result.all()]
+        logger.warning(f"⚠️ No daily values found for session_id='{backtest_id}'. All session_ids in DB: {all_session_ids[:10]}")
+
     # 5. 종목 코드 목록 추출 및 종목명 조회
     stock_codes = list(set([trade.stock_code for trade in trades]))
     companies_query = select(Company.stock_code, Company.company_name).where(Company.stock_code.in_(stock_codes))
@@ -1092,7 +1121,9 @@ async def get_backtest_result(
             daily_return=float(dv.daily_return) if dv.daily_return else 0,
             cumulative_return=float(dv.cumulative_return) if dv.cumulative_return else 0,
             value=float(dv.cumulative_return) if dv.cumulative_return else 0,  # 차트용 (하위 호환성)
-            daily_drawdown=float(dv.daily_drawdown) if dv.daily_drawdown else 0  # 일일 낙폭
+            daily_drawdown=float(dv.daily_drawdown) if dv.daily_drawdown else 0,  # 일일 낙폭
+            benchmark_return=float(dv.benchmark_return) if dv.benchmark_return else 0,  # 벤치마크 일일 수익률
+            benchmark_cum_return=float(dv.benchmark_cum_return) if dv.benchmark_cum_return else 0  # 벤치마크 누적 수익률
         )
         for dv in daily_values
     ]

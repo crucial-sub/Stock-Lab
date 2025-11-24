@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { type MouseEvent } from "react";
 
 /**
  * 포트폴리오 카드
@@ -69,9 +69,6 @@ export function PortfolioCard({
   onEditCancel,
   isRenaming = false,
 }: PortfolioCardProps) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
   // 수익률 포맷팅
   const formatProfitRate = (rate: number) => {
     const sign = rate >= 0 ? "+" : "";
@@ -84,42 +81,9 @@ export function PortfolioCard({
   // 자동매매 카드인지 판단
   const isAutoTrading = id.startsWith("auto-");
 
-  // 메뉴 외부 클릭 시 닫기
-  useEffect(() => {
-    if (!isMenuOpen) return;
-
-    const handleClickOutside = (event: Event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    const handleEscKey = (event: Event) => {
-      const keyboardEvent = event as KeyboardEvent;
-      if (keyboardEvent.key === "Escape") {
-        setIsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscKey);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscKey);
-    };
-  }, [isMenuOpen]);
-
-  const handleShare = (event: MouseEvent) => {
-    event.stopPropagation();
-    onShare({ id, strategyId, title });
-    setIsMenuOpen(false);
-  };
-
   const handleRename = (event: MouseEvent) => {
     event.stopPropagation();
     onRename({ id, strategyId, title });
-    setIsMenuOpen(false);
   };
 
   return (
@@ -128,7 +92,7 @@ export function PortfolioCard({
         }`}
       onClick={() => onClick(id)}
     >
-      {/* 헤더: 제목과 체크박스 */}
+      {/* 헤더: 제목과 아이콘들 */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           {isEditing ? (
@@ -151,14 +115,32 @@ export function PortfolioCard({
             <h3 className="text-[1.25rem] font-semibold text-black">{title}</h3>
           )}
         </div>
-        <div className="flex flex-col items-end gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          {/* 전략 이름 수정 버튼 */}
+          <button
+            type="button"
+            onClick={handleRename}
+            className="relative shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-[#e5e9ff] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            aria-label="전략 이름 수정"
+          >
+            <div className="relative w-5 h-5 pointer-events-none">
+              <Image
+                src="/icons/edit_square.svg"
+                alt=""
+                fill
+                className="object-contain"
+                aria-hidden="true"
+              />
+            </div>
+          </button>
+          {/* 선택 체크박스 */}
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation(); // 카드 클릭 이벤트 전파 방지
               onSelect(id);
             }}
-            className="relative shrink-0 w-10 h-[1.875rem] flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            className="relative shrink-0 w-8 h-8 flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             aria-label={isSelected ? "선택 해제" : "선택"}
           >
             <div className="relative w-5 h-5 pointer-events-none">
@@ -178,8 +160,8 @@ export function PortfolioCard({
         </div>
       </div>
 
-      {/* 수익률 + 케밥 메뉴 */}
-      <div className="flex items-center justify-between mb-3">
+      {/* 수익률 */}
+      <div className="mb-3">
         <p
           className={[
             "text-[1.25rem] font-semibold",
@@ -190,45 +172,6 @@ export function PortfolioCard({
         >
           {formatProfitRate(profitRate)}
         </p>
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setIsMenuOpen((prev) => !prev);
-            }}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-[#000000] transition hover:bg-[#e5e9ff]"
-            aria-label="포트폴리오 메뉴 열기"
-          >
-            <div className="relative w-5 h-5">
-              <Image
-                src="/icons/more_vert.svg"
-                alt="메뉴"
-                fill
-                className="object-contain"
-                aria-hidden="true"
-              />
-            </div>
-          </button>
-          {isMenuOpen ? (
-            <div className="absolute right-0 mt-2 w-40 rounded-[12px] border border-[#dbe3f5] bg-white p-1 shadow-elev-card-soft z-10">
-              <button
-                type="button"
-                onClick={handleShare}
-                className="w-full rounded-[8px] px-4 py-2 text-left text-sm text-[#000000] transition hover:bg-[#f3f5ff]"
-              >
-                포트폴리오 공유
-              </button>
-              <button
-                type="button"
-                onClick={handleRename}
-                className="w-full rounded-[8px] px-4 py-2 text-left text-sm text-[#000000] transition hover:bg-[#f3f5ff]"
-              >
-                전략 이름 수정
-              </button>
-            </div>
-          ) : null}
-        </div>
       </div>
 
       {/* 상태 태그 */}

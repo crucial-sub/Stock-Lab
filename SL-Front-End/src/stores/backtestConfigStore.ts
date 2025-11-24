@@ -356,7 +356,27 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
       })),
 
     // 초기화 함수
-    reset: () => set(defaultConfig),
+    reset: () => {
+      // 현재 날짜 계산 (클라이언트 사이드에서만 유효)
+      const today = new Date();
+      const oneYearAgo = new Date(today);
+      oneYearAgo.setFullYear(today.getFullYear() - 1);
+
+      const formatDate = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+      };
+
+      set({
+        ...defaultConfig,
+        start_date: formatDate(oneYearAgo),
+        end_date: formatDate(today),
+        buyConditionsUI: [],
+        sellConditionsUI: [],
+      });
+    },
 
     // BacktestRunRequest 형식으로 데이터 반환
     getBacktestRequest: () => {

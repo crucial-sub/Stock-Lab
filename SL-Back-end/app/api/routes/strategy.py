@@ -10,7 +10,7 @@ from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, desc, func
+from sqlalchemy import select, and_, or_, desc, func, delete as sql_delete
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -557,7 +557,14 @@ async def delete_backtest_sessions(
                 detail=f"삭제 권한이 없는 세션이 포함되어 있습니다: {unauthorized_sessions}"
             )
 
-        # 3. 세션 삭제
+        # 3. 관련 데이터 삭제 (SimulationStatistics)
+        stats_delete_query = sql_delete(SimulationStatistics).where(
+            SimulationStatistics.session_id.in_(session_ids)
+        )
+        await db.execute(stats_delete_query)
+        logger.info(f"🗑️ SimulationStatistics 삭제 완료: {len(session_ids)}개 세션")
+
+        # 4. 세션 삭제
         deleted_count = 0
         for session in sessions:
             await db.delete(session)
@@ -565,7 +572,7 @@ async def delete_backtest_sessions(
 
         await db.commit()
 
-        # 🎯 4. Redis 랭킹에서 삭제된 세션 제거
+        # 🎯 5. Redis 랭킹에서 삭제된 세션 제거
         try:
             from app.services.ranking_service import get_ranking_service
             ranking_service = await get_ranking_service()

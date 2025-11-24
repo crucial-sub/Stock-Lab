@@ -123,6 +123,7 @@ class VectorizedConditionEvaluator:
         →
         "(ROE > 15) and (PBR < 2)"
         """
+        # 🔧 입력 검증: expression과 conditions가 비어있으면 빈 문자열 반환
         if not expression or not expression.strip():
             self.logger.warning("⚠️ expression이 비어있음 - 빈 쿼리 반환")
             return ""
@@ -163,6 +164,7 @@ class VectorizedConditionEvaluator:
                     continue
 
             # NaN 처리: factor가 NaN이 아닌 경우만
+            # 🔧 FIX: Pandas query는 'and' 대신 '&' 사용
             try:
                 # 특수문자가 없으면 직접 사용
                 if factor.isidentifier():
@@ -176,6 +178,7 @@ class VectorizedConditionEvaluator:
 
             condition_map[cond_id] = condition_str
 
+        # 🔧 조건 매핑 검증: condition_map이 비어있으면 실패
         if not condition_map:
             self.logger.warning("⚠️ 유효한 조건이 하나도 생성되지 않음 - 빈 쿼리 반환")
             return ""
@@ -188,17 +191,20 @@ class VectorizedConditionEvaluator:
             import re
             query_str = re.sub(r'\b' + re.escape(cond_id) + r'\b', condition_str, query_str)
 
+        # 🔧 FIX: Pandas query는 Python 키워드 대신 연산자를 사용해야 함
         # 'and' → '&', 'or' → '|', 'not' → '~'
         # 단어 경계를 고려하여 치환 (변수명 안의 and/or는 치환하지 않음)
         query_str = re.sub(r'\band\b', '&', query_str)
         query_str = re.sub(r'\bor\b', '|', query_str)
         query_str = re.sub(r'\bnot\b', '~', query_str)
 
+        # 🔧 최종 검증: 치환되지 않은 조건 ID가 남아있는지 확인
         for cond_id in condition_map.keys():
             if re.search(r'\b' + re.escape(cond_id) + r'\b', query_str):
                 self.logger.warning(f"⚠️ 조건 ID '{cond_id}'가 치환되지 않고 남아있음 - expression과 conditions 불일치")
                 # 경고만 하고 계속 진행 (부분 일치일 수 있음)
 
+        # 🔧 빈 쿼리 검증: 연산자만 남은 경우
         stripped_query = query_str.strip()
         if not stripped_query or stripped_query in ['', '|', '&', '~', '||', '&&']:
             self.logger.warning(f"⚠️ 빈 쿼리 생성됨: '{query_str}' (원본 expression: '{expression}')")

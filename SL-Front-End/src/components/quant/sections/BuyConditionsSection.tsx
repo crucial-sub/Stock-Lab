@@ -77,6 +77,14 @@ export function BuyConditionsSection() {
     }
   }, [factors, priority_factor, setPriorityFactor]);
 
+  // 스토어 priority_factor 변경 시 표시 텍스트 동기화
+  useEffect(() => {
+    if (priority_factor) {
+      const cleaned = priority_factor.replace(/[{}]/g, "");
+      setPriorityFactorDisplay(cleaned);
+    }
+  }, [priority_factor]);
+
   // 논리 조건식 자동 생성
   useEffect(() => {
     if (isAutoLogic) {

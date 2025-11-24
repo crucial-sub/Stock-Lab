@@ -5,6 +5,7 @@ import types
 import sys
 import uuid
 import json
+import copy
 import traceback
 import logging
 import hashlib
@@ -444,10 +445,14 @@ class ChatHandler:
             sid = s.get("id")
             if not sid:
                 continue
+            backtest_cfg = s.get("backtest_config")
+            if backtest_cfg is not None:
+                backtest_cfg = copy.deepcopy(backtest_cfg)
             self.strategy_backtest_templates[sid] = {
                 "strategy_name": s.get("name", sid),
                 "buy_conditions": self._filter_valid_conditions(s.get("buy_conditions", [])),
                 "sell_conditions": self._filter_valid_conditions(s.get("sell_conditions", [])),
+                "backtest_config": backtest_cfg,
             }
             alias_tokens = self._build_strategy_aliases(
                 sid,
@@ -1831,6 +1836,9 @@ class ChatHandler:
         if not matched_id:
             matched_id = "warren_buffett"
         tpl = self.strategy_backtest_templates.get(matched_id)
+        backtest_cfg = tpl.get("backtest_config") if tpl else None
+        if backtest_cfg is not None:
+            backtest_cfg = copy.deepcopy(backtest_cfg)
         if not tpl:
             return {
                 "answer": "해당 전략 템플릿을 찾지 못했습니다. strategies.json을 확인해주세요.",
@@ -1845,6 +1853,7 @@ class ChatHandler:
             "sell": self._filter_valid_conditions(tpl["sell_conditions"]),
         }
         state["selected_strategy"] = matched_id
+        state["backtest_config"] = backtest_cfg
 
         answer = (
             f"{tpl['strategy_name']}으로 진행할게요.\n"
@@ -1908,6 +1917,7 @@ class ChatHandler:
             "intent": "backtest_configuration",
             "ui_language": ui_language,
             "backtest_conditions": state["backtest_conditions"],
+            "backtest_config": backtest_cfg,
         }
 
     async def _retrieve_context(self, message: str, intent: str) -> str:
@@ -2001,6 +2011,7 @@ class ChatHandler:
             "설정이 완료되면 바로 결과를 확인하실 수 있어요."
         )
 
+        backtest_config = state.get("backtest_config")
         ui_language = {
             "type": "backtest_configuration",
             "strategy": {
@@ -2051,12 +2062,15 @@ class ChatHandler:
                 },
             ],
         }
+        if backtest_config:
+            ui_language["backtest_config"] = backtest_config
 
         return {
             "answer": answer,
             "intent": "backtest_configuration",
             "ui_language": ui_language,
             "backtest_conditions": state["backtest_conditions"],
+            "backtest_config": backtest_config,
         }
 
     def _filter_valid_conditions(self, conditions: List[dict]) -> List[dict]:

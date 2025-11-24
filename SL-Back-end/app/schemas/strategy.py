@@ -131,6 +131,9 @@ class MyStrategiesResponse(BaseModel):
     """내 투자전략 목록 응답"""
     strategies: List[StrategyListItem]
     total: int
+    page: int
+    limit: int
+    has_next: bool
 
 
 class StrategyRankingResponse(BaseModel):

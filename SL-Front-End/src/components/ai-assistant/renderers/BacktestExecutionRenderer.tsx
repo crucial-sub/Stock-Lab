@@ -2,7 +2,7 @@
  * 백테스트 실행 및 결과 렌더링 메인 컴포넌트
  *
  * AI 어시스턴트 채팅에서 백테스트 실행을 담당하는 최상위 컴포넌트입니다.
- * - 폴링을 통한 실시간 진행 상황 확인
+ * - WebSocket을 통한 실시간 진행 상황 확인
  * - 로딩 UI → 결과 UI 자동 전환
  * - 상태 관리 및 에러 처리
  * - 마운트 시 자동 시작
@@ -16,6 +16,7 @@ import {
   getBacktestResult,
   getBacktestYieldPoints,
 } from "@/lib/api/backtest";
+import { useBacktestWebSocket } from "@/hooks/useBacktestWebSocket";
 import { BacktestLoadingView } from "./BacktestLoadingView";
 import { BacktestResultView } from "./BacktestResultView";
 import type { BacktestResult } from "@/types/api";
@@ -65,6 +66,16 @@ export function BacktestExecutionRenderer({
   userName,
   config,
 }: BacktestExecutionRendererProps) {
+  // 🚀 WebSocket 연결
+  const {
+    chartData: wsChartData,
+    progress: wsProgress,
+    isCompleted: wsIsCompleted,
+    error: wsError,
+    statistics: wsStatistics,
+    isConnected: wsIsConnected,
+  } = useBacktestWebSocket(backtestId, true);
+
   // 상태 관리
   const [phase, setPhase] = useState<BacktestPhase>("idle");
   const [progress, setProgress] = useState(0);
@@ -85,6 +96,96 @@ export function BacktestExecutionRenderer({
   const tickingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const yieldPollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingYieldRef = useRef(false);
+
+  // 🚀 WebSocket 데이터를 상태로 동기화
+  useEffect(() => {
+    if (!wsIsConnected) return;
+
+    console.log("📡 [BacktestExecutionRenderer] WebSocket 데이터 동기화:", {
+      progress: wsProgress,
+      chartDataLength: wsChartData.length,
+      isCompleted: wsIsCompleted,
+      isConnected: wsIsConnected,
+    });
+    console.log("📡 [BacktestExecutionRenderer] wsChartData:", wsChartData);
+
+    // 진행률 업데이트
+    setProgress(wsProgress);
+    lastProgressRef.current = wsProgress;
+
+    // 차트 데이터를 yieldPoints 형식으로 변환
+    const formattedYieldPoints = wsChartData.map((point) => ({
+      date: point.date,
+      cumulativeReturn: point.cumulativeReturn,
+      buyCount: 0,
+      sellCount: 0,
+    }));
+
+    console.log("📡 [BacktestExecutionRenderer] formattedYieldPoints:", formattedYieldPoints);
+    setYieldPoints(formattedYieldPoints);
+
+    // 현재 수익률 업데이트
+    if (wsChartData.length > 0) {
+      const latestPoint = wsChartData[wsChartData.length - 1];
+      setCurrentReturn(latestPoint.cumulativeReturn);
+    }
+
+    // 진행 중이면 loading 상태로
+    if (wsProgress > 0 && wsProgress < 100) {
+      setPhase("loading");
+
+      // 폴링 중지 (WebSocket 사용 중)
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      if (yieldPollingIntervalRef.current) {
+        clearInterval(yieldPollingIntervalRef.current);
+        yieldPollingIntervalRef.current = null;
+      }
+    }
+
+    // WebSocket 에러 처리
+    if (wsError) {
+      setError(new Error(wsError));
+      setPhase("error");
+
+      // 폴링 재시작 (fallback)
+      console.warn("⚠️ WebSocket 에러 발생, 폴링으로 fallback:", wsError);
+    }
+  }, [wsProgress, wsChartData, wsIsCompleted, wsError, wsIsConnected]);
+
+  // 🚀 WebSocket 완료 처리
+  useEffect(() => {
+    if (!wsIsCompleted) return;
+
+    console.log("✅ WebSocket 완료 감지, 최종 결과 조회 중...");
+
+    const fetchFinalResult = async () => {
+      try {
+        const result = await getBacktestResult(backtestId);
+        setFinalResult(result);
+        setPhase("completed");
+        setProgress(100);
+
+        // 타이머 정리
+        if (tickingIntervalRef.current) {
+          clearInterval(tickingIntervalRef.current);
+          tickingIntervalRef.current = null;
+        }
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      } catch (err) {
+        console.error("최종 결과 조회 실패:", err);
+        setError(err instanceof Error ? err : new Error("결과 조회 실패"));
+        setPhase("error");
+      }
+    };
+
+    fetchFinalResult();
+  }, [wsIsCompleted, backtestId]);
 
   /**
    * 상태/추가 API에서 받은 yieldPoints를 병합하여 누락 없이 순서대로 추가

@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-stocklabadmin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nmmteam05}
-      POSTGRES_DB: ${POSTGRES_DB:-stock_lab_investment_db_investment_db}
+      POSTGRES_DB: ${POSTGRES_DB:-stock_lab_investment_db}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -47,9 +47,12 @@ services:
     env_file:
       - ./SL-Back-end/.env.local
     environment:
-      # SSH 터널을 통한 RDS 연결 (실제 데이터가 있는 DB)
+      # 원격 DB (SSH 터널링 필요: ssh -N -L 5433:localhost:5432 user@host)
       DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db
       DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db
+      # 로컬 Docker DB 사용
+      # DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
+      # DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
       REDIS_HOST: redis
       REDIS_PORT: 6379
       DEBUG: "true"

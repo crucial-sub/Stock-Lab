@@ -24,6 +24,10 @@ _balance_cache: Dict[str, Dict[str, Any]] = {}
 _cache_timestamps: Dict[str, datetime] = {}
 CACHE_DURATION_SECONDS = 10  # 10초 캐싱
 
+# 예수금 캐시 (60초)
+_deposit_cache: Dict[str, Dict[str, Any]] = {}
+_deposit_timestamps: Dict[str, datetime] = {}
+
 
 class KiwoomService:
     """키움증권 API 서비스"""
@@ -172,17 +176,19 @@ class KiwoomService:
     def get_deposit_info(access_token: str, qry_tp: str = "3") -> Dict[str, Any]:
         """
         예수금 상세 현황 조회 (REST API)
-
-        Args:
-            access_token: 접근 토큰
-            qry_tp: 조회구분 (3: 추정조회, 2: 일반조회, 기본값: 3)
-
-        Returns:
-            예수금 상세 정보
-
-        Raises:
-            requests.RequestException: API 요청 실패시
+        
+        * 60초 캐싱 적용
         """
+        # 캐시 키 생성
+        cache_key = f"{KiwoomService._get_cache_key(access_token)}_{qry_tp}"
+        
+        # 캐시 유효성 확인 (60초)
+        if cache_key in _deposit_timestamps:
+            elapsed = (datetime.now() - _deposit_timestamps[cache_key]).total_seconds()
+            if elapsed < 60:
+                logger.debug("💾 캐시된 예수금 데이터 반환")
+                return _deposit_cache[cache_key]
+
         url = f"{KIWOOM_MOCK_HOST}/api/dostk/acnt"
         headers = {
             "Content-Type": "application/json;charset=UTF-8",
@@ -200,6 +206,11 @@ class KiwoomService:
             response.raise_for_status()
             response_data = response.json()
             logger.info(f"예수금 조회 API 응답: {response_data}")
+            
+            # 캐시 저장
+            _deposit_cache[cache_key] = response_data
+            _deposit_timestamps[cache_key] = datetime.now()
+            
             return response_data
         except requests.RequestException as e:
             logger.error(f"예수금 조회 실패: {e}")
@@ -687,20 +698,18 @@ class KiwoomService:
             raise ValueError("키움 토큰이 없습니다. 계정 연동을 먼저 진행해주세요.")
 
         try:
-            # 간단한 API 호출로 토큰 유효성 테스트
-            test_result = KiwoomService.get_deposit_info(
-                access_token=user.kiwoom_access_token,
-                qry_tp="3"
-            )
-
-            # 토큰이 유효하면 그대로 반환
-            if test_result.get("return_code") == 0:
-                logger.debug(f"✅ 키움 토큰 유효 (user: {user.email})")
+            # DB에 저장된 만료 시간 확인
+            from datetime import timezone
+            now = datetime.now(timezone.utc)
+            
+            # 만료 시간이 없거나, 이미 만료되었거나, 만료 10분 전이면 갱신
+            if (not user.kiwoom_token_expires_at or 
+                now >= user.kiwoom_token_expires_at - timedelta(minutes=10)):
+                
+                logger.info(f"🔄 키움 토큰 만료 임박/경과 (user: {user.email})")
+            else:
+                # 유효하면 그대로 반환
                 return user.kiwoom_access_token
-
-            # 토큰이 만료되었으면 갱신 시도
-            error_msg = test_result.get("return_msg", "")
-            logger.warning(f"⚠️ 키움 토큰 만료 감지: {error_msg}")
 
             if not user.kiwoom_app_key or not user.kiwoom_app_secret:
                 raise ValueError("app_key/app_secret이 없어 토큰 갱신이 불가능합니다.")

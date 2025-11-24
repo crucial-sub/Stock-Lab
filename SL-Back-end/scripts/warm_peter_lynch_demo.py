@@ -10,9 +10,11 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import List, Dict, Any
 import pandas as pd
+import pickle
+import lz4.frame
 
 from app.core.database import AsyncSessionLocal
-from app.core.cache import get_cache
+from app.core.cache import get_cache, get_redis
 from app.services.advanced_backtest import _run_backtest_async
 from sqlalchemy import text
 
@@ -185,7 +187,10 @@ async def warm_factor_data_for_peter_lynch():
 
             logger.info(f"📊 계산 날짜: {len(calc_dates)}일")
 
+            # 🔥 CRITICAL FIX: 백테스트와 동일한 캐시 구조 사용
             # 날짜별로 팩터 계산 및 캐싱
+            themes_str = ','.join(sorted(PETER_LYNCH_CONFIG["themes"]))
+
             for calc_date in calc_dates:
                 try:
                     factors_df = await calculator.calculate_all_factors(
@@ -194,14 +199,30 @@ async def warm_factor_data_for_peter_lynch():
                     )
 
                     if factors_df is not None and not factors_df.empty:
-                        # 팩터별로 캐싱
-                        for factor_name in all_factors:
-                            if factor_name in factors_df.columns:
-                                cache_key = f"peter_lynch:factor:{factor_name}:{calc_date}"
-                                factor_data = factors_df[[factor_name, 'stock_code']].to_dict('records')
-                                await cache.set(cache_key, factor_data, ttl=0)  # 영구
+                        # 🚀 NEW: 백테스트와 동일한 형식으로 캐싱
+                        # {stock_code: {factor: value}} 구조
+                        factors_by_stock = {}
+                        for _, row in factors_df.iterrows():
+                            stock_code = row['stock_code']
+                            factors_by_stock[stock_code] = {
+                                factor: row.get(factor)
+                                for factor in all_factors
+                                if factor in factors_df.columns
+                            }
 
-                        logger.info(f"✅ {calc_date} 팩터 캐싱 완료 (영구)")
+                        # 🔥 CRITICAL FIX: LZ4 압축 사용 (backtest_cache_optimized와 동일)
+                        cache_key = f"backtest_optimized:factors:{calc_date}:{themes_str}"
+
+                        # 직렬화 + LZ4 압축
+                        serialized = pickle.dumps(factors_by_stock, protocol=pickle.HIGHEST_PROTOCOL)
+                        compressed = lz4.frame.compress(serialized)
+
+                        # Redis에 직접 저장 (cache.set()은 이미 pickle.dumps를 하므로 우회)
+                        redis_client = get_redis()
+                        await redis_client.set(cache_key, compressed)
+
+                        logger.info(f"✅ {calc_date} 팩터 캐싱 완료 (영구) - Key: {cache_key}")
+                        logger.info(f"   종목 수: {len(factors_by_stock)}, 팩터 수: {len(all_factors)}")
 
                 except Exception as e:
                     logger.error(f"❌ {calc_date} 팩터 계산 실패: {e}")
@@ -285,7 +306,8 @@ async def warm_backtest_result_for_peter_lynch():
                 },
                 condition_sell=condition_sell,
                 max_buy_value=None,
-                max_daily_stock=None
+                max_daily_stock=None,
+                fast_mode=True  # 🔥 초고속 모드 활성화!
             )
 
             logger.info("✅ 백테스트 실행 완료!")

@@ -6,17 +6,17 @@ import type {
   MarketStock,
 } from "@/types";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { memo, useState } from "react";
 
 interface MarketInsightSectionProps {
   stocks: MarketStock[];
   news: MarketNews[];
 }
 
-export function MarketInsightSection({
+const MarketInsightSectionComponent = ({
   stocks,
   news,
-}: MarketInsightSectionProps) {
+}: MarketInsightSectionProps) => {
   const router = useRouter();
   const [selectedStock, setSelectedStock] = useState<{
     name: string;
@@ -113,4 +113,10 @@ export function MarketInsightSection({
       />
     </section>
   );
-}
+};
+
+/**
+ * MarketInsightSection with React.memo
+ * - Prevents re-renders when stocks and news arrays haven't changed
+ */
+export const MarketInsightSection = memo(MarketInsightSectionComponent);

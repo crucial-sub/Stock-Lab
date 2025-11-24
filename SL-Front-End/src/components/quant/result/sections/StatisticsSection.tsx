@@ -13,7 +13,7 @@ interface StatisticsSectionProps {
     finalCapital?: number;
   };
   initialCapital: number;
-  periodReturns: Array<{ label: string; value: number }>;
+  periodReturns?: Array<{ label: string; value: number }>;
 }
 
 export function StatisticsSection({
@@ -105,9 +105,11 @@ export function StatisticsSection({
         </div>
       </FieldPanel>
 
-      <FieldPanel conditionType="none" className="h-full">
-        <PeriodReturnsChart periodReturns={periodReturns} />
-      </FieldPanel>
+      {periodReturns &&
+        <FieldPanel conditionType="none" className="h-full">
+          <PeriodReturnsChart periodReturns={periodReturns} />
+        </FieldPanel>
+      }
     </div>
   );
 }

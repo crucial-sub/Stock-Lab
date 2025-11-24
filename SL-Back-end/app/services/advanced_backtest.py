@@ -7,7 +7,7 @@
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -118,7 +118,7 @@ async def _run_backtest_async(
     target_stocks: List[str],
     target_universes: List[str],
     use_all_stocks: bool,
-    buy_conditions: List[dict],
+    buy_conditions: Union[List[dict], dict],  # 리스트 또는 딕셔너리 (벡터화 지원)
     buy_logic: str,
     priority_factor: str,
     priority_order: str,
@@ -190,40 +190,55 @@ async def _run_backtest_async(
                 # 중괄호가 없으면 그대로 사용
                 return expr.strip().upper()
 
-            parsed_conditions = []
-            if buy_conditions:
-                for cond in buy_conditions:
-                    factor_code = _extract_factor(cond.get('exp_left_side'))
-                    if not factor_code:
-                        continue
-                    parsed_conditions.append({
-                        "id": cond.get('name') or factor_code,
-                        "factor": factor_code,
-                        "operator": cond.get('inequality', '>'),
-                        "value": cond.get('exp_right_side'),
-                        "description": cond.get('exp_left_side')
-                    })
-
-            # 논리식 생성: buy_logic에 따라 조건 ID들을 연결
-            expression_text = ""
-            if parsed_conditions:
-                if buy_logic and buy_logic.upper() == "OR":
-                    expression_text = " or ".join([c["id"] for c in parsed_conditions])
-                else:
-                    # 기본값은 AND
-                    expression_text = " and ".join([c["id"] for c in parsed_conditions])
-
-            # 우선순위 팩터 정규화
-            normalized_priority_factor = _extract_factor(priority_factor)
-
+            # 🚀 벡터화 평가 지원: buy_conditions가 이미 딕셔너리 형식인 경우 그대로 사용
             buy_condition_payload: Optional[dict] = None
-            if parsed_conditions and expression_text:
-                buy_condition_payload = {
-                    "expression": expression_text,
-                    "conditions": parsed_conditions,
-                    "priority_factor": normalized_priority_factor,
-                    "priority_order": priority_order or "desc"
-                }
+
+            if isinstance(buy_conditions, dict) and 'expression' in buy_conditions and 'conditions' in buy_conditions:
+                # 이미 벡터화 형식 (expression + conditions)
+                logger.info("✅ 벡터화 형식의 buy_conditions 감지")
+                buy_condition_payload = buy_conditions
+                # 우선순위 팩터가 없으면 파라미터에서 가져옴
+                if 'priority_factor' not in buy_condition_payload:
+                    normalized_priority_factor = _extract_factor(priority_factor)
+                    buy_condition_payload['priority_factor'] = normalized_priority_factor
+                if 'priority_order' not in buy_condition_payload:
+                    buy_condition_payload['priority_order'] = priority_order or "desc"
+            else:
+                # 레거시 형식 (리스트) → 파싱하여 벡터화 형식으로 변환
+                logger.info("📋 레거시 형식의 buy_conditions 감지 - 벡터화 형식으로 변환")
+                parsed_conditions = []
+                if buy_conditions:
+                    for cond in buy_conditions:
+                        factor_code = _extract_factor(cond.get('exp_left_side'))
+                        if not factor_code:
+                            continue
+                        parsed_conditions.append({
+                            "id": cond.get('name') or factor_code,
+                            "factor": factor_code,
+                            "operator": cond.get('inequality', '>'),
+                            "value": cond.get('exp_right_side'),
+                            "description": cond.get('exp_left_side')
+                        })
+
+                # 논리식 생성: buy_logic에 따라 조건 ID들을 연결
+                expression_text = ""
+                if parsed_conditions:
+                    if buy_logic and buy_logic.upper() == "OR":
+                        expression_text = " or ".join([c["id"] for c in parsed_conditions])
+                    else:
+                        # 기본값은 AND
+                        expression_text = " and ".join([c["id"] for c in parsed_conditions])
+
+                # 우선순위 팩터 정규화
+                normalized_priority_factor = _extract_factor(priority_factor)
+
+                if parsed_conditions and expression_text:
+                    buy_condition_payload = {
+                        "expression": expression_text,
+                        "conditions": parsed_conditions,
+                        "priority_factor": normalized_priority_factor,
+                        "priority_order": priority_order or "desc"
+                    }
 
             # 기능상 SELL condition 리스트는 STOP/TAKE/HOLD 로직에 의해 관리하므로
             # condition_sell 의 factor 조건만 전달 (없으면 빈 리스트)
@@ -315,9 +330,9 @@ async def _run_backtest_async(
 
             # 2.5 백테스트 요약 생성 및 저장
             total_profit = final_capital - float(initial_capital)
-            summary = f"""## 백테스트 결과 요약
+            summary = f"""
 
-### 📊 주요 성과 지표
+### ✨ 주요 성과 지표
 - **총 수익률**: {final_return:.2f}%
 - **연환산 수익률**: {annualized_return:.2f}%
 - **최대 낙폭(MDD)**: {max_drawdown:.2f}%
@@ -330,7 +345,7 @@ async def _run_backtest_async(
 - **총 수익금**: {total_profit:,.0f}원
 
 ### 💡 주요 인사이트
-백테스트 기간 동안 전략이 안정적으로 수행되었으며, 리스크 관리가 효과적으로 작동했습니다.
+- 백테스트 기간 동안 전략이 안정적으로 수행되었으며, 리스크 관리가 효과적으로 작동했습니다.
 """
 
             # description 필드에 요약 저장

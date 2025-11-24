@@ -333,6 +333,29 @@ async def run_backtest(
             # Redis 에러는 무시하고 계속 진행 (Rate Limiting 없이)
             logger.warning(f"Rate Limiting 스킵 (Redis 에러): {e}")
 
+        # 🚀 벡터화 평가 지원: 유명 전략 사용 시 DB에서 expression과 conditions 로드
+        loaded_strategy_config = None
+        if request.strategy_name and request.strategy_name in ['peter_lynch', 'warren_buffett', 'benjamin_graham']:
+            from sqlalchemy import text
+            logger.info(f"🎯 유명 전략 감지: {request.strategy_name}")
+
+            result = await db.execute(
+                text('SELECT backtest_config FROM investment_strategies WHERE id = :id'),
+                {'id': request.strategy_name}
+            )
+            config = result.scalar_one_or_none()
+
+            if config and 'expression' in config and 'conditions' in config:
+                loaded_strategy_config = {
+                    'expression': config['expression'],
+                    'conditions': config['conditions'],
+                    'priority_factor': config.get('priority_factor', request.priority_factor),
+                    'priority_order': config.get('priority_order', request.priority_order)
+                }
+                logger.info(f"✅ 벡터화 설정 로드: expression={loaded_strategy_config['expression']}, conditions={len(loaded_strategy_config['conditions'])}개")
+            else:
+                logger.warning(f"⚠️ 전략 '{request.strategy_name}' 설정에 expression/conditions 없음")
+
         # 1. 세션 ID 생성
         session_id = str(uuid.uuid4())
 
@@ -557,7 +580,7 @@ async def run_backtest(
                 target_stocks,  # 선택된 개별 종목 코드 목록
                 target_universes,  # 선택된 유니버스 목록
                 request.trade_targets.use_all_stocks,  # 전체 종목 사용 여부
-                [c.model_dump() for c in request.buy_conditions],  # 매수 조건
+                loaded_strategy_config or [c.model_dump() for c in request.buy_conditions],  # 🚀 벡터화: 유명 전략이면 expression+conditions, 아니면 리스트
                 request.buy_logic,
                 request.priority_factor,
                 request.priority_order,
@@ -1869,3 +1892,62 @@ async def save_backtest_as_portfolio(
         "message": "포트폴리오 저장 기능은 개발 중입니다. 향후 업데이트 예정입니다.",
         "portfolio_id": None  # TODO: 실제 포트폴리오 ID 반환
     }
+
+
+@router.post("/cache/clear")
+async def clear_backtest_cache(
+    cache_type: Optional[str] = "all",
+    user: User = Depends(get_current_user)
+):
+    """
+    백테스트 캐시 클리어 (일관성 보장을 위해)
+
+    Args:
+        cache_type: 클리어할 캐시 타입 ("all", "price", "financial")
+
+    Returns:
+        캐시 클리어 결과
+    """
+    try:
+        from app.core.cache import get_cache
+        cache = get_cache()
+
+        cleared_keys = []
+
+        if cache_type in ["all", "price"]:
+            # 가격 데이터 캐시 클리어
+            pattern = "price_data:*"
+            keys = await cache.redis.keys(pattern)
+            if keys:
+                await cache.redis.delete(*keys)
+                cleared_keys.extend([k.decode() if isinstance(k, bytes) else k for k in keys])
+                logger.info(f"🗑️ 가격 데이터 캐시 클리어: {len(keys)}개 키")
+
+        if cache_type in ["all", "financial"]:
+            # 재무 데이터 캐시 클리어
+            pattern = "financial_data:*"
+            keys = await cache.redis.keys(pattern)
+            if keys:
+                await cache.redis.delete(*keys)
+                cleared_keys.extend([k.decode() if isinstance(k, bytes) else k for k in keys])
+                logger.info(f"🗑️ 재무 데이터 캐시 클리어: {len(keys)}개 키")
+
+        if cache_type == "all":
+            # 팩터 데이터 캐시 클리어
+            pattern = "factor:*"
+            keys = await cache.redis.keys(pattern)
+            if keys:
+                await cache.redis.delete(*keys)
+                cleared_keys.extend([k.decode() if isinstance(k, bytes) else k for k in keys])
+                logger.info(f"🗑️ 팩터 데이터 캐시 클리어: {len(keys)}개 키")
+
+        return {
+            "success": True,
+            "message": f"캐시 클리어 완료: {len(cleared_keys)}개 키",
+            "cache_type": cache_type,
+            "cleared_count": len(cleared_keys)
+        }
+
+    except Exception as e:
+        logger.error(f"캐시 클리어 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"캐시 클리어 실패: {str(e)}")

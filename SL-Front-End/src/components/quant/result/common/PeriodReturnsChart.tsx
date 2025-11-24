@@ -65,7 +65,7 @@ export function PeriodReturnsChart({ periodReturns }: PeriodReturnsChartProps) {
                 : { top: "calc(50% + 10px)" };
 
             return (
-              <div key={index} className="relative flex-1 h-full">
+              <div key={`${index}-${item.label}`} className="relative flex-1 h-full">
                 {barHeight > 0 ? (
                   <div
                     className={`${barColor} absolute left-1/2 -translate-x-1/2 w-4 rounded-sm`}

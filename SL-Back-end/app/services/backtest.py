@@ -25,7 +25,6 @@ from functools import partial
 import time
 import hashlib
 import json
-# 🚀 EXTREME OPTIMIZATION: Numba JIT 컴파일 (Python 루프를 C 속도로)
 try:
     from numba import jit, prange
     NUMBA_AVAILABLE = True
@@ -52,6 +51,7 @@ from app.schemas.backtest import (
     BacktestSettings
 )
 from app.services.condition_evaluator import ConditionEvaluator, LogicalExpressionParser
+from app.services.condition_evaluator_vectorized import vectorized_evaluator
 from app.core.cache import cache
 
 logger = logging.getLogger(__name__)
@@ -139,7 +139,6 @@ class DrawdownPeriod:
     is_active: bool = True
 
 
-# 🚀 EXTREME OPTIMIZATION: Numba JIT 최적화 함수들
 @jit(nopython=True, cache=True)
 def calculate_returns_numba(prices: np.ndarray, periods: int) -> np.ndarray:
     """
@@ -221,9 +220,14 @@ def calculate_portfolio_value_numba(
 class BacktestEngine:
     """백테스트 엔진"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, random_seed: int = 42):
         self.db = db
         self.tax_rate = Decimal("0.0023")  # 0.23% 거래세 (고정)
+
+        # 랜덤 시드 고정 (결과 재현성 보장)
+        self.random_seed = random_seed
+        np.random.seed(random_seed)
+        logger.info(f"🎲 랜덤 시드 설정: {random_seed}")
 
         # 추적용 컨테이너
         self.orders: List[Order] = []
@@ -252,7 +256,7 @@ class BacktestEngine:
     async def run_backtest(
         self,
         backtest_id: UUID,
-        buy_conditions: List[Dict],
+        buy_conditions: Union[List[Dict], Dict[str, Any]],  # 벡터화 평가 지원
         sell_conditions: List[Dict],
         start_date: date,
         end_date: date,
@@ -511,14 +515,12 @@ class BacktestEngine:
 
         logger.info(f"📊 가격 데이터 로드 - target_themes: {target_themes}, target_stocks: {target_stocks}, target_universes: {target_universes}")
 
-        # 🚀 Redis 캐시 조회 (필터 없는 기본 캐시 사용)
         from app.core.cache import get_cache
         cache = get_cache()
 
         # 기본 캐시 키 (필터 없음 - 모든 사용자가 같은 캐시 공유)
         base_cache_key = f"price_data:all:{start_date}:{end_date}"
 
-        # 🚀 캐시 조회
         cached_data = None
         try:
             cached_data = await cache.get(base_cache_key)
@@ -634,7 +636,8 @@ class BacktestEngine:
             and_(*conditions)
         ).order_by(
             StockPrice.trade_date,
-            Company.stock_code
+            Company.stock_code,
+            StockPrice.company_id  # 3차 정렬: 일관성 보장
         )
 
         result = await self.db.execute(query)
@@ -670,13 +673,11 @@ class BacktestEngine:
         if target_stocks:
             logger.info(f"🎯 필터링 대상: {len(target_stocks)}개 종목")
 
-        # 🚀 Redis 캐시 키 생성 (종목 필터링 포함)
         from app.core.cache import get_cache
         cache = get_cache()
         stocks_str = ','.join(sorted(target_stocks)) if target_stocks else 'ALL'
         cache_key = f"financial_data:{start_date}:{end_date}:{stocks_str}"
 
-        # 🚀 캐시 조회
         try:
             cached_data = await cache.get(cache_key)
             if cached_data:
@@ -857,7 +858,6 @@ class BacktestEngine:
 
             logger.info(f"Loaded financial data for {financial_df['stock_code'].nunique()} companies")
 
-            # 🚀 캐시 저장 (7일 TTL - 재무제표는 분기별로 변경)
             try:
                 # report_date를 문자열로 변환하여 저장
                 cache_df = financial_df.copy()
@@ -875,12 +875,10 @@ class BacktestEngine:
     async def _load_benchmark_data(self, benchmark: str, start_date: date, end_date: date) -> pd.DataFrame:
         """벤치마크 데이터 로드 (KOSPI/KOSDAQ) + Redis 캐싱"""
 
-        # 🚀 Redis 캐시 키 생성
         from app.core.cache import get_cache
         cache = get_cache()
         cache_key = f"benchmark:{benchmark}:{start_date}:{end_date}"
 
-        # 🚀 캐시 조회
         try:
             cached_data = await cache.get(cache_key)
             if cached_data:
@@ -905,8 +903,8 @@ class BacktestEngine:
         # 현재는 더미 데이터 생성
         dates = pd.date_range(start_date, end_date, freq='B')  # Business days
 
-        # 가상의 벤치마크 수익률 생성
-        np.random.seed(42)
+        # 가상의 벤치마크 수익률 생성 (클래스 인스턴스의 시드 사용)
+        np.random.seed(self.random_seed)
         returns = np.random.normal(0.0005, 0.015, len(dates))  # 평균 0.05%, 변동성 1.5%
 
         benchmark_df = pd.DataFrame({
@@ -918,7 +916,6 @@ class BacktestEngine:
 
         logger.info(f"Loaded {benchmark} benchmark data: {len(benchmark_df)} days")
 
-        # 🚀 캐시 저장 (7일 TTL)
         try:
             cache_df = benchmark_df.copy()
             if 'date' in cache_df.columns:
@@ -1050,7 +1047,6 @@ class BacktestEngine:
         chunk_size = max(1, total_dates // num_cores)
         date_chunks = [unique_dates[i:i + chunk_size] for i in range(0, total_dates, chunk_size)]
 
-        # 🚀 Polars vectorization의 장점을 활용하기 위해:
         # - 각 날짜별로 팩터 계산 (Polars가 내부적으로 SIMD 사용)
         # - 단순화: 멀티프로세싱 대신 asyncio로 빠르게 처리
         # - Polars의 group_by + agg가 이미 최적화되어 있으므로 단순 반복으로도 충분히 빠름
@@ -1071,7 +1067,6 @@ class BacktestEngine:
             stock_factor_map: Dict[str, Dict[str, float]] = defaultdict(dict)
             price_until_date = price_pl.filter(pl.col('date') <= calc_date)
 
-            # 🚀 Polars 벡터화된 팩터 계산 (내부적으로 최적화됨)
             if financial_pl is not None or financial_dict is not None:
                 value_factor_list = ['PER', 'PBR', 'PSR', 'PCR', 'DIVIDEND_YIELD', 'EARNINGS_YIELD', 'FCF_YIELD', 'EV_EBITDA', 'EV_SALES', 'BOOK_TO_MARKET']
                 if any(f in required_factors for f in value_factor_list):
@@ -1190,7 +1185,6 @@ class BacktestEngine:
         total_dates = len(unique_dates)
 
         for date_idx, calc_date in enumerate(unique_dates):
-            # 🚀 분기별 캐싱 (재무 데이터는 분기별이므로)
             cache_key = None
             if cache_enabled:
                 quarter_key = get_quarter_key(calc_date)
@@ -1419,7 +1413,6 @@ class BacktestEngine:
         price_pl = pl.from_pandas(price_data)
         financial_pl = pl.from_pandas(financial_data) if not financial_data.empty else None
 
-        # 🚀 최적화: 재무 데이터 사전 색인화 (종목별로 한 번만 필터링)
         financial_dict = None
         if financial_pl is not None:
             logger.info("🚀 재무 데이터 사전 색인화 시작...")
@@ -1436,7 +1429,6 @@ class BacktestEngine:
 
         start_time = time.time()
 
-        # 🚀 Option A: Multiprocessing (최고 성능) vs Sequential + Caching (캐시 히트 시 빠름)
         # 환경변수로 제어: USE_MULTIPROCESSING=true (기본값: true)
         import os
         use_multiprocessing = os.getenv('USE_MULTIPROCESSING', 'true').lower() == 'true'
@@ -1546,7 +1538,6 @@ class BacktestEngine:
         if latest_price.is_empty():
             return factors
 
-        # 🚀 Polars 벡터화: 모든 종목의 재무 데이터를 한 번에 처리
         if financial_dict is not None:
             # 사전 색인화된 데이터 사용: 종목별 최신 재무 데이터 추출
             financial_records = []
@@ -1587,7 +1578,6 @@ class BacktestEngine:
             if latest_financial.is_empty():
                 return factors
 
-            # 🚀 Polars 벡터화: group_by로 종목별 최신 데이터 추출
             # 최신 분기 데이터 (PBR용)
             latest_fin = (
                 latest_financial
@@ -1612,13 +1602,11 @@ class BacktestEngine:
             # 조인: 최신 분기와 연간 보고서 결합
             financial_data = latest_fin.join(annual_fin, on='stock_code', how='left')
 
-        # 🚀 Polars 벡터화: 가격 데이터와 재무 데이터 조인
         joined = latest_price.join(financial_data, on='stock_code', how='inner')
 
         if joined.is_empty():
             return factors
 
-        # 🚀 Polars 벡터화: PER, PBR 계산 (벡터 연산)
         result = joined.select([
             pl.col('stock_code'),
             # PER = 시가총액 / 당기순이익
@@ -1658,7 +1646,6 @@ class BacktestEngine:
         """🚀 수익성 팩터 계산 (Polars 벡터화 최적화)"""
         factors: Dict[str, Dict[str, float]] = {}
 
-        # 🚀 Polars 벡터화: 모든 종목의 최신 재무 데이터 한 번에 추출
         if financial_dict is not None:
             # 사전 색인화된 데이터 사용
             financial_records = []
@@ -1683,7 +1670,6 @@ class BacktestEngine:
 
             latest_financial = pl.DataFrame(financial_records)
         else:
-            # 🚀 Polars 벡터화: group_by로 종목별 최신 데이터 추출
             filtered = financial_pl.filter(pl.col('available_date') <= calc_date)
             if filtered.is_empty():
                 return factors
@@ -1703,7 +1689,6 @@ class BacktestEngine:
                 ])
             )
 
-        # 🚀 Polars 벡터화: ROE, ROA, DEBT_RATIO, GPM, OPM, NPM 계산 (벡터 연산)
         result = latest_financial.select([
             pl.col('stock_code'),
             # ROE = (당기순이익 / 자본총계) * 100
@@ -1947,7 +1932,6 @@ class BacktestEngine:
         """🚀 안정성 팩터 계산 (Polars 벡터화 최적화)"""
         factors: Dict[str, Dict[str, float]] = {}
 
-        # 🚀 Polars 벡터화: 모든 종목의 최신 재무 데이터 한 번에 추출
         if financial_dict is not None:
             # 사전 색인화된 데이터 사용
             financial_records = []
@@ -1974,7 +1958,6 @@ class BacktestEngine:
 
             latest_financial = pl.DataFrame(financial_records)
         else:
-            # 🚀 Polars 벡터화: group_by로 종목별 최신 데이터 추출
             filtered = financial_pl.filter(pl.col('available_date') <= calc_date)
             if filtered.is_empty():
                 return factors
@@ -1996,7 +1979,6 @@ class BacktestEngine:
                 ])
             )
 
-        # 🚀 Polars 벡터화: 안정성 팩터 계산 (벡터 연산)
         result = latest_financial.select([
             pl.col('stock_code'),
             # DEBT_TO_EQUITY = 부채총계 / 자본총계
@@ -2092,7 +2074,6 @@ class BacktestEngine:
         if current_prices.is_empty():
             return factors
 
-        # ✅ 벡터화: 모든 종목의 현재가를 한 번에 가져오기
         current_dict = dict(zip(
             current_prices.select('stock_code').to_pandas()['stock_code'],
             current_prices.select('close_price').to_pandas()['close_price']
@@ -2103,7 +2084,6 @@ class BacktestEngine:
             target_date = calc_date - pd.Timedelta(days=lookback_days)
             date_window_start = target_date - pd.Timedelta(days=lookback_days * 0.2)  # ±20% 여유
 
-            # ✅ 벡터화: 모든 종목의 과거가를 한 번에 필터링
             past_prices = price_pl.filter(
                 (pl.col('date') >= date_window_start) &
                 (pl.col('date') <= target_date)
@@ -2112,7 +2092,6 @@ class BacktestEngine:
             if past_prices.is_empty():
                 continue
 
-            # ✅ 벡터화: 종목별 최신 과거가 추출 (group_by 사용)
             past_latest = past_prices.group_by('stock_code').agg([
                 pl.col('close_price').first().alias('past_price')
             ])
@@ -2530,13 +2509,11 @@ class BacktestEngine:
         if factor_df.empty:
             return factor_df
 
-        # 🚀 Pandas → Polars 변환
         factor_pl = pl.from_pandas(factor_df)
 
         meta_columns = {'date', 'stock_code', 'industry', 'size_bucket', 'market_type'}
         factor_columns = [col for col in factor_df.columns if col not in meta_columns]
 
-        # 🚀 Polars 벡터화 연산으로 정규화
         for col in factor_columns:
             if col not in factor_pl.columns:
                 continue
@@ -2580,14 +2557,12 @@ class BacktestEngine:
         if factor_df.empty:
             return factor_df
 
-        # 🚀 Pandas → Polars 변환
         factor_pl = pl.from_pandas(factor_df)
 
         meta_columns = {'date', 'stock_code', 'industry', 'size_bucket', 'market_type'}
         factor_columns = [col for col in factor_df.columns if col not in meta_columns]
         lower_is_better = {'PER', 'PBR', 'VOLATILITY'}
 
-        # 🚀 Polars group_by().agg()로 벡터화된 랭킹 계산
         for col in factor_columns:
             if col not in factor_pl.columns:
                 continue
@@ -2623,7 +2598,6 @@ class BacktestEngine:
 
         logger.info("포트폴리오 시뮬레이션 시작")
 
-        # 🚀 OPTIMIZATION: factor_data 날짜별 사전 그룹화 (250번 필터링 → 1번)
         logger.info("🚀 팩터 데이터 날짜별 그룹화...")
         factor_data_by_date = {}
         if not factor_data.empty:
@@ -2639,6 +2613,10 @@ class BacktestEngine:
         executions: List[Dict[str, Any]] = []
         daily_snapshots: List[Dict[str, Any]] = []
         position_history: List[Dict[str, Any]] = []
+        saved_execution_ids: set = set()  # 중복 실행 방지
+
+        from app.services.factor_integration import FactorIntegration
+        factor_integrator = FactorIntegration(self.db)
 
         # 거래일 리스트
         trading_days = sorted(price_data['date'].unique())
@@ -2646,10 +2624,10 @@ class BacktestEngine:
 
         benchmark_lookup = None
         if benchmark_data is not None and not benchmark_data.empty:
-            benchmark_copy = benchmark_data.copy()
-            benchmark_copy['date'] = pd.to_datetime(benchmark_copy['date'])
+            benchmark_dates = pd.to_datetime(benchmark_data['date'])
+            benchmark_with_dates = benchmark_data.assign(date=benchmark_dates)
             # 동일 날짜 중복 방지를 위해 마지막 값 사용
-            benchmark_lookup = benchmark_copy.drop_duplicates(subset=['date'], keep='last').set_index('date')
+            benchmark_lookup = benchmark_with_dates.drop_duplicates(subset=['date'], keep='last').set_index('date')
 
         priority_factor = None
         priority_order = "desc"
@@ -2665,10 +2643,8 @@ class BacktestEngine:
         peak_value = float(initial_capital)
         current_mdd = 0.0
 
-        # 🚀 최적화: 리밸런싱 날짜 Set으로 변환 (O(1) 조회)
         rebalance_dates_set = {pd.Timestamp(d) for d in rebalance_dates}
 
-        # 🚀 시뮬레이션 시작 - 진행률 0% 초기화
         from sqlalchemy import update
         from app.models.simulation import SimulationSession
         stmt_init = (
@@ -2688,37 +2664,31 @@ class BacktestEngine:
         # ⚡ 배치 commit 전략: 20개 거래일마다 commit
         progress_batch_count = 0
         PROGRESS_BATCH_SIZE = 20
-        saved_execution_ids = set()  # ✅ BUG FIX: 이미 DB에 저장된 execution ID 추적 (중복 저장 방지)
 
-        # 🚀 EXTREME OPTIMIZATION: Price data 사전 색인화 (완전 벡터화 - 100배 빠름!)
         logger.info("🚀 가격 데이터 색인화 시작...")
 
-        # ✅ 완전 벡터화: iterrows() 완전 제거 (50초 → 0.5초)
-        price_data_indexed = price_data.copy()
-        price_data_indexed['date'] = pd.to_datetime(price_data_indexed['date'])
+        price_dates = pd.to_datetime(price_data['date'])
 
-        # 벡터화된 딕셔너리 생성
-        keys = list(zip(price_data_indexed['stock_code'], price_data_indexed['date']))
+        keys = list(zip(price_data['stock_code'].values, price_dates))
 
         # 기본값 처리: high/low가 없으면 close 사용
-        high_prices = price_data_indexed.get('high_price', price_data_indexed['close_price']).fillna(price_data_indexed['close_price'])
-        low_prices = price_data_indexed.get('low_price', price_data_indexed['close_price']).fillna(price_data_indexed['close_price'])
-        open_prices = price_data_indexed.get('open_price', price_data_indexed['close_price']).fillna(price_data_indexed['close_price'])
+        close_prices = price_data['close_price'].values
+        high_prices = (price_data['high_price'].fillna(price_data['close_price']).values
+                      if 'high_price' in price_data.columns else close_prices)
+        low_prices = (price_data['low_price'].fillna(price_data['close_price']).values
+                     if 'low_price' in price_data.columns else close_prices)
+        open_prices = (price_data['open_price'].fillna(price_data['close_price']).values
+                      if 'open_price' in price_data.columns else close_prices)
 
-        values = [
-            {
-                'close_price': float(close),
-                'high_price': float(high),
-                'low_price': float(low),
-                'open_price': float(open_)
-            }
-            for close, high, low, open_ in zip(
-                price_data_indexed['close_price'],
-                high_prices,
-                low_prices,
-                open_prices
-            )
-        ]
+        values = list(map(
+            lambda x: {
+                'close_price': float(x[0]),
+                'high_price': float(x[1]),
+                'low_price': float(x[2]),
+                'open_price': float(x[3])
+            },
+            zip(close_prices, high_prices, low_prices, open_prices)
+        ))
 
         price_lookup = dict(zip(keys, values))
         logger.info(f"✅ 가격 데이터 색인화 완료: {len(price_lookup):,}개 엔트리")
@@ -2732,16 +2702,13 @@ class BacktestEngine:
             daily_buy_count = 0  # 당일 매수 횟수
             daily_sell_count = 0  # 당일 매도 횟수
             daily_rebalance_sell_count = 0  # 리밸런싱 매도 횟수
-            daily_sold_stocks = set()  # ✅ BUG FIX: 당일 매도한 종목 추적 (같은 날 재매수 방지)
+            daily_sold_stocks = set()  # 당일 매도한 종목 추적
 
-            # 🚀 최적화: O(1) 리밸런싱 날짜 체크
             is_rebalance_day = pd.Timestamp(trading_day) in rebalance_dates_set
 
             # 리밸런싱 날짜인 경우: 매도 먼저, 매수는 나중에
             if is_rebalance_day:
                 # 1단계: 리밸런싱 매도 (조건 불만족 종목)
-                from app.services.factor_integration import FactorIntegration
-                factor_integrator = FactorIntegration(self.db)
 
                 # 현재 보유 종목 중 조건 만족하는 종목 확인
                 if holdings:
@@ -2765,7 +2732,6 @@ class BacktestEngine:
                         if not holding:
                             continue
 
-                        # ✅ 최소 보유기간 체크 추가!
                         # trading_day와 holding.entry_date를 date로 변환하여 비교
                         trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
                         entry_date = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
@@ -2774,7 +2740,6 @@ class BacktestEngine:
                             logger.debug(f"⏸️  리밸런싱 매도 보류: {stock_code} (보유 {hold_days_count}일 < 최소 {min_hold}일)")
                             continue  # 최소 보유기간 미달이면 리밸런싱도 안 함!
 
-                        # 🎯 익일 시가 조회 (리밸런싱도 익일 시가)
                         next_day_price = None
                         next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
 
@@ -2830,14 +2795,12 @@ class BacktestEngine:
                             'commission': commission,
                             'tax': tax,
                             'realized_pnl': holding.realized_pnl,
-                            'return_pct': profit_rate,  # ✅ 수익률 추가
                             'selection_reason': 'REBALANCE (next day open)',
-                            'hold_days': (next_sell_date - (holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date)).days  # ✅ 보유일수 추가!
                         })
 
                         del holdings[stock_code]
+                        daily_sold_stocks.add(stock_code)  # 당일 매도 종목 추적
                         daily_rebalance_sell_count += 1
-                        daily_sold_stocks.add(stock_code)  # ✅ 당일 매도 종목 기록
 
             # 2단계: 목표가/손절가 등 일반 매도 (매일 체크)
             sell_trades = await self._execute_sells(
@@ -2845,7 +2808,7 @@ class BacktestEngine:
                 condition_sell,
                 price_data, trading_day, cash_balance,
                 orders, executions,
-                price_lookup  # 🚀 EXTREME OPTIMIZATION
+                price_lookup=price_lookup,
             )
             daily_sell_count = len(sell_trades)  # 일반 매도 횟수
 
@@ -2863,19 +2826,19 @@ class BacktestEngine:
                         position.realized_pnl = (trade['price'] - position.entry_price) * position.quantity
                     self.closed_positions.append(position)
                     del holdings[trade['stock_code']]
-                    daily_sold_stocks.add(trade['stock_code'])  # ✅ 당일 매도 종목 기록
+                    daily_sold_stocks.add(trade['stock_code'])  # 당일 매도 종목 추적
 
             # 3단계: 매수 (리밸런싱 날짜에만)
             if is_rebalance_day:
 
                 # 2단계: 매수 종목 선정
-                # 🚀 OPTIMIZATION: 사전 그룹화된 팩터 데이터 사용
                 today_factor_data = factor_data_by_date.get(pd.Timestamp(trading_day), pd.DataFrame())
 
                 buy_candidates = await self._select_buy_candidates(
-                    factor_data=today_factor_data,  # ✅ 필터링된 데이터 사용
+                    factor_data=today_factor_data,
                     buy_conditions=buy_conditions,
                     trading_day=trading_day,
+                    factor_integrator=factor_integrator,
                     price_data=price_data,
                     holdings=holdings,
                     max_positions=max_positions,
@@ -2886,7 +2849,6 @@ class BacktestEngine:
                 # 이미 보유 중인 종목은 매수 후보에서 제외 (리밸런싱에서는 유지)
                 new_buy_candidates = [s for s in buy_candidates if s not in holdings]
 
-                # ✅ BUG FIX: 당일 매도한 종목도 매수 후보에서 제외 (같은 날 재매수 방지)
                 new_buy_candidates = [s for s in new_buy_candidates if s not in daily_sold_stocks]
 
                 logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개 (당일 매도 제외 {len(daily_sold_stocks)}개), 보유 {len(holdings)}개/{max_positions}개")
@@ -3019,7 +2981,6 @@ class BacktestEngine:
             if should_save_details:
                 from app.models.simulation import SimulationDailyValue, SimulationTrade
 
-                # 🚀 OPTIMIZATION 7: DB 저장 최적화 (DELETE 제거, UPSERT만 사용)
                 # Before: DELETE + INSERT (모든 데이터 재저장) - 2-3초
                 # After: UPSERT (변경된 데이터만 업데이트) - 0.2-0.3초, 10배 빠름!
 
@@ -3058,7 +3019,6 @@ class BacktestEngine:
                     stmt = insert(SimulationDailyValue).values(daily_values_to_upsert)
                     await self.db.execute(stmt)
 
-                # ✅ BUG FIX: 중복 저장 방지 - 아직 저장되지 않은 거래만 필터링
                 trades_to_insert = []
                 for execution in executions:
                     exec_id = execution.get('execution_id')
@@ -3067,7 +3027,6 @@ class BacktestEngine:
                             'session_id': str(backtest_id),
                             'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
                             'stock_code': execution['stock_code'],
-                            'stock_name': execution.get('stock_name'),  # ✅ 종목명 추가!
                             'trade_type': execution['trade_type'],  # BUY or SELL
                             'quantity': int(execution['quantity']),
                             'price': float(execution['price']),
@@ -3076,8 +3035,6 @@ class BacktestEngine:
                             'tax': float(execution.get('tax', 0)),
                             'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
                             'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None,
-                            'holding_days': int(execution['hold_days']) if execution.get('hold_days') is not None else None,  # ✅ 보유일수 추가!
-                            'reason': execution.get('selection_reason')  # ✅ 매도 사유 추가!
                         })
                         saved_execution_ids.add(exec_id)
 
@@ -3154,7 +3111,7 @@ class BacktestEngine:
         cash_balance: Decimal,
         orders: List[Dict[str, Any]],
         executions: List[Dict[str, Any]],
-        price_lookup: Optional[Dict] = None  # 🚀 EXTREME OPTIMIZATION
+        price_lookup: Optional[Dict] = None,
     ) -> List[Dict]:
         """매도 실행"""
 
@@ -3172,8 +3129,23 @@ class BacktestEngine:
         if len(holdings) > 0:
             logger.debug(f"💼 [{trading_day}] 매도 체크: {len(holdings)}개 보유")
 
+        condition_sell_stocks = set()
+        if condition_sell and len(holdings) > 0 and not date_factors.empty:
+            holding_stock_codes = list(holdings.keys())
+
+            if 'expression' in condition_sell and 'conditions' in condition_sell:
+                expression_payload = {
+                    "expression": condition_sell['expression'],
+                    "conditions": condition_sell['conditions']
+                }
+                condition_sell_stocks = set(vectorized_evaluator.evaluate_buy_conditions_vectorized(
+                    factor_data=date_factors,
+                    stock_codes=holding_stock_codes,
+                    buy_expression=expression_payload,
+                    trading_date=trading_ts
+                ))
+
         for stock_code, holding in list(holdings.items()):
-            # 🚀 EXTREME OPTIMIZATION: O(1) dictionary 조회
             if price_lookup:
                 price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
                 if not price_info:
@@ -3226,7 +3198,6 @@ class BacktestEngine:
             max_hold = hold_cfg.get('max_hold_days') if hold_cfg else None
             enforce_min_hold = min_hold is not None and hold_days_count < min_hold
 
-            # 🎯 매도 우선순위: 1) 손절가 2) 목표가 3) 최소 보유기간 4) 최대 보유일
             # 손절가/목표가는 최소 보유기간 무시!
             if target_cfg:
                 target_gain = target_cfg.get('target_gain')
@@ -3239,7 +3210,6 @@ class BacktestEngine:
                 # 종가 기준 수익률 (로깅용)
                 close_profit_rate = ((close_price / holding.entry_price) - Decimal("1")) * Decimal("100")
 
-                # 🚀 PERFORMANCE: 디버깅 로그 제거 (3,145번 호출 → 0번)
                 # logger.debug(f"📊 [{trading_day}] {stock_code} | 종가: {close_profit_rate:.2f}% | 고가: {high_profit_rate:.2f}% | 저가: {low_profit_rate:.2f}% | 목표: {target_gain}% | 손절: -{stop_loss}%")
 
                 # 1순위: 손절가 우선 체크 (저가 기준)
@@ -3251,7 +3221,6 @@ class BacktestEngine:
                     actual_loss_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
                     sell_reason = f"Stop loss {actual_loss_rate:.2f}%"
                     sell_reason_key = "stop"
-                    # 🚀 PERFORMANCE: 디버깅 로그 제거
                     # logger.debug(f"🛑 손절가 매도: {stock_code} | 저가: {low_profit_rate:.2f}% | 손절가 도달 -> {actual_loss_rate:.2f}%에 매도")
 
                 # 2순위: 목표가 체크 (고가 기준)
@@ -3263,7 +3232,6 @@ class BacktestEngine:
                     actual_profit_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
                     sell_reason = f"Take profit {actual_profit_rate:.2f}%"
                     sell_reason_key = "target"
-                    # 🚀 PERFORMANCE: 디버깅 로그 제거
                     # logger.debug(f"🎯 목표가 매도: {stock_code} | 고가: {high_profit_rate:.2f}% | 목표가 도달 -> {actual_profit_rate:.2f}%에 매도")
 
             # 3순위: 최소 보유기간 체크 (손절가/목표가 미도달 시)
@@ -3303,39 +3271,12 @@ class BacktestEngine:
                             sell_reason_key = "hold"
                             break
 
-            if (not should_sell) and condition_sell and not date_factors.empty:
-                condition_list = condition_sell.get('sell_conditions') or []
-                logic = condition_sell.get('sell_logic')
-                evaluator = self.condition_evaluator
-                if logic and condition_list:
-                    expression_payload = {
-                        "expression": logic,
-                        "conditions": condition_list
-                    }
-                    selected, _ = evaluator.evaluate_buy_conditions(
-                        factor_data=date_factors,
-                        stock_codes=[stock_code],
-                        buy_expression=expression_payload,
-                        trading_date=trading_ts
-                    )
-                    if stock_code in selected:
-                        should_sell = True
-                        sell_reason = "Condition sell triggered"
-                        sell_reason_key = "condition"
-                elif condition_list:
-                    passed, _, _ = evaluator.evaluate_condition_group(
-                        factor_data=date_factors,
-                        stock_code=stock_code,
-                        conditions=condition_list,
-                        trading_date=trading_ts
-                    )
-                    if passed:
-                        should_sell = True
-                        sell_reason = "Condition sell triggered"
-                        sell_reason_key = "condition"
+            if (not should_sell) and stock_code in condition_sell_stocks:
+                should_sell = True
+                sell_reason = "Condition sell triggered"
+                sell_reason_key = "condition"
 
             if should_sell:
-                # 🎯 익일 시가 조회 (더 현실적인 백테스트)
                 # D일 매도 조건 만족 → D+1일 시가에 매도
                 if price_lookup:
                     # 익일 찾기
@@ -3431,7 +3372,6 @@ class BacktestEngine:
                     'realized_pnl': profit,
                     'profit': profit,
                     'profit_rate': profit_rate,
-                    'return_pct': profit_rate,  # ✅ DB 저장용 키 추가
                     'hold_days': (actual_sell_date - (holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date)).days,
                     'selection_reason': sell_reason,
                     'factors': {}
@@ -3446,6 +3386,7 @@ class BacktestEngine:
         factor_data: pd.DataFrame,
         buy_conditions: Any,
         trading_day: date,
+        factor_integrator,
         price_data: pd.DataFrame,
         holdings: Dict,
         max_positions: int,
@@ -3453,10 +3394,6 @@ class BacktestEngine:
         priority_order: str = "desc"
     ) -> List[str]:
         """매수 후보 종목 선정 (논리식/가중치 지원) - 통합 모듈 사용"""
-
-        # 통합 모듈 사용
-        from app.services.factor_integration import FactorIntegration
-        factor_integrator = FactorIntegration(self.db)
 
         candidates: List[str] = []
 
@@ -3782,7 +3719,6 @@ class BacktestEngine:
             if current_price_data.empty:
                 continue
 
-            # 🎯 익일 시가 조회 (더 현실적인 백테스트)
             # D일 조건 만족 → D+1일 시가에 매수
             next_day_price_data = price_data[
                 (price_data['stock_code'] == stock_code) &
@@ -3977,7 +3913,6 @@ class BacktestEngine:
         if not holding_codes:
             return total_value
 
-        # 🚀 벡터화: MultiIndex로 한 번에 모든 종목 가격 조회
         try:
             # price_data에 MultiIndex가 없으면 생성 (처음 한 번만)
             if not hasattr(self, '_price_data_indexed') or self._last_price_data_id != id(price_data):
@@ -3996,7 +3931,6 @@ class BacktestEngine:
             elif not isinstance(current_prices, pd.Series):
                 current_prices = pd.Series(current_prices, index=holding_codes)
 
-            # 🚀 Numba JIT로 포트폴리오 가치 계산 (2-5배 빠름!)
             prices_array = []
             quantities_array = []
 

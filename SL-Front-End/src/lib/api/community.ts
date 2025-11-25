@@ -175,6 +175,7 @@ export const communityApi = {
    */
   getPosts: async (params?: {
     postType?: string;
+    userId?: string;
     tags?: string | string[];
     search?: string;
     page?: number;

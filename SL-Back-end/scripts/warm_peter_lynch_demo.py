@@ -156,6 +156,27 @@ async def warm_factor_data_for_peter_lynch():
     # 모든 팩터 (기본 + 추가)
     all_factors = PETER_LYNCH_CONFIG["base_factors"] + PETER_LYNCH_CONFIG["additional_factors"]
 
+    # 🔥 FIX: 전략 해시 생성 (전략별 캐시 격리)
+    from app.services.backtest_cache_optimized import generate_strategy_hash
+
+    # 피터린치 전략 조건으로 해시 생성
+    buy_conditions = {
+        "expression": "(A AND B AND C)",
+        "conditions": [
+            {"name": "A", "factor": "PEG", "operator": "<", "value": 1.5},
+            {"name": "B", "factor": "ROE", "operator": ">", "value": 15},
+            {"name": "C", "factor": "PER", "operator": "<", "value": 20}
+        ]
+    }
+    trading_rules = {
+        "target_gain": PETER_LYNCH_CONFIG["target_gain"],
+        "stop_loss": PETER_LYNCH_CONFIG["stop_loss"],
+        "min_hold_days": PETER_LYNCH_CONFIG["min_hold_days"],
+        "max_hold_days": PETER_LYNCH_CONFIG["max_hold_days"]
+    }
+    strategy_hash = generate_strategy_hash(buy_conditions, trading_rules)
+    logger.info(f"🔐 전략 해시 생성: {strategy_hash} (피터린치 전략)")
+
     async with AsyncSessionLocal() as db:
         try:
             from app.services.factor_calculator_complete import CompleteFactorCalculator
@@ -210,8 +231,8 @@ async def warm_factor_data_for_peter_lynch():
                                 if factor in factors_df.columns
                             }
 
-                        # 🔥 CRITICAL FIX: LZ4 압축 사용 (backtest_cache_optimized와 동일)
-                        cache_key = f"backtest_optimized:factors:{calc_date}:{themes_str}"
+                        # 🔥 CRITICAL FIX: 전략 해시 포함한 캐시 키 (전략별 격리)
+                        cache_key = f"backtest_optimized:factors:{calc_date}:{themes_str}:{strategy_hash}"
 
                         # 직렬화 + LZ4 압축
                         serialized = pickle.dumps(factors_by_stock, protocol=pickle.HIGHEST_PROTOCOL)
@@ -223,6 +244,7 @@ async def warm_factor_data_for_peter_lynch():
 
                         logger.info(f"✅ {calc_date} 팩터 캐싱 완료 (영구) - Key: {cache_key}")
                         logger.info(f"   종목 수: {len(factors_by_stock)}, 팩터 수: {len(all_factors)}")
+                        logger.info(f"   전략 해시: {strategy_hash}")
 
                 except Exception as e:
                     logger.error(f"❌ {calc_date} 팩터 계산 실패: {e}")

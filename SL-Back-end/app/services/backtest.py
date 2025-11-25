@@ -817,6 +817,7 @@ class BacktestEngine:
 
         logger.info(f"📊 재무 데이터 조회 연도 범위: {start_year} ~ {end_year}")
 
+        # 결과 일관성을 위해 ORDER BY 추가 (환경 간 동일한 순서 보장)
         income_query = select(
             FinancialStatement.company_id,
             Company.stock_code,
@@ -842,9 +843,9 @@ class BacktestEngine:
                     '매출총이익', '매출원가'
                 ])
             )
-        )
+        ).order_by(Company.stock_code, FinancialStatement.bsns_year, FinancialStatement.reprt_code)
 
-        # 재무상태표 데이터
+        # 재무상태표 데이터 (결과 일관성을 위해 ORDER BY 추가)
         balance_query = select(
             FinancialStatement.company_id,
             Company.stock_code,
@@ -866,7 +867,7 @@ class BacktestEngine:
                     '현금및현금성자산', '단기차입금', '장기차입금'
                 ])
             )
-        )
+        ).order_by(Company.stock_code, FinancialStatement.bsns_year, FinancialStatement.reprt_code)
 
         # 데이터 실행
         income_result = await self.db.execute(income_query)
@@ -2722,15 +2723,19 @@ class BacktestEngine:
         factor_columns = [col for col in factor_df.columns if col not in meta_columns]
         lower_is_better = {'PER', 'PBR', 'VOLATILITY'}
 
+        # 결과 일관성을 위해 stock_code로 먼저 정렬 (동점 시 알파벳 순 랭크 보장)
+        factor_pl = factor_pl.sort(['date', 'stock_code'])
+
         for col in factor_columns:
             if col not in factor_pl.columns:
                 continue
 
             descending = col not in lower_is_better  # ascending 반대
 
+            # ordinal rank: 동점이어도 정렬 순서(stock_code)대로 일관된 랭크 부여
             factor_pl = factor_pl.with_columns(
                 pl.col(col)
-                .rank(method='average', descending=descending)
+                .rank(method='ordinal', descending=descending)
                 .over('date')
                 .alias(f'{col}_RANK')
             )

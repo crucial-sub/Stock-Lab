@@ -89,7 +89,8 @@ class VectorizedConditionEvaluator:
             # 5. 한 번에 모든 종목 평가!
             try:
                 selected = date_data.query(query_str)
-                selected_stocks = selected['stock_code'].tolist()
+                # 결과 일관성을 위해 stock_code 정렬 (환경 간 동일한 순서 보장)
+                selected_stocks = sorted(selected['stock_code'].tolist())
                 # 🚀 OPTIMIZATION: INFO 레벨로만 요약 로깅
                 if len(selected_stocks) > 0:
                     self.logger.info(f"✅ 조건 충족: {len(selected_stocks)}개 종목")
@@ -286,7 +287,8 @@ class VectorizedConditionEvaluator:
             except:
                 pass
 
-        return selected_stocks
+        # 결과 일관성을 위해 stock_code 정렬 (환경 간 동일한 순서 보장)
+        return sorted(selected_stocks)
 
 
 # 싱글톤 인스턴스

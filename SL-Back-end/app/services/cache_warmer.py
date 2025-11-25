@@ -201,22 +201,24 @@ async def warm_price_data():
                     for p in all_prices
                 ]
 
-                # 날짜 범위별로 캐싱 (일반적인 백테스트 기간)
-                common_periods = [
-                    (365, "1year"),    # 1년
-                    (730, "2years"),   # 2년
-                    (1095, "3years"),  # 3년
-                    (180, "6months"),  # 6개월
+                # 날짜 범위별로 캐싱 (절대 날짜 기준 표준 기간)
+                # 백테스트와 호환되도록 고정된 표준 기간 사용
+                from datetime import date
+
+                standard_periods = [
+                    (date(2024, 1, 1), date(2024, 12, 31), "2024_full"),     # 2024년 전체
+                    (date(2023, 1, 1), date(2024, 12, 31), "2023-2024"),     # 2년
+                    (date(2022, 1, 1), date(2024, 12, 31), "2022-2024"),     # 3년
+                    (date(2024, 7, 1), date(2024, 12, 31), "2024_h2"),       # 2024 하반기
                 ]
 
-                for days, label in common_periods:
-                    start_date = latest_date - timedelta(days=days)
+                for start_date, end_date, label in standard_periods:
                     filtered_data = [
                         p for p in price_data
-                        if datetime.fromisoformat(p["trade_date"]).date() >= start_date
+                        if start_date <= datetime.fromisoformat(p["trade_date"]).date() <= end_date
                     ]
 
-                    cache_key = f"price_data:all:{start_date}:{latest_date}"
+                    cache_key = f"price_data:all:{start_date}:{end_date}"
                     await cache.set(cache_key, filtered_data, ttl=0)  # 영구 캐싱 (TTL=0)
                     logger.info(f"✅ Cached {label} price data: {len(filtered_data)} records (permanent)")
 

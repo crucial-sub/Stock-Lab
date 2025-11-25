@@ -85,9 +85,12 @@ CACHE_TTL_SECONDS = {
 # Phase 0 최적화: 필터 정보를 캐시 키에 포함
 def get_cache_key(data_type: str, start_date, end_date,
                   target_themes: list = None, target_stocks: list = None,
-                  target_universes: list = None) -> str:
+                  target_universes: list = None,
+                  use_all_data: bool = False) -> str:
     """
     필터 정보를 포함한 캐시 키 생성
+
+    **캐시 워밍 호환성**: use_all_data=True로 설정하면 필터 없이 "all" 키워드 사용
 
     Args:
         data_type: 데이터 타입 (price_data, financial_data 등)
@@ -96,10 +99,15 @@ def get_cache_key(data_type: str, start_date, end_date,
         target_themes: 테마 필터
         target_stocks: 종목 필터
         target_universes: 유니버스 필터
+        use_all_data: True이면 필터 무시하고 전체 데이터 캐시 키 생성 (캐시 워밍 호환)
 
     Returns:
         캐시 키 문자열
     """
+    # 캐시 워밍 호환: 필터 없이 전체 데이터 조회
+    if use_all_data:
+        return f"{data_type}:all:{start_date}:{end_date}"
+
     # 필터 정보를 정렬하여 일관된 키 생성
     themes_str = ','.join(sorted(target_themes or []))
     stocks_str = ','.join(sorted(target_stocks or []))[:100]  # 너무 길면 잘라냄

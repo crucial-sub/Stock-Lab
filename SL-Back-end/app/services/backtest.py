@@ -3927,6 +3927,9 @@ class BacktestEngine:
                 net_amount = amount - commission - tax
                 cost_basis = holding.entry_price * quantity if holding.entry_price else Decimal("0")
                 profit = net_amount - cost_basis
+                # 실제 체결일 = 익일 (모든 매도 조건 통일)
+                actual_sell_date = next_sell_date
+
                 if cost_basis > 0:
                     profit_rate = ((net_amount / cost_basis) - 1) * 100
 
@@ -3940,9 +3943,6 @@ class BacktestEngine:
                         logger.warning(f"   보유기간: {(actual_sell_date - (holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date)).days}일")
                 else:
                     profit_rate = 0
-
-                # 실제 체결일 = 익일 (모든 매도 조건 통일)
-                actual_sell_date = next_sell_date
 
                 order = {
                     'order_id': f"ORD-S-{stock_code}-{trading_day}",
@@ -4045,11 +4045,11 @@ class BacktestEngine:
                 )
                 candidates = [stock for stock, score in ranked_stocks]
             else:
-                # 가중치가 없으면 선택된 종목 그대로 사용
-                candidates = selected_stocks[:max_positions]
+                # 가중치가 없으면 선택된 종목 정렬 후 사용 (결과 일관성 보장)
+                candidates = sorted(selected_stocks)[:max_positions]
         else:
-            # 일반 조건인 경우 선택된 종목 사용
-            candidates = selected_stocks[:max_positions]
+            # 일반 조건인 경우 선택된 종목 정렬 후 사용 (결과 일관성 보장)
+            candidates = sorted(selected_stocks)[:max_positions]
 
         return candidates
 

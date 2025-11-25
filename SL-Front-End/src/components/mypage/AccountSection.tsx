@@ -25,7 +25,7 @@ export function AccountSection() {
       // 자동매매 할당 금액 조회
       try {
         const dashboardData = await autoTradingApi.getPortfolioDashboard();
-        setAllocatedCapital(Number(dashboardData.total_allocated_capital) || 0);
+        setAllocatedCapital(Number((dashboardData as any).total_allocated_capital) || 0);
       } catch (err) {
         console.warn("자동매매 할당 금액 조회 실패:", err);
       }

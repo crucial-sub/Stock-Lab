@@ -4,6 +4,7 @@
 - API 라우터에서 호출
 """
 
+import asyncio
 import logging
 from datetime import date, datetime
 from decimal import Decimal
@@ -161,6 +162,27 @@ async def _run_backtest_async(
             )
             await db.execute(stmt)
             await db.commit()
+
+            # 🎯 FIX: WebSocket 연결 대기 (클라이언트가 연결할 때까지 최대 3초 대기)
+            from app.services.backtest_websocket import ws_manager
+
+            logger.info("⏳ WebSocket 클라이언트 연결 대기 중...")
+            max_wait_time = 3.0  # 최대 3초 대기
+            wait_interval = 0.1  # 0.1초 간격으로 체크
+            elapsed = 0.0
+
+            while elapsed < max_wait_time:
+                if session_id in ws_manager.active_connections and len(ws_manager.active_connections[session_id]) > 0:
+                    logger.info(f"✅ WebSocket 클라이언트 연결됨 ({elapsed:.1f}초 대기)")
+                    break
+                await asyncio.sleep(wait_interval)
+                elapsed += wait_interval
+
+            if session_id not in ws_manager.active_connections:
+                logger.warning(f"⚠️ WebSocket 클라이언트 연결 안 됨 ({elapsed:.1f}초 대기 후 백테스트 시작)")
+
+            # 추가 안정화 대기 (연결 직후 메시지 수신 준비)
+            await asyncio.sleep(0.2)
 
             # BacktestEngine 생성 (최적화 적용)
             engine = BacktestEngine(db)

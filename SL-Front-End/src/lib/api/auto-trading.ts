@@ -313,10 +313,10 @@ export const autoTradingApi = {
     token: string,
   ): Promise<AutoTradingStrategyResponse[]> => {
     const axios = (await import("axios")).default;
-    // Docker 환경에서는 컨테이너 이름 사용
-    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
+    // 서버 사이드에서는 Docker 내부 네트워크 또는 localhost 사용
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const response = await axios.get<AutoTradingStrategyResponse[]>(
-      `${baseURL}/api/v1/auto-trading/my-strategies`,
+      `${baseURL}/auto-trading/my-strategies`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -421,9 +421,10 @@ export const autoTradingApi = {
     total_allocated_capital: number;
   }> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
+    // 서버 사이드에서는 Docker 내부 네트워크 또는 localhost 사용
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const response = await axios.get(
-      `${baseURL}/api/v1/auto-trading/dashboard`,
+      `${baseURL}/auto-trading/dashboard`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

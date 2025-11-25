@@ -157,13 +157,12 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
             : "-"}
         </div>
         <p
-          className={`font-semibold ${
-            (basicInfo.changevs1d || 0) > 0
-              ? "text-price-up"
-              : (basicInfo.changevs1d || 0) < 0
-                ? "text-price-down"
-                : "text-text-muted"
-          }`}
+          className={`font-semibold ${(basicInfo.changevs1d || 0) > 0
+            ? "text-price-up"
+            : (basicInfo.changevs1d || 0) < 0
+              ? "text-price-down"
+              : "text-text-muted"
+            }`}
         >
           {basicInfo.changevs1d
             ? `${basicInfo.changevs1d > 0 ? "+" : ""}${basicInfo.changevs1d.toLocaleString()}원 (${formattedDailyChangeRate}%)`
@@ -172,10 +171,10 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         <p className="pt-[0.25rem] text-[0.75rem] text-muted font-normal">
           {basicInfo.tradeDate
             ? new Date(basicInfo.tradeDate).toLocaleDateString("ko-KR", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })
             : "-"}{" "}
           기준
         </p>
@@ -187,11 +186,10 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
             <button
               key={tab}
               type="button"
-              className={`rounded-full px-[0.75rem] pt-[0.25rem] pb-[0.15rem] text-[0.875rem] font-normal transition ${
-                isActive
-                  ? "bg-brand-purple text-white font-semibold"
-                  : "text-muted font-normal"
-              }`}
+              className={`rounded-full px-[0.75rem] pt-[0.25rem] pb-[0.15rem] text-[0.875rem] font-normal transition ${isActive
+                ? "bg-brand-purple text-white font-semibold"
+                : "text-muted font-normal"
+                }`}
               onClick={() => setActivePeriod(tab)}
             >
               {tab}
@@ -220,12 +218,6 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
       </p>
       <div className="grid md:grid-cols-3 pt-[12px]">
         {changeStats.map((stat, index) => {
-          const alignment =
-            index === 0
-              ? "items-start text-left"
-              : index === 1
-                ? "items-center text-center"
-                : "items-end text-right";
           const isPositive = stat.value.includes("+");
           const valueColor = isPositive
             ? "text-price-up "
@@ -234,7 +226,7 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
           return (
             <div
               key={stat.label}
-              className={`flex flex-col gap-1 ${alignment}`}
+              className={`flex flex-col gap-1 text-center`}
             >
               <span className="text-[0.875rem] font-normal text-muted">{stat.label}</span>
               <span className={`text-[1.125rem] font-semibold ${valueColor}`}>
@@ -244,32 +236,6 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
           );
         })}
       </div>
-
-      <Divider />
-      <section className="rounded-[8px] bg-white">
-        <SectionHeader
-          title="종목 진단 점수"
-          helper={
-            <span className="group relative inline-flex items-center">
-              <Icon
-                src="/icons/help.svg"
-                alt="도움말"
-                size={20}
-                color="#C8C8C8"
-                className="cursor-help"
-              />
-              <span className="pointer-events-none absolute left-full top-1/2 z-10 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-full bg-[#f0f0f0] px-5 pt-1.5 pb-1 text-[0.75rem] text-black leading-[1.25] opacity-0 transition-all duration-200 ease-out group-hover:translate-x-3 group-hover:opacity-100">
-                종목을 시가총액 크기에 맞춰 6개의 유니버스로 구분하고
-                <br/>
-                각 유니버스별 종목의 모멘텀 점수와 펀더멘탈 점수를 상대평가하여 산출해낸 점수
-              </span>
-            </span>
-          }
-        />
-        <div className="py-[1rem] flex items-center justify-center">
-          <p className="text-text-muted">종목 진단 점수는 준비 중입니다.</p>
-        </div>
-      </section>
 
       <Divider />
       <section>
@@ -285,8 +251,8 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
                 className="cursor-help"
               />
               <span className="pointer-events-none absolute left-full top-1/2 z-10 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-full bg-[#f0f0f0] px-5 pt-1.5 pb-1 text-[0.75rem] text-black leading-[1.25] opacity-0 transition-all duration-200 ease-out group-hover:translate-x-3 group-hover:opacity-100">
-                시가총액 : 회사의 규모 <br/>
-                PSR : 회사가 돈을 잘 버는지 알려주는 지수, 시가총액 / 매출액 <br/>
+                시가총액 : 회사의 규모 <br />
+                PSR : 회사가 돈을 잘 버는지 알려주는 지수, 시가총액 / 매출액 <br />
                 PBR : 회사가 갖고있는 돈에 대해 알려주는 지수, 주가 / 주당순자산가치
               </span>
             </span>
@@ -297,16 +263,10 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         </p>
         <div className="pt-[1rem] grid md:grid-cols-3">
           {overviewStats.map((stat, index) => {
-            const alignment =
-              index === 0
-                ? "items-start text-left"
-                : index === 1
-                  ? "items-center text-center"
-                  : "items-end text-right";
             return (
               <div
                 key={stat.label}
-                className={`flex flex-col gap-1 ${alignment}`}
+                className={`flex flex-col gap-1 text-center`}
               >
                 <p className="text-[0.75rem] font-normal text-muted">
                   {stat.label}
@@ -334,7 +294,7 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
                 className="cursor-help"
               />
               <span className="pointer-events-none absolute left-full top-1/2 z-10 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-full bg-[#f0f0f0] px-5 pt-1.5 pb-1 text-[0.75rem] text-black leading-[1.25] opacity-0 transition-all duration-200 ease-out group-hover:translate-x-3 group-hover:opacity-100">
-                외국인과 기관의 수급 강도를 점수화한 것<br/>
+                외국인과 기관의 수급 강도를 점수화한 것<br />
                 점수가 높을수록 최근 수급이 상대적으로 강해졌다는 의미
               </span>
             </span>

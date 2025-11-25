@@ -251,13 +251,19 @@ export function TradingHistoryTab({
         </div>
 
         {/* 테이블 헤더 */}
-        <div className="grid grid-cols-[1fr_150px_150px_120px_120px] gap-4 px-6 py-4 bg-bg-muted border-b border-border-subtle">
+        <div className="grid grid-cols-[1fr_120px_120px_100px_100px_90px_100px] gap-4 px-6 py-4 bg-bg-muted border-b border-border-subtle">
           <div className="text-sm font-medium text-text-muted">종목명</div>
           <div className="text-sm font-medium text-text-muted text-right">
             진입
           </div>
           <div className="text-sm font-medium text-text-muted text-right">
             청산
+          </div>
+          <div className="text-sm font-medium text-text-muted text-right">
+            진입가(원)
+          </div>
+          <div className="text-sm font-medium text-text-muted text-right">
+            청산가(원)
           </div>
           <div className="text-sm font-medium text-text-muted text-right">
             보유일수
@@ -279,7 +285,7 @@ export function TradingHistoryTab({
             currentTrades.map((trade, idx) => (
               <div
                 key={`${trade.stockCode}-${idx}`}
-                className="grid grid-cols-[1fr_150px_150px_120px_120px] gap-4 px-6 py-4 border-b border-border-subtle hover:bg-bg-muted transition-colors"
+                className="grid grid-cols-[1fr_120px_120px_100px_100px_90px_100px] gap-4 px-6 py-4 border-b border-border-subtle hover:bg-bg-muted transition-colors"
               >
                 <button
                   type="button"
@@ -296,6 +302,12 @@ export function TradingHistoryTab({
                 <div className="text-text-body text-right">{trade.buyDate}</div>
                 <div className="text-text-body text-right">
                   {trade.sellDate || "-"}
+                </div>
+                <div className="text-text-body text-right">
+                  {trade.buyPrice.toLocaleString('ko-KR')}
+                </div>
+                <div className="text-text-body text-right">
+                  {trade.sellPrice.toLocaleString('ko-KR')}
                 </div>
                 <div className="text-text-body text-right">
                   {calculateHoldingDays(trade.buyDate, trade.sellDate)}일

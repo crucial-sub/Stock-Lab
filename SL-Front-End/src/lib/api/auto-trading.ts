@@ -229,7 +229,7 @@ export interface DeactivationConditions {
 
 export const autoTradingApi = {
   /**
-   * 자동매매 활성화
+   * 가상매매 활성화
    */
   activateAutoTrading: async (
     request: AutoTradingActivateRequest,
@@ -254,7 +254,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 자동매매 비활성화
+   * 가상매매 비활성화
    */
   deactivateAutoTrading: async (
     strategyId: string,
@@ -268,7 +268,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 자동매매 전략 이름 수정
+   * 가상매매 전략 이름 수정
    */
   updateStrategyName: async (
     strategyId: string,
@@ -283,7 +283,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 자동매매 전략 상태 조회
+   * 가상매매 전략 상태 조회
    */
   getAutoTradingStatus: async (
     strategyId: string,
@@ -295,7 +295,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 내 자동매매 전략 목록 조회
+   * 내 가상매매 전략 목록 조회
    */
   getMyAutoTradingStrategies: async (): Promise<
     AutoTradingStrategyResponse[]
@@ -307,16 +307,16 @@ export const autoTradingApi = {
   },
 
   /**
-   * 내 자동매매 전략 목록 조회 (서버 사이드)
+   * 내 가상매매 전략 목록 조회 (서버 사이드)
    */
   getMyAutoTradingStrategiesServer: async (
     token: string,
   ): Promise<AutoTradingStrategyResponse[]> => {
     const axios = (await import("axios")).default;
-    // Docker 환경에서는 컨테이너 이름 사용
-    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
+    // 서버 사이드에서는 Docker 내부 네트워크 또는 localhost 사용
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const response = await axios.get<AutoTradingStrategyResponse[]>(
-      `${baseURL}/api/v1/auto-trading/my-strategies`,
+      `${baseURL}/auto-trading/my-strategies`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -327,7 +327,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 자동매매 수동 실행 (테스트용)
+   * 가상매매 수동 실행 (테스트용)
    */
   executeAutoTrading: async (
     strategyId: string,
@@ -421,9 +421,10 @@ export const autoTradingApi = {
     total_allocated_capital: number;
   }> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
+    // 서버 사이드에서는 Docker 내부 네트워크 또는 localhost 사용
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const response = await axios.get(
-      `${baseURL}/api/v1/auto-trading/dashboard`,
+      `${baseURL}/auto-trading/dashboard`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

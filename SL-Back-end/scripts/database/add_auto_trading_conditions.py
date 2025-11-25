@@ -1,5 +1,5 @@
 """
-자동매매 전략 테이블에 백테스트 조건 컬럼 추가
+가상매매 전략 테이블에 백테스트 조건 컬럼 추가
 - 매수/매도 조건을 백테스트와 완전히 동기화
 """
 import asyncio
@@ -16,14 +16,14 @@ DATABASE_URL = os.getenv(
 
 
 async def add_auto_trading_conditions():
-    """자동매매 전략 테이블에 백테스트 조건 컬럼 추가"""
+    """가상매매 전략 테이블에 백테스트 조건 컬럼 추가"""
 
     engine = create_async_engine(DATABASE_URL, echo=True)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
         try:
-            print("\n🚀 자동매매 전략 테이블 마이그레이션 시작...\n")
+            print("\n🚀 가상매매 전략 테이블 마이그레이션 시작...\n")
 
             # 매수 조건 컬럼 추가
             await session.execute(text("""

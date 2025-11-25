@@ -53,10 +53,14 @@ class VectorizedConditionEvaluator:
         """
         try:
             # 1. 해당 날짜의 데이터만 필터링
-            date_data = factor_data[factor_data['date'] == trading_date].copy()
+            # 날짜 타입 정규화: factor_data['date']와 trading_date의 타입 불일치 해결
+            # (datetime64[ns], pd.Timestamp, date 등 혼합 가능)
+            factor_dates = pd.to_datetime(factor_data['date'])
+            trading_ts = pd.Timestamp(trading_date)
+            date_data = factor_data[factor_dates == trading_ts].copy()
 
             if date_data.empty:
-                self.logger.debug(f"날짜 {trading_date}에 데이터 없음")
+                self.logger.debug(f"날짜 {trading_date}에 데이터 없음 (factor_data 날짜 범위: {factor_dates.min()} ~ {factor_dates.max()})")
                 return []
 
             # 2. 대상 종목만 필터링
@@ -85,7 +89,8 @@ class VectorizedConditionEvaluator:
             # 5. 한 번에 모든 종목 평가!
             try:
                 selected = date_data.query(query_str)
-                selected_stocks = selected['stock_code'].tolist()
+                # 결과 일관성을 위해 stock_code 정렬 (환경 간 동일한 순서 보장)
+                selected_stocks = sorted(selected['stock_code'].tolist())
                 # 🚀 OPTIMIZATION: INFO 레벨로만 요약 로깅
                 if len(selected_stocks) > 0:
                     self.logger.info(f"✅ 조건 충족: {len(selected_stocks)}개 종목")
@@ -282,7 +287,8 @@ class VectorizedConditionEvaluator:
             except:
                 pass
 
-        return selected_stocks
+        # 결과 일관성을 위해 stock_code 정렬 (환경 간 동일한 순서 보장)
+        return sorted(selected_stocks)
 
 
 # 싱글톤 인스턴스

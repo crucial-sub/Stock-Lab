@@ -107,61 +107,95 @@ class UserStockService:
         """
         # 최신 거래일 찾기
         latest_trade_date = await self._get_latest_trade_date()
+        logger.info(f"🔍 [get_favorites] Latest trade date: {latest_trade_date}")
+        
+        if not latest_trade_date:
+            return {"items": [], "total": 0}
 
-        # 관심종목 조회 (최신 거래일이 있으면 가격 정보까지 포함)
-        price_columns = []
-        join_condition = None
-        if latest_trade_date:
-            price_columns = [
+        # 전일 거래일 찾기
+        from sqlalchemy import select as sql_select
+        prev_trade_date_query = (
+            sql_select(StockPrice.trade_date)
+            .where(StockPrice.trade_date < latest_trade_date)
+            .order_by(desc(StockPrice.trade_date))
+            .limit(1)
+        )
+        prev_date_result = await self.db.execute(prev_trade_date_query)
+        prev_trade_date = prev_date_result.scalar_one_or_none()
+        logger.info(f"🔍 [get_favorites] Previous trade date: {prev_trade_date}")
+
+        # 전일 주가 서브쿼리 (별칭: prev)
+        PrevStockPrice = StockPrice.__table__.alias("prev_stock_price")
+
+        # 관심종목 조회 (현재가 + 전일 종가)
+        query = (
+            select(
+                UserFavoriteStock.stock_code,
+                UserFavoriteStock.stock_name,
+                UserFavoriteStock.company_id,
+                Company.industry,
+                UserFavoriteStock.created_at,
                 StockPrice.close_price,
                 StockPrice.change_vs_1d,
                 StockPrice.fluctuation_rate,
                 StockPrice.volume,
                 StockPrice.trading_value,
-                StockPrice.market_cap
-            ]
-            join_condition = and_(
-                UserFavoriteStock.company_id == StockPrice.company_id,
-                StockPrice.trade_date == latest_trade_date
-            )
-
-        query = (
-            select(
-                UserFavoriteStock.stock_code,
-                UserFavoriteStock.stock_name,
-                Company.industry,
-                UserFavoriteStock.created_at,
-                *price_columns
+                StockPrice.market_cap,
+                PrevStockPrice.c.close_price.label("prev_close_price")
             )
             .join(Company, Company.company_id == UserFavoriteStock.company_id)
+            .outerjoin(
+                StockPrice,
+                and_(
+                    UserFavoriteStock.company_id == StockPrice.company_id,
+                    StockPrice.trade_date == latest_trade_date
+                )
+            )
+            .outerjoin(
+                PrevStockPrice,
+                and_(
+                    PrevStockPrice.c.company_id == UserFavoriteStock.company_id,
+                    PrevStockPrice.c.trade_date == prev_trade_date
+                )
+            )
             .where(UserFavoriteStock.user_id == user_id)
             .order_by(desc(UserFavoriteStock.favorite_id))
         )
 
-        if join_condition is not None:
-            query = query.outerjoin(StockPrice, join_condition)
-
         result = await self.db.execute(query)
         rows = result.all()
+        logger.info(f"🔍 [get_favorites] Found {len(rows)} favorite stocks")
 
-        items = [
-            {
+        items = []
+        for row in rows:
+            # 등락률 계산
+            fluctuation_rate = row.fluctuation_rate
+            close_price = row.close_price
+            change_vs_1d = row.change_vs_1d
+            prev_close_price = row.prev_close_price
+            
+            logger.info(f"🔍 [get_favorites] {row.stock_name} ({row.stock_code}): rate={fluctuation_rate}, price={close_price}, change={change_vs_1d}, prev={prev_close_price}")
+
+            # DB에 등락률이 없으면 전일 종가로 계산
+            if fluctuation_rate is None and close_price and prev_close_price and prev_close_price != 0:
+                fluctuation_rate = ((close_price - prev_close_price) / prev_close_price) * 100
+                logger.info(f"✅ [get_favorites] Calculated rate for {row.stock_name}: {fluctuation_rate:.2f}%")
+                # 등락금액도 계산
+                if change_vs_1d is None:
+                    change_vs_1d = close_price - prev_close_price
+
+            items.append({
                 "stock_code": row.stock_code,
                 "stock_name": row.stock_name,
-                "theme": getattr(row, "industry", None),
-                "current_price": getattr(row, "close_price", None),
-                "change_rate": getattr(row, "fluctuation_rate", None),
-                "previous_close": self._calculate_previous_close_value(
-                    getattr(row, "close_price", None),
-                    getattr(row, "change_vs_1d", None)
-                ),
-                "volume": getattr(row, "volume", None),
-                "trading_value": getattr(row, "trading_value", None),
-                "market_cap": getattr(row, "market_cap", None),
+                "theme": row.industry,
+                "current_price": close_price,
+                "change_rate": fluctuation_rate,
+                "previous_close": prev_close_price,
+                "volume": row.volume,
+                "trading_value": row.trading_value,
+                "market_cap": row.market_cap,
                 "created_at": row.created_at
-            }
-            for row in rows
-        ]
+            })
 
         return {"items": items, "total": len(items)}
 

@@ -12,6 +12,7 @@
  * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
+import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
 import {
@@ -25,18 +26,17 @@ import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWra
 import { StockInfoTab } from "@/components/quant/result/StockInfoTab";
 import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import {
+  backtestQueryKey,
   useBacktestResultQuery,
   useBacktestSettingsQuery,
-  backtestQueryKey,
 } from "@/hooks/useBacktestQuery";
 import { useBacktestStatus } from "@/hooks/useBacktestStatus";
-import { mockBacktestResult } from "@/mocks/backtestResult";
-import { strategyApi } from "@/lib/api/strategy";
 import { communityApi } from "@/lib/api/community";
+import { strategyApi } from "@/lib/api/strategy";
+import { mockBacktestResult } from "@/mocks/backtestResult";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
+import { useEffect, useRef, useState } from "react";
 
 interface QuantResultPageClientProps {
   backtestId: string;
@@ -102,11 +102,11 @@ export function QuantResultPageClient({
   const isApiCompleted = result?.status === "completed" || result?.status === "failed";
   const isActuallyCompleted = isCompleted || isApiCompleted;
 
-  // 백테스트 설정 조회
+  // 백테스트 설정 조회 (진행 중에도 조회하여 차트 X축 고정에 사용)
   const { data: settings, isLoading: isLoadingSettings } =
     useBacktestSettingsQuery(
       backtestId,
-      !isMockMode && isActuallyCompleted, // API 완료 상태도 고려
+      !isMockMode, // 진행 중에도 설정 조회 (차트 X축 고정 필요)
     );
 
   const { data: myStrategies } = useQuery({
@@ -255,7 +255,7 @@ export function QuantResultPageClient({
       const response = await communityApi.cloneStrategy(backtestId);
 
       // 복제 성공 메시지
-      alert(`전략이 성공적으로 복제되었습니다!\n\n복제된 전략: ${response.strategy_name}\n포트폴리오 목록으로 이동합니다.`);
+      alert(`전략이 성공적으로 복제되었습니다!\n\n복제된 전략: ${response.message}\n포트폴리오 목록으로 이동합니다.`);
 
       // 포트폴리오 목록 페이지로 이동 (서버 데이터 새로고침 필요)
       // window.location.href 사용하여 서버 데이터를 강제로 새로고침
@@ -454,14 +454,64 @@ export function QuantResultPageClient({
       return closestPoint?.cumulativeReturn || 0;
     };
 
-    return [
-      { label: "최근 거래일", value: latestReturn },
-      { label: "최근 일주일", value: latestReturn - getReturnAtDate(7) },
-      { label: "최근 1개월", value: latestReturn - getReturnAtDate(30) },
-      { label: "최근 3개월", value: latestReturn - getReturnAtDate(90) },
-      { label: "최근 6개월", value: latestReturn - getReturnAtDate(180) },
-      { label: "최근 1년", value: latestReturn - getReturnAtDate(365) },
-    ];
+    // 백테스트 총 기간 계산 (첫 날짜 ~ 마지막 날짜)
+    const firstPoint = sortedPoints[0];
+    const firstDate = new Date(firstPoint.date);
+    const totalDays = Math.floor(
+      (latestDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    const periods = [];
+
+    // 최근 거래일은 항상 표시
+    periods.push({ label: "최근 거래일", value: latestReturn });
+
+    // 백테스트 기간에 따라 동적으로 표시할 기간 결정
+    if (totalDays >= 7) {
+      periods.push({
+        label: "최근 일주일",
+        value: latestReturn - getReturnAtDate(7),
+      });
+    }
+    if (totalDays >= 30) {
+      periods.push({
+        label: "최근 1개월",
+        value: latestReturn - getReturnAtDate(30),
+      });
+    }
+    if (totalDays >= 90) {
+      periods.push({
+        label: "최근 3개월",
+        value: latestReturn - getReturnAtDate(90),
+      });
+    }
+    if (totalDays >= 180) {
+      periods.push({
+        label: "최근 6개월",
+        value: latestReturn - getReturnAtDate(180),
+      });
+    }
+    if (totalDays >= 350) {
+      // 350일 이상이면 "최근 1년" 표시 (거래일 기준으로 약간의 여유 허용)
+      periods.push({
+        label: "최근 1년",
+        value: latestReturn - getReturnAtDate(365),
+      });
+    }
+    if (totalDays >= 700) {
+      periods.push({
+        label: "최근 2년",
+        value: latestReturn - getReturnAtDate(730),
+      });
+    }
+    if (totalDays >= 1050) {
+      periods.push({
+        label: "최근 3년",
+        value: latestReturn - getReturnAtDate(1095),
+      });
+    }
+
+    return periods;
   };
 
   const periodReturns = calculatePeriodReturns();
@@ -498,7 +548,7 @@ export function QuantResultPageClient({
           periodReturns={periodReturns}
         />
 
-        {/* 자동매매 섹션 */}
+        {/* 가상매매 섹션 */}
         <AutoTradingSection
           sessionId={backtestId}
           sessionStatus={backtestStatus || "completed"}

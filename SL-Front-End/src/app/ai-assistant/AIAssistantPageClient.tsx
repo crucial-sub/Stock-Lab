@@ -14,6 +14,7 @@ import { chatHistoryApi } from "@/lib/api/chat-history";
 import { sendChatMessage, type ChatResponse } from "@/lib/api/chatbot";
 import { runBacktest, type BacktestRunRequest } from "@/lib/api/backtest";
 import { getStrategyDetail } from "@/lib/api/investment-strategy";
+import { authApi } from "@/lib/api/auth";
 import { getAuthTokenFromCookie } from "@/lib/auth/token";
 import type { QuestionnaireAnswer, Question } from "@/data/assistantQuestionnaire";
 import { createAnswer } from "@/data/assistantQuestionnaire";
@@ -130,6 +131,9 @@ export function AIAssistantPageClient({
   const [strategyRecommendations, setStrategyRecommendations] = useState<StrategyMatch[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyDetail | null>(null);
 
+  // 사용자 닉네임 상태 (포트폴리오 이름에 표시용)
+  const [userName, setUserName] = useState<string>("사용자");
+
   // SSE 스트리밍 상태
   const [, setStreamingMessage] = useState<string>("");
 
@@ -153,6 +157,25 @@ export function AIAssistantPageClient({
       seen.add(session.id);
       return true;
     });
+  }, []);
+
+  // 사용자 닉네임 가져오기 (컴포넌트 마운트 시)
+  useEffect(() => {
+    const fetchUserName = async () => {
+      const token = getAuthTokenFromCookie();
+      if (!token) return;
+
+      try {
+        const userInfo = await authApi.getCurrentUser();
+        if (userInfo.nickname) {
+          setUserName(userInfo.nickname);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user info:", error);
+      }
+    };
+
+    fetchUserName();
   }, []);
 
   // 채팅 세션 저장 함수 (로컬 상태)
@@ -447,6 +470,7 @@ export function AIAssistantPageClient({
         backtestId: response.backtestId,  // 실제 백테스트 ID
         strategyId: selectedStrategy.id,
         strategyName,
+        userName, // 사용자 닉네임 추가
         config: {
           investmentAmount: config.investmentAmount,
           startDate: config.startDate,
@@ -483,7 +507,7 @@ export function AIAssistantPageClient({
     } catch (error) {
       console.error("Failed to start backtest:", error);
     }
-  }, [selectedStrategy, sessionId]);
+  }, [selectedStrategy, sessionId, userName]);
 
   // DB 또는 localStorage에서 채팅 세션 불러오기
   useEffect(() => {

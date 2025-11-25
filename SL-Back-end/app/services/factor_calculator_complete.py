@@ -105,6 +105,19 @@ class CompleteFactorCalculator:
             if not quality_df.empty:
                 factor_df = factor_df.merge(quality_df, on='stock_code', how='left')
 
+            # PEG 계산: PER / EARNINGS_GROWTH_1Y (성장률이 양수일 때만 유효)
+            # PEG = 주가수익비율 / 순이익성장률
+            if 'PER' in factor_df.columns and 'EARNINGS_GROWTH_1Y' in factor_df.columns:
+                def calc_peg(row):
+                    per = row.get('PER')
+                    growth = row.get('EARNINGS_GROWTH_1Y')
+                    # PER이 양수이고 성장률이 양수일 때만 PEG 계산
+                    if pd.notnull(per) and pd.notnull(growth) and growth > 0 and per > 0:
+                        return per / growth
+                    return None
+                factor_df['PEG'] = factor_df.apply(calc_peg, axis=1)
+                logger.info(f"PEG 팩터 계산 완료: {factor_df['PEG'].notna().sum()}개 종목")
+
         except Exception as e:
             logger.error(f"고급 팩터 계산 중 에러: {e}")
             logger.exception(e)

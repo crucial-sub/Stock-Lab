@@ -182,7 +182,8 @@ class FactorIntegration:
 
             if all_conditions_met:
                 selected_stocks.append(stock_code)
-        return selected_stocks
+        # 결과 일관성을 위해 stock_code 정렬 (환경 간 동일한 순서 보장)
+        return sorted(selected_stocks)
 
     def _evaluate_condition(self, value: float, operator: str, threshold: float) -> bool:
         """단일 조건 평가"""

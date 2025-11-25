@@ -20,6 +20,30 @@ from app.core.cache import cache
 logger = logging.getLogger(__name__)
 
 
+def generate_strategy_hash(buy_conditions: Any, trading_rules: Dict = None) -> str:
+    """
+    전략 조건으로 고유 해시 생성
+
+    Args:
+        buy_conditions: 매수 조건 (dict 또는 list)
+        trading_rules: 매매 규칙 (목표가/손절가, 보유기간 등)
+
+    Returns:
+        8자리 해시 문자열
+    """
+    strategy_data = {
+        'buy_conditions': buy_conditions,
+        'trading_rules': trading_rules or {}
+    }
+
+    # JSON으로 직렬화 (key 정렬로 일관성 보장)
+    strategy_str = json.dumps(strategy_data, sort_keys=True, default=str)
+
+    # MD5 해시 생성 후 앞 8자리 사용
+    hash_obj = hashlib.md5(strategy_str.encode('utf-8'))
+    return hash_obj.hexdigest()[:8]
+
+
 class OptimizedCacheManager:
     """최적화된 캐시 관리자"""
 
@@ -39,21 +63,32 @@ class OptimizedCacheManager:
         calc_date: date,
         factor_names: List[str],
         target_themes: List[str] = None,
-        target_stocks: List[str] = None
+        target_stocks: List[str] = None,
+        strategy_hash: str = None
     ) -> str:
         """
-        팩터 캐시 키 생성 (최적화)
+        팩터 캐시 키 생성 (전략별 구분)
 
-        🔥 CRITICAL FIX: 워밍업 스크립트와 동일한 키 형식 사용
-        - 기존: backtest_optimized:factors:{hash} (워밍업과 불일치!)
-        - 수정: backtest_optimized:factors:{date}:{themes} (워밍업과 일치!)
+        🔥 FIXED: 전략 조건 해시를 포함하여 전략별 캐시 격리
+        - 수정 전: backtest_optimized:factors:{date}:{themes} (전략 구분 불가 ❌)
+        - 수정 후: backtest_optimized:factors:{date}:{themes}:{strategy_hash} (전략별 구분 ✅)
+
+        Args:
+            calc_date: 계산 날짜
+            factor_names: 요청 팩터 목록
+            target_themes: 대상 테마
+            target_stocks: 대상 종목
+            strategy_hash: 전략 조건 해시 (8자리)
         """
         # 테마 정규화
         themes_str = ','.join(sorted(target_themes)) if target_themes else 'all'
 
-        # 🚀 SIMPLE KEY: 워밍업과 동일한 형식
-        # peter_lynch 워밍업과 호환되도록 단순화
-        return f"{self.cache_prefix}:factors:{calc_date}:{themes_str}"
+        # 🔥 FIX: 전략 해시를 키에 포함하여 전략별 격리
+        if strategy_hash:
+            return f"{self.cache_prefix}:factors:{calc_date}:{themes_str}:{strategy_hash}"
+        else:
+            # 워밍업 스크립트 등 호환성을 위한 폴백 (strategy_hash가 없는 경우)
+            return f"{self.cache_prefix}:factors:{calc_date}:{themes_str}"
 
     def _decompress_and_deserialize(self, data: bytes) -> Optional[Dict]:
         """압축 해제 + 역직렬화 (ThreadPoolExecutor용)"""
@@ -69,7 +104,8 @@ class OptimizedCacheManager:
         dates: List[date],
         factor_names: List[str],
         target_themes: List[str] = None,
-        target_stocks: List[str] = None
+        target_stocks: List[str] = None,
+        strategy_hash: str = None
     ) -> Dict[date, Optional[Dict]]:
         """
         배치 캐시 조회 (메모리 캐시 + 병렬 역직렬화)
@@ -81,11 +117,13 @@ class OptimizedCacheManager:
 
         기존: 252일 × 36ms = 9초
         최적화: 메모리 히트 시 0초, Redis 히트 시 2-3초
+
+        🔥 FIXED: strategy_hash 파라미터 추가로 전략별 캐시 격리
         """
         try:
-            # 1. 캐시 키 생성
+            # 1. 캐시 키 생성 (전략 해시 포함)
             cache_keys = {
-                d: self._generate_factor_cache_key(d, factor_names, target_themes, target_stocks)
+                d: self._generate_factor_cache_key(d, factor_names, target_themes, target_stocks, strategy_hash)
                 for d in dates
             }
 
@@ -175,20 +213,23 @@ class OptimizedCacheManager:
         factor_data: Dict[date, Dict[str, Dict[str, float]]],
         factor_names: List[str],
         target_themes: List[str] = None,
-        target_stocks: List[str] = None
+        target_stocks: List[str] = None,
+        strategy_hash: str = None
     ) -> bool:
         """
         배치 캐시 저장 (네트워크 IO 최소화)
 
         기존: 252일 × 300ms = 75초
         최적화: 1회 × 800ms = 0.8초 (90배 개선!)
+
+        🔥 FIXED: strategy_hash 파라미터 추가로 전략별 캐시 격리
         """
         try:
-            # 1. 캐시 데이터 준비
+            # 1. 캐시 데이터 준비 (전략 해시 포함)
             cache_dict = {}
             for calc_date, factors in factor_data.items():
                 cache_key = self._generate_factor_cache_key(
-                    calc_date, factor_names, target_themes, target_stocks
+                    calc_date, factor_names, target_themes, target_stocks, strategy_hash
                 )
 
                 # 직렬화 + 압축

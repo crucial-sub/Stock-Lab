@@ -350,25 +350,69 @@ async def _run_backtest_async(
             await db.execute(stmt_stats)
             logger.info(f"✅ SimulationStatistics 저장 완료")
 
-            # 2.5 백테스트 요약 생성 및 저장
+            # 2.5 백테스트 요약 생성 및 저장 (상세 마크다운 형식)
+            # - backtest.py의 _generate_backtest_summary 로직과 동일
             total_profit = final_capital - float(initial_capital)
-            summary = f"""
+            total_days = (end_date - start_date).days
+            profit_or_loss = "수익" if final_return >= 0 else "손실"
+            performance_emoji = "📈" if final_return >= 0 else "📉"
 
-### ✨ 주요 성과 지표
-- **총 수익률**: {final_return:.2f}%
-- **연환산 수익률**: {annualized_return:.2f}%
-- **최대 낙폭(MDD)**: {max_drawdown:.2f}%
+            summary = f"""### {performance_emoji} 백테스트 결과 요약
+
+#### 📊 핵심 성과 지표
+- **총 수익률**: {final_return:+.2f}% ({profit_or_loss})
+- **최종 자산**: {final_capital:,.0f}원 (초기 자산: {float(initial_capital):,.0f}원)
+- **순손익**: {total_profit:+,.0f}원
+
+#### 📉 위험 지표
+- **최대 낙폭 (MDD)**: {max_drawdown:.2f}%
+- **연환산 수익률 (CAGR)**: {annualized_return:.2f}%
 - **샤프 비율**: {sharpe_ratio:.2f}
+
+#### 📅 백테스트 정보
+- **테스트 기간**: {start_date.strftime('%Y년 %m월 %d일')} ~ {end_date.strftime('%Y년 %m월 %d일')} ({total_days}일)
+- **총 거래 횟수**: {total_trades}회
 - **승률**: {win_rate:.2f}%
 
-### 📈 투자 성과
-- **초기 투자금**: {float(initial_capital):,.0f}원
-- **최종 자산**: {final_capital:,.0f}원
-- **총 수익금**: {total_profit:,.0f}원
-
-### 💡 주요 인사이트
-- 백테스트 기간 동안 전략이 안정적으로 수행되었으며, 리스크 관리가 효과적으로 작동했습니다.
+#### 💡 종합 평가
 """
+            # 수익률 평가
+            if final_return >= 20:
+                summary += "- ✅ **우수한 수익률**: 목표 대비 높은 수익을 달성했습니다.\n"
+            elif final_return >= 10:
+                summary += "- ✅ **양호한 수익률**: 안정적인 수익을 기록했습니다.\n"
+            elif final_return >= 0:
+                summary += "- ⚠️ **보통 수익률**: 소폭의 수익을 기록했습니다.\n"
+            else:
+                summary += "- ⚠️ **손실 발생**: 전략 재검토가 필요합니다.\n"
+
+            # MDD 평가
+            if abs(max_drawdown) <= 10:
+                summary += "- ✅ **낮은 리스크**: MDD가 양호한 수준입니다.\n"
+            elif abs(max_drawdown) <= 20:
+                summary += "- ⚠️ **중간 리스크**: MDD 관리가 필요합니다.\n"
+            else:
+                summary += "- ⚠️ **높은 리스크**: 손실 폭이 큰 편입니다. 리스크 관리 전략 보완이 필요합니다.\n"
+
+            # 샤프 비율 평가
+            if sharpe_ratio >= 1.5:
+                summary += "- ✅ **우수한 위험 대비 수익**: 샤프 비율이 매우 좋습니다.\n"
+            elif sharpe_ratio >= 1.0:
+                summary += "- ✅ **양호한 위험 대비 수익**: 샤프 비율이 양호합니다.\n"
+            elif sharpe_ratio >= 0.5:
+                summary += "- ⚠️ **보통 위험 대비 수익**: 샤프 비율이 보통 수준입니다.\n"
+            else:
+                summary += "- ⚠️ **낮은 위험 대비 수익**: 리스크 대비 수익이 낮습니다.\n"
+
+            # 거래 빈도 평가
+            if total_trades == 0:
+                summary += "- ⚠️ **거래 없음**: 매수/매도 조건을 재검토하세요.\n"
+            elif total_trades < 10:
+                summary += "- ⚠️ **낮은 거래 빈도**: 거래 기회가 제한적입니다.\n"
+            elif total_trades < 50:
+                summary += "- ✅ **적절한 거래 빈도**: 균형잡힌 거래 빈도입니다.\n"
+            else:
+                summary += "- ⚠️ **높은 거래 빈도**: 과도한 거래로 수수료 부담이 클 수 있습니다.\n"
 
             # description 필드에 요약 저장
             stmt_summary = (
@@ -479,7 +523,8 @@ async def _run_backtest_async(
                 'win_rate': 0.0,
                 'profit_factor': 0.0,
                 'final_capital': float(initial_capital),  # 초기 자본금 그대로
-                'initial_capital': float(initial_capital)
+                'total_commission': 0.0,
+                'total_tax': 0.0
             }
 
             # SimulationStatistics 저장 (UPSERT)

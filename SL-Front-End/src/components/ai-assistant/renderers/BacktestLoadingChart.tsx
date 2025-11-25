@@ -128,12 +128,16 @@ export function BacktestLoadingChart({
       keepTargetHover: true,
       animationDuration: 0,
     });
-    xAxisTooltip.get("background").setAll({
-      fill: am5.color(0x000000),
-      stroke: am5.color(0x000000),
-      fillOpacity: 1,
-      cornerRadius: 6,
-    });
+    const tooltipBg = xAxisTooltip.get("background");
+    if (tooltipBg) {
+      tooltipBg.setAll({
+        fill: am5.color(0x000000),
+        stroke: am5.color(0x000000),
+        fillOpacity: 1,
+      } as any);
+      // cornerRadius - 타입 정의에 없지만 실제로 동작
+      (tooltipBg as any).set("cornerRadius", 6);
+    }
     xAxisTooltip.label.setAll({
       text: "{valueX.formatDate('yyyy.MM.dd')}",
       fill: am5.color(0xffffff),
@@ -157,6 +161,7 @@ export function BacktestLoadingChart({
     xAxis.set("tooltip", xAxisTooltip);
     xAxisTooltip.label.setAll({ text: "{value.formatDate('yyyy.MM.dd')}" });
     xAxis.get("tooltip")?.label.setAll({ text: "{valueX.formatDate('yyyy.MM.dd')}" });
+    // @ts-ignore - amcharts5 타입 정의와 실제 API 불일치
     xAxis.get("tooltip")?.set("dateFormats", {
       day: "yyyy.MM.dd",
       month: "yyyy.MM.dd",
@@ -293,6 +298,7 @@ export function BacktestLoadingChart({
       xAxis: xAxis,
       yAxis: yAxisReturn,
     });
+    // @ts-ignore - amcharts5 타입 정의와 실제 API 불일치
     cursor.set("tooltipDateFormat", "yyyy.MM.dd");
 
     // 커서 스타일 설정 - 세로선만 표시
@@ -306,7 +312,9 @@ export function BacktestLoadingChart({
     });
 
     chart.set("cursor", cursor);
+    // @ts-ignore - amcharts5 타입 정의와 실제 API 불일치
     cursor.set("xTooltip", xAxisTooltip);
+    // @ts-ignore - amcharts5 타입 정의와 실제 API 불일치
     cursor.get("xTooltip")?.label.setAll({ text: "{valueX.formatDate('yyyy.MM.dd')}" });
     chart.plotContainer.set("mask", undefined);
 

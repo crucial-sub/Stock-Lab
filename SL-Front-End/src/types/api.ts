@@ -86,11 +86,13 @@ export interface BacktestRunRequest {
   /* 매매 대상 */
   trade_targets: {
     use_all_stocks: boolean; // 전체 종목을 그대로 쓸지 여부(true면 아래 선택 목록 무시하거나 참고만 함)
+    selected_universes?: string[]; // 선택한 유니버스 목록 (ChatBot API 호환용)
     selected_themes: string[]; // 선택한 테마 ID/코드 목록
     selected_stocks: string[]; // 개별로 지정한 종목 코드 목록 e.g. ["005930", "207940"]
     // UI 전용 필드 (백엔드 요청에는 포함되지 않음)
-    selected_stock_count?: number; // 선택된 종목 수
+    selected_stock_count?: number | null; // 선택된 종목 수
     total_stock_count?: number; // 전체 종목 수
+    total_theme_count?: number; // 전체 테마 수 (ChatBot API 호환용)
   };
 }
 
@@ -170,6 +172,8 @@ export interface BacktestResult {
     dailyDrawdown?: number;
     buyCount?: number;
     sellCount?: number;
+    /** 벤치마크 누적 수익률 (KOSPI/KOSDAQ) */
+    benchmarkCumReturn?: number;
   }[];
   /** 유니버스 종목 목록 */
   universeStocks?: UniverseStock[];

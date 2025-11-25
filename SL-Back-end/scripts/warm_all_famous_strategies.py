@@ -256,11 +256,17 @@ def generate_all_strategy_hashes():
 
     hashes = {}
     for strategy_id, config in STRATEGIES_CONFIG.items():
+        # 🔥 FIX: buy_conditions 구조를 백테스트 실행 시와 동일하게 맞춤
+        # backtest.py:356-360에서 loaded_strategy_config에 priority_factor, priority_order 추가됨
+        # DB에 priority_factor가 없으면 request.priority_factor(빈 문자열)가 사용됨
         buy_conditions = {
             "expression": config["expression"],
-            "conditions": config["conditions"]
+            "conditions": config["conditions"],
+            "priority_factor": config.get("priority_factor"),  # DB에 없으면 None
+            "priority_order": config.get("priority_order", "desc")  # 기본값: desc
         }
-        # backtest_integration.py와 동일한 구조로 변경
+        # 🔥 프론트엔드 → 백엔드 API 요청과 동일한 구조로 설정 (해시 일치 보장)
+        # 프론트엔드에서 전송하는 값: sell_price_basis="전일 종가", sell_price_offset=0
         trading_rules = {
             "target_and_loss": {
                 "target_gain": config["target_gain"],
@@ -268,7 +274,9 @@ def generate_all_strategy_hashes():
             },
             "hold_days": {
                 "min_hold_days": config["min_hold_days"],
-                "max_hold_days": config["max_hold_days"]
+                "max_hold_days": config["max_hold_days"],
+                "sell_price_basis": "전일 종가",  # 프론트엔드 기본값
+                "sell_price_offset": 0            # 프론트엔드 기본값 (Decimal(0)으로 정규화됨)
             },
             "condition_sell_meta": None
         }

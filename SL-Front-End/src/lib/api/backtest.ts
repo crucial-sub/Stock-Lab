@@ -173,6 +173,8 @@ export interface BacktestStatus {
   currentMdd?: number;
   startDate?: string;
   endDate?: string;
+  /** 에러 발생 시 에러 메시지 */
+  errorMessage?: string;
   yieldPoints?: Array<{
     date: string;
     buyCount?: number;
@@ -183,6 +185,8 @@ export interface BacktestStatus {
     positionValue?: number;
     dailyReturn?: number;
     value?: number;
+    /** 현재 MDD (%) */
+    currentMdd?: number;
   }>;
 }
 

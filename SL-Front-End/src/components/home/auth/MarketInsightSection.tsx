@@ -64,7 +64,7 @@ const MarketInsightSectionComponent = ({
                     {stock.name}
                   </span>
                 </div>
-                <span className="text-[0.95rem] font-normal text-price-up">
+                <span className={stock.changeRate >= 0 ? "text-price-up" : "text-price-down"}>
                   {stock.change}
                 </span>
                 <span className="text-right text-[0.95rem] font-normal text-text-muted">

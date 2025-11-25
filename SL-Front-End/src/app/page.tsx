@@ -170,6 +170,7 @@ export default async function HomePage() {
               name: item.stockName || "",
               tag: item.theme ?? item.stockCode ?? "테마 정보 없음",
               change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+              changeRate: item.changeRate ?? 0,
               price: item.currentPrice ? `${item.currentPrice.toLocaleString()}원` : "-",
               volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
             }));
@@ -198,6 +199,7 @@ export default async function HomePage() {
                 name: item.name || "",
                 tag: item.theme ?? item.code ?? "테마 정보 없음",
                 change: `${(item.changeRate ?? 0) > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+                changeRate: item.changeRate ?? 0,
                 price: item.price ? `${item.price.toLocaleString()}원` : "-",
                 volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
               }));
@@ -280,6 +282,7 @@ export default async function HomePage() {
             name: item.name || "",
             tag: item.theme ?? item.code ?? "테마 정보 없음",
             change: `${(item.changeRate ?? 0) > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+            changeRate: item.changeRate ?? 0,
             price: item.price ? `${item.price.toLocaleString()}원` : "-",
             volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
           }));

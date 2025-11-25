@@ -82,7 +82,7 @@ export function GuestMarketInsightSection({
                     {stock.name}
                   </span>
                 </div>
-                <span className="text-[0.95rem] font-normal text-price-up">
+                <span className={parseFloat(stock.change) >= 0 ? "text-price-up" : "text-price-down"}>
                   {stock.change}
                 </span>
                 <span className="text-right text-[0.95rem] font-normal text-text-muted">

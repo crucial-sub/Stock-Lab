@@ -185,9 +185,16 @@ const buildAuthenticatedStats = (
 ): HomeStatCardData[] => {
   // 자동매매 대시보드 데이터 우선 사용 (활성 전략이 있는 경우)
   const activeCount = Number(dashboardData.active_strategy_count) || 0;
-  const totalAssets = parseNumericValue(dashboardData.total_assets);
+  let totalAssets = parseNumericValue(dashboardData.total_assets);
   const totalReturn = parseNumericValue(dashboardData.total_return);
   const totalProfit = parseNumericValue(dashboardData.total_profit);
+
+  // 활성 포트폴리오가 없으면 키움 계좌 잔고로 표시
+  if (activeCount === 0 && kiwoomAccountData) {
+    const cashBalance = parseNumericValue(kiwoomAccountData.cash?.balance);
+    const holdingsValue = parseNumericValue(kiwoomAccountData.holdings?.tot_evlt_amt);
+    totalAssets = cashBalance + holdingsValue;
+  }
 
   return [
     {
@@ -273,6 +280,7 @@ export function HomePageClient({
               name: item.stockName,
               tag: item.theme ?? item.stockCode,
               change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+              changeRate: item.changeRate ?? 0,
               price: item.currentPrice
                 ? `${item.currentPrice.toLocaleString()}원`
                 : "-",
@@ -303,6 +311,7 @@ export function HomePageClient({
             name: item.name,
             tag: item.theme ?? item.code,
             change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+            changeRate: item.changeRate ?? 0,
             price: item.price ? `${item.price.toLocaleString()}원` : "-",
             volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
           }));

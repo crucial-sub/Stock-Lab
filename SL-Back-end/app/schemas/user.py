@@ -69,9 +69,3 @@ class UserDeleteRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     phone_number: str = Field(..., min_length=10, max_length=20, pattern=r'^\d+$')
-
-
-class PasswordChangeRequest(BaseModel):
-    """비밀번호 변경 요청 스키마"""
-    current_password: str = Field(..., min_length=8, max_length=100, description="현재 비밀번호")
-    new_password: str = Field(..., min_length=8, max_length=100, description="새 비밀번호")

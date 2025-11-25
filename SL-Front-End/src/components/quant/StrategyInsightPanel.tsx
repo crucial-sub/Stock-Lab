@@ -39,7 +39,8 @@ const formatCurrency = (value?: number | null) => {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "-";
   }
-  return `${value.toLocaleString("ko-KR")}원`;
+  // 원화는 정수로 표시 (소수점 반올림)
+  return `${Math.round(value).toLocaleString("ko-KR")}원`;
 };
 
 export function StrategyInsightPanel({
@@ -169,7 +170,7 @@ export function StrategyInsightPanel({
               </p>
               <p className="text-xs text-slate-500">
                 {signal.current_price
-                  ? `${signal.current_price.toLocaleString("ko-KR")}원`
+                  ? `${Math.round(signal.current_price).toLocaleString("ko-KR")}원`
                   : "-"}
               </p>
             </div>

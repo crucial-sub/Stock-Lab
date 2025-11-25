@@ -261,6 +261,71 @@ class BacktestEngine:
         self.max_daily_stock: Optional[int] = None
         self.condition_sell_meta: Optional[Dict[str, Any]] = None
 
+    async def _load_benchmark_data(
+        self,
+        benchmark_code: str,
+        start_date: date,
+        end_date: date
+    ) -> pd.DataFrame:
+        """
+        벤치마크 지수 데이터 로드 (KOSPI/KOSDAQ)
+
+        Args:
+            benchmark_code: 벤치마크 코드 ("KOSPI" 또는 "KOSDAQ")
+            start_date: 시작일
+            end_date: 종료일
+
+        Returns:
+            pd.DataFrame: 벤치마크 가격 데이터 (columns: date, close_price)
+        """
+        # 벤치마크 코드 매핑 (데이터베이스에 저장된 실제 코드)
+        # 한국거래소(KRX) 표준 코드:
+        # - KOSPI: "001" 또는 "^KS11" 또는 "KOSPI"
+        # - KOSDAQ: "101" 또는 "^KQ11" or "KOSDAQ"
+        code_map = {
+            "KOSPI": ["001", "^KS11", "KOSPI", "KS11"],
+            "KOSDAQ": ["101", "^KQ11", "KOSDAQ", "KQ11"]
+        }
+
+        possible_codes = code_map.get(benchmark_code, [benchmark_code])
+
+        logger.info(f"📊 벤치마크 데이터 로드 시작: {benchmark_code} ({start_date} ~ {end_date})")
+
+        # 각 가능한 코드로 데이터 조회 시도
+        for code in possible_codes:
+            try:
+                stmt = select(StockPrice).where(
+                    and_(
+                        StockPrice.stock_code == code,
+                        StockPrice.date >= start_date,
+                        StockPrice.date <= end_date
+                    )
+                ).order_by(StockPrice.date)
+
+                result = await self.db.execute(stmt)
+                prices = result.scalars().all()
+
+                if prices:
+                    # DataFrame으로 변환
+                    benchmark_df = pd.DataFrame([
+                        {
+                            'date': price.date,
+                            'close_price': float(price.close_price)
+                        }
+                        for price in prices
+                    ])
+                    logger.info(f"✅ 벤치마크 데이터 로드 완료: {code} ({len(benchmark_df)}일)")
+                    return benchmark_df
+
+            except Exception as e:
+                logger.warning(f"⚠️ 벤치마크 코드 {code} 조회 실패: {e}")
+                continue
+
+        # 데이터를 찾지 못한 경우 경고 로그 및 빈 DataFrame 반환
+        logger.warning(f"⚠️ 벤치마크 데이터를 찾을 수 없습니다: {benchmark_code} (시도한 코드: {possible_codes})")
+        logger.warning(f"⚠️ 벤치마크 수익률은 0으로 계산됩니다.")
+        return pd.DataFrame(columns=['date', 'close_price'])
+
     async def run_backtest(
         self,
         backtest_id: UUID,
@@ -2867,6 +2932,11 @@ class BacktestEngine:
                             profit_rate = ((net_amount / cost_basis) - 1) * 100
                         else:
                             profit_rate = 0
+
+                        # 보유일수 계산
+                        entry_date_val = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
+                        hold_days = (next_sell_date - entry_date_val).days
+
                         executions.append({
                             'execution_id': f"EXE-REBAL-{stock_code}-{next_sell_date}",
                             'execution_date': next_sell_date,  # 익일
@@ -2881,6 +2951,8 @@ class BacktestEngine:
                             'commission': commission,
                             'tax': tax,
                             'realized_pnl': holding.realized_pnl,
+                            'profit_rate': profit_rate,  # ✅ 수익률 추가
+                            'hold_days': hold_days,  # ✅ 보유일수 추가
                             'selection_reason': 'REBALANCE (next day open)',
                         })
 
@@ -3011,12 +3083,13 @@ class BacktestEngine:
             else:
                 daily_ret = 0.0
 
-            # MDD 계산
+            # MDD 계산 (양수로 통일: 낙폭의 절대값)
             portfolio_value_float = float(portfolio_value)
             if portfolio_value_float > peak_value:
                 peak_value = portfolio_value_float
-            drawdown = ((portfolio_value_float - peak_value) / peak_value) * 100
-            if drawdown < current_mdd:
+            # 🔧 FIX: drawdown을 양수로 계산 (최대값 - 현재값) / 최대값
+            drawdown = ((peak_value - portfolio_value_float) / peak_value) * 100
+            if drawdown > current_mdd:
                 current_mdd = drawdown
 
             # 거래 횟수 계산 (당일 매도)
@@ -3088,6 +3161,12 @@ class BacktestEngine:
                 buy_count=daily_buy_count,
                 sell_count=total_sell_count
             )
+
+            # 🎬 시각적 효과: 실시간 렌더링을 위한 짧은 지연 (개발/데모 환경용)
+            # 매 10%마다 0.15초 지연 (전체 약 1.5초 소요)
+            if progress_percentage % 10 == 0 and progress_percentage > 0:
+                import asyncio
+                await asyncio.sleep(0.15)
 
             # 🚀 초고속: DB UPDATE 제거 (시뮬레이션 완료 후 bulk insert)
 
@@ -3207,6 +3286,59 @@ class BacktestEngine:
 
         daily_values_to_insert = []
         prev_portfolio_value = None
+        max_portfolio_value = float(initial_capital)  # 최대 포트폴리오 가치 (MDD 계산용)
+
+        # ✅ 벤치마크 수익률 계산을 위한 초기값
+        benchmark_initial_price = None
+        prev_benchmark_price = None
+        benchmark_prices = {}  # {date: price} 매핑
+
+        if benchmark_data is not None and not benchmark_data.empty and len(benchmark_data) > 0:
+            logger.info(f"📊 벤치마크 DataFrame 크기: {len(benchmark_data)}행")
+            logger.info(f"📊 벤치마크 DataFrame 컬럼: {benchmark_data.columns.tolist()}")
+
+            # 벤치마크 데이터를 딕셔너리로 변환 (빠른 조회를 위해)
+            try:
+                # 가능한 컬럼 이름들 (close_price, close, Close 등)
+                price_column = None
+                for col_name in ['close_price', 'close', 'Close', 'CLOSE']:
+                    if col_name in benchmark_data.columns:
+                        price_column = col_name
+                        break
+
+                if price_column is None:
+                    logger.warning(f"⚠️ 가격 컬럼을 찾을 수 없습니다. 사용 가능한 컬럼: {benchmark_data.columns.tolist()}")
+                    logger.warning(f"⚠️ 벤치마크 수익률은 0으로 계산됩니다.")
+                else:
+                    logger.info(f"✅ 벤치마크 가격 컬럼 사용: '{price_column}'")
+                    # 데이터 변환
+                    for idx, row in benchmark_data.iterrows():
+                        try:
+                            date_key = pd.Timestamp(row['date'])
+                            benchmark_prices[date_key] = float(row[price_column])
+                        except Exception as row_error:
+                            logger.warning(f"⚠️ 벤치마크 행 처리 실패 (인덱스 {idx}): {row_error}")
+                            continue
+
+                    # 첫 거래일의 벤치마크 가격을 초기값으로 설정
+                    if len(benchmark_prices) > 0:
+                        first_date = pd.Timestamp(daily_snapshots[0]['date'])
+                        if first_date in benchmark_prices:
+                            benchmark_initial_price = benchmark_prices[first_date]
+                            prev_benchmark_price = benchmark_initial_price
+                            logger.info(f"✅ 벤치마크 초기 가격: {benchmark_initial_price:.2f}, 총 {len(benchmark_prices)}일")
+                        else:
+                            logger.warning(f"⚠️ 첫 거래일 {first_date}의 벤치마크 데이터 없음 (사용 가능한 첫 날짜: {min(benchmark_prices.keys()) if benchmark_prices else 'N/A'})")
+                    else:
+                        logger.warning(f"⚠️ 벤치마크 가격 데이터를 추출하지 못했습니다")
+
+            except Exception as e:
+                logger.error(f"❌ 벤치마크 데이터 처리 중 오류: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+        else:
+            logger.warning(f"⚠️ 벤치마크 데이터가 없거나 비어있습니다 (benchmark_data={'None' if benchmark_data is None else 'empty'})")
+            logger.warning(f"⚠️ 벤치마크 수익률은 0으로 계산됩니다.")
 
         for snapshot in daily_snapshots:
             portfolio_value = float(snapshot['portfolio_value'])
@@ -3220,6 +3352,40 @@ class BacktestEngine:
             # cumulative_return 계산
             cumulative_ret = ((portfolio_value - float(initial_capital)) / float(initial_capital)) * 100
 
+            # 🎯 FIX: daily_drawdown (MDD) 계산
+            # 최대값 갱신
+            if portfolio_value > max_portfolio_value:
+                max_portfolio_value = portfolio_value
+
+            # 낙폭 계산 (현재값이 최대값보다 낮으면 낙폭 발생)
+            if max_portfolio_value > 0:
+                daily_drawdown = ((max_portfolio_value - portfolio_value) / max_portfolio_value) * 100
+            else:
+                daily_drawdown = 0.0
+
+            # ✅ 벤치마크 수익률 계산
+            benchmark_return = 0.0
+            benchmark_cum_return = 0.0
+
+            if benchmark_initial_price is not None and len(benchmark_prices) > 0:
+                current_date = pd.Timestamp(snapshot['date'])
+                try:
+                    if current_date in benchmark_prices:
+                        current_benchmark_price = benchmark_prices[current_date]
+
+                        # 일일 수익률 계산
+                        if prev_benchmark_price is not None and prev_benchmark_price > 0:
+                            benchmark_return = ((current_benchmark_price - prev_benchmark_price) / prev_benchmark_price) * 100
+
+                        # 누적 수익률 계산
+                        if benchmark_initial_price > 0:
+                            benchmark_cum_return = ((current_benchmark_price - benchmark_initial_price) / benchmark_initial_price) * 100
+
+                        prev_benchmark_price = current_benchmark_price
+                except Exception as e:
+                    logger.warning(f"⚠️ 벤치마크 수익률 계산 실패 ({current_date}): {e}")
+                    # 벤치마크 데이터가 없는 날은 0으로 유지
+
             daily_values_to_insert.append({
                 'session_id': str(backtest_id),
                 'date': snapshot['date'].date() if hasattr(snapshot['date'], 'date') else snapshot['date'],
@@ -3227,7 +3393,10 @@ class BacktestEngine:
                 'cash': float(snapshot['cash_balance']),
                 'position_value': float(snapshot['invested_amount']),
                 'daily_return': daily_ret,
-                'cumulative_return': cumulative_ret
+                'cumulative_return': cumulative_ret,
+                'daily_drawdown': daily_drawdown,  # ✅ MDD 추가
+                'benchmark_return': benchmark_return,  # ✅ 벤치마크 일일 수익률 (TODO: 실제 데이터 연동)
+                'benchmark_cum_return': benchmark_cum_return  # ✅ 벤치마크 누적 수익률 (TODO: 실제 데이터 연동)
             })
             prev_portfolio_value = portfolio_value
 
@@ -4499,12 +4668,13 @@ class BacktestEngine:
         downside_volatility = 0 if np.isnan(downside_vol_val) or np.isinf(downside_vol_val) else downside_vol_val
 
         # 샤프 비율
-        risk_free_rate = 0.02  # 2% 무위험 수익률
-        sharpe_val = (annualized_return - risk_free_rate) / volatility if volatility > 0 else 0
+        # 🔧 FIX: 단위 통일 - annualized_return은 % 단위이므로 risk_free_rate도 % 단위로 변환
+        risk_free_rate_pct = 2.0  # 2% 무위험 수익률 (% 단위)
+        sharpe_val = (annualized_return - risk_free_rate_pct) / volatility if volatility > 0 else 0
         sharpe_ratio = 0 if np.isnan(sharpe_val) or np.isinf(sharpe_val) else sharpe_val
 
         # 소르티노 비율
-        sortino_val = (annualized_return - risk_free_rate) / downside_volatility if downside_volatility > 0 else 0
+        sortino_val = (annualized_return - risk_free_rate_pct) / downside_volatility if downside_volatility > 0 else 0
         sortino_ratio = 0 if np.isnan(sortino_val) or np.isinf(sortino_val) else sortino_val
 
         # 칼마 비율

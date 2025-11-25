@@ -611,17 +611,19 @@ class BacktestEngine:
         from app.core.cache import get_cache
         cache = get_cache()
 
-        # Phase 0 최적화: 캐시 키에 필터 정보 포함
+        # Phase 0 최적화: 캐시 워밍과 호환되도록 전체 데이터 조회
+        # 캐시 워밍 시 "price_data:all:{start}:{end}" 키로 저장됨
         base_cache_key = config.get_cache_key(
             'price_data', start_date, end_date,
-            target_themes, target_stocks, target_universes
+            target_themes=None, target_stocks=None, target_universes=None,
+            use_all_data=True  # 필터 없이 전체 데이터 조회
         )
 
         cached_data = None
         try:
             cached_data = await cache.get(base_cache_key)
             if cached_data:
-                logger.info(f"💾 시세 데이터 캐시 히트: {len(cached_data)}개 레코드 (기본 캐시)")
+                logger.info(f"💾 시세 데이터 캐시 히트: {len(cached_data)}개 레코드 (캐시 워밍 데이터)")
 
                 # 캐시 데이터를 DataFrame으로 변환
                 df = pd.DataFrame(cached_data)

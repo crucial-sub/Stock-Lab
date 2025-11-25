@@ -23,7 +23,7 @@ export default async function AutoTradingStatusPage({
   }
 
   try {
-    // 자동매매 전략 상태 조회
+    // 가상매매 전략 상태 조회
     const axios = (await import("axios")).default;
     // SSR에서는 API_BASE_URL (backend 호스트), 클라이언트에서는 NEXT_PUBLIC_API_BASE_URL (localhost)
     const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";

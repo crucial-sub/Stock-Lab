@@ -179,7 +179,21 @@ async def warm_price_data():
             all_prices = result.mappings().all()
 
             if all_prices:
-                # 전체 가격 데이터를 캐싱 (필터 없는 베이스 데이터)
+                # 🚨 0원 데이터 필터링 (무상증자/액면분할 기간 데이터 제외)
+                # 시가/고가/저가가 0원인 데이터는 기업행동 기간으로 판단하여 제외
+                filtered_prices = [
+                    p for p in all_prices
+                    if p["open_price"] and p["high_price"] and p["low_price"]
+                    and float(p["open_price"]) > 0
+                    and float(p["high_price"]) > 0
+                    and float(p["low_price"]) > 0
+                ]
+
+                filtered_count = len(all_prices) - len(filtered_prices)
+                if filtered_count > 0:
+                    logger.warning(f"⚠️ 캐시 워밍: 0원 데이터 {filtered_count}건 필터링됨")
+
+                # 전체 가격 데이터를 캐싱
                 price_data = [
                     {
                         "company_id": str(p["company_id"]),
@@ -198,7 +212,7 @@ async def warm_price_data():
                         "market_cap": float(p["market_cap"]) if p["market_cap"] else None,
                         "listed_shares": int(p["listed_shares"]) if p["listed_shares"] else None,
                     }
-                    for p in all_prices
+                    for p in filtered_prices
                 ]
 
                 # 날짜 범위별로 캐싱 (절대 날짜 기준 표준 기간)

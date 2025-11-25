@@ -53,7 +53,7 @@ export function PortfolioShareCard({
           </p>
         </div>
 
-        {Number(returnRate) >= 0 ? (
+        {parseFloat(returnRate) >= 0 ? (
           <p className="text-[1.25rem] font-semibold text-price-up">
             {returnRate}{" "}
             <span className="text-base font-normal">%</span>

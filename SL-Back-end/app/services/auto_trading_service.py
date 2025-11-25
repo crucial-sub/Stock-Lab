@@ -1361,23 +1361,26 @@ class AutoTradingService:
 
         if user and user.kiwoom_access_token:
             try:
-                # 키움 API에서 전체 계좌 평가 조회
-                account_data = KiwoomService.get_account_evaluation(
+                # 키움 API 통합 잔고 조회 (예수금 + 주식 평가액)
+                unified_data = KiwoomService.get_unified_balance(
                     access_token=user.kiwoom_access_token
                 )
 
-                tot_evlt_amt = account_data.get("tot_evlt_amt")
-                tot_evlt_pl = account_data.get("tot_evlt_pl")
-                tot_prft_rt = account_data.get("tot_prft_rt")
+                # 1. 예수금
+                cash_balance = Decimal(str(int(unified_data.get("cash", {}).get("balance", "0"))))
+                
+                # 2. 주식 평가 정보
+                holdings = unified_data.get("holdings", {})
+                stock_eval = Decimal(str(int(holdings.get("tot_evlt_amt", "0"))))
+                stock_profit = Decimal(str(int(holdings.get("tot_evlt_pl", "0"))))
+                stock_return = Decimal(str(float(holdings.get("tot_prft_rt", "0"))))
 
-                if tot_evlt_amt:
-                    kiwoom_total_eval = Decimal(str(int(tot_evlt_amt)))
-                if tot_evlt_pl:
-                    kiwoom_total_profit = Decimal(str(int(tot_evlt_pl)))
-                if tot_prft_rt:
-                    kiwoom_total_profit_rate = Decimal(str(float(tot_prft_rt)))
+                # 3. 총 자산 = 예수금 + 주식 평가액
+                kiwoom_total_eval = cash_balance + stock_eval
+                kiwoom_total_profit = stock_profit
+                kiwoom_total_profit_rate = stock_return
 
-                logger.info(f"💰 키움 API 전체 계좌 대시보드: 평가액={kiwoom_total_eval:,.0f}원, 손익={kiwoom_total_profit:,.0f}원, 수익률={kiwoom_total_profit_rate:.2f}%")
+                logger.info(f"💰 키움 API 통합 대시보드: 총자산={kiwoom_total_eval:,.0f}원 (예수금 {cash_balance:,.0f} + 주식 {stock_eval:,.0f}), 손익={kiwoom_total_profit:,.0f}원, 수익률={kiwoom_total_profit_rate:.2f}%")
 
             except Exception as kiwoom_err:
                 logger.warning(f"키움 API 대시보드 데이터 조회 실패: {kiwoom_err}")
@@ -1400,14 +1403,17 @@ class AutoTradingService:
             total_positions_count += len(positions)
 
         # 3. 오늘 매매 건수
-        today_trades_query = select(func.count(LiveTrade.trade_id)).where(
-            and_(
-                LiveTrade.strategy_id.in_([s.strategy_id for s in active_strategies]),
-                LiveTrade.trade_date == date.today()
+        # 3. 오늘 매매 건수 (활성 전략이 있을 때만)
+        total_trades_today = 0
+        if active_strategies:
+            today_trades_query = select(func.count(LiveTrade.trade_id)).where(
+                and_(
+                    LiveTrade.strategy_id.in_([s.strategy_id for s in active_strategies]),
+                    LiveTrade.trade_date == date.today()
+                )
             )
-        )
-        today_trades_result = await db.execute(today_trades_query)
-        total_trades_today = today_trades_result.scalar() or 0
+            today_trades_result = await db.execute(today_trades_query)
+            total_trades_today = today_trades_result.scalar() or 0
 
         # 4. 수익률 계산 (키움 API 전체 계좌 데이터 우선 사용)
         if kiwoom_total_eval is not None:

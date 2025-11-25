@@ -337,15 +337,10 @@ def integrate_optimizations(backtest_engine):
             factor_analyzer = FactorDependencyAnalyzer()
             required_factors = set()
 
-            # buy_expression에서 필요한 팩터 추출
-            if hasattr(strategy, 'buy_expression') and strategy.buy_expression:
+            # buy_conditions 매개변수에서 직접 팩터 추출
+            if buy_conditions:
                 required_factors = factor_analyzer.extract_factors_from_conditions(
-                    buy_expression=strategy.buy_expression
-                )
-            # 또는 buy_conditions에서 추출
-            elif hasattr(strategy, 'buy_conditions') and strategy.buy_conditions:
-                required_factors = factor_analyzer.extract_factors_from_conditions(
-                    conditions=strategy.buy_conditions
+                    conditions=buy_conditions
                 )
 
             # 필요한 팩터가 없으면 기본 팩터 세트 사용

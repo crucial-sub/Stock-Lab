@@ -478,8 +478,7 @@ async def _run_backtest_async(
                 'losing_trades': 0,
                 'win_rate': 0.0,
                 'profit_factor': 0.0,
-                'final_capital': float(initial_capital),  # 초기 자본금 그대로
-                'initial_capital': float(initial_capital)
+                'final_capital': float(initial_capital)  # 초기 자본금 그대로
             }
 
             # SimulationStatistics 저장 (UPSERT)

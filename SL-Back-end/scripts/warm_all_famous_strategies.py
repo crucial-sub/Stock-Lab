@@ -260,11 +260,17 @@ def generate_all_strategy_hashes():
             "expression": config["expression"],
             "conditions": config["conditions"]
         }
+        # backtest_integration.py와 동일한 구조로 변경
         trading_rules = {
-            "target_gain": config["target_gain"],
-            "stop_loss": config["stop_loss"],
-            "min_hold_days": config["min_hold_days"],
-            "max_hold_days": config["max_hold_days"]
+            "target_and_loss": {
+                "target_gain": config["target_gain"],
+                "stop_loss": config["stop_loss"]
+            },
+            "hold_days": {
+                "min_hold_days": config["min_hold_days"],
+                "max_hold_days": config["max_hold_days"]
+            },
+            "condition_sell_meta": None
         }
         strategy_hash = generate_strategy_hash(buy_conditions, trading_rules)
         hashes[strategy_id] = strategy_hash
@@ -349,11 +355,15 @@ async def warm_factor_data_for_strategy(strategy_id: str, config: dict, strategy
         # 진행률 업데이트 간격 설정 (10% 단위)
         progress_interval = max(1, len(dates) // 10)
 
+        # 캐시 직접 사용 (OptimizedCacheManager가 아닌 core.cache)
+        from app.core.cache import get_cache
+        cache = get_cache()
+
         for i, calc_date in enumerate(dates, 1):
             cache_key = f"backtest_optimized:factors:{calc_date}:{themes_str}:{strategy_hash}"
 
             # 캐시 확인
-            cached = await optimized_cache.get(cache_key)
+            cached = await cache.get(cache_key)
             if cached is not None:
                 cached_count += 1
                 # 진행률 로그 (10% 단위)
@@ -372,11 +382,17 @@ async def warm_factor_data_for_strategy(strategy_id: str, config: dict, strategy
                 )
 
                 if not factors.empty:
-                    # 캐시 저장
-                    await optimized_cache.set_factors_batch(
-                        cache_key=cache_key,
-                        factors_df=factors
-                    )
+                    # 캐시 저장: DataFrame을 직렬화하여 저장
+                    import lz4.frame
+                    import pickle
+
+                    # DataFrame을 pickle로 직렬화
+                    serialized = pickle.dumps(factors)
+                    # LZ4 압축
+                    compressed = lz4.frame.compress(serialized)
+
+                    # 캐시 저장 (TTL=영구, 30일)
+                    await cache.set(cache_key, compressed, ttl=30*24*3600)
                     new_cached += 1
 
                     # 진행률 로그 (10% 단위)

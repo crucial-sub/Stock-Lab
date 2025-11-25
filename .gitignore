@@ -74,4 +74,16 @@ SL-Back-end/logs/quant_api.log
 SL-Back-end/logs/
 SL-Front-End/.next/
 docker-compose.override.yml
+
+# Docker Compose environment-specific files (keep only templates)
+# docker-compose.dev.yml  # Keep tracked for development reference
+# docker-compose.ec2.yml  # Keep tracked for EC2 deployment reference
+# docker-compose.prod.yml # Keep tracked for production reference
+
+# Backup files
+*.bak
+*.backup
+*~
+get-docker.sh
+
 nu*

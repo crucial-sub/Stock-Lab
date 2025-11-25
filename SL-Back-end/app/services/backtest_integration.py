@@ -85,8 +85,12 @@ def integrate_optimizations(backtest_engine):
         financial_cache_key = f"financial_data:{start_date}:{end_date}:{stocks_str}"
         stock_prices_cache_key = f"stock_prices:{start_date}:{end_date}:{stocks_str}"
 
+        # 기업행동 정보 저장용
+        corporate_actions_result = {}
+
         # 🚀 병렬 로드 헬퍼 함수
         async def _load_price_parallel():
+            nonlocal corporate_actions_result
             try:
                 cached = await optimized_cache.get_price_data_cached(price_cache_key)
                 if cached is None:
@@ -94,9 +98,10 @@ def integrate_optimizations(backtest_engine):
                     from app.core.database import AsyncSessionLocal
                     async with AsyncSessionLocal() as independent_db:
                         independent_manager = OptimizedDBManager(independent_db)
-                        data = await independent_manager.load_price_data_optimized(
+                        data, corporate_actions = await independent_manager.load_price_data_optimized(
                             start_date, end_date, target_themes, target_stocks
                         )
+                    corporate_actions_result = corporate_actions
                     if not data.empty:
                         await optimized_cache.set_price_data_cached(price_cache_key, data)
                     return data
@@ -153,27 +158,29 @@ def integrate_optimizations(backtest_engine):
         logger.info(f"   - 가격 데이터: {len(price_data):,}건")
         logger.info(f"   - 재무 데이터: {len(financial_data):,}건")
         logger.info(f"   - 상장주식수: {len(stock_prices_data):,}건")
+        if corporate_actions_result:
+            logger.info(f"   - 🚨 기업행동 감지: {len(corporate_actions_result)}개 종목")
 
-        return price_data, financial_data, stock_prices_data
+        return price_data, financial_data, stock_prices_data, corporate_actions_result
 
     async def _load_price_data_optimized(
         start_date: date,
         end_date: date,
         target_themes: List[str] = None,
         target_stocks: List[str] = None
-    ) -> pd.DataFrame:
-        """가격 데이터 로드 (병렬 로드 래퍼)"""
-        price_data, _, _ = await _load_all_data_parallel(
+    ) -> tuple:
+        """가격 데이터 로드 (병렬 로드 래퍼) - 기업행동 정보도 함께 반환"""
+        price_data, _, _, corporate_actions = await _load_all_data_parallel(
             start_date, end_date, target_themes, target_stocks
         )
-        return price_data
+        return price_data, corporate_actions
 
     async def _load_financial_data_optimized(
         start_date: date,
         end_date: date
     ) -> pd.DataFrame:
         """재무 데이터 로드 (병렬 로드 래퍼)"""
-        _, financial_data, _ = await _load_all_data_parallel(
+        _, financial_data, _, _ = await _load_all_data_parallel(
             start_date, end_date, None, None
         )
         return financial_data

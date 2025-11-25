@@ -254,6 +254,12 @@ class BacktestEngine:
         self.condition_evaluator = ConditionEvaluator()
         self.expression_parser = LogicalExpressionParser()
 
+        # 기업행동 감지 정보 (무상증자/액면분할 등)
+        # {stock_code: {event_date, prev_close, action_type, ...}}
+        self.corporate_actions: Dict[str, Dict] = {}
+        # 기업행동으로 매수 금지된 종목
+        self.blocked_stocks: Set[str] = set()
+
         # 전략 제약 기본값
         self.initial_capital: Decimal = Decimal("0")
         self.per_stock_ratio: Optional[Decimal] = None
@@ -660,6 +666,16 @@ class BacktestEngine:
                     df = df[filter_mask]
                     logger.info(f"✅ AND 필터링 후: {len(df)}개 레코드")
 
+                # 🚨 캐시 히트 시에도 기업행동 감지 필수!
+                # 캐시 워밍 데이터는 기업행동 필터링이 안 된 원본 데이터이므로
+                # 반드시 기업행동 감지 및 데이터 필터링을 수행해야 함
+                if 'date' in df.columns:
+                    df['date'] = pd.to_datetime(df['date'])
+                df, corporate_actions = self._detect_corporate_actions(df)
+                if corporate_actions:
+                    self.corporate_actions = corporate_actions
+                    logger.warning(f"🚨 기업행동 감지 (캐시 히트): {len(corporate_actions)}개 종목 - 강제 청산 대상")
+
                 return df
         except Exception as e:
             logger.debug(f"시세 캐시 조회 실패: {e}")
@@ -765,6 +781,12 @@ class BacktestEngine:
         logger.info(f"📊 시세 데이터 로드 완료: {len(df):,}개 레코드, {df['stock_code'].nunique()}개 종목")
         logger.info(f"📅 시세 데이터 날짜 범위: {df['date'].min().date()} ~ {df['date'].max().date()}")
 
+        # 🚨 기업행동 감지 (무상증자/액면분할 등)
+        df, corporate_actions = self._detect_corporate_actions(df)
+        if corporate_actions:
+            self.corporate_actions = corporate_actions
+            logger.warning(f"🚨 기업행동 감지: {len(corporate_actions)}개 종목 - 강제 청산 대상")
+
         # Phase 0 최적화: price_lookup 사전 구축 (10-20배 빠른 가격 조회)
         self.price_lookup = {}
         for _, row in df.iterrows():
@@ -784,6 +806,97 @@ class BacktestEngine:
         # (필터링된 데이터를 저장하면 캐시 키가 너무 많아짐)
 
         return df
+
+    def _detect_corporate_actions(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Dict]]:
+        """
+        기업행동 감지 (무상증자/액면분할 등)
+
+        하루에 50% 이상 변동하는 경우 기업행동으로 판단하고,
+        해당 정보를 반환합니다. 기업행동 발생일 이후 데이터는 제외됩니다.
+
+        Args:
+            df: 주가 데이터 DataFrame
+
+        Returns:
+            Tuple[DataFrame, Dict]:
+                - 기업행동 발생일 이후 데이터가 제외된 DataFrame
+                - 기업행동 이벤트 정보 딕셔너리 {stock_code: {event_date, prev_close, action_type, ...}}
+        """
+        corporate_actions = {}
+
+        if df.empty:
+            return df, corporate_actions
+
+        # 등락률 계산
+        df = df.sort_values(['stock_code', 'date'])
+        df['prev_close'] = df.groupby('stock_code')['close_price'].shift(1)
+        df['change_rate'] = ((df['close_price'] - df['prev_close']) / df['prev_close'] * 100).where(df['prev_close'] > 0)
+
+        ABNORMAL_THRESHOLD = 50.0  # 50% 이상 변동 시 기업행동으로 판단
+        before_count = len(df)
+
+        # 급등/급락 이벤트 감지
+        abnormal_mask = df['change_rate'].abs() > ABNORMAL_THRESHOLD
+
+        if not abnormal_mask.any():
+            # 임시 컬럼 제거
+            df = df.drop(columns=['prev_close', 'change_rate'], errors='ignore')
+            return df, corporate_actions
+
+        # 기업행동 발생 종목 및 날짜 추출
+        abnormal_events = df[abnormal_mask][['stock_code', 'stock_name', 'date', 'prev_close', 'close_price', 'change_rate']].copy()
+
+        # 각 종목별 첫 번째 기업행동 이벤트만 사용 (가장 이른 날짜)
+        abnormal_events = abnormal_events.sort_values('date').drop_duplicates(subset=['stock_code'], keep='first')
+
+        # 기업행동 이벤트 정보 저장 및 로깅
+        for _, row in abnormal_events.iterrows():
+            stock_code = row['stock_code']
+            event_date = row['date']
+            action_type = "무상증자/액면분할" if row['change_rate'] > 0 else "감자/액면병합"
+
+            corporate_actions[stock_code] = {
+                'stock_code': stock_code,
+                'stock_name': row['stock_name'],
+                'event_date': event_date,
+                'prev_close': row['prev_close'],
+                'new_close': row['close_price'],
+                'change_rate': row['change_rate'],
+                'action_type': action_type
+            }
+
+            logger.warning(
+                f"⚠️ 기업행동 감지: {row['stock_name']}({stock_code}) "
+                f"{event_date.strftime('%Y-%m-%d') if hasattr(event_date, 'strftime') else event_date} "
+                f"{row['prev_close']:.0f}원 → {row['close_price']:.0f}원 "
+                f"({row['change_rate']:+.1f}%) [{action_type}]"
+            )
+
+        # 기업행동 발생일 이후 데이터만 제외 (이전 데이터는 유지)
+        mask_to_keep = pd.Series(True, index=df.index)
+
+        for stock_code, event_info in corporate_actions.items():
+            event_date = event_info['event_date']
+            # 해당 종목의 기업행동 발생일 이후 데이터 제외
+            stock_mask = (df['stock_code'] == stock_code) & (df['date'] >= event_date)
+            mask_to_keep = mask_to_keep & ~stock_mask
+
+        df_filtered = df[mask_to_keep].copy()
+
+        # 임시 컬럼 제거
+        df_filtered = df_filtered.drop(columns=['prev_close', 'change_rate'], errors='ignore')
+
+        after_count = len(df_filtered)
+        filtered_count = before_count - after_count
+
+        if filtered_count > 0:
+            logger.warning(
+                f"⚠️ 기업행동 데이터 필터링 완료: "
+                f"{len(corporate_actions)}개 종목 감지, "
+                f"{filtered_count}건 데이터 제외 (기업행동 발생일 이후)"
+            )
+
+        return df_filtered, corporate_actions
 
     async def _load_financial_data(self, start_date: date, end_date: date, target_stocks: List[str] = None) -> pd.DataFrame:
         """재무 데이터 로드 + Redis 캐싱"""
@@ -1311,7 +1424,7 @@ class BacktestEngine:
         start_time: float,
         cache_enabled: bool
     ) -> List[Dict]:
-        """순차 처리 + Redis 캐싱"""
+        """순차 처리 + Redis 캐싱 (최적화: 분기별 1회 조회)"""
         all_rows = []
 
         # 분기별 캐시를 위한 도우미 함수
@@ -1323,33 +1436,77 @@ class BacktestEngine:
 
         total_dates = len(unique_dates)
 
-        for date_idx, calc_date in enumerate(unique_dates):
-            cache_key = None
-            if cache_enabled:
-                quarter_key = get_quarter_key(calc_date)
+        # 🚀 최적화: 이미 로드된 분기 추적 (중복 조회 방지)
+        loaded_quarters: Set[str] = set()
+        # 🚀 최적화: 분기별로 계산이 필요한 날짜 그룹화
+        quarters_to_calc: Dict[str, List] = defaultdict(list)
+
+        # 1단계: 캐시 히트된 분기 먼저 로드 (분기당 1회만)
+        if cache_enabled:
+            unique_quarters = set(get_quarter_key(d) for d in unique_dates)
+            logger.info(f"🔍 캐시 조회 대상 분기: {sorted(unique_quarters)}")
+
+            for quarter_key in sorted(unique_quarters):
                 cache_params = {
                     'quarter': quarter_key,
                     'factors': sorted(list(required_factors)),
-                    'stocks': sorted(price_data['stock_code'].unique().tolist()[:50])  # 종목 수 제한
+                    'stocks': sorted(price_data['stock_code'].unique().tolist()[:50])
                 }
                 cache_key = cache._generate_key('backtest_factors', cache_params)
 
-                # 캐시 조회
                 try:
                     cached_data = await cache.get(cache_key)
                     if cached_data:
                         logger.info(f"💾 캐시 히트: {quarter_key} - {len(cached_data)}개 레코드")
                         all_rows.extend(cached_data)
-                        continue
+                        loaded_quarters.add(quarter_key)
                 except Exception as e:
-                    logger.debug(f"캐시 조회 실패: {e}")
+                    logger.debug(f"캐시 조회 실패 ({quarter_key}): {e}")
 
-            # 캐시 미스 - 계산 수행
-            todays_prices = price_data[price_data['date'] == calc_date]
-            if todays_prices.empty:
+            if loaded_quarters:
+                logger.info(f"✅ 캐시 로드 완료: {len(loaded_quarters)}개 분기, {len(all_rows)}개 레코드")
+
+        # 2단계: 캐시 미스된 분기만 계산 (분기별 1회만 계산하여 모든 날짜에 적용)
+        dates_to_calculate = [d for d in unique_dates if get_quarter_key(d) not in loaded_quarters]
+
+        if not dates_to_calculate:
+            logger.info(f"🚀 모든 분기 캐시 히트 - 팩터 계산 스킵 ({len(all_rows)}개 레코드)")
+            return all_rows
+
+        # 🚀 최적화: 캐시 미스된 분기 그룹화 (분기별 1회만 계산)
+        quarters_to_calculate = defaultdict(list)
+        for d in dates_to_calculate:
+            quarters_to_calculate[get_quarter_key(d)].append(d)
+
+        logger.info(f"📊 캐시 미스 분기: {list(quarters_to_calculate.keys())} ({len(dates_to_calculate)}개 날짜)")
+
+        # 분기별로 1회만 팩터 계산
+        for quarter_key, quarter_dates in quarters_to_calculate.items():
+            logger.info(f"🔧 분기 {quarter_key} 팩터 계산 시작 ({len(quarter_dates)}개 날짜)...")
+            quarter_start_time = time.time()
+
+            # 분기의 마지막 날짜 기준으로 팩터 1회 계산
+            calc_date = max(quarter_dates)
+            cache_key = None
+
+            if cache_enabled:
+                cache_params = {
+                    'quarter': quarter_key,
+                    'factors': sorted(list(required_factors)),
+                    'stocks': sorted(price_data['stock_code'].unique().tolist()[:50])
+                }
+                cache_key = cache._generate_key('backtest_factors', cache_params)
+
+            # 해당 분기의 모든 종목 가격 데이터
+            quarter_prices = price_data[price_data['date'].isin(quarter_dates)]
+            if quarter_prices.empty:
                 continue
 
-            date_rows = []
+            # 분기 마지막 날짜의 가격 데이터 (팩터 계산용)
+            todays_prices = price_data[price_data['date'] == calc_date]
+            if todays_prices.empty:
+                todays_prices = quarter_prices[quarter_prices['date'] == quarter_prices['date'].max()]
+
             industry_map = {}
             if 'industry' in todays_prices.columns:
                 industry_map = dict(zip(todays_prices['stock_code'], todays_prices['industry']))
@@ -1468,31 +1625,37 @@ class BacktestEngine:
                 except Exception as e:
                     logger.error(f"기술적 지표 팩터 계산 에러 ({calc_date}): {e}")
 
-            # 결과 저장
-            for stock in todays_prices['stock_code'].unique():
-                record = {
-                    'date': pd.Timestamp(calc_date),
-                    'stock_code': stock,
-                    'industry': industry_map.get(stock),
-                    'size_bucket': size_bucket_map.get(stock)
-                }
-                record.update(stock_factor_map.get(stock, {}))
-                date_rows.append(record)
+            # 🚀 결과 저장: 분기 내 모든 날짜에 대해 동일한 팩터 값 적용
+            quarter_rows = []
+            all_stocks = set()
 
-            # 캐시 저장
-            if cache_enabled and cache_key and date_rows:
+            # 해당 분기의 모든 날짜-종목 조합 생성
+            for qdate in quarter_dates:
+                qdate_prices = price_data[price_data['date'] == qdate]
+                for stock in qdate_prices['stock_code'].unique():
+                    all_stocks.add(stock)
+                    record = {
+                        'date': pd.Timestamp(qdate),
+                        'stock_code': stock,
+                        'industry': industry_map.get(stock),
+                        'size_bucket': size_bucket_map.get(stock)
+                    }
+                    record.update(stock_factor_map.get(stock, {}))
+                    quarter_rows.append(record)
+
+            # 캐시 저장 (분기별 1회)
+            if cache_enabled and cache_key and quarter_rows:
                 try:
-                    await cache.set(cache_key, date_rows, ttl=0)
+                    await cache.set(cache_key, quarter_rows, ttl=0)
+                    logger.info(f"💾 캐시 저장: {quarter_key} - {len(quarter_rows)}개 레코드")
                 except Exception as e:
                     logger.debug(f"캐시 저장 실패: {e}")
 
-            all_rows.extend(date_rows)
+            all_rows.extend(quarter_rows)
 
-            # 진행상황 로깅
-            if (date_idx + 1) % max(1, total_dates // 10) == 0:
-                progress = (date_idx + 1) * 100 // total_dates
-                elapsed = time.time() - start_time
-                logger.info(f"⏱️  진행: {date_idx + 1}/{total_dates} ({progress}%) - 경과: {elapsed:.1f}초")
+            # 분기 완료 로깅
+            quarter_elapsed = time.time() - quarter_start_time
+            logger.info(f"✅ 분기 {quarter_key} 완료: {len(quarter_rows)}개 레코드, {len(all_stocks)}개 종목, {quarter_elapsed:.1f}초")
 
         return all_rows
 
@@ -2824,13 +2987,16 @@ class BacktestEngine:
 
         rebalance_dates_set = {pd.Timestamp(d) for d in rebalance_dates}
 
-        # 🚀 OPTIMIZATION: 조건 평가 사전 계산 (4초 절약)
+        # 🚀 OPTIMIZATION: 조건 평가 사전 계산 (벡터화로 10배 이상 빠름)
         logger.info("🚀 모든 리밸런싱 날짜의 조건 평가 사전 계산 중...")
         buy_conditions_cache = {}
         if not factor_data.empty:
+            # 종목 리스트는 한 번만 계산
+            all_stocks = factor_data['stock_code'].unique().tolist()
+            start_precompute = time.time()
+
             for rebalance_date in rebalance_dates_set:
-                # 모든 종목에 대해 조건 평가
-                all_stocks = factor_data['stock_code'].unique().tolist()
+                # 벡터화된 조건 평가 (이제 O(1)에 가까운 속도)
                 valid_stocks = factor_integrator.evaluate_buy_conditions_with_factors(
                     factor_data=factor_data,
                     stock_codes=all_stocks,
@@ -2838,7 +3004,9 @@ class BacktestEngine:
                     trading_date=rebalance_date
                 )
                 buy_conditions_cache[rebalance_date] = set(valid_stocks)
-        logger.info(f"✅ {len(buy_conditions_cache)}개 리밸런싱 날짜의 조건 평가 완료")
+
+            elapsed = time.time() - start_precompute
+            logger.info(f"✅ {len(buy_conditions_cache)}개 리밸런싱 날짜의 조건 평가 완료 ({elapsed:.2f}초)")
 
         from sqlalchemy import update
         from app.models.simulation import SimulationSession
@@ -2900,6 +3068,117 @@ class BacktestEngine:
             daily_sold_stocks = set()  # 당일 매도한 종목 추적
 
             is_rebalance_day = pd.Timestamp(trading_day) in rebalance_dates_set
+
+            # 🚨 0단계: 기업행동 강제 청산 (매일 체크)
+            # 기업행동 발생 전날(마지막 거래일)에 해당 종목 강제 청산
+            if holdings and self.corporate_actions:
+                trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
+                # 강제 청산 대상 종목 수집 (dict 순회 중 삭제 방지)
+                stocks_to_force_sell = []
+
+                for stock_code, event_info in self.corporate_actions.items():
+                    if stock_code not in holdings:
+                        continue
+
+                    event_date = event_info['event_date']
+                    event_date_val = event_date.date() if hasattr(event_date, 'date') else event_date
+
+                    # 🔧 수정된 로직: 다음 거래일이 기업행동 발생일 이후인지 확인
+                    # 거래일 리스트에서 다음 거래일 찾기
+                    current_idx = None
+                    for idx, td in enumerate(trading_days):
+                        td_date = td.date() if hasattr(td, 'date') else td
+                        if td_date == trading_day_date:
+                            current_idx = idx
+                            break
+
+                    if current_idx is None or current_idx >= len(trading_days) - 1:
+                        continue
+
+                    # 다음 거래일 확인
+                    next_trading_day = trading_days[current_idx + 1]
+                    next_td_date = next_trading_day.date() if hasattr(next_trading_day, 'date') else next_trading_day
+
+                    # 다음 거래일이 기업행동 발생일 이후이면 오늘 강제 청산
+                    # (기업행동 발생일의 데이터는 이미 필터링되어 없으므로)
+                    if next_td_date >= event_date_val:
+                        stocks_to_force_sell.append(stock_code)
+
+                for stock_code in stocks_to_force_sell:
+                    if stock_code not in holdings:
+                        continue
+
+                    event_info = self.corporate_actions[stock_code]
+                    holding = holdings[stock_code]
+
+                    # 당일 종가로 강제 청산
+                    price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
+                    if not price_info:
+                        logger.warning(f"⚠️ 기업행동 강제 청산 실패: {stock_code} - 가격 정보 없음")
+                        continue
+
+                    prev_close = Decimal(str(price_info['close_price']))
+                    execution_price = prev_close * (1 - self.slippage)
+
+                    amount = execution_price * holding.quantity
+                    commission = amount * self.commission_rate
+                    tax = amount * self.tax_rate
+                    net_amount = amount - commission - tax
+                    cost_basis = holding.entry_price * holding.quantity if holding.entry_price else Decimal("0")
+                    net_profit = net_amount - cost_basis
+
+                    # 매도 실행
+                    cash_balance += net_amount
+                    holding.is_open = False
+                    holding.exit_date = trading_day_date
+                    holding.exit_price = execution_price
+                    holding.realized_pnl = net_profit
+                    self.closed_positions.append(holding)
+
+                    # 수익률 계산
+                    if cost_basis > 0:
+                        profit_rate = ((net_amount / cost_basis) - 1) * 100
+                    else:
+                        profit_rate = 0
+
+                    # 보유일수 계산
+                    entry_date_val = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
+                    hold_days_count = (trading_day_date - entry_date_val).days
+
+                    # 강제 청산 기록
+                    sell_reason = f"기업행동({event_info['action_type']}) 감지로 인한 강제 청산 ({event_info['change_rate']:+.1f}%)"
+
+                    executions.append({
+                        'execution_id': f"EXE-CORP-{stock_code}-{trading_day_date}",
+                        'execution_date': trading_day_date,
+                        'trade_date': trading_day_date,
+                        'stock_code': stock_code,
+                        'stock_name': holding.stock_name,
+                        'side': 'SELL',
+                        'trade_type': 'SELL',
+                        'quantity': holding.quantity,
+                        'price': execution_price,
+                        'amount': amount,
+                        'commission': commission,
+                        'tax': tax,
+                        'realized_pnl': holding.realized_pnl,
+                        'profit_rate': profit_rate,
+                        'hold_days': hold_days_count,
+                        'selection_reason': sell_reason,
+                    })
+
+                    logger.warning(
+                        f"🚨 기업행동 강제 청산: {holding.stock_name}({stock_code}) "
+                        f"매수가 {holding.entry_price:.0f}원 → 매도가 {execution_price:.0f}원 "
+                        f"(수익률 {profit_rate:.2f}%) [{sell_reason}]"
+                    )
+
+                    del holdings[stock_code]
+                    daily_sold_stocks.add(stock_code)
+
+                    # 해당 종목 향후 매수 금지
+                    self.blocked_stocks.add(stock_code)
 
             # 리밸런싱 날짜인 경우: 매도 먼저, 매수는 나중에
             if is_rebalance_day:
@@ -3054,7 +3333,16 @@ class BacktestEngine:
 
                 new_buy_candidates = [s for s in new_buy_candidates if s not in daily_sold_stocks]
 
-                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개 (당일 매도 제외 {len(daily_sold_stocks)}개), 보유 {len(holdings)}개/{max_positions}개")
+                # 기업행동으로 매수 금지된 종목 제외
+                blocked_count = 0
+                if self.blocked_stocks:
+                    before_blocked = len(new_buy_candidates)
+                    new_buy_candidates = [s for s in new_buy_candidates if s not in self.blocked_stocks]
+                    blocked_count = before_blocked - len(new_buy_candidates)
+                    if blocked_count > 0:
+                        logger.debug(f"🚫 기업행동 종목 제외: {blocked_count}개")
+
+                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개 (당일 매도 제외 {len(daily_sold_stocks)}개, 기업행동 제외 {blocked_count}개), 보유 {len(holdings)}개/{max_positions}개")
 
                 buy_candidates = new_buy_candidates
 

@@ -130,60 +130,87 @@ class FactorIntegration:
                 )
                 return selected_stocks
 
-        # 일반 조건인 경우 (AND 로직)
-        selected_stocks = []
+        # 🚀 OPTIMIZATION: 일반 조건도 벡터화로 처리 (for loop 제거)
+        import re
 
-        for stock_code in stock_codes:
-            # 해당 종목의 팩터 데이터 추출
-            stock_mask = (factor_data['stock_code'] == stock_code)
-            date_mask = (pd.to_datetime(factor_data['date']) == trading_date)
-            stock_data = factor_data[stock_mask & date_mask]
+        # 1. 해당 날짜의 데이터만 필터링
+        date_mask = (pd.to_datetime(factor_data['date']) == trading_date)
+        date_data = factor_data[date_mask].copy()
 
-            if stock_data.empty:
+        if date_data.empty:
+            return []
+
+        # 2. 대상 종목만 필터링
+        if stock_codes:
+            date_data = date_data[date_data['stock_code'].isin(stock_codes)]
+
+        if date_data.empty:
+            return []
+
+        # 3. 벡터화된 조건 평가 (Pandas boolean indexing)
+        condition_mask = pd.Series([True] * len(date_data), index=date_data.index)
+
+        for condition in buy_conditions:
+            # factor 키가 없으면 exp_left_side에서 추출
+            if 'factor' in condition:
+                factor_name = condition['factor']
+                operator = condition.get('operator', '>')
+                threshold = condition.get('value', 0)
+            else:
+                # exp_left_side에서 팩터명 추출: "기본값({debt_ratio})" → "debt_ratio"
+                exp_left_side = condition.get('exp_left_side', '')
+                match = re.search(r'\{([^}]+)\}', exp_left_side)
+                if not match:
+                    logger.warning(f"조건에서 팩터명 추출 실패: {condition}")
+                    continue
+                factor_name = match.group(1)
+                operator = condition.get('inequality', '>')
+                threshold = condition.get('exp_right_side', 0)
+
+            # 대소문자 구분 없이 팩터 컬럼 찾기
+            factor_name_upper = factor_name.upper()
+            factor_col = None
+
+            if factor_name_upper in date_data.columns:
+                factor_col = factor_name_upper
+            elif f"{factor_name_upper}_RANK" in date_data.columns:
+                factor_col = f"{factor_name_upper}_RANK"
+
+            if factor_col is None:
+                # 팩터 컬럼이 없으면 해당 조건은 False 처리
+                condition_mask = condition_mask & False
                 continue
 
-            # 모든 조건 체크
-            all_conditions_met = True
+            # 🚀 벡터화된 조건 평가 (Pandas 연산)
+            factor_values = pd.to_numeric(date_data[factor_col], errors='coerce')
 
-            for condition in buy_conditions:
-                # factor 키가 없으면 exp_left_side에서 추출
-                if 'factor' in condition:
-                    factor_name = condition['factor']
-                    operator = condition.get('operator', '>')
-                    threshold = condition.get('value', 0)
-                else:
-                    # exp_left_side에서 팩터명 추출: "기본값({debt_ratio})" → "debt_ratio"
-                    import re
-                    exp_left_side = condition.get('exp_left_side', '')
-                    match = re.search(r'\{([^}]+)\}', exp_left_side)
-                    if not match:
-                        logger.warning(f"조건에서 팩터명 추출 실패: {condition}")
-                        all_conditions_met = False
-                        break
-                    factor_name = match.group(1)
-                    operator = condition.get('inequality', '>')
-                    threshold = condition.get('exp_right_side', 0)
+            if operator == '>':
+                cond_result = factor_values > threshold
+            elif operator == '>=':
+                cond_result = factor_values >= threshold
+            elif operator == '<':
+                cond_result = factor_values < threshold
+            elif operator == '<=':
+                cond_result = factor_values <= threshold
+            elif operator == '==':
+                cond_result = factor_values == threshold
+            elif operator == '!=':
+                cond_result = factor_values != threshold
+            else:
+                cond_result = pd.Series([False] * len(date_data), index=date_data.index)
 
-                # 대소문자 구분 없이 팩터 값 가져오기
-                factor_name_upper = factor_name.upper()
+            # NaN 값은 False로 처리
+            cond_result = cond_result.fillna(False)
+            condition_mask = condition_mask & cond_result
 
-                if factor_name_upper in stock_data.columns:
-                    factor_value = float(stock_data[factor_name_upper].iloc[0])
-                elif f"{factor_name_upper}_RANK" in stock_data.columns:
-                    factor_value = float(stock_data[f"{factor_name_upper}_RANK"].iloc[0])
-                else:
-                    all_conditions_met = False
-                    break
+        # 4. 조건을 만족하는 종목 추출
+        selected_data = date_data[condition_mask]
+        selected_stocks = sorted(selected_data['stock_code'].tolist())
 
-                # 조건 평가
-                if not self._evaluate_condition(factor_value, operator, threshold):
-                    all_conditions_met = False
-                    break
+        if len(selected_stocks) > 0:
+            logger.info(f"✅ 벡터화 조건 평가: {len(selected_stocks)}개 종목 선정")
 
-            if all_conditions_met:
-                selected_stocks.append(stock_code)
-        # 결과 일관성을 위해 stock_code 정렬 (환경 간 동일한 순서 보장)
-        return sorted(selected_stocks)
+        return selected_stocks
 
     def _evaluate_condition(self, value: float, operator: str, threshold: float) -> bool:
         """단일 조건 평가"""

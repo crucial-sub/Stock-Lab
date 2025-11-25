@@ -246,6 +246,11 @@ class SimulationSession(Base):
     description = Column(Text, nullable=True, comment="포트폴리오 설명")
     share_url = Column(String(100), nullable=True, unique=True, index=True, comment="공유 URL 슬러그")
 
+    # 포트폴리오 저장 관련 필드
+    is_portfolio = Column(Boolean, default=False, nullable=False, comment="포트폴리오로 저장 여부")
+    portfolio_name = Column(String(200), nullable=True, comment="포트폴리오 이름")
+    saved_at = Column(TIMESTAMP, nullable=True, comment="포트폴리오 저장 시간")
+
     # 커뮤니티 기능
     view_count = Column(Integer, default=0, comment="조회수")
     like_count = Column(Integer, default=0, comment="좋아요 수")

@@ -15,6 +15,7 @@ from app.services.backtest_factor_optimized import OptimizedFactorCalculator
 from app.services.backtest_cache_optimized import optimized_cache
 from app.services.backtest_db_optimized import OptimizedDBManager
 from app.services.condition_evaluator_vectorized import vectorized_evaluator
+from app.services.factor_dependency_analyzer import FactorDependencyAnalyzer
 
 # 초고속 모드 (Numba JIT + 병렬 처리)
 try:
@@ -326,20 +327,52 @@ def integrate_optimizations(backtest_engine):
         use_ultra_fast = ULTRA_FAST_MODE and len(dates_to_calc) > 3 and not use_extreme
 
         if use_extreme:
-            logger.info("🔥🔥🔥 극한 최적화 모드 활성화 (Extreme Performance - 모든 팩터)")
+            logger.info("🔥🔥🔥 극한 최적화 모드 활성화 (Extreme Performance - 선택적 팩터 계산)")
             logger.info(f"💰 financial_pl 상태: None={financial_pl is None}, Empty={financial_pl.is_empty() if financial_pl is not None else 'N/A'}, Len={len(financial_pl) if financial_pl is not None else 0}")
 
             # JIT 워밍업 (첫 실행만)
             await extreme_optimizer.warmup_jit_functions()
 
-            # 🚀 OPTIMIZATION 2: 배치 팩터 계산 (모든 날짜 한 번에)
+            # 🎯 팩터 의존성 분석 - 필요한 팩터만 계산
+            factor_analyzer = FactorDependencyAnalyzer()
+            required_factors = set()
+
+            # buy_expression에서 필요한 팩터 추출
+            if hasattr(strategy, 'buy_expression') and strategy.buy_expression:
+                required_factors = factor_analyzer.extract_factors_from_conditions(
+                    buy_expression=strategy.buy_expression
+                )
+            # 또는 buy_conditions에서 추출
+            elif hasattr(strategy, 'buy_conditions') and strategy.buy_conditions:
+                required_factors = factor_analyzer.extract_factors_from_conditions(
+                    conditions=strategy.buy_conditions
+                )
+
+            # 필요한 팩터가 없으면 기본 팩터 세트 사용
+            if not required_factors:
+                logger.warning("⚠️ 조건식에서 팩터를 추출할 수 없음. 기본 팩터 세트 사용")
+                required_factors = {'PER', 'PBR', 'ROE', 'ROA', 'DEBT_RATIO', 'CURRENT_RATIO'}
+
+            # compute_mask 생성
+            compute_mask = {
+                factor: (factor in required_factors)
+                for factor in FactorDependencyAnalyzer.ALL_FACTORS
+            }
+
+            enabled_count = sum(1 for v in compute_mask.values() if v)
+            speedup = 148 / enabled_count if enabled_count > 0 else 1
+            logger.info(f"🎯 선택적 팩터 계산: {enabled_count}/148개 팩터만 계산 (예상 속도 향상: {speedup:.1f}배)")
+            logger.info(f"📊 계산할 팩터: {sorted(required_factors)}")
+
+            # 🚀 OPTIMIZATION 2: 배치 팩터 계산 (필요한 팩터만!)
             dates_to_calc_objs = [
                 calc_date.date() if hasattr(calc_date, 'date') else calc_date
                 for calc_date in dates_to_calc
             ]
 
             all_factors_by_date = extreme_optimizer.calculate_all_indicators_batch_extreme(
-                price_pl, financial_pl, dates_to_calc_objs, stock_prices_pl
+                price_pl, financial_pl, dates_to_calc_objs, stock_prices_pl,
+                compute_mask=compute_mask  # 👈 선택적 팩터 계산 활성화!
             )
 
         elif use_ultra_fast:

@@ -44,6 +44,18 @@ interface SummaryMarkdownProps {
  * ```
  */
 export function SummaryMarkdown({ summary }: SummaryMarkdownProps) {
+  // summary가 없는 경우 빈 상태 표시
+  if (!summary || summary.trim() === "") {
+    return (
+      <div className="w-full">
+        <h3 className="text-[1.25rem] font-semibold mb-4">📝 AI 요약</h3>
+        <div className="text-center text-gray-500 py-10">
+          백테스트 요약이 생성되지 않았습니다.
+        </div>
+      </div>
+    );
+  }
+
   // summary 앞뒤 빈 줄 제거
   let processedSummary = summary.trim();
 

@@ -589,6 +589,7 @@ async def run_backtest(
             benchmark="KOSPI",
             status="PENDING",
             progress=0,
+            is_portfolio=True,  # 포트폴리오 목록에 표시되도록 설정
             created_at=datetime.now()
         )
         db.add(session)
@@ -1957,39 +1958,109 @@ async def save_backtest_as_portfolio(
 ):
     """
     백테스트 결과를 포트폴리오로 저장
-
-    TODO: 실제 포트폴리오 저장 로직 구현 필요
-    현재는 404 에러 방지를 위한 스텁 엔드포인트입니다.
-
-    구현 필요 사항:
-    - PortfolioStrategy 레코드 생성
-    - 백테스트 설정 및 통계 복사
-    - 사용자별 포트폴리오 관리
+    - SimulationSession의 is_portfolio 플래그를 True로 설정
+    - 포트폴리오 이름 저장
+    - 통계 정보 확인
     """
-    # 백테스트 세션 확인
-    session_query = select(SimulationSession).where(SimulationSession.session_id == backtest_id)
-    session_result = await db.execute(session_query)
-    session = session_result.scalar_one_or_none()
+    try:
+        # 1. 백테스트 세션 확인
+        session_query = select(SimulationSession).where(SimulationSession.session_id == backtest_id)
+        session_result = await db.execute(session_query)
+        session = session_result.scalar_one_or_none()
 
-    if not session:
-        raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
+        if not session:
+            raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
 
-    # 포트폴리오 이름 (optional, 프론트엔드에서 전달될 수 있음)
-    portfolio_name = request.get("name", f"백테스트_{backtest_id[:8]}")
+        # 2. 권한 확인 (옵셔널 - 로그인한 경우만)
+        if current_user and session.user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="이 백테스트를 저장할 권한이 없습니다"
+            )
 
-    # TODO: 실제 저장 로직 구현
-    # - PortfolioStrategy 생성
-    # - InvestmentStrategy 연결
-    # - 전략 설정 복사
-    # - 통계 정보 저장
+        # 3. 상태 확인 (완료된 백테스트만 저장 허용)
+        if session.status != "COMPLETED":
+            raise HTTPException(
+                status_code=400,
+                detail=f"백테스트 상태가 {session.status}입니다. 완료된 백테스트만 포트폴리오로 저장할 수 있습니다"
+            )
 
-    logger.info(f"포트폴리오 저장 요청 - backtest_id: {backtest_id}, name: {portfolio_name}")
+        # 4. 통계 정보 확인 (필수)
+        stats_query = select(SimulationStatistics).where(
+            SimulationStatistics.session_id == backtest_id
+        )
+        stats_result = await db.execute(stats_query)
+        statistics = stats_result.scalar_one_or_none()
 
-    return {
-        "success": True,
-        "message": "포트폴리오 저장 기능은 개발 중입니다. 향후 업데이트 예정입니다.",
-        "portfolio_id": None  # TODO: 실제 포트폴리오 ID 반환
-    }
+        if not statistics:
+            raise HTTPException(
+                status_code=400,
+                detail="백테스트 통계가 없어 포트폴리오로 저장할 수 없습니다"
+            )
+
+        # 5. 포트폴리오로 저장
+        portfolio_name = request.get("name", "")
+        if not portfolio_name:
+            # 기본 이름 생성
+            portfolio_name = f"{session.session_name or '백테스트'}_포트폴리오"
+
+        # is_portfolio 플래그 설정
+        session.is_portfolio = True
+        session.portfolio_name = portfolio_name
+        session.saved_at = func.now()
+
+        # 6. portfolio_strategies 테이블 업데이트 (포트폴리오 목록에 표시하기 위해)
+        # simulation_sessions는 이미 strategy_id를 가지고 있으므로,
+        # portfolio_strategies의 strategy_name만 업데이트
+        from app.models.simulation import PortfolioStrategy
+
+        if session.strategy_id:
+            strategy_query = select(PortfolioStrategy).where(
+                PortfolioStrategy.strategy_id == session.strategy_id
+            )
+            strategy_result = await db.execute(strategy_query)
+            strategy = strategy_result.scalar_one_or_none()
+
+            if strategy:
+                # 기존 전략의 이름을 포트폴리오 이름으로 업데이트
+                strategy.strategy_name = portfolio_name
+                strategy.updated_at = func.now()
+                logger.info(f"📊 portfolio_strategies 업데이트: {portfolio_name}")
+            else:
+                logger.warning(f"⚠️ strategy_id {session.strategy_id}에 해당하는 전략을 찾을 수 없습니다")
+
+        # 7. DB 커밋
+        await db.commit()
+
+        logger.info(f"✅ 포트폴리오 저장 완료 - ID: {backtest_id}, 이름: {portfolio_name}")
+
+        def _safe_float(value: Any, default: float = 0.0) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        return {
+            "success": True,
+            "message": "포트폴리오가 성공적으로 저장되었습니다",
+            "portfolio_id": session.session_id,
+            "portfolio_name": portfolio_name,
+            "statistics": {
+                "total_return": _safe_float(statistics.total_return),
+                "annualized_return": _safe_float(statistics.annualized_return),
+                "max_drawdown": _safe_float(statistics.max_drawdown)
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"포트폴리오 저장 실패: {e}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"포트폴리오 저장 중 오류가 발생했습니다: {str(e)}"
+        )
 
 
 @router.post("/cache/clear")

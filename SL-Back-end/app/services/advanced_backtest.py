@@ -394,6 +394,23 @@ async def _run_backtest_async(
 
             logger.info(f"✅ 백테스트 최종 통계 저장 완료 - 수익률: {final_return:.2f}%, 승률: {win_rate:.2f}%, 거래: {total_trades}건")
 
+            # 📡 WebSocket 완료 메시지 전송 (DB 저장 완료 후 전송하여 타이밍 이슈 해결)
+            from app.services.backtest_websocket import ws_manager
+            await ws_manager.send_completion(
+                backtest_id=str(session_id),
+                statistics={
+                    'final_value': float(final_capital),
+                    'total_return': float(final_return),
+                    'annualized_return': float(annualized_return),
+                    'max_drawdown': float(max_drawdown),
+                    'total_trades': total_trades,
+                    'win_rate': float(win_rate),
+                    'sharpe_ratio': float(sharpe_ratio)
+                },
+                summary=summary
+            )
+            logger.info(f"📡 WebSocket 완료 메시지 전송 완료 - session_id: {session_id}")
+
             # 🎯 랭킹 업데이트 (공개 전략인 경우)
             try:
                 from app.services.ranking_service import get_ranking_service
@@ -444,6 +461,36 @@ async def _run_backtest_async(
         except Exception as e:
             logger.error(f"백테스트 실행 중 오류: {e}", exc_info=True)
 
+            # 🔧 FAILED 상태에서도 기본 통계 저장 (0% 방지)
+            from app.models.simulation import SimulationStatistics
+            from sqlalchemy.dialects.postgresql import insert
+
+            # 기본 통계 데이터 생성 (실패했지만 초기값 저장)
+            default_stats = {
+                'session_id': session_id,
+                'total_return': 0.0,
+                'annualized_return': 0.0,
+                'max_drawdown': 0.0,
+                'volatility': 0.0,
+                'sharpe_ratio': 0.0,
+                'total_trades': 0,
+                'winning_trades': 0,
+                'losing_trades': 0,
+                'win_rate': 0.0,
+                'profit_factor': 0.0,
+                'final_capital': float(initial_capital),  # 초기 자본금 그대로
+                'initial_capital': float(initial_capital)
+            }
+
+            # SimulationStatistics 저장 (UPSERT)
+            stmt_stats = insert(SimulationStatistics).values(default_stats)
+            stmt_stats = stmt_stats.on_conflict_do_update(
+                index_elements=['session_id'],
+                set_=default_stats
+            )
+            await db.execute(stmt_stats)
+            logger.info(f"⚠️ FAILED 백테스트 기본 통계 저장 완료")
+
             # 세션 상태를 'FAILED'로 업데이트
             from app.models.simulation import SimulationSession
             from sqlalchemy import update
@@ -459,6 +506,17 @@ async def _run_backtest_async(
             )
             await db.execute(stmt)
             await db.commit()
+
+            # 📡 WebSocket 에러 메시지 전송 (실패 케이스)
+            try:
+                from app.services.backtest_websocket import ws_manager
+                await ws_manager.send_error(
+                    backtest_id=str(session_id),
+                    error_message=str(e)
+                )
+                logger.info(f"📡 WebSocket 에러 메시지 전송 완료 - session_id: {session_id}")
+            except Exception as ws_error:
+                logger.warning(f"WebSocket 에러 메시지 전송 실패 (무시): {ws_error}")
 
             # 🚀 Rate Limit 해제 (백테스트 실패 시에도)
             try:

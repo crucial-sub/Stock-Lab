@@ -214,6 +214,7 @@ class BacktestTrade(BaseModel):
     weight: float = Field(..., serialization_alias="weight")
     valuation: float = Field(..., serialization_alias="valuation")
     quantity: int = Field(..., serialization_alias="quantity")
+    reason: Optional[str] = Field(None, serialization_alias="reason")  # ✅ 매매 사유 추가
 
 
 class BacktestYieldPoint(BaseModel):
@@ -914,7 +915,8 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
                 sell_date=trade.trade_date.isoformat(),
                 weight=float(amount / initial_capital * 100) if initial_capital > 0 else 0,
                 valuation=int(amount),  # 소수점 제거
-                quantity=int(trade.quantity) if trade.quantity else 0
+                quantity=int(trade.quantity) if trade.quantity else 0,
+                reason=trade.selection_reason if trade.selection_reason else "매도"  # ✅ selection_reason 필드 사용
             ))
 
     # 일별 매수/매도 횟수 집계
@@ -1173,7 +1175,8 @@ async def get_backtest_result(
                 sell_date=trade.trade_date.isoformat(),
                 weight=float(amount / initial_capital * 100) if initial_capital > 0 else 0,
                 valuation=amount,
-                quantity=int(trade.quantity) if trade.quantity else 0
+                quantity=int(trade.quantity) if trade.quantity else 0,
+                reason=trade.reason if trade.reason else "매도"  # ✅ 매도 사유 추가
             ))
 
     yield_points = [

@@ -2953,7 +2953,7 @@ class BacktestEngine:
                             'realized_pnl': holding.realized_pnl,
                             'profit_rate': profit_rate,  # ✅ 수익률 추가
                             'hold_days': hold_days,  # ✅ 보유일수 추가
-                            'selection_reason': 'REBALANCE (next day open)',
+                            'selection_reason': '리밸런싱 (익일 시가)',
                         })
 
                         del holdings[stock_code]
@@ -3222,6 +3222,7 @@ class BacktestEngine:
                                 'session_id': str(backtest_id),
                                 'trade_date': execution['execution_date'].date() if hasattr(execution['execution_date'], 'date') else execution['execution_date'],
                                 'stock_code': execution['stock_code'],
+                                'stock_name': execution.get('stock_name'),  # 🔥 FIX: 종목명 추가
                                 'trade_type': execution['trade_type'],  # BUY or SELL
                                 'quantity': int(execution['quantity']),
                                 'price': float(execution['price']),
@@ -3229,7 +3230,9 @@ class BacktestEngine:
                                 'commission': float(execution['commission']),
                                 'tax': float(execution.get('tax', 0)),
                                 'realized_pnl': float(execution.get('realized_pnl', 0)) if execution.get('realized_pnl') else None,
-                                'return_pct': float(execution.get('return_pct', 0)) if execution.get('return_pct') else None,
+                                'return_pct': float(execution.get('profit_rate', 0)) if execution.get('profit_rate') else None,  # 🔥 FIX: return_pct → profit_rate
+                                'holding_days': execution.get('hold_days'),  # 🔥 FIX: 보유 기간 추가
+                                'reason': execution.get('selection_reason', 'Unknown'),  # 🔥 FIX: 매도 사유 추가
                             })
                             saved_execution_ids.add(exec_id)
 
@@ -3788,24 +3791,16 @@ class BacktestEngine:
                 # 1순위: 손절가 우선 체크 (저가 기준)
                 if stop_loss is not None and low_profit_rate <= -stop_loss:
                     should_sell = True
-                    # 손절가에 정확히 매도된 것으로 간주
-                    target_stop_price = holding.entry_price * (Decimal("1") - stop_loss / Decimal("100"))
-                    current_price = target_stop_price
-                    actual_loss_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
-                    sell_reason = f"Stop loss {actual_loss_rate:.2f}%"
+                    sell_reason = f"손절 (설정: -{stop_loss}%)"
                     sell_reason_key = "stop"
-                    # logger.debug(f"🛑 손절가 매도: {stock_code} | 저가: {low_profit_rate:.2f}% | 손절가 도달 -> {actual_loss_rate:.2f}%에 매도")
+                    # logger.debug(f"🛑 손절가 매도: {stock_code} | 저가: {low_profit_rate:.2f}% | 손절가 도달")
 
                 # 2순위: 목표가 체크 (고가 기준)
                 elif target_gain is not None and high_profit_rate >= target_gain:
                     should_sell = True
-                    # 목표가에 정확히 매도된 것으로 간주
-                    target_gain_price = holding.entry_price * (Decimal("1") + target_gain / Decimal("100"))
-                    current_price = target_gain_price
-                    actual_profit_rate = ((current_price / holding.entry_price) - Decimal("1")) * Decimal("100")
-                    sell_reason = f"Take profit {actual_profit_rate:.2f}%"
+                    sell_reason = f"목표가 도달 (설정: +{target_gain}%)"
                     sell_reason_key = "target"
-                    # logger.debug(f"🎯 목표가 매도: {stock_code} | 고가: {high_profit_rate:.2f}% | 목표가 도달 -> {actual_profit_rate:.2f}%에 매도")
+                    # logger.debug(f"🎯 목표가 매도: {stock_code} | 고가: {high_profit_rate:.2f}% | 목표가 도달")
 
             # 3순위: 최소 보유기간 체크 (손절가/목표가 미도달 시)
             # 최소 보유기간 미달이면 최대 보유일, 조건부 매도 등 다른 매도 불가
@@ -3815,7 +3810,7 @@ class BacktestEngine:
             # 4순위: 최대 보유일 체크
             if not should_sell and max_hold and hold_days_count >= max_hold:
                 should_sell = True
-                sell_reason = f"Max hold days reached ({hold_days_count}d)"
+                sell_reason = f"최대 보유기간 도달 ({hold_days_count}일)"
                 sell_reason_key = "hold"
 
             # 5순위: 조건부 매도
@@ -3825,7 +3820,7 @@ class BacktestEngine:
                         loss_rate = ((current_price / holding.entry_price) - 1) * 100
                         if loss_rate <= -float(condition.get('value', 10)):
                             should_sell = True
-                            sell_reason = f"Stop loss triggered: {loss_rate:.2f}%"
+                            sell_reason = f"손절 조건 충족: {loss_rate:.2f}%"
                             sell_reason_key = "stop"
                             break
 
@@ -3833,20 +3828,22 @@ class BacktestEngine:
                         profit_rate = ((current_price / holding.entry_price) - 1) * 100
                         if profit_rate >= float(condition.get('value', 20)):
                             should_sell = True
-                            sell_reason = f"Take profit triggered: {profit_rate:.2f}%"
+                            sell_reason = f"익절 조건 충족: {profit_rate:.2f}%"
                             sell_reason_key = "target"
                             break
 
                     elif condition.get('type') == 'HOLD_DAYS':
                         if hold_days_count >= int(condition.get('value', 30)):
                             should_sell = True
-                            sell_reason = f"Hold period exceeded: {hold_days_count} days"
+                            sell_reason = f"보유기간 초과: {hold_days_count}일"
                             sell_reason_key = "hold"
                             break
 
             if (not should_sell) and stock_code in condition_sell_stocks:
                 should_sell = True
-                sell_reason = "Condition sell triggered"
+                # 🔥 FIX: 조건부 매도 사유 상세화 (실제 조건식 포함)
+                condition_expr = condition_sell.get('expression', 'Unknown') if condition_sell else 'Unknown'
+                sell_reason = f"조건부 매도: {condition_expr}"
                 sell_reason_key = "condition"
 
             if should_sell:
@@ -3889,13 +3886,9 @@ class BacktestEngine:
                 # 매도 실행
                 quantity = holding.quantity
 
-                # 목표가/손절가는 이론상 정확한 가격 사용, 나머지는 익일 시가
-                if sell_reason_key in ["target", "stop"]:
-                    # 목표가/손절가는 current_price 사용 (이미 목표가/손절가로 계산됨)
-                    execution_price = current_price * (1 - self.slippage)
-                else:
-                    # 보유일, 조건부 매도 등은 익일 시가
-                    execution_price = next_day_price * (1 - self.slippage)
+                # 🔧 FIX: 모든 매도를 익일 시가로 통일 (현실적인 백테스트)
+                # D일 조건 충족 → D+1일 시가에 매도
+                execution_price = next_day_price * (1 - self.slippage)
 
                 amount = execution_price * quantity
                 commission = amount * self.commission_rate
@@ -3905,14 +3898,20 @@ class BacktestEngine:
                 profit = net_amount - cost_basis
                 if cost_basis > 0:
                     profit_rate = ((net_amount / cost_basis) - 1) * 100
+
+                    # 🔍 DEBUG: 비정상적인 수익률 검증 및 로깅
+                    if abs(profit_rate) > 100:  # 100% 이상 수익/손실은 확인 필요
+                        logger.warning(f"⚠️ 높은 수익률 감지: {stock_code}")
+                        logger.warning(f"   매수일: {holding.entry_date}, 매도일: {actual_sell_date}")
+                        logger.warning(f"   매수가: {holding.entry_price}, 매도가: {execution_price}")
+                        logger.warning(f"   수량: {quantity}, 수익률: {profit_rate:.2f}%")
+                        logger.warning(f"   cost_basis: {cost_basis}, net_amount: {net_amount}")
+                        logger.warning(f"   보유기간: {(actual_sell_date - (holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date)).days}일")
                 else:
                     profit_rate = 0
 
-                # 실제 체결일 결정 (date 타입으로 통일)
-                if sell_reason_key not in ["target", "stop"]:
-                    actual_sell_date = next_sell_date
-                else:
-                    actual_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+                # 실제 체결일 = 익일 (모든 매도 조건 통일)
+                actual_sell_date = next_sell_date
 
                 order = {
                     'order_id': f"ORD-S-{stock_code}-{trading_day}",
@@ -3926,6 +3925,12 @@ class BacktestEngine:
                     'reason': sell_reason
                 }
                 orders.append(order)
+
+                # 🔍 DEBUG: 매도 사유 로깅
+                if not sell_reason:
+                    logger.error(f"❌ sell_reason이 비어있음: {stock_code}")
+                else:
+                    logger.debug(f"✅ 매도 사유 저장: {stock_code} → {sell_reason}")
 
                 execution = {
                     'execution_id': f"EXE-S-{stock_code}-{actual_sell_date}",
@@ -4377,7 +4382,7 @@ class BacktestEngine:
                 'order_type': 'MARKET',
                 'quantity': quantity,
                 'status': 'FILLED',
-                'reason': "Factor-based selection (next day open)"
+                'reason': "팩터 기반 매수 (익일 시가)"
             }
             if orders is not None:
                 orders.append(order)
@@ -4398,7 +4403,7 @@ class BacktestEngine:
                 'tax': Decimal("0"),
                 'slippage': self.slippage,
                 'factors': trade_factors,
-                'selection_reason': "Factor-based selection (next day open)"
+                'selection_reason': "팩터 기반 매수 (익일 시가)"
             }
             if executions is not None:
                 executions.append(execution)

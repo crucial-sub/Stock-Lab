@@ -498,7 +498,7 @@ export function QuantResultPageClient({
           periodReturns={periodReturns}
         />
 
-        {/* 자동매매 섹션 */}
+        {/* 가상매매 섹션 */}
         <AutoTradingSection
           sessionId={backtestId}
           sessionStatus={backtestStatus || "completed"}

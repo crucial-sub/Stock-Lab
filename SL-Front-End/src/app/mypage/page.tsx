@@ -53,6 +53,7 @@ export default function MyPage() {
 
   // 금액 포맷팅 함수
   const formatAmount = (value: string | number): string => {
+    if (value === undefined || value === null) return "0";
     const num = typeof value === "string" ? parseInt(value, 10) : value;
     if (Number.isNaN(num)) return "0";
     return num.toLocaleString("ko-KR");
@@ -60,6 +61,7 @@ export default function MyPage() {
 
   // 퍼센트 포맷팅 함수
   const formatPercent = (value: string | number): string => {
+    if (value === undefined || value === null) return "0.00";
     const num = typeof value === "string" ? parseFloat(value) : value;
     if (Number.isNaN(num)) return "0.00";
     return num.toFixed(2);

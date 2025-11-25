@@ -78,7 +78,7 @@ const PortfolioCardComponent = ({
   // 수익률이 양수인지 판단
   const isPositive = profitRate >= 0;
 
-  // 자동매매 카드인지 판단
+  // 가상매매 카드인지 판단
   const isAutoTrading = id.startsWith("auto-");
 
   const handleRename = (event: MouseEvent) => {
@@ -179,11 +179,11 @@ const PortfolioCardComponent = ({
         {isAutoTrading ? (
           isActive ? (
             <span className="inline-block bg-green-500 font-semibold px-4 py-1 rounded-full text-white">
-              자동매매 중
+              가상매매 중
             </span>
           ) : (
             <span className="inline-block bg-gray-400 font-semibold px-4 py-1 rounded-full text-white">
-              자동매매 종료
+              가상매매 종료
             </span>
           )
         ) : isActive ? (

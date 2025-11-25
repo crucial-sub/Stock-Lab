@@ -22,12 +22,12 @@ export function AccountSection() {
       const response = await kiwoomApi.getAccountBalance();
       setAccountBalance(response.data);
 
-      // 자동매매 할당 금액 조회
+      // 가상매매 할당 금액 조회
       try {
         const dashboardData = await autoTradingApi.getPortfolioDashboard();
         setAllocatedCapital(Number((dashboardData as any).total_allocated_capital) || 0);
       } catch (err) {
-        console.warn("자동매매 할당 금액 조회 실패:", err);
+        console.warn("가상매매 할당 금액 조회 실패:", err);
       }
     } catch (err: unknown) {
       const errorMessage =
@@ -63,7 +63,7 @@ export function AccountSection() {
 
   const handleDisconnect = async () => {
     const confirmed = window.confirm(
-      "키움증권 연동을 해제하시겠습니까?\n\n해제 시 자동매매 기능을 사용할 수 없습니다.\n활성화된 자동매매 전략이 있다면 먼저 비활성화해주세요."
+      "키움증권 연동을 해제하시겠습니까?\n\n해제 시 가상매매 기능을 사용할 수 없습니다.\n활성화된 가상매매 전략이 있다면 먼저 비활성화해주세요."
     );
 
     if (!confirmed) return;
@@ -190,7 +190,7 @@ export function AccountSection() {
                         return val || 0;
                       };
 
-                      // 전체 평가액에서 자동매매 할당 금액 제외
+                      // 전체 평가액에서 가상매매 할당 금액 제외
                       const totalEval = parseValue(totEvltAmt) + parseValue(cashBalance);
                       return formatAmount(totalEval - allocatedCapital);
                     })()}

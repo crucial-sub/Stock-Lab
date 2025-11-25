@@ -389,13 +389,14 @@ export function BacktestExecutionRenderer({
       if (totalDays >= 180) {
         periods.push({ label: "최근 6개월", value: latestReturn - getReturnAtDate(180) });
       }
-      if (totalDays >= 365) {
+      if (totalDays >= 350) {
+        // 350일 이상이면 "최근 1년" 표시 (거래일 기준으로 약간의 여유 허용)
         periods.push({ label: "최근 1년", value: latestReturn - getReturnAtDate(365) });
       }
-      if (totalDays >= 730) {
+      if (totalDays >= 700) {
         periods.push({ label: "최근 2년", value: latestReturn - getReturnAtDate(730) });
       }
-      if (totalDays >= 1095) {
+      if (totalDays >= 1050) {
         periods.push({ label: "최근 3년", value: latestReturn - getReturnAtDate(1095) });
       }
 

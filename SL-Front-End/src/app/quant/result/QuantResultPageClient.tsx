@@ -454,14 +454,64 @@ export function QuantResultPageClient({
       return closestPoint?.cumulativeReturn || 0;
     };
 
-    return [
-      { label: "최근 거래일", value: latestReturn },
-      { label: "최근 일주일", value: latestReturn - getReturnAtDate(7) },
-      { label: "최근 1개월", value: latestReturn - getReturnAtDate(30) },
-      { label: "최근 3개월", value: latestReturn - getReturnAtDate(90) },
-      { label: "최근 6개월", value: latestReturn - getReturnAtDate(180) },
-      { label: "최근 1년", value: latestReturn - getReturnAtDate(365) },
-    ];
+    // 백테스트 총 기간 계산 (첫 날짜 ~ 마지막 날짜)
+    const firstPoint = sortedPoints[0];
+    const firstDate = new Date(firstPoint.date);
+    const totalDays = Math.floor(
+      (latestDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    const periods = [];
+
+    // 최근 거래일은 항상 표시
+    periods.push({ label: "최근 거래일", value: latestReturn });
+
+    // 백테스트 기간에 따라 동적으로 표시할 기간 결정
+    if (totalDays >= 7) {
+      periods.push({
+        label: "최근 일주일",
+        value: latestReturn - getReturnAtDate(7),
+      });
+    }
+    if (totalDays >= 30) {
+      periods.push({
+        label: "최근 1개월",
+        value: latestReturn - getReturnAtDate(30),
+      });
+    }
+    if (totalDays >= 90) {
+      periods.push({
+        label: "최근 3개월",
+        value: latestReturn - getReturnAtDate(90),
+      });
+    }
+    if (totalDays >= 180) {
+      periods.push({
+        label: "최근 6개월",
+        value: latestReturn - getReturnAtDate(180),
+      });
+    }
+    if (totalDays >= 350) {
+      // 350일 이상이면 "최근 1년" 표시 (거래일 기준으로 약간의 여유 허용)
+      periods.push({
+        label: "최근 1년",
+        value: latestReturn - getReturnAtDate(365),
+      });
+    }
+    if (totalDays >= 700) {
+      periods.push({
+        label: "최근 2년",
+        value: latestReturn - getReturnAtDate(730),
+      });
+    }
+    if (totalDays >= 1050) {
+      periods.push({
+        label: "최근 3년",
+        value: latestReturn - getReturnAtDate(1095),
+      });
+    }
+
+    return periods;
   };
 
   const periodReturns = calculatePeriodReturns();

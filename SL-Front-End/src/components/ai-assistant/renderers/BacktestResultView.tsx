@@ -220,7 +220,7 @@ export function BacktestResultView({
 
         {/* 5. 포트폴리오 저장 버튼 */}
         <section className="flex justify-center pt-4 border-t border-gray-200">
-          <SavePortfolioButton backtestId={backtestId} strategyName={strategyName} />
+          <SavePortfolioButton backtestId={backtestId} strategyName={strategyName} userName={userName} />
         </section>
       </div>
     </>

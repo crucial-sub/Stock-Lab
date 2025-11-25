@@ -1137,6 +1137,13 @@ class BacktestEngine:
                 if priority_factor != "없음":
                     required_factors.add(priority_factor.upper())
 
+        # PEG 계산에 필요한 의존성 팩터 자동 추가
+        # PEG = PER / EARNINGS_GROWTH_1Y 이므로 두 팩터가 모두 필요
+        if 'PEG' in required_factors:
+            required_factors.add('PER')
+            required_factors.add('EARNINGS_GROWTH_1Y')
+            logger.info("PEG 팩터 의존성 추가: PER, EARNINGS_GROWTH_1Y")
+
         logger.info(f"필요한 팩터: {required_factors}")
         return required_factors
 
@@ -1218,6 +1225,18 @@ class BacktestEngine:
                         self._merge_factor_maps(stock_factor_map, filtered_growth_map)
                     except Exception as e:
                         logger.error(f"성장성 팩터 에러 ({calc_date}): {e}")
+
+                # PEG 계산: PER / EARNINGS_GROWTH_1Y (두 팩터가 계산된 후에 수행)
+                if 'PEG' in required_factors:
+                    try:
+                        for stock in stock_factor_map:
+                            per = stock_factor_map[stock].get('PER')
+                            earnings_growth = stock_factor_map[stock].get('EARNINGS_GROWTH_1Y')
+                            # PER이 양수이고 성장률이 양수일 때만 PEG 계산
+                            if per is not None and earnings_growth is not None and per > 0 and earnings_growth > 0:
+                                stock_factor_map[stock]['PEG'] = per / earnings_growth
+                    except Exception as e:
+                        logger.error(f"PEG 팩터 에러 ({calc_date}): {e}")
 
             if any(f.startswith('MOMENTUM') for f in required_factors):
                 try:
@@ -1383,6 +1402,18 @@ class BacktestEngine:
                         self._merge_factor_maps(stock_factor_map, filtered_growth_map)
                     except Exception as e:
                         logger.error(f"성장성 팩터 계산 에러 ({calc_date}): {e}")
+
+                # PEG 계산: PER / EARNINGS_GROWTH_1Y (두 팩터가 계산된 후에 수행)
+                if 'PEG' in required_factors:
+                    try:
+                        for stock in stock_factor_map:
+                            per = stock_factor_map[stock].get('PER')
+                            earnings_growth = stock_factor_map[stock].get('EARNINGS_GROWTH_1Y')
+                            # PER이 양수이고 성장률이 양수일 때만 PEG 계산
+                            if per is not None and earnings_growth is not None and per > 0 and earnings_growth > 0:
+                                stock_factor_map[stock]['PEG'] = per / earnings_growth
+                    except Exception as e:
+                        logger.error(f"PEG 팩터 계산 에러 ({calc_date}): {e}")
 
             # 모멘텀 팩터
             if any(f.startswith('MOMENTUM') for f in required_factors):
@@ -3630,7 +3661,7 @@ class BacktestEngine:
 - **총 거래 횟수**: {total_trades}회
 - **시뮬레이션 소요 시간**: {simulation_time:.2f}초
 
-#### 💡 종합 평가
+#### 💡 AI 종합 평가
 """
 
         # 수익률 평가

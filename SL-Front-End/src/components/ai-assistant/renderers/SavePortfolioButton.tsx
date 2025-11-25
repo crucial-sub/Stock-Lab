@@ -23,6 +23,32 @@ interface SavePortfolioButtonProps {
   backtestId: string;
   /** 전략명 (포트폴리오 이름으로 사용) */
   strategyName?: string;
+  /** 사용자명 */
+  userName?: string;
+}
+
+/**
+ * 전략명 축약 함수
+ * "캐시 우드의 전략" -> "캐시우드"
+ * "피터린치의 전략" -> "피터린치"
+ */
+function abbreviateStrategyName(name: string): string {
+  return name
+    .replace(/의\s*전략$/g, "") // "의 전략" 제거
+    .replace(/\s+/g, ""); // 공백 제거
+}
+
+/**
+ * 포트폴리오 이름 생성 함수
+ * 형식: {userName}_{전략명 축약}_{MMDD}
+ * 예: 박중섭_캐시우드_1125
+ */
+function generatePortfolioName(userName: string, strategyName: string): string {
+  const abbreviatedName = abbreviateStrategyName(strategyName);
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${userName}_${abbreviatedName}_${month}${day}`;
 }
 
 /**
@@ -39,7 +65,7 @@ interface SavePortfolioButtonProps {
  * }
  * ```
  */
-export function SavePortfolioButton({ backtestId, strategyName }: SavePortfolioButtonProps) {
+export function SavePortfolioButton({ backtestId, strategyName, userName }: SavePortfolioButtonProps) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,11 +79,14 @@ export function SavePortfolioButton({ backtestId, strategyName }: SavePortfolioB
       setError(null);
       setSuccess(false);
 
-      // 포트폴리오 이름 생성: 전략명 기반
-      // 예: "피터린치 전략" -> "피터린치 전략 포트폴리오"
-      const portfolioName = strategyName
-        ? `${strategyName} 포트폴리오`
-        : undefined;
+      // 포트폴리오 이름 생성: {userName}_{전략명 축약}_{MMDD}
+      // 예: "박중섭_캐시우드_1125"
+      const portfolioName =
+        userName && strategyName
+          ? generatePortfolioName(userName, strategyName)
+          : strategyName
+            ? abbreviateStrategyName(strategyName)
+            : undefined;
 
       // API 호출 (포트폴리오 이름 전달)
       const response = await savePortfolio(backtestId, portfolioName);

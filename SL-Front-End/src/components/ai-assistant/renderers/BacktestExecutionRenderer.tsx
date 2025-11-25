@@ -104,6 +104,11 @@ export function BacktestExecutionRenderer({
       isCompleted,
     });
 
+    if (backtestStatus === "failed") {
+      setPhase("error");
+      return;
+    }
+
     // 시간 추적 시작
     if (!startTimeRef.current && backtestStatus !== "error" && backtestStatus !== "failed") {
       startTimeRef.current = Date.now();

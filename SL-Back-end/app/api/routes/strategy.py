@@ -86,16 +86,22 @@ async def get_my_strategies(
         user_id = current_user.user_id
         offset = (page - 1) * limit
 
-        # 1. 전체 개수 조회
+        # 1. 전체 개수 조회 (포트폴리오로 저장된 것만)
         count_query = (
             select(func.count())
             .select_from(SimulationSession)
-            .where(SimulationSession.user_id == user_id)
+            .where(
+                and_(
+                    SimulationSession.user_id == user_id,
+                    SimulationSession.is_portfolio == True
+                )
+            )
         )
         total_result = await db.execute(count_query)
         total = total_result.scalar()
 
         # 2. 사용자의 시뮬레이션 세션 조회 (페이지네이션 적용)
+        # 포트폴리오로 저장된 것만 조회
         sessions_query = (
             select(SimulationSession, PortfolioStrategy, SimulationStatistics)
             .join(
@@ -106,8 +112,13 @@ async def get_my_strategies(
                 SimulationStatistics,
                 SimulationStatistics.session_id == SimulationSession.session_id
             )
-            .where(SimulationSession.user_id == user_id)
-            .order_by(SimulationSession.created_at.desc())
+            .where(
+                and_(
+                    SimulationSession.user_id == user_id,
+                    SimulationSession.is_portfolio == True  # 포트폴리오로 저장된 것만
+                )
+            )
+            .order_by(SimulationSession.saved_at.desc())  # saved_at 기준으로 정렬
             .offset(offset)
             .limit(limit)
         )

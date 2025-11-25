@@ -12,6 +12,7 @@
 "use client";
 
 import { savePortfolio } from "@/lib/api/backtest";
+import { AxiosError } from "axios";
 import { useState } from "react";
 
 /**
@@ -20,6 +21,8 @@ import { useState } from "react";
 interface SavePortfolioButtonProps {
   /** 백테스트 ID */
   backtestId: string;
+  /** 전략명 (포트폴리오 이름으로 사용) */
+  strategyName?: string;
 }
 
 /**
@@ -36,7 +39,7 @@ interface SavePortfolioButtonProps {
  * }
  * ```
  */
-export function SavePortfolioButton({ backtestId }: SavePortfolioButtonProps) {
+export function SavePortfolioButton({ backtestId, strategyName }: SavePortfolioButtonProps) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +53,14 @@ export function SavePortfolioButton({ backtestId }: SavePortfolioButtonProps) {
       setError(null);
       setSuccess(false);
 
-      // API 호출
-      const response = await savePortfolio(backtestId);
+      // 포트폴리오 이름 생성: 전략명 기반
+      // 예: "피터린치 전략" -> "피터린치 전략 포트폴리오"
+      const portfolioName = strategyName
+        ? `${strategyName} 포트폴리오`
+        : undefined;
+
+      // API 호출 (포트폴리오 이름 전달)
+      const response = await savePortfolio(backtestId, portfolioName);
 
       // 성공 처리
       setSuccess(true);
@@ -63,10 +72,16 @@ export function SavePortfolioButton({ backtestId }: SavePortfolioButtonProps) {
       }, 3000);
     } catch (err) {
       // 에러 처리
+      const axiosError = err as AxiosError<any>;
+      const detail =
+        axiosError.response?.data?.detail ||
+        axiosError.response?.data?.message ||
+        axiosError.message;
       const errorMessage =
-        err instanceof Error
+        detail ||
+        (err instanceof Error
           ? err.message
-          : "포트폴리오 저장 중 오류가 발생했습니다.";
+          : "포트폴리오 저장 중 오류가 발생했습니다.");
       setError(errorMessage);
       console.error("[SavePortfolioButton] 저장 실패:", err);
     } finally {

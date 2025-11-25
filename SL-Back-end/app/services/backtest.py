@@ -512,8 +512,10 @@ class BacktestEngine:
                 }
             )
 
-            # 7. 결과 저장 (이미 시뮬레이션 중에 bulk insert 완료)
-            await self._save_result(backtest_id, result)
+            # 7. 결과 저장 - 비활성화
+            # _save_result는 구 시스템(BacktestSession)에 저장하려고 함
+            # 현재는 SimulationSession을 사용하므로 불필요 (이미 3340-3353줄에서 저장)
+            # await self._save_result(backtest_id, result)
 
             # 🚀 성능 측정 종료
             backtest_elapsed = time.time() - backtest_start_time
@@ -3304,19 +3306,71 @@ class BacktestEngine:
             daily_snapshots=daily_snapshots
         )
 
-        await ws_manager.send_completion(
-            backtest_id=str(backtest_id),
-            statistics={
-                'final_value': float(final_portfolio_value),
-                'total_return': float(final_return),
-                'annualized_return': float(cagr),
-                'daily_avg_return': float(daily_avg_return),
-                'max_drawdown': float(current_mdd),
-                'total_trades': total_sell_trades,
-                'simulation_time': bulk_insert_elapsed
-            },
-            summary=summary
-        )
+        # 📊 SimulationStatistics DB 저장 (WebSocket 전송 전에 저장)
+        from app.models.simulation import SimulationStatistics, SimulationSession
+        from sqlalchemy import delete, update
+
+        try:
+            # 기존 통계 삭제 (중복 방지)
+            await self.db.execute(delete(SimulationStatistics).where(
+                SimulationStatistics.session_id == str(backtest_id)
+            ))
+
+            # 새로운 통계 저장
+            simulation_stats = SimulationStatistics(
+                session_id=str(backtest_id),
+                total_return=float(final_return),
+                annualized_return=float(cagr),  # CAGR 저장
+                benchmark_return=None,  # 벤치마크는 나중에 구현
+                excess_return=None,
+                max_drawdown=float(current_mdd),
+                win_rate=50.0,  # TODO: 실제 승률 계산
+                sharpe_ratio=0.0,  # TODO: 샤프 비율 계산
+                # avg_daily_return 필드는 SimulationStatistics 모델에 없음 (제거)
+                volatility=0.0,  # TODO: 변동성 계산
+                total_trades=total_sell_trades,
+                winning_trades=total_sell_trades // 2,  # TODO: 실제 승리 거래 수 계산
+                losing_trades=total_sell_trades // 2,   # TODO: 실제 패배 거래 수 계산
+                avg_profit=0.0,  # TODO: 평균 수익 계산
+                avg_loss=0.0,    # TODO: 평균 손실 계산
+                final_capital=float(final_portfolio_value),
+                total_commission=None,
+                total_tax=None
+            )
+            self.db.add(simulation_stats)
+
+            # 세션 상태를 COMPLETED로 업데이트
+            from sqlalchemy.sql import func
+            await self.db.execute(
+                update(SimulationSession)
+                .where(SimulationSession.session_id == str(backtest_id))
+                .values(
+                    status='COMPLETED',
+                    completed_at=func.now()
+                )
+            )
+
+            # DB 커밋
+            await self.db.commit()
+            logger.info(f"✅ SimulationStatistics 저장 완료 - session_id: {backtest_id}")
+
+        except Exception as e:
+            logger.error(f"❌ SimulationStatistics 저장 실패: {e}")
+            await self.db.rollback()
+
+        # 📡 WebSocket 완료 메시지 전송은 advanced_backtest.py에서 DB 저장 완료 후 전송
+        # (타이밍 이슈 해결: DB 저장 완료 전에 프론트엔드가 결과 페이지로 이동하는 문제 방지)
+        # WebSocket 전송에 필요한 데이터를 반환값에 포함
+        websocket_data = {
+            'final_value': float(final_portfolio_value),
+            'total_return': float(final_return),
+            'annualized_return': float(cagr),
+            'daily_avg_return': float(daily_avg_return),
+            'max_drawdown': float(current_mdd),
+            'total_trades': total_sell_trades,
+            'simulation_time': bulk_insert_elapsed,
+            'summary': summary
+        }
 
         return {
             'trades': [execution for execution in executions if execution['side'] == 'SELL'],
@@ -3326,7 +3380,8 @@ class BacktestEngine:
             'final_holdings': holdings,
             'final_cash': cash_balance,
             'rebalance_dates': rebalance_dates,
-            'position_history': position_history
+            'position_history': position_history,
+            'websocket_data': websocket_data  # WebSocket 전송용 데이터 (advanced_backtest.py에서 사용)
         }
 
     def _generate_backtest_summary(
@@ -5396,11 +5451,14 @@ class BacktestEngine:
                     'description': sell_condition.description or ''
                 })
 
-            if conditions_data:
-                await self.db.execute(
-                    BacktestConditionModel.__table__.insert(),
-                    conditions_data
-                )
+            # 🔧 Foreign Key 문제로 임시 비활성화
+            # backtest_conditions 테이블이 backtest_sessions를 참조하는데
+            # 우리는 simulation_sessions를 사용하므로 FK 위반 발생
+            # if conditions_data:
+            #     await self.db.execute(
+            #         BacktestConditionModel.__table__.insert(),
+            #         conditions_data
+            #     )
 
             # 3. 통계 저장 - BacktestStatistics (기존)
             stats = result.statistics

@@ -7,10 +7,13 @@
  * - 일관된 상태 관리 인터페이스 제공
  */
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBacktestWebSocket } from "./useBacktestWebSocket";
-import { backtestQueryKey } from "./useBacktestQuery";
+import {
+  backtestQueryKey,
+  useBacktestStatusQuery,
+} from "./useBacktestQuery";
 import type { ChartDataPoint } from "./useBacktestWebSocket";
 
 /**
@@ -81,6 +84,13 @@ export function useBacktestStatus(
 ): UseBacktestStatusReturn {
   const queryClient = useQueryClient();
 
+  // API 상태 단발 조회 (WebSocket 연결 실패/완료된 세션 접속 시 폴백)
+  const { data: apiStatus } = useBacktestStatusQuery(
+    backtestId ?? "",
+    enabled && !!backtestId,
+    false, // WebSocket 사용 시 폴링 비활성화
+  );
+
   // WebSocket 연결 및 실시간 데이터 수신
   const {
     isConnected,
@@ -92,71 +102,106 @@ export function useBacktestStatus(
     summary,
   } = useBacktestWebSocket(backtestId, enabled);
 
+  // API에서 받은 차트/진행률 폴백 데이터
+  const fallbackChartData: ChartDataPoint[] = useMemo(() => {
+    if (!apiStatus?.yieldPoints) return [];
+    return apiStatus.yieldPoints.map((point) => ({
+      date: point.date,
+      portfolioValue: point.portfolioValue ?? point.value ?? 0,
+      cumulativeReturn: point.cumulativeReturn ?? point.value ?? 0,
+      dailyReturn: point.dailyReturn ?? 0,
+      currentMdd: point.currentMdd ?? 0,
+      buyCount: point.buyCount ?? 0,
+      sellCount: point.sellCount ?? 0,
+    }));
+  }, [apiStatus?.yieldPoints]);
+
+  const mergedChartData = chartData.length > 0 ? chartData : fallbackChartData;
+
+  const apiCompleted = apiStatus?.status === "completed";
+  const apiFailed = apiStatus?.status === "failed";
+
+  // 진행률 계산 (WebSocket > API > 기본값)
+  const mergedProgress =
+    wsProgress > 0 ? wsProgress : apiStatus?.progress ?? 0;
+
   // 백테스트 상태 계산
-  const status: BacktestStatusType = wsError
+  const status: BacktestStatusType = apiFailed
+    ? "failed"
+    : wsError && !apiCompleted
     ? "error"
-    : wsIsCompleted
+    : wsIsCompleted || apiCompleted
     ? "completed"
-    : wsProgress > 0
+    : mergedProgress > 0 || apiStatus?.status === "running"
     ? "running"
     : "pending";
 
-  // WebSocket 데이터에서 현재 값들 계산
-  const latestData = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+  const mergedError =
+    status === "failed"
+      ? apiStatus?.errorMessage || "백테스트 실행에 실패했습니다."
+      : status === "error"
+      ? wsError
+      : null;
 
-  const currentReturn = latestData?.cumulativeReturn;
-  const currentCapital = latestData?.portfolioValue;
-  const currentDate = latestData?.date;
-  const currentMdd = latestData?.currentMdd;
-  const buyCount = latestData?.buyCount;
-  const sellCount = latestData?.sellCount;
+  const mergedIsCompleted = wsIsCompleted || apiCompleted;
+
+  // WebSocket 데이터에서 현재 값들 계산
+  const latestData = mergedChartData.length > 0 ? mergedChartData[mergedChartData.length - 1] : null;
+
+  const currentReturn = latestData?.cumulativeReturn ?? apiStatus?.currentReturn;
+  const currentCapital = latestData?.portfolioValue ?? apiStatus?.currentCapital;
+  const currentDate = latestData?.date ?? apiStatus?.currentDate;
+  const currentMdd = latestData?.currentMdd ?? apiStatus?.currentMdd;
+  const buyCount = latestData?.buyCount ?? apiStatus?.buyCount;
+  const sellCount = latestData?.sellCount ?? apiStatus?.sellCount;
 
   // WebSocket 데이터를 React Query 캐시에 동기화
   // 다른 컴포넌트에서 캐시된 데이터를 활용할 수 있도록
   useEffect(() => {
-    if (!backtestId || !isConnected) return;
+    if (!backtestId || (!isConnected && !apiStatus)) return;
 
     // 상태 데이터를 캐시에 저장
     queryClient.setQueryData(
       backtestQueryKey.status(backtestId),
       {
         status,
-        progress: wsProgress,
-        chartData,
+        progress: mergedProgress,
+        chartData: mergedChartData,
         currentReturn,
         currentCapital,
         currentDate,
         currentMdd,
         buyCount,
         sellCount,
-        isCompleted: wsIsCompleted,
-        error: wsError,
+        isCompleted: mergedIsCompleted,
+        error: mergedError,
       }
     );
   }, [
     backtestId,
     isConnected,
     status,
-    wsProgress,
-    chartData,
+    mergedProgress,
+    mergedChartData,
     currentReturn,
     currentCapital,
     currentDate,
     currentMdd,
     buyCount,
     sellCount,
-    wsIsCompleted,
-    wsError,
+    mergedIsCompleted,
+    mergedError,
+    apiStatus,
     queryClient,
   ]);
 
   return {
     status,
-    progress: wsProgress,
-    chartData,
+    progress: mergedProgress,
+    chartData: mergedChartData,
     isConnected,
-    isCompleted: wsIsCompleted,
-    error: wsError,
+    isCompleted: mergedIsCompleted,
+    error: mergedError,
     statistics,
     summary,
     currentReturn,

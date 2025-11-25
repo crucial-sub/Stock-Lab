@@ -89,13 +89,9 @@ export function PortfolioPageClient({
 
     // PENDING 상태 - 백테스트 설정 화면으로 이동
     if (portfolio.status === "PENDING") {
-      if (portfolio.sourceSessionId) {
-        // 복제된 전략 - 조건 자동 채움
-        router.push(`/quant/new?clone=${portfolio.sourceSessionId}`);
-      } else {
-        // 새로 만든 전략 - 빈 화면 (현재는 사용 안함)
-        router.push(`/quant/new`);
-      }
+      // 복제된 전략이든 새 전략이든 현재 세션 ID 사용
+      // (복제 시 새 세션에 원본 조건이 모두 복사되어 있음)
+      router.push(`/quant/new?clone=${portfolio.id}`);
       return;
     }
 

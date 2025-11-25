@@ -216,7 +216,9 @@ export function useBacktestWebSocket(
           readyState: ws.readyState,
           url,
         });
-        setError("WebSocket 연결 오류 - 초기 데이터로 표시됩니다");
+        // 저장된 포트폴리오나 완료된 백테스트의 경우 WebSocket 연결 실패가 정상이므로
+        // 에러 메시지를 표시하지 않음 (API 폴백 사용)
+        // setError("WebSocket 연결 오류 - 초기 데이터로 표시됩니다");
         setIsConnected(false);
       };
 

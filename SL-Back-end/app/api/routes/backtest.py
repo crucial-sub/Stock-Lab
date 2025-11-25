@@ -338,26 +338,89 @@ async def run_backtest(
 
         # 🚀 벡터화 평가 지원: 유명 전략 사용 시 DB에서 expression과 conditions 로드
         loaded_strategy_config = None
-        if request.strategy_name and request.strategy_name in ['peter_lynch', 'warren_buffett', 'benjamin_graham']:
+        if request.strategy_name:
             from sqlalchemy import text
-            logger.info(f"🎯 유명 전략 감지: {request.strategy_name}")
+            logger.info(f"🎯 전략 감지: {request.strategy_name}")
 
+            # id 또는 name으로 조회 (한글/영문 모두 지원)
             result = await db.execute(
-                text('SELECT backtest_config FROM investment_strategies WHERE id = :id'),
-                {'id': request.strategy_name}
+                text('SELECT backtest_config FROM investment_strategies WHERE id = :id OR name = :name'),
+                {'id': request.strategy_name, 'name': request.strategy_name}
             )
             config = result.scalar_one_or_none()
 
-            if config and 'expression' in config and 'conditions' in config:
-                loaded_strategy_config = {
-                    'expression': config['expression'],
-                    'conditions': config['conditions'],
-                    'priority_factor': config.get('priority_factor', request.priority_factor),
-                    'priority_order': config.get('priority_order', request.priority_order)
-                }
-                logger.info(f"✅ 벡터화 설정 로드: expression={loaded_strategy_config['expression']}, conditions={len(loaded_strategy_config['conditions'])}개")
+            if config:
+                # Case 1: expression과 conditions가 이미 있는 경우 (peter_lynch 형식)
+                if 'expression' in config and 'conditions' in config:
+                    loaded_strategy_config = {
+                        'expression': config['expression'],
+                        'conditions': config['conditions'],
+                        'priority_factor': config.get('priority_factor', request.priority_factor),
+                        'priority_order': config.get('priority_order', request.priority_order)
+                    }
+                    logger.info(f"✅ 벡터화 설정 로드: expression={loaded_strategy_config['expression']}, conditions={len(loaded_strategy_config['conditions'])}개")
+
+                # Case 2: buy_conditions만 있는 경우 → 자동 변환
+                elif 'buy_conditions' in config and config['buy_conditions']:
+                    logger.info(f"🔄 buy_conditions → conditions 자동 변환 시작")
+
+                    def convert_buy_conditions(buy_conditions: list) -> tuple:
+                        """
+                        buy_conditions 형식을 벡터화 평가용 conditions로 변환
+
+                        입력 형식 (warren_buffett 등):
+                        {"name": "A", "inequality": ">", "exp_left_side": "기본값({ROE})", "exp_right_side": 12}
+
+                        출력 형식 (peter_lynch):
+                        {"id": "A", "factor": "ROE", "operator": ">", "value": 12}
+                        """
+                        import re
+                        conditions = []
+                        condition_ids = []
+
+                        for bc in buy_conditions:
+                            # 팩터 추출: "기본값({ROE})" → "ROE"
+                            exp_left = bc.get('exp_left_side', '')
+                            factor_match = re.search(r'\{([A-Z_0-9]+)\}', exp_left)
+                            if not factor_match:
+                                logger.warning(f"⚠️ 팩터 추출 실패: {exp_left}")
+                                continue
+
+                            factor = factor_match.group(1)
+                            condition_id = bc.get('name', f'C{len(conditions)}')
+                            operator = bc.get('inequality', '>')
+                            value = bc.get('exp_right_side', 0)
+
+                            conditions.append({
+                                'id': condition_id,
+                                'factor': factor,
+                                'operator': operator,
+                                'value': value
+                            })
+                            condition_ids.append(condition_id)
+
+                        # expression 생성: buy_logic에 따라 and/or 연결
+                        buy_logic = config.get('buy_logic', 'and')
+                        expression = f' {buy_logic} '.join(condition_ids)
+
+                        return expression, conditions
+
+                    expression, conditions = convert_buy_conditions(config['buy_conditions'])
+
+                    if conditions:
+                        loaded_strategy_config = {
+                            'expression': expression,
+                            'conditions': conditions,
+                            'priority_factor': config.get('priority_factor', request.priority_factor),
+                            'priority_order': config.get('priority_order', request.priority_order)
+                        }
+                        logger.info(f"✅ 자동 변환 완료: expression={expression}, conditions={len(conditions)}개")
+                    else:
+                        logger.warning(f"⚠️ 전략 '{request.strategy_name}' buy_conditions 변환 실패")
+                else:
+                    logger.warning(f"⚠️ 전략 '{request.strategy_name}' 설정에 expression/conditions/buy_conditions 없음")
             else:
-                logger.warning(f"⚠️ 전략 '{request.strategy_name}' 설정에 expression/conditions 없음")
+                logger.warning(f"⚠️ 전략 '{request.strategy_name}'을 DB에서 찾을 수 없음")
 
         # 1. 세션 ID 생성
         session_id = str(uuid.uuid4())

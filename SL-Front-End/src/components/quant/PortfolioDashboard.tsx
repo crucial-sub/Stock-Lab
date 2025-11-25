@@ -27,9 +27,9 @@ export function PortfolioDashboard({
   evaluationAmount,
   activePortfolioCount,
 }: PortfolioDashboardProps) {
-  // 숫자를 천 단위 콤마로 포맷팅
+  // 숫자를 천 단위 콤마로 포맷팅 (원화는 정수로 표시)
   const formatNumber = (num: number) => {
-    return new Intl.NumberFormat("ko-KR").format(num);
+    return new Intl.NumberFormat("ko-KR").format(Math.round(num));
   };
 
   // 수익률 포맷팅 (+/- 부호 포함)

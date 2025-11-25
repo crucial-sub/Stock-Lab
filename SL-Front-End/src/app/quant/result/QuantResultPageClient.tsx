@@ -27,14 +27,14 @@ import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import {
   useBacktestResultQuery,
   useBacktestSettingsQuery,
-  useBacktestStatusQuery,
   backtestQueryKey,
 } from "@/hooks/useBacktestQuery";
+import { useBacktestStatus } from "@/hooks/useBacktestStatus";
 import { mockBacktestResult } from "@/mocks/backtestResult";
 import { strategyApi } from "@/lib/api/strategy";
 import { communityApi } from "@/lib/api/community";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 
@@ -58,34 +58,55 @@ export function QuantResultPageClient({
   const [editInputValue, setEditInputValue] = useState("");
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const queryClient = useQueryClient();
-  const previousStatusRef = useRef<string | undefined>(undefined);
   const router = useRouter();
+
+  // 시간 추적을 위한 상태
+  const startTimeRef = useRef<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const tickingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Mock 모드 체크
   const isMockMode = backtestId.startsWith("mock");
 
-  // 백테스트 상태 폴링 (pending/running 상태일 때만)
-  const { data: statusData } = useBacktestStatusQuery(
-    backtestId,
-    !isMockMode, // mock 모드가 아닐 때만 활성화
-    2000, // 2초마다 폴링
+  // 🚀 통합 백테스트 상태 훅 사용 (WebSocket 기반 실시간 업데이트)
+  // Mock 모드가 아닌 경우에만 WebSocket 연결 (포트폴리오 결과도 상태 확인 필요)
+  const {
+    status: backtestStatus,
+    progress,
+    chartData,
+    isCompleted,
+    error: wsError,
+    currentReturn,
+    currentCapital,
+    currentDate,
+    currentMdd,
+    buyCount,
+    sellCount,
+  } = useBacktestStatus(
+    isMockMode ? null : backtestId,
+    !isMockMode
   );
 
-  // React Query로 백테스트 결과 조회 (completed 상태일 때만)
+  // React Query로 백테스트 결과 조회
+  // WebSocket으로 완료되지 않더라도 API 호출하여 저장된 포트폴리오 결과 표시
   const {
     data: result,
     isLoading,
     error,
   } = useBacktestResultQuery(
     backtestId,
-    !isMockMode && statusData?.status === "completed",
+    !isMockMode, // isCompleted 조건 제거 - 항상 API 호출
   );
+
+  // API 응답에서 완료 상태 확인 (WebSocket 완료 또는 API에서 completed/failed 상태)
+  const isApiCompleted = result?.status === "completed" || result?.status === "failed";
+  const isActuallyCompleted = isCompleted || isApiCompleted;
 
   // 백테스트 설정 조회
   const { data: settings, isLoading: isLoadingSettings } =
     useBacktestSettingsQuery(
       backtestId,
-      !isMockMode && statusData?.status === "completed",
+      !isMockMode && isActuallyCompleted, // API 완료 상태도 고려
     );
 
   const { data: myStrategies } = useQuery({
@@ -104,25 +125,55 @@ export function QuantResultPageClient({
 
   const resolvedStrategyName =
     currentStrategyMeta?.strategyName ||
-    statusData?.strategyName ||
     settings?.strategyName ||
     initialStrategyName;
 
-  // 백테스트 완료 시 결과 데이터 자동 갱신
+  // 🕒 시간 추적 로직 (백테스트 진행 중일 때만 동작)
   useEffect(() => {
-    if (!isMockMode && statusData?.status === "completed") {
-      // 상태가 running → completed로 변경되었을 때만 invalidate
-      if (previousStatusRef.current === "running") {
-        console.log("✅ 백테스트 완료 감지 - 결과 데이터 자동 갱신");
-        queryClient.invalidateQueries({
-          queryKey: ["backtest", "detail", backtestId],
-        });
+    if (!isMockMode && (backtestStatus === "running" || backtestStatus === "pending")) {
+      // 시간 추적 시작
+      if (!startTimeRef.current) {
+        startTimeRef.current = Date.now();
       }
-      previousStatusRef.current = statusData.status;
-    } else if (statusData?.status) {
-      previousStatusRef.current = statusData.status;
     }
-  }, [statusData?.status, backtestId, isMockMode, queryClient]);
+  }, [isMockMode, backtestStatus]);
+
+  // 초 단위 부드러운 시간 갱신용 로컬 타이머
+  useEffect(() => {
+    if (!isMockMode && (backtestStatus === "running" || backtestStatus === "pending")) {
+      tickingIntervalRef.current = setInterval(() => {
+        if (!startTimeRef.current) return;
+        const now = Date.now();
+        const elapsed = now - startTimeRef.current;
+        setElapsedTime(elapsed);
+      }, 1000);
+    }
+
+    return () => {
+      if (tickingIntervalRef.current) {
+        clearInterval(tickingIntervalRef.current);
+        tickingIntervalRef.current = null;
+      }
+    };
+  }, [isMockMode, backtestStatus]);
+
+  // 🔄 WebSocket 완료 시 결과 데이터 refetch (타이밍 이슈 해결)
+  // DB 저장 완료 후 WebSocket 완료 메시지가 전송되므로, 이 시점에 데이터를 다시 가져옴
+  useEffect(() => {
+    if (isCompleted && !isMockMode) {
+      // WebSocket에서 완료 메시지를 받으면 쿼리를 invalidate하여 최신 데이터 fetch
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.detail(backtestId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.settings(backtestId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["myStrategies"],
+      });
+      console.log("[QuantResultPageClient] WebSocket 완료 - 결과 데이터 refetch");
+    }
+  }, [isCompleted, isMockMode, backtestId, queryClient]);
 
   // 외부 데이터로부터 전략명 동기화 (사용자가 직접 수정한 경우는 유지)
   useEffect(() => {
@@ -201,9 +252,14 @@ export function QuantResultPageClient({
   // 전략 복제 핸들러
   const handleClone = async () => {
     try {
-      await communityApi.cloneStrategy(backtestId);
-      alert("전략이 성공적으로 복제되었습니다.");
-      router.push("/quant");
+      const response = await communityApi.cloneStrategy(backtestId);
+
+      // 복제 성공 메시지
+      alert(`전략이 성공적으로 복제되었습니다!\n\n복제된 전략: ${response.strategy_name}\n포트폴리오 목록으로 이동합니다.`);
+
+      // 포트폴리오 목록 페이지로 이동 (서버 데이터 새로고침 필요)
+      // window.location.href 사용하여 서버 데이터를 강제로 새로고침
+      window.location.href = "/quant";
     } catch (error: any) {
       alert(
         error?.response?.data?.detail ||
@@ -266,8 +322,9 @@ export function QuantResultPageClient({
   // Mock 데이터 또는 실제 데이터 사용
   const finalResult = isMockMode ? mockBacktestResult : result;
 
-  // 상태 데이터 로딩 중이거나 아직 데이터가 없는 경우
-  if (!isMockMode && !statusData) {
+  // API 데이터도 없고 WebSocket 상태도 없는 경우에만 로딩 표시
+  // (저장된 포트폴리오는 API 데이터가 있으므로 로딩 표시 안함)
+  if (!isMockMode && !backtestStatus && !result) {
     return (
       <div className="min-h-screen bg-bg-app flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -278,37 +335,48 @@ export function QuantResultPageClient({
     );
   }
 
-  // 백테스트가 아직 실행 중인 경우
+  // yieldPoints 형식 변환 (차트 컴포넌트용)
+  const yieldPoints = chartData.map(point => ({
+    date: point.date,
+    cumulativeReturn: point.cumulativeReturn,
+    buyCount: point.buyCount,
+    sellCount: point.sellCount,
+  }));
+
+  // 백테스트가 아직 실행 중인 경우 (저장된 포트폴리오는 제외)
+  // API 응답이 있고 completed 상태면 로딩 UI를 표시하지 않음
   if (
     !isMockMode &&
-    statusData &&
-    (statusData.status === "pending" || statusData.status === "running")
+    !isApiCompleted &&  // API에서 completed가 아닌 경우만
+    (backtestStatus === "pending" || backtestStatus === "running")
   ) {
     console.log(
-      "📊 백테스트 진행 중 - yieldPoints:",
-      statusData.yieldPoints ? statusData.yieldPoints.length : 0,
+      "📊 백테스트 진행 중 - chartData points:",
+      chartData.length,
     );
     return (
       <BacktestLoadingState
         backtestId={backtestId}
-        strategyName={statusData.strategyName || initialStrategyName}
-        status={statusData.status}
-        progress={statusData.progress || 0}
-        buyCount={statusData.buyCount}
-        sellCount={statusData.sellCount}
-        currentReturn={statusData.currentReturn}
-        currentCapital={statusData.currentCapital}
-        currentDate={statusData.currentDate}
-        currentMdd={statusData.currentMdd}
-        startDate={statusData.startDate}
-        endDate={statusData.endDate}
-        yieldPoints={statusData.yieldPoints}
+        strategyName={resolvedStrategyName}
+        status={backtestStatus}
+        progress={progress}
+        buyCount={buyCount}
+        sellCount={sellCount}
+        currentReturn={currentReturn}
+        currentCapital={currentCapital}
+        currentDate={currentDate}
+        currentMdd={currentMdd}
+        startDate={settings?.startDate}
+        endDate={settings?.endDate}
+        elapsedTime={elapsedTime}
+        yieldPoints={yieldPoints}
+        webSocketEnabled={true}
       />
     );
   }
 
   // 백테스트가 실패한 경우
-  if (!isMockMode && statusData?.status === "failed") {
+  if (!isMockMode && (backtestStatus === "failed" || backtestStatus === "error")) {
     return (
       <div className="min-h-screen bg-bg-app flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -316,7 +384,7 @@ export function QuantResultPageClient({
             백테스트 실행 실패
           </h1>
           <p className="text-text-secondary">
-            백테스트 실행 중 오류가 발생했습니다.
+            {wsError || "백테스트 실행 중 오류가 발생했습니다."}
           </p>
         </div>
       </div>
@@ -433,7 +501,7 @@ export function QuantResultPageClient({
         {/* 자동매매 섹션 */}
         <AutoTradingSection
           sessionId={backtestId}
-          sessionStatus={statusData?.status || "completed"}
+          sessionStatus={backtestStatus || "completed"}
         />
 
         {/* 탭 네비게이션 */}

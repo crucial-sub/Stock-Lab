@@ -12,6 +12,18 @@ interface PeriodReturnsBarProps {
 }
 
 export function PeriodReturnsBar({ periodReturns }: PeriodReturnsBarProps) {
+  // 데이터가 없는 경우 빈 상태 표시
+  if (!periodReturns || periodReturns.length === 0) {
+    return (
+      <div className="w-full rounded-lg mb-10">
+        <h3 className="text-[1.25rem] font-semibold mb-6">📊 수익률 (%)</h3>
+        <div className="text-center text-gray-500 py-10">
+          기간별 수익률 데이터가 없습니다.
+        </div>
+      </div>
+    );
+  }
+
   // 최대값 계산 (절댓값 기준)
   const maxAbsValue = Math.max(...periodReturns.map(p => Math.abs(p.value)));
 

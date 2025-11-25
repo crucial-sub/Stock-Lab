@@ -18,6 +18,9 @@ export interface ProgressMessage {
   daily_return: number;
   cumulative_return: number;
   progress_percent: number;
+  current_mdd: number;
+  buy_count: number;
+  sell_count: number;
 }
 
 export interface CompletedMessage {
@@ -25,10 +28,13 @@ export interface CompletedMessage {
   statistics: {
     final_value: number;
     total_return: number;
+    annualized_return: number;
+    daily_avg_return: number;
     max_drawdown: number;
     total_trades: number;
     simulation_time: number;
   };
+  summary?: string; // AI 생성 마크다운 요약
 }
 
 export interface ErrorMessage {
@@ -49,6 +55,9 @@ export interface ChartDataPoint {
   portfolioValue: number;
   cumulativeReturn: number;
   dailyReturn: number;
+  currentMdd: number;
+  buyCount: number;
+  sellCount: number;
 }
 
 /**
@@ -67,6 +76,8 @@ export interface UseBacktestWebSocketReturn {
   error: string | null;
   /** 최종 통계 */
   statistics: CompletedMessage["statistics"] | null;
+  /** AI 요약 (마크다운) */
+  summary: string | null;
 }
 
 /**
@@ -102,6 +113,7 @@ export function useBacktestWebSocket(
   const [error, setError] = useState<string | null>(null);
   const [statistics, setStatistics] =
     useState<CompletedMessage["statistics"] | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -158,6 +170,9 @@ export function useBacktestWebSocket(
                 portfolioValue: message.portfolio_value,
                 cumulativeReturn: message.cumulative_return,
                 dailyReturn: message.daily_return,
+                currentMdd: message.current_mdd,
+                buyCount: message.buy_count,
+                sellCount: message.sell_count,
               };
               console.log(`📊 [useBacktestWebSocket] 새 데이터 포인트 추가:`, newDataPoint);
 
@@ -174,7 +189,9 @@ export function useBacktestWebSocket(
 
             case "completed":
               console.log("✅ 백테스트 완료:", message.statistics);
+              console.log("📝 AI 요약 수신:", message.summary?.length || 0, "글자");
               setStatistics(message.statistics);
+              setSummary(message.summary || null);
               setIsCompleted(true);
               setProgress(100);
               ws.close();
@@ -195,8 +212,13 @@ export function useBacktestWebSocket(
       };
 
       ws.onerror = (event) => {
-        console.error("❌ WebSocket 에러:", event);
-        setError("WebSocket 연결 오류");
+        console.warn("⚠️ WebSocket 연결 실패 (폴백 모드 사용):", {
+          readyState: ws.readyState,
+          url,
+        });
+        // 저장된 포트폴리오나 완료된 백테스트의 경우 WebSocket 연결 실패가 정상이므로
+        // 에러 메시지를 표시하지 않음 (API 폴백 사용)
+        // setError("WebSocket 연결 오류 - 초기 데이터로 표시됩니다");
         setIsConnected(false);
       };
 
@@ -236,5 +258,6 @@ export function useBacktestWebSocket(
     isCompleted,
     error,
     statistics,
+    summary,
   };
 }

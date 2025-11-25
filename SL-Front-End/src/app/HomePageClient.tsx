@@ -1,20 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { DiscussionPreviewSection } from "@/components/community";
 import {
   HighlightsSection,
   MarketInsightSection,
-  PerformanceChartSection,
-  StatsOverviewSection,
+  StatsOverviewSection
 } from "@/components/home/auth";
 import { FloatingChatWidget } from "@/components/home/FloatingChatWidget";
 import {
   GuestMarketInsightSection,
   GuestPortfolioSection,
 } from "@/components/home/guest";
-import { StrategyCard } from "@/components/ai-assistant/StrategyCard";
 import { authApi } from "@/lib/api/auth";
 import { marketQuoteApi } from "@/lib/api/market-quote";
 import { fetchLatestNews } from "@/lib/api/news";
@@ -28,6 +25,8 @@ import type {
   MarketStock,
 } from "@/types";
 import type { AccountPerformanceChart } from "@/types/kiwoom";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * 홈 페이지 클라이언트 컴포넌트
@@ -338,7 +337,6 @@ export function HomePageClient({
         console.warn("주요 시황 뉴스 조회 실패:", error);
       }
     };
-
     // 서버에서 내려준 초기 값이 없을 때만 호출
     if (!marketNews.length) {
       fetchNews();

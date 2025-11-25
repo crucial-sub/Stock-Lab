@@ -10,14 +10,9 @@
 
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  getBacktestStatus,
-  getBacktestResult,
-  getBacktestYieldPoints,
-} from "@/lib/api/backtest";
-import { useBacktestWebSocket } from "@/hooks/useBacktestWebSocket";
-import { BacktestLoadingView } from "./BacktestLoadingView";
+import { useEffect, useState, useRef } from "react";
+import { useBacktestStatus } from "@/hooks/useBacktestStatus";
+import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import { BacktestResultView } from "./BacktestResultView";
 import type { BacktestResult } from "@/types/api";
 
@@ -56,7 +51,7 @@ type BacktestPhase = "idle" | "loading" | "completed" | "error";
  * - 폴링을 통한 실시간 진행 상황 확인 및 UI 업데이트
  * - 상태에 따른 조건부 렌더링:
  *   - idle: 준비 중 메시지
- *   - loading: 진행 중 UI (BacktestLoadingView)
+ *   - loading: 진행 중 UI (BacktestLoadingState)
  *   - completed: 완료 UI (BacktestResultView)
  *   - error: 에러 UI + 재시도 버튼
  */
@@ -66,372 +61,182 @@ export function BacktestExecutionRenderer({
   userName,
   config,
 }: BacktestExecutionRendererProps) {
-  // 🚀 WebSocket 연결
+  // 🚀 통합 백테스트 상태 훅 사용
   const {
-    chartData: wsChartData,
-    progress: wsProgress,
-    isCompleted: wsIsCompleted,
+    status: backtestStatus,
+    progress,
+    chartData,
+    isCompleted,
     error: wsError,
     statistics: wsStatistics,
-    isConnected: wsIsConnected,
-  } = useBacktestWebSocket(backtestId, true);
+    summary: wsSummary,
+    currentReturn,
+    currentCapital,
+    currentDate,
+    currentMdd,
+    buyCount,
+    sellCount,
+  } = useBacktestStatus(backtestId, true);
 
-  // 상태 관리
+  // UI 상태 관리
   const [phase, setPhase] = useState<BacktestPhase>("idle");
-  const [progress, setProgress] = useState(0);
-  const [currentReturn, setCurrentReturn] = useState(0);
-  const [yieldPoints, setYieldPoints] = useState<any[]>([]);
   const [finalResult, setFinalResult] = useState<BacktestResult | null>(null);
-  const [error, setError] = useState<Error | null>(null);
 
   // 시간 추적을 위한 상태 추가
   const startTimeRef = useRef<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [estimatedTotalTime, setEstimatedTotalTime] = useState(0);
-  const lastProgressRef = useRef(0);
-  const lastYieldTimestampRef = useRef<number | null>(null);
-
-  // Ref로 폴링 인터벌 관리
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const tickingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const yieldPollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isFetchingYieldRef = useRef(false);
 
-  // 🚀 WebSocket 데이터를 상태로 동기화
+  // yieldPoints 형식 변환 (차트 컴포넌트용)
+  const yieldPoints = chartData.map(point => ({
+    date: point.date,
+    cumulativeReturn: point.cumulativeReturn,
+    buyCount: point.buyCount,
+    sellCount: point.sellCount,
+  }));
+
+  // 🚀 백테스트 상태에 따른 UI 업데이트
   useEffect(() => {
-    if (!wsIsConnected) return;
-
-    console.log("📡 [BacktestExecutionRenderer] WebSocket 데이터 동기화:", {
-      progress: wsProgress,
-      chartDataLength: wsChartData.length,
-      isCompleted: wsIsCompleted,
-      isConnected: wsIsConnected,
+    console.log("📡 [BacktestExecutionRenderer] 백테스트 상태:", {
+      status: backtestStatus,
+      progress,
+      chartDataLength: chartData.length,
+      isCompleted,
     });
-    console.log("📡 [BacktestExecutionRenderer] wsChartData:", wsChartData);
 
-    // 진행률 업데이트
-    setProgress(wsProgress);
-    lastProgressRef.current = wsProgress;
-
-    // 차트 데이터를 yieldPoints 형식으로 변환
-    const formattedYieldPoints = wsChartData.map((point) => ({
-      date: point.date,
-      cumulativeReturn: point.cumulativeReturn,
-      buyCount: 0,
-      sellCount: 0,
-    }));
-
-    console.log("📡 [BacktestExecutionRenderer] formattedYieldPoints:", formattedYieldPoints);
-    setYieldPoints(formattedYieldPoints);
-
-    // 현재 수익률 업데이트
-    if (wsChartData.length > 0) {
-      const latestPoint = wsChartData[wsChartData.length - 1];
-      setCurrentReturn(latestPoint.cumulativeReturn);
-    }
-
-    // 진행 중이면 loading 상태로
-    if (wsProgress > 0 && wsProgress < 100) {
-      setPhase("loading");
-
-      // 폴링 중지 (WebSocket 사용 중)
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      if (yieldPollingIntervalRef.current) {
-        clearInterval(yieldPollingIntervalRef.current);
-        yieldPollingIntervalRef.current = null;
-      }
-    }
-
-    // WebSocket 에러 처리
-    if (wsError) {
-      setError(new Error(wsError));
+    if (backtestStatus === "failed") {
       setPhase("error");
-
-      // 폴링 재시작 (fallback)
-      console.warn("⚠️ WebSocket 에러 발생, 폴링으로 fallback:", wsError);
-    }
-  }, [wsProgress, wsChartData, wsIsCompleted, wsError, wsIsConnected]);
-
-  // 🚀 WebSocket 완료 처리
-  useEffect(() => {
-    if (!wsIsCompleted) return;
-
-    console.log("✅ WebSocket 완료 감지, 최종 결과 조회 중...");
-
-    const fetchFinalResult = async () => {
-      try {
-        const result = await getBacktestResult(backtestId);
-        setFinalResult(result);
-        setPhase("completed");
-        setProgress(100);
-
-        // 타이머 정리
-        if (tickingIntervalRef.current) {
-          clearInterval(tickingIntervalRef.current);
-          tickingIntervalRef.current = null;
-        }
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-      } catch (err) {
-        console.error("최종 결과 조회 실패:", err);
-        setError(err instanceof Error ? err : new Error("결과 조회 실패"));
-        setPhase("error");
-      }
-    };
-
-    fetchFinalResult();
-  }, [wsIsCompleted, backtestId]);
-
-  /**
-   * 상태/추가 API에서 받은 yieldPoints를 병합하여 누락 없이 순서대로 추가
-   */
-  const appendYieldPoints = useCallback((points?: any[]) => {
-    if (!points || points.length === 0) return;
-
-    const sorted = [...points]
-      .map((p) => ({ ...p, _ts: new Date(p.date).getTime() }))
-      .sort((a, b) => a._ts - b._ts);
-
-    const slice = sorted.filter(
-      (p) => p._ts > (lastYieldTimestampRef.current ?? -Infinity),
-    );
-    if (slice.length === 0) return;
-
-    setYieldPoints((prev) => [...prev, ...slice.map(({ _ts, ...rest }) => rest)]);
-    lastYieldTimestampRef.current = slice[slice.length - 1]._ts;
-  }, []);
-
-  /**
-   * 백테스트 상태 폴링
-   */
-  const pollBacktestStatus = useCallback(async () => {
-    try {
-      const status = await getBacktestStatus(backtestId);
-
-      // 진행률 값 보정 및 저장
-      const progressValue =
-        status.progress !== undefined && status.progress !== null
-          ? Math.min(100, Math.max(0, status.progress))
-          : lastProgressRef.current;
-
-      let hasProgressChanged = false;
-      if (status.progress !== undefined && status.progress !== null) {
-        hasProgressChanged = progressValue !== lastProgressRef.current;
-        setProgress(progressValue);
-        lastProgressRef.current = progressValue;
-      }
-
-      // 시작 시간 설정 (최초 한 번만)
-      if (!startTimeRef.current && status.status !== "failed") {
-        startTimeRef.current = Date.now();
-      }
-
-      // 시간 계산 (progress가 정체돼 있어도 시간은 계속 증가)
-      if (startTimeRef.current) {
-        const currentTime = Date.now();
-        const elapsed = currentTime - startTimeRef.current;
-        setElapsedTime(elapsed);
-
-        // 예상 남은 시간 계산
-        if (progressValue > 0 && progressValue < 100 && hasProgressChanged) {
-          const totalEstimatedTime = elapsed / (progressValue / 100);
-          setEstimatedTotalTime(Math.max(elapsed, totalEstimatedTime));
-        } else if (progressValue >= 100) {
-          setEstimatedTotalTime(elapsed);
-        }
-      }
-
-      // 현재 수익률 업데이트
-      if (status.currentReturn != null) {  // null과 undefined 체크
-        setCurrentReturn(status.currentReturn);
-      } else if (status.yieldPoints && status.yieldPoints.length > 0) {
-        // 완료 상태에서 currentReturn이 null일 때는 마지막 yieldPoint 사용
-        const lastPoint = status.yieldPoints[status.yieldPoints.length - 1];
-        if (lastPoint.cumulativeReturn != null) {
-          setCurrentReturn(lastPoint.cumulativeReturn);
-        }
-      }
-
-      // yieldPoints 업데이트
-      appendYieldPoints(status.yieldPoints);
-
-      // 상태에 따른 처리
-      if (status.status === "completed") {
-        // 폴링 중지
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-
-        // 최종 결과 조회
-        const result = await getBacktestResult(backtestId);
-
-        setFinalResult(result);
-        setPhase("completed");
-        setProgress(100);
-        lastProgressRef.current = 100;
-        if (tickingIntervalRef.current) {
-          clearInterval(tickingIntervalRef.current);
-          tickingIntervalRef.current = null;
-        }
-        if (startTimeRef.current) {
-          const doneElapsed = Date.now() - startTimeRef.current;
-          setElapsedTime(doneElapsed);
-          setEstimatedTotalTime(doneElapsed);
-        }
-      } else if (status.status === "failed") {
-        // 폴링 중지
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-        if (tickingIntervalRef.current) {
-          clearInterval(tickingIntervalRef.current);
-          tickingIntervalRef.current = null;
-        }
-
-        setError(new Error("백테스트 실행 중 오류가 발생했습니다."));
-        setPhase("error");
-      } else {
-        // running, pending 상태는 계속 폴링
-        setPhase("loading");
-      }
-    } catch (err) {
-      // 폴링 중지
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-
-      setError(err instanceof Error ? err : new Error("알 수 없는 오류가 발생했습니다."));
-      setPhase("error");
-    }
-  }, [backtestId]);
-
-  /**
-   * 진행 중일 때 수익률 포인트를 전용 API로 주기적으로 받아와 차트와 싱크를 맞춘다.
-   * 상태 응답(status) 외에 별도로 데이터를 당겨서 초기 지연을 줄임.
-   */
-  useEffect(() => {
-    const shouldPollYield =
-      phase === "loading" && lastProgressRef.current > 0 && backtestId;
-
-    const fetchYieldPoints = async () => {
-      if (!shouldPollYield || isFetchingYieldRef.current) return;
-      isFetchingYieldRef.current = true;
-      try {
-        const res = await getBacktestYieldPoints(backtestId, {
-          page: 1,
-          limit: 500,
-        });
-        appendYieldPoints(res.data);
-      } catch (err) {
-        // 폴링 실패는 무시하고 다음 주기에서 재시도
-        console.warn("yieldPoints polling 실패", err);
-      } finally {
-        isFetchingYieldRef.current = false;
-      }
-    };
-
-    // 즉시 한 번 실행
-    fetchYieldPoints();
-
-    if (shouldPollYield) {
-      yieldPollingIntervalRef.current = setInterval(fetchYieldPoints, 2000);
+      return;
     }
 
-    return () => {
-      if (yieldPollingIntervalRef.current) {
-        clearInterval(yieldPollingIntervalRef.current);
-        yieldPollingIntervalRef.current = null;
-      }
-    };
-  }, [appendYieldPoints, backtestId, phase]);
-
-  /**
-   * 백테스트 시작 (마운트 시 자동 실행)
-   */
-  useEffect(() => {
-    setPhase("loading");
-    startTimeRef.current = Date.now();
-    lastProgressRef.current = 0;
-    setEstimatedTotalTime(0);
-    lastYieldTimestampRef.current = null;
-    setYieldPoints([]);
-
-    // 즉시 첫 폴링 실행
-    pollBacktestStatus();
-
-    // 1초마다 폴링
-    pollingIntervalRef.current = setInterval(() => {
-      pollBacktestStatus();
-    }, 1000);
-
-    // 초 단위 부드러운 시간 갱신용 로컬 타이머
-    tickingIntervalRef.current = setInterval(() => {
-      if (!startTimeRef.current) return;
-      const now = Date.now();
-      const elapsed = now - startTimeRef.current;
-      setElapsedTime(elapsed);
-
-      // 진행률이 아주 낮아도 전체 예상 시간은 최소 경과 시간 이상 유지
-      // 예상 시간은 진행률 업데이트 시에만 갱신 (여기서는 미변경)
-    }, 1000);
-
-    // 언마운트 시 폴링 및 타이머 중지
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      if (tickingIntervalRef.current) {
-        clearInterval(tickingIntervalRef.current);
-        tickingIntervalRef.current = null;
-      }
-    };
-  }, [backtestId, pollBacktestStatus]);
-
-  /**
-   * 재시도 함수
-   */
-  const handleRetry = () => {
-    setError(null);
-    setPhase("idle");
-    setProgress(0);
-    setCurrentReturn(0);
-    setYieldPoints([]);
-    setFinalResult(null);
-    startTimeRef.current = null;
-    setElapsedTime(0);
-    setEstimatedTotalTime(0);
-    lastProgressRef.current = 0;
-    lastYieldTimestampRef.current = null;
-
-    // 폴링 재시작
-    setTimeout(() => {
-      setPhase("loading");
+    // 시간 추적 시작
+    if (!startTimeRef.current && backtestStatus !== "error" && backtestStatus !== "failed") {
       startTimeRef.current = Date.now();
-      pollBacktestStatus();
-      pollingIntervalRef.current = setInterval(() => {
-        pollBacktestStatus();
-      }, 1000);
-      if (tickingIntervalRef.current) {
-        clearInterval(tickingIntervalRef.current);
-      }
+    }
+
+    // 상태에 따른 phase 업데이트
+    if (wsError) {
+      setPhase("error");
+    } else if (progress > 0 && progress < 100) {
+      setPhase("loading");
+    } else if (progress === 0) {
+      setPhase("loading");
+    }
+  }, [backtestStatus, progress, chartData.length, isCompleted, wsError]);
+
+  // 초 단위 부드러운 시간 갱신용 로컬 타이머
+  useEffect(() => {
+    if (phase === "loading") {
       tickingIntervalRef.current = setInterval(() => {
         if (!startTimeRef.current) return;
         const now = Date.now();
         const elapsed = now - startTimeRef.current;
         setElapsedTime(elapsed);
-
-        // 예상 시간은 진행률 업데이트 시에만 갱신 (여기서는 미변경)
       }, 1000);
-    }, 100);
+    }
+
+    return () => {
+      if (tickingIntervalRef.current) {
+        clearInterval(tickingIntervalRef.current);
+        tickingIntervalRef.current = null;
+      }
+    };
+  }, [phase]);
+
+  // 🚀 백테스트 완료 처리 (WebSocket 데이터만 사용)
+  useEffect(() => {
+    if (!isCompleted) {
+      console.log("⏳ [BacktestExecutionRenderer] 아직 완료되지 않음:", { isCompleted, wsStatistics, chartDataLength: chartData.length });
+      return;
+    }
+
+    if (!wsStatistics) {
+      console.error("⚠️ [BacktestExecutionRenderer] wsStatistics가 없음! chartData로 대체 시도");
+      console.log("📊 chartData:", chartData.length, "포인트");
+    }
+
+    console.log("✅ 백테스트 완료 감지, WebSocket 데이터 사용");
+    console.log("📊 [BacktestExecutionRenderer] WebSocket statistics:", wsStatistics);
+    console.log("📊 [BacktestExecutionRenderer] WebSocket summary:", wsSummary?.length || 0, "글자");
+    console.log("📊 [BacktestExecutionRenderer] chartData:", chartData.length, "포인트");
+
+    // ✅ chartData에서 statistics 계산 (fallback)
+    const lastDataPoint = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+
+    // 기간 계산
+    const startDateObj = new Date(config.startDate);
+    const endDateObj = new Date(config.endDate);
+    const totalDays = Math.floor((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24));
+    const years = totalDays / 365.0;
+
+    const finalValue = lastDataPoint?.portfolioValue || config.initialCapital;
+    const totalReturn = lastDataPoint?.cumulativeReturn || 0;
+
+    // CAGR 계산: (최종값/초기값)^(1/년수) - 1
+    const cagr = years > 0 ? (Math.pow(finalValue / config.initialCapital, 1 / years) - 1) * 100 : 0;
+
+    const calculatedStats = {
+      total_return: totalReturn,
+      final_value: finalValue,
+      annualized_return: cagr,
+      max_drawdown: Math.min(...chartData.map(d => d.currentMdd || 0)),
+      total_trades: chartData.reduce((sum, d) => sum + (d.buyCount || 0) + (d.sellCount || 0), 0),
+    };
+
+    // wsStatistics가 있으면 사용, 없으면 계산된 값 사용
+    const finalStats = wsStatistics || calculatedStats;
+
+    console.log("📊 [BacktestExecutionRenderer] 최종 사용 statistics:", finalStats);
+
+    // ✅ WebSocket 데이터를 BacktestResult 형식으로 변환
+    const convertedResult: BacktestResult = {
+      id: backtestId,
+      status: "completed",
+      statistics: {
+        totalReturn: finalStats.total_return,
+        annualizedReturn: finalStats.annualized_return || 0,
+        sharpeRatio: 0,
+        maxDrawdown: finalStats.max_drawdown,
+        winRate: 0,
+        profitFactor: 0,
+        volatility: 0,
+        totalTrades: finalStats.total_trades,
+        winningTrades: 0,
+        losingTrades: 0,
+        initialCapital: config.initialCapital,
+        finalCapital: finalStats.final_value,
+      },
+      trades: [],
+      portfolio: [],
+      yieldPoints: chartData.map(point => ({
+        date: point.date,
+        value: point.portfolioValue,
+        portfolioValue: point.portfolioValue,
+        cumulativeReturn: point.cumulativeReturn,
+        dailyReturn: point.dailyReturn,
+        buyCount: point.buyCount,
+        sellCount: point.sellCount,
+      })),
+      summary: wsSummary || undefined,
+    };
+
+    console.log("✅ [BacktestExecutionRenderer] 변환된 결과:", convertedResult);
+    setFinalResult(convertedResult);
+    setPhase("completed");
+  }, [isCompleted, wsStatistics, wsSummary, chartData, backtestId, config.initialCapital]);
+
+  /**
+   * 백테스트 시작 (마운트 시 초기 상태 설정)
+   */
+  useEffect(() => {
+    setPhase("loading");
+  }, [backtestId]);
+
+  /**
+   * 재시도 함수 - 페이지 새로고침으로 재시작
+   */
+  const handleRetry = () => {
+    window.location.reload();
   };
 
   /**
@@ -463,7 +268,7 @@ export function BacktestExecutionRenderer({
 
           {/* 에러 메시지 */}
           <p className="text-red-600 text-sm leading-relaxed">
-            {error?.message ||
+            {wsError ||
               "알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해주세요."}
           </p>
 
@@ -483,20 +288,26 @@ export function BacktestExecutionRenderer({
    * 로딩 상태 렌더링
    */
   if (phase === "loading") {
+    const loadingStatus = progress > 0 ? "running" : "pending";
+
     return (
-      <BacktestLoadingView
-        userName={userName}
+      <BacktestLoadingState
+        backtestId={backtestId}
         strategyName={strategyName}
-        config={config}
+        status={loadingStatus}
         progress={progress}
-        accumulatedData={{
-          yieldPoints,
-          statistics: {
-            currentReturn,
-            elapsedTime,
-            estimatedTotalTime,
-          },
-        }}
+        buyCount={buyCount}
+        sellCount={sellCount}
+        currentReturn={currentReturn}
+        currentCapital={currentCapital}
+        currentDate={currentDate}
+        currentMdd={currentMdd}
+        initialCapital={config.initialCapital}
+        startDate={config.startDate}
+        endDate={config.endDate}
+        elapsedTime={elapsedTime}
+        yieldPoints={yieldPoints}
+        webSocketEnabled={true}
       />
     );
   }
@@ -507,11 +318,23 @@ export function BacktestExecutionRenderer({
   if (phase === "completed" && finalResult) {
     // 기간별 수익률 계산
     const calculatePeriodReturns = () => {
-      if (!finalResult.yieldPoints || finalResult.yieldPoints.length === 0) {
+      // ✅ API 응답에 yieldPoints가 없으면 WebSocket chartData 사용
+      const dataPoints = finalResult.yieldPoints && finalResult.yieldPoints.length > 0
+        ? finalResult.yieldPoints
+        : yieldPoints;
+
+      console.log("📊 [calculatePeriodReturns] 데이터 소스:", {
+        apiYieldPoints: finalResult.yieldPoints?.length || 0,
+        chartDataYieldPoints: yieldPoints.length,
+        using: dataPoints === finalResult.yieldPoints ? "API" : "WebSocket chartData"
+      });
+
+      if (!dataPoints || dataPoints.length === 0) {
+        console.warn("⚠️ [calculatePeriodReturns] 데이터가 없습니다!");
         return [];
       }
 
-      const sortedPoints = [...finalResult.yieldPoints].sort(
+      const sortedPoints = [...dataPoints].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
       );
 
@@ -527,7 +350,7 @@ export function BacktestExecutionRenderer({
       );
 
       // 디버깅: 기간 정보 출력
-      console.log("백테스트 기간 정보:", {
+      console.log("📊 [calculatePeriodReturns] 백테스트 기간 정보:", {
         firstDate: firstPoint.date,
         latestDate: latestPoint.date,
         totalDays: totalDays,
@@ -576,8 +399,17 @@ export function BacktestExecutionRenderer({
         periods.push({ label: "최근 3년", value: latestReturn - getReturnAtDate(1095) });
       }
 
+      console.log("📊 [calculatePeriodReturns] 계산된 기간별 수익률:", periods);
       return periods;
     };
+
+    // ✅ summary는 반드시 API에서 받아야 함
+    const summaryText = finalResult.summary || "";
+
+    console.log("📝 [BacktestExecutionRenderer] Summary:", {
+      length: summaryText.length,
+      content: summaryText,
+    });
 
     return (
       <BacktestResultView
@@ -587,13 +419,13 @@ export function BacktestExecutionRenderer({
         result={{
           backtestId: finalResult.id,
           statistics: finalResult.statistics,
-          allYieldPoints: finalResult.yieldPoints || [],
+          allYieldPoints: finalResult.yieldPoints || yieldPoints,
           periodReturns: calculatePeriodReturns(),
           yearlyReturns: [],
           monthlyReturns: [],
           stockWiseReturns: [],
           totalAssetsData: [],
-          summary: finalResult.summary || "",
+          summary: summaryText,
         }}
       />
     );

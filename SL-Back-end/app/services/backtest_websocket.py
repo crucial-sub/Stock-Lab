@@ -49,7 +49,10 @@ class BacktestWebSocketManager:
         position_value: float,
         daily_return: float,
         cumulative_return: float,
-        progress_percent: int
+        progress_percent: int,
+        current_mdd: float = 0.0,
+        buy_count: int = 0,
+        sell_count: int = 0
     ):
         """진행 상황 업데이트 전송"""
         if backtest_id not in self.active_connections:
@@ -66,7 +69,10 @@ class BacktestWebSocketManager:
             "position_value": position_value,
             "daily_return": daily_return,
             "cumulative_return": cumulative_return,
-            "progress_percent": progress_percent
+            "progress_percent": progress_percent,
+            "current_mdd": current_mdd,
+            "buy_count": buy_count,
+            "sell_count": sell_count
         }
 
         # 모든 연결된 클라이언트에게 전송
@@ -110,16 +116,20 @@ class BacktestWebSocketManager:
     async def send_completion(
         self,
         backtest_id: str,
-        statistics: Dict
+        statistics: Dict,
+        summary: str = None
     ):
-        """백테스트 완료 알림"""
+        """백테스트 완료 알림 (summary 포함)"""
         if backtest_id not in self.active_connections:
             return
 
         message = {
             "type": "completed",
-            "statistics": statistics
+            "statistics": statistics,
+            "summary": summary
         }
+
+        logger.info(f"✅ WebSocket 완료 전송: {backtest_id} (summary: {len(summary) if summary else 0}글자)")
 
         disconnected = set()
         for websocket in self.active_connections[backtest_id]:

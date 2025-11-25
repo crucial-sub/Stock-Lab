@@ -1134,7 +1134,8 @@ async def clone_strategy_by_session(
             start_date=session.start_date,
             end_date=session.end_date,
             status="PENDING",  # 복제된 전략은 아직 실행 안함
-            is_active=False
+            is_active=False,
+            is_portfolio=True  # 포트폴리오 목록에 표시되도록 설정
         )
         db.add(new_session)
         await db.flush()  # session_id 생성을 위해 flush

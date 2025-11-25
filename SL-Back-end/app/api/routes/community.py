@@ -42,6 +42,7 @@ router = APIRouter()
 @router.get("/posts", response_model=PostListResponse)
 async def get_posts(
     post_type: Optional[str] = Query(None, description="게시글 유형 필터 (STRATEGY_SHARE/DISCUSSION/QUESTION)"),
+    user_id: Optional[str] = Query(None, description="사용자 ID 필터 (작성자 기준)"),
     tags: Optional[str] = Query(None, description="태그 필터 (쉼표로 구분)"),
     search: Optional[str] = Query(None, description="제목+내용 검색"),
     page: int = Query(1, ge=1),
@@ -60,6 +61,9 @@ async def get_posts(
         # 필터 적용
         if post_type:
             query = query.where(CommunityPost.post_type == post_type)
+
+        if user_id:
+            query = query.where(CommunityPost.user_id == user_id)
 
         if tags:
             tag_list = [t.strip() for t in tags.split(',')]

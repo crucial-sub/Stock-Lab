@@ -84,9 +84,9 @@ export const kiwoomApi = {
    */
   getStatusServer: async (token: string): Promise<KiwoomStatusResponse> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const { data } = await axios.get<KiwoomStatusResponse>(
-      `${baseURL}/api/v1/kiwoom/credentials/status`,
+      `${baseURL}/kiwoom/credentials/status`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -101,9 +101,9 @@ export const kiwoomApi = {
    */
   getAccountBalanceServer: async (token: string): Promise<AccountBalance> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const { data } = await axios.get<AccountBalance>(
-      `${baseURL}/api/v1/kiwoom/account/balance`,
+      `${baseURL}/kiwoom/account/balance`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -131,9 +131,9 @@ export const kiwoomApi = {
     days: number = 30
   ): Promise<AccountPerformanceChart> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.API_BASE_URL?.replace('/api/v1', '') || "http://backend:8000";
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const { data } = await axios.get<AccountPerformanceChart>(
-      `${baseURL}/api/v1/kiwoom/account/performance-chart?days=${days}`,
+      `${baseURL}/kiwoom/account/performance-chart?days=${days}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

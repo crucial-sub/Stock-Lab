@@ -215,15 +215,24 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
         },
         "warren_buffett": {
+            # 🚀 벡터화 평가 활성화: expression + conditions 형식
+            "expression": "A and B and C and D and E and F",  # AND 로직
+            "conditions": [
+                {"id": "A", "factor": "ROE", "operator": ">", "value": 12},  # ROE > 12%
+                {"id": "B", "factor": "CURRENT_RATIO", "operator": ">", "value": 1.2},  # 유동비율 > 1.2
+                {"id": "C", "factor": "PER", "operator": "<", "value": 20},  # PER < 20
+                {"id": "D", "factor": "PBR", "operator": "<", "value": 2.0},  # PBR < 2.0
+                {"id": "E", "factor": "DEBT_RATIO", "operator": "<", "value": 170},  # 부채비율 < 170%
+                {"id": "F", "factor": "EARNINGS_GROWTH_1Y", "operator": ">", "value": 5},  # 순이익증가율(1Y) > 5%
+            ],
+            # UI 표시용 (하위 호환성)
             "buy_conditions": [
                 {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12}, # ROE > 12%
-                # 장기부채비율 제외 (계산 불가)
                 {"name": "B", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.2}, # 유동비율 > 1.2
-                # FCF 제외 (계산 불가)
                 {"name": "C", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20}, # PER < 20
                 {"name": "D", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0}, # PBR < 2.0
                 {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 170}, # 부채비율 < 170%
-                {"name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 5} # EPS(주당순이익) 성장률 > 5% 조건을 순이익증가율(1Y)로 대체
+                {"name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 5} # 순이익증가율(1Y) > 5%
             ],
             "priority_factor": "기본값({PBR})",
             "priority_order": "asc",
@@ -251,6 +260,13 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
                 "sell_price_offset": 0
             },
             "condition_sell": {
+                # 🚀 벡터화 평가 활성화: expression + conditions 형식
+                "expression": "A or B",  # OR 로직
+                "conditions": [
+                    {"id": "A", "factor": "PBR", "operator": ">", "value": 2.5},  # PBR > 2.5
+                    {"id": "B", "factor": "ROE", "operator": "<", "value": 8},  # ROE < 8%
+                ],
+                # UI 표시용 (하위 호환성)
                 "sell_conditions": [
                     {"name": "A", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.5},
                     {"name": "B", "exp_left_side": "기본값({ROE})", "inequality": "<", "exp_right_side": 8}
@@ -259,7 +275,6 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
                 "sell_price_basis": "전일 종가",
                 "sell_price_offset": 0
             },
-            # TODO: FCF, EPS 성장률 추가 (향후 구현)
         },
         "william_oneil": {
             "buy_conditions": [
@@ -438,12 +453,22 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
         },
         "cathie_wood": {
+            # 🚀 벡터화 평가 활성화: expression + conditions 형식
+            "expression": "A and B and C and D and E",  # AND 로직
+            "conditions": [
+                {"id": "A", "factor": "PEG", "operator": ">", "value": 0},  # PEG > 0
+                {"id": "B", "factor": "PEG", "operator": "<", "value": 3},  # PEG < 3 (완화: 2.5 → 3)
+                {"id": "C", "factor": "PSR", "operator": "<", "value": 30},  # PSR < 30 (완화: 25 → 30)
+                {"id": "D", "factor": "REVENUE_GROWTH_1Y", "operator": ">", "value": 10},  # 매출 성장률 > 10% (완화: 15 → 10)
+                {"id": "E", "factor": "CURRENT_RATIO", "operator": ">", "value": 1.2},  # 유동비율 > 1.2 (완화: 1.5 → 1.2)
+            ],
+            # UI 표시용 (하위 호환성)
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0}, #PEG > 0
-                {"name": "B", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2.5}, #PEG < 2.5
-                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 25}, # PSR < 25
-                {"name": "D", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 15}, # 매출 성장률 > 15%
-                {"name": "E", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5} # 유동비율 > 1.5
+                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0},
+                {"name": "B", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 3},
+                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 30},
+                {"name": "D", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 10},
+                {"name": "E", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.2}
             ],
             "priority_factor": "기본값({REVENUE_GROWTH_1Y})",
             "priority_order": "desc",
@@ -471,6 +496,13 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
                 "sell_price_offset": 0
             },
             "condition_sell": {
+                # 🚀 벡터화 평가 활성화: expression + conditions 형식
+                "expression": "A or B",  # OR 로직
+                "conditions": [
+                    {"id": "A", "factor": "PSR", "operator": ">", "value": 30},  # PSR > 30
+                    {"id": "B", "factor": "REVENUE_GROWTH_1Y", "operator": "<", "value": 5},  # 매출 성장률 < 5%
+                ],
+                # UI 표시용 (하위 호환성)
                 "sell_conditions": [
                     {"name": "A", "exp_left_side": "기본값({PSR})", "inequality": ">", "exp_right_side": 30},
                     {"name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": "<", "exp_right_side": 5}

@@ -817,6 +817,7 @@ class BacktestEngine:
 
         logger.info(f"📊 재무 데이터 조회 연도 범위: {start_year} ~ {end_year}")
 
+        # 결과 일관성을 위해 ORDER BY 추가 (환경 간 동일한 순서 보장)
         income_query = select(
             FinancialStatement.company_id,
             Company.stock_code,
@@ -842,9 +843,9 @@ class BacktestEngine:
                     '매출총이익', '매출원가'
                 ])
             )
-        )
+        ).order_by(Company.stock_code, FinancialStatement.bsns_year, FinancialStatement.reprt_code)
 
-        # 재무상태표 데이터
+        # 재무상태표 데이터 (결과 일관성을 위해 ORDER BY 추가)
         balance_query = select(
             FinancialStatement.company_id,
             Company.stock_code,
@@ -866,7 +867,7 @@ class BacktestEngine:
                     '현금및현금성자산', '단기차입금', '장기차입금'
                 ])
             )
-        )
+        ).order_by(Company.stock_code, FinancialStatement.bsns_year, FinancialStatement.reprt_code)
 
         # 데이터 실행
         income_result = await self.db.execute(income_query)
@@ -1137,6 +1138,13 @@ class BacktestEngine:
                 if priority_factor != "없음":
                     required_factors.add(priority_factor.upper())
 
+        # PEG 계산에 필요한 의존성 팩터 자동 추가
+        # PEG = PER / EARNINGS_GROWTH_1Y 이므로 두 팩터가 모두 필요
+        if 'PEG' in required_factors:
+            required_factors.add('PER')
+            required_factors.add('EARNINGS_GROWTH_1Y')
+            logger.info("PEG 팩터 의존성 추가: PER, EARNINGS_GROWTH_1Y")
+
         logger.info(f"필요한 팩터: {required_factors}")
         return required_factors
 
@@ -1218,6 +1226,18 @@ class BacktestEngine:
                         self._merge_factor_maps(stock_factor_map, filtered_growth_map)
                     except Exception as e:
                         logger.error(f"성장성 팩터 에러 ({calc_date}): {e}")
+
+                # PEG 계산: PER / EARNINGS_GROWTH_1Y (두 팩터가 계산된 후에 수행)
+                if 'PEG' in required_factors:
+                    try:
+                        for stock in stock_factor_map:
+                            per = stock_factor_map[stock].get('PER')
+                            earnings_growth = stock_factor_map[stock].get('EARNINGS_GROWTH_1Y')
+                            # PER이 양수이고 성장률이 양수일 때만 PEG 계산
+                            if per is not None and earnings_growth is not None and per > 0 and earnings_growth > 0:
+                                stock_factor_map[stock]['PEG'] = per / earnings_growth
+                    except Exception as e:
+                        logger.error(f"PEG 팩터 에러 ({calc_date}): {e}")
 
             if any(f.startswith('MOMENTUM') for f in required_factors):
                 try:
@@ -1383,6 +1403,18 @@ class BacktestEngine:
                         self._merge_factor_maps(stock_factor_map, filtered_growth_map)
                     except Exception as e:
                         logger.error(f"성장성 팩터 계산 에러 ({calc_date}): {e}")
+
+                # PEG 계산: PER / EARNINGS_GROWTH_1Y (두 팩터가 계산된 후에 수행)
+                if 'PEG' in required_factors:
+                    try:
+                        for stock in stock_factor_map:
+                            per = stock_factor_map[stock].get('PER')
+                            earnings_growth = stock_factor_map[stock].get('EARNINGS_GROWTH_1Y')
+                            # PER이 양수이고 성장률이 양수일 때만 PEG 계산
+                            if per is not None and earnings_growth is not None and per > 0 and earnings_growth > 0:
+                                stock_factor_map[stock]['PEG'] = per / earnings_growth
+                    except Exception as e:
+                        logger.error(f"PEG 팩터 계산 에러 ({calc_date}): {e}")
 
             # 모멘텀 팩터
             if any(f.startswith('MOMENTUM') for f in required_factors):
@@ -2691,15 +2723,19 @@ class BacktestEngine:
         factor_columns = [col for col in factor_df.columns if col not in meta_columns]
         lower_is_better = {'PER', 'PBR', 'VOLATILITY'}
 
+        # 결과 일관성을 위해 stock_code로 먼저 정렬 (동점 시 알파벳 순 랭크 보장)
+        factor_pl = factor_pl.sort(['date', 'stock_code'])
+
         for col in factor_columns:
             if col not in factor_pl.columns:
                 continue
 
             descending = col not in lower_is_better  # ascending 반대
 
+            # ordinal rank: 동점이어도 정렬 순서(stock_code)대로 일관된 랭크 부여
             factor_pl = factor_pl.with_columns(
                 pl.col(col)
-                .rank(method='average', descending=descending)
+                .rank(method='ordinal', descending=descending)
                 .over('date')
                 .alias(f'{col}_RANK')
             )
@@ -3633,7 +3669,7 @@ class BacktestEngine:
 - **총 거래 횟수**: {total_trades}회
 - **시뮬레이션 소요 시간**: {simulation_time:.2f}초
 
-#### 💡 종합 평가
+#### 💡 AI 종합 평가
 """
 
         # 수익률 평가
@@ -3896,6 +3932,9 @@ class BacktestEngine:
                 net_amount = amount - commission - tax
                 cost_basis = holding.entry_price * quantity if holding.entry_price else Decimal("0")
                 profit = net_amount - cost_basis
+                # 실제 체결일 = 익일 (모든 매도 조건 통일)
+                actual_sell_date = next_sell_date
+
                 if cost_basis > 0:
                     profit_rate = ((net_amount / cost_basis) - 1) * 100
 
@@ -3909,9 +3948,6 @@ class BacktestEngine:
                         logger.warning(f"   보유기간: {(actual_sell_date - (holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date)).days}일")
                 else:
                     profit_rate = 0
-
-                # 실제 체결일 = 익일 (모든 매도 조건 통일)
-                actual_sell_date = next_sell_date
 
                 order = {
                     'order_id': f"ORD-S-{stock_code}-{trading_day}",
@@ -4014,11 +4050,11 @@ class BacktestEngine:
                 )
                 candidates = [stock for stock, score in ranked_stocks]
             else:
-                # 가중치가 없으면 선택된 종목 그대로 사용
-                candidates = selected_stocks[:max_positions]
+                # 가중치가 없으면 선택된 종목 정렬 후 사용 (결과 일관성 보장)
+                candidates = sorted(selected_stocks)[:max_positions]
         else:
-            # 일반 조건인 경우 선택된 종목 사용
-            candidates = selected_stocks[:max_positions]
+            # 일반 조건인 경우 선택된 종목 정렬 후 사용 (결과 일관성 보장)
+            candidates = sorted(selected_stocks)[:max_positions]
 
         return candidates
 

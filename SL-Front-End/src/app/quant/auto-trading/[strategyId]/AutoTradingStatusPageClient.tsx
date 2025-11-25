@@ -85,7 +85,7 @@ export function AutoTradingStatusPageClient({
     code: string;
   } | null>(null);
 
-  // 자동매매 상태 조회 (5초마다 자동 갱신)
+  // 가상매매 상태 조회 (5초마다 자동 갱신)
   const { data: statusData, isLoading } = useQuery({
     queryKey: ["autoTradingStatus", strategyId],
     queryFn: () => autoTradingApi.getAutoTradingStatus(strategyId),
@@ -195,7 +195,7 @@ export function AutoTradingStatusPageClient({
     { label: "1년", value: totalReturn },
   ];
 
-  // 자동매매 거래 내역을 백테스트 형식으로 변환
+  // 가상매매 거래 내역을 백테스트 형식으로 변환
   const convertedTrades = today_trades.map((trade) => ({
     stockName: trade.stock_name || trade.stock_code,
     stockCode: trade.stock_code,
@@ -214,8 +214,8 @@ export function AutoTradingStatusPageClient({
     <main className="flex-1 px-[18.75rem] py-[3.75rem] overflow-auto">
       {/* 헤더 */}
       <PageHeader
-        title="🤖 실시간 자동매매"
-        subtitle={`${strategy.strategy_name || "자동매매 전략"} • ${strategy.is_active ? "활성화" : "비활성화"}`}
+        title="🤖 증권사 연동 실시간 가상매매"
+        subtitle={`${strategy.strategy_name || "가상매매 전략"} • ${strategy.is_active ? "활성화" : "비활성화"}`}
         onBack={() => router.push("/quant")}
       />
 
@@ -493,9 +493,9 @@ export function AutoTradingStatusPageClient({
                   </div>
                 )}
 
-                {/* 자동매매 실행 정보 */}
+                {/* 가상매매 실행 정보 */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
-                  <h3 className="font-semibold text-blue-900 mb-2">🎯 자동매매 실행 정보</h3>
+                  <h3 className="font-semibold text-blue-900 mb-2">🎯 가상매매 실행 정보</h3>
                   <div className="grid grid-cols-2 gap-3 text-sm text-blue-700 mb-3">
                     <div>
                       <span className="text-gray-600">종목당 비중:</span> <span className="font-semibold">{strategy.per_stock_ratio}%</span>
@@ -516,7 +516,7 @@ export function AutoTradingStatusPageClient({
         )}
       </div>
 
-      {/* 자동매매 비활성화 섹션 (하단 고정) */}
+      {/* 가상매매 비활성화 섹션 (하단 고정) */}
       <div className="mt-8">
         <AutoTradingSection
           sessionId={strategy.simulation_session_id}

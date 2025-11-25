@@ -79,7 +79,7 @@ export function PortfolioPageClient({
     const portfolio = portfolios.find((p) => p.id === id);
     if (!portfolio) return;
 
-    // 자동매매 전략 카드인 경우 자동매매 상태 페이지로 이동
+    // 가상매매 전략 카드인 경우 가상매매 상태 페이지로 이동
     if (id.startsWith("auto-")) {
       if (portfolio.strategyId) {
         router.push(`/quant/auto-trading/${portfolio.strategyId}`);
@@ -233,7 +233,7 @@ export function PortfolioPageClient({
       return;
     }
 
-    // 자동매매 전략인 경우 이모지 제거
+    // 가상매매 전략인 경우 이모지 제거
     const isAutoTrading = portfolio.id.startsWith("auto-");
     const displayName = isAutoTrading ? trimmedName.replace(/^🤖\s*/, "") : trimmedName;
 
@@ -245,9 +245,9 @@ export function PortfolioPageClient({
     try {
       setIsRenaming(true);
 
-      // 자동매매 전략인지 백테스트 전략인지 구분
+      // 가상매매 전략인지 백테스트 전략인지 구분
       if (isAutoTrading) {
-        // 자동매매 전략 이름 수정
+        // 가상매매 전략 이름 수정
         await autoTradingApi.updateStrategyName(portfolio.strategyId, {
           strategy_name: displayName,
         });

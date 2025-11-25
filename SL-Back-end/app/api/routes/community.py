@@ -44,7 +44,6 @@ async def get_posts(
     post_type: Optional[str] = Query(None, description="게시글 유형 필터 (STRATEGY_SHARE/DISCUSSION/QUESTION)"),
     tags: Optional[str] = Query(None, description="태그 필터 (쉼표로 구분)"),
     search: Optional[str] = Query(None, description="제목+내용 검색"),
-    user_id: Optional[str] = Query(None, description="작성자 ID 필터 (특정 사용자의 게시글만 조회)"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db)
@@ -61,18 +60,6 @@ async def get_posts(
         # 필터 적용
         if post_type:
             query = query.where(CommunityPost.post_type == post_type)
-
-        if user_id:
-            # UUID 형식 검증
-            from uuid import UUID
-            try:
-                user_uuid = UUID(user_id)
-                query = query.where(CommunityPost.user_id == user_uuid)
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid user_id format"
-                )
 
         if tags:
             tag_list = [t.strip() for t in tags.split(',')]
@@ -99,13 +86,6 @@ async def get_posts(
         )
         if post_type:
             count_query = count_query.where(CommunityPost.post_type == post_type)
-        if user_id:
-            from uuid import UUID
-            try:
-                user_uuid = UUID(user_id)
-                count_query = count_query.where(CommunityPost.user_id == user_uuid)
-            except ValueError:
-                pass
 
         total_result = await db.execute(count_query)
         total = total_result.scalar()

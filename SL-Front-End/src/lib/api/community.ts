@@ -9,7 +9,6 @@ export interface PostSummary {
   title: string;
   contentPreview: string;
   authorNickname: string | null;
-  authorId: string | null;
   isAnonymous: boolean;
   tags: string[] | null;
   postType: string;
@@ -176,9 +175,9 @@ export const communityApi = {
    */
   getPosts: async (params?: {
     postType?: string;
+    userId?: string;
     tags?: string | string[];
     search?: string;
-    userId?: string;
     page?: number;
     limit?: number;
   }): Promise<PostListResponse> => {

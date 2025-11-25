@@ -53,10 +53,17 @@ export function PortfolioShareCard({
           </p>
         </div>
 
-        <p className="text-[1.25rem] font-semibold text-price-up">
-          {returnRate}{" "}
-          <span className="text-base font-normal">%</span>
-        </p>
+        {Number(returnRate) >= 0 ? (
+          <p className="text-[1.25rem] font-semibold text-price-up">
+            {returnRate}{" "}
+            <span className="text-base font-normal">%</span>
+          </p>
+        ) : (
+          <p className="text-[1.25rem] font-semibold text-price-down">
+            {returnRate}{" "}
+            <span className="text-base font-normal">%</span>
+          </p>
+        )}
       </div>
 
       {/* 설정 조건 */}

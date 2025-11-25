@@ -46,12 +46,12 @@ export default async function PortfolioPage() {
     // 1. 백테스트 전략 목록 가져오기
     const data = await strategyApi.getMyStrategiesServer(token);
 
-    // 2. 자동매매 활성화된 전략 목록 가져오기
+    // 2.  가상매매활성화된 전략 목록 가져오기
     let autoTradingStrategies: any[] = [];
     try {
       autoTradingStrategies = await autoTradingApi.getMyAutoTradingStrategiesServer(token);
     } catch (error) {
-      console.warn("자동매매 전략 조회 실패:", error);
+      console.warn("가상매매 전략 조회 실패:", error);
     }
 
     // 백테스트 전략을 Portfolio 형태로 변환
@@ -67,10 +67,10 @@ export default async function PortfolioPage() {
       createdAt: formatDateToCard(strategy.createdAt),
     }));
 
-    // 자동매매 전략을 Portfolio 형태로 변환 (활성/비활성 모두 포함)
+    // 가상매매 전략을 Portfolio 형태로 변환 (활성/비활성 모두 포함)
     const autoTradingPortfolios: Portfolio[] = autoTradingStrategies
       .map((strategy) => {
-        // 자동매매 전략 이름 사용 (없으면 원래 백테스트 전략 이름 찾기)
+        // 가상매매 전략 이름 사용 (없으면 원래 백테스트 전략 이름 찾기)
         let displayName = strategy.strategy_name;
 
         if (!displayName) {
@@ -100,7 +100,7 @@ export default async function PortfolioPage() {
     // 두 리스트 합치기
     const portfolios: Portfolio[] = [...backtestPortfolios, ...autoTradingPortfolios];
 
-    // 3. 자동매매 대시보드 데이터 가져오기
+    // 3. 가상매매 대시보드 데이터 가져오기
     let dashboardData = {
       total_assets: 0,
       total_return: 0,
@@ -117,7 +117,7 @@ export default async function PortfolioPage() {
       console.warn("대시보드 데이터 조회 실패:", error);
     }
 
-    // 자동매매 대시보드 데이터만 사용
+    // 가상매매 대시보드 데이터만 사용
     const totalAssets = Number(dashboardData.total_assets) || 0;
     const totalProfit = Number(dashboardData.total_profit) || 0;
     const totalReturn = Number(dashboardData.total_return) || 0;

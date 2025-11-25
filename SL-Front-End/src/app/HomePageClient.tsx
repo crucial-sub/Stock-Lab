@@ -42,7 +42,7 @@ interface DashboardData {
   active_strategy_count: number;
   total_positions: number;
   total_trades_today: number;
-  total_allocated_capital: number; // 자동매매에 할당된 총 금액
+  total_allocated_capital: number; // 가상매매에 할당된 총 금액
 }
 
 export interface KiwoomAccountData {
@@ -183,11 +183,18 @@ const buildAuthenticatedStats = (
   dashboardData: DashboardData,
   kiwoomAccountData: KiwoomAccountData | null,
 ): HomeStatCardData[] => {
-  // 자동매매 대시보드 데이터 우선 사용 (활성 전략이 있는 경우)
+  // 가상매매 대시보드 데이터 우선 사용 (활성 전략이 있는 경우)
   const activeCount = Number(dashboardData.active_strategy_count) || 0;
-  const totalAssets = parseNumericValue(dashboardData.total_assets);
+  let totalAssets = parseNumericValue(dashboardData.total_assets);
   const totalReturn = parseNumericValue(dashboardData.total_return);
   const totalProfit = parseNumericValue(dashboardData.total_profit);
+
+  // 활성 포트폴리오가 없으면 키움 계좌 잔고로 표시
+  if (activeCount === 0 && kiwoomAccountData) {
+    const cashBalance = parseNumericValue(kiwoomAccountData.cash?.balance);
+    const holdingsValue = parseNumericValue(kiwoomAccountData.holdings?.tot_evlt_amt);
+    totalAssets = cashBalance + holdingsValue;
+  }
 
   return [
     {
@@ -195,7 +202,7 @@ const buildAuthenticatedStats = (
       title: "총 모의 자산",
       value: `${totalAssets.toLocaleString()}원`,
       change: formatCurrencyWithSign(totalProfit),
-      badge: activeCount > 0 ? "자동매매 활성" : undefined,
+      badge: activeCount > 0 ? "가상매매 활성" : undefined,
     },
     {
       id: "return",
@@ -273,6 +280,7 @@ export function HomePageClient({
               name: item.stockName,
               tag: item.theme ?? item.stockCode,
               change: `${item.changeRate && item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+              changeRate: item.changeRate ?? 0,
               price: item.currentPrice
                 ? `${item.currentPrice.toLocaleString()}원`
                 : "-",
@@ -303,6 +311,7 @@ export function HomePageClient({
             name: item.name,
             tag: item.theme ?? item.code,
             change: `${item.changeRate > 0 ? "+" : ""}${(item.changeRate ?? 0).toFixed(2)}%`,
+            changeRate: item.changeRate ?? 0,
             price: item.price ? `${item.price.toLocaleString()}원` : "-",
             volume: item.volume ? `${item.volume.toLocaleString()}주` : "-",
           }));
@@ -425,7 +434,7 @@ export function HomePageClient({
               >
                 키움증권 모의투자 계좌를 연동
               </a>
-              하면 자동매매를 이용할 수 있습니다.
+              하면 가상매매를 이용할 수 있습니다.
             </p>
           )}
           <MarketInsightSection stocks={marketStocks} news={marketNews} />

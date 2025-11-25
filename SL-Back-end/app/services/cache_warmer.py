@@ -265,7 +265,7 @@ async def warm_factor_calculations():
             calculator = CompleteFactorCalculator(db)
 
             # ⚡ 전체 종목을 한 번에 계산 (배치 크기 증가)
-            batch_size = 500  # 100 -> 500으로 증가
+            batch_size = 1000  # 100 -> 500으로 증가
             for i in range(0, len(stock_codes), batch_size):
                 batch = stock_codes[i:i + batch_size]
 
@@ -426,6 +426,57 @@ async def warm_backtest_results():
         logger.error(f"❌ Backtest warming failed: {e}")
 
 
+async def warm_famous_strategies():
+    """
+    유명 투자 전략 10개 캐싱 (병렬 처리)
+    - 급등주, 안정성장, 피터린치, 워렌버핏 등
+    - 30-35분 소요 (4개씩 병렬 처리)
+    """
+    logger.info("🔥 Starting famous strategies warming (10 strategies, parallel)...")
+
+    try:
+        import subprocess
+        import os
+
+        # 유명 전략 캐시 워밍 스크립트 실행
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "scripts",
+            "warm_all_famous_strategies.py"
+        )
+
+        if not os.path.exists(script_path):
+            logger.warning(f"⚠️ Famous strategies script not found: {script_path}")
+            logger.info(f"   Expected path: {script_path}")
+            return
+
+        logger.info(f"📂 Running script: {script_path}")
+
+        # 서브프로세스로 실행
+        result = subprocess.run(
+            ["python3", script_path],
+            capture_output=True,
+            text=True,
+            timeout=3600  # 1시간 타임아웃
+        )
+
+        if result.returncode == 0:
+            logger.info("✅ Famous strategies warming completed!")
+            # 주요 로그만 출력
+            for line in result.stdout.split('\n'):
+                if any(keyword in line for keyword in ['✅', '🔄', '배치', '완료', '시작']):
+                    logger.info(f"   {line}")
+        else:
+            logger.error(f"❌ Famous strategies warming failed!")
+            logger.error(f"   Return code: {result.returncode}")
+            logger.error(f"   Stderr: {result.stderr[:500]}")  # 처음 500자만
+
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Famous strategies warming timeout (1 hour)")
+    except Exception as e:
+        logger.error(f"❌ Famous strategies warming failed: {e}")
+
+
 async def run_cache_warming():
     """
     전체 캐시 워밍 프로세스 실행
@@ -449,6 +500,12 @@ async def run_cache_warming():
 
         # 3단계: 인기 백테스트 메타데이터 캐싱
         await warm_backtest_results()
+
+        # 4단계: 유명 투자 전략 10개 캐싱 (병렬 처리) - NEW!
+        logger.info("\n" + "=" * 80)
+        logger.info("📊 Phase 4: Famous Strategies Warming")
+        logger.info("=" * 80)
+        await warm_famous_strategies()
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()

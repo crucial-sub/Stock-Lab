@@ -1,0 +1,180 @@
+# Docker Compose version is now optional and deprecated
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sl_postgres_dev
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-stocklabadmin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nmmteam05}
+      POSTGRES_DB: ${POSTGRES_DB:-stock_lab_investment_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - quant_network_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stocklabadmin -d stock_lab_investment_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: sl_redis_dev
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - quant_network_dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend (Development with hot-reload)
+  backend:
+    build:
+      context: ./SL-Back-end
+      dockerfile: Dockerfile.dev
+    container_name: sl_backend_dev
+    env_file:
+      - ./SL-Back-end/.env.local
+    environment:
+      # 원격 DB (SSH 터널링 필요: ssh -N -L 5433:localhost:5432 user@host)
+      DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db
+      DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@host.docker.internal:5433/stock_lab_investment_db
+      # 로컬 Docker DB 사용
+      # DATABASE_URL: postgresql+asyncpg://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
+      # DATABASE_SYNC_URL: postgresql://stocklabadmin:nmmteam05@postgres:5432/stock_lab_investment_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Mount source code for hot-reload
+      - ./SL-Back-end/app:/app/app
+      - ./SL-Back-end/logs:/app/logs
+      - ./SL-Back-end/scripts:/app/scripts
+    networks:
+      - quant_network_dev
+    stdin_open: true
+    tty: true
+
+  # Next.js Frontend (Development with hot-reload)
+  frontend:
+    build:
+      context: ./SL-Front-End
+      dockerfile: Dockerfile.dev
+    container_name: sl_frontend_dev
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
+      NEXT_PUBLIC_CHATBOT_API_URL: ${NEXT_PUBLIC_CHATBOT_API_URL:-http://localhost:8003}
+      API_BASE_URL: ${API_BASE_URL:-http://backend:8000/api/v1}
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    volumes:
+      # Mount source code for hot-reload
+      - ./SL-Front-End/src:/app/src
+      - ./SL-Front-End/public:/app/public
+      - ./SL-Front-End/package.json:/app/package.json
+      - ./SL-Front-End/pnpm-lock.yaml:/app/pnpm-lock.yaml
+      - ./SL-Front-End/next.config.ts:/app/next.config.ts
+      - ./SL-Front-End/tailwind.config.js:/app/tailwind.config.js
+      - ./SL-Front-End/tsconfig.json:/app/tsconfig.json
+      - ./SL-Front-End/postcss.config.js:/app/postcss.config.js
+      - ./SL-Front-End/biome.json:/app/biome.json
+      # Exclude node_modules from mounting (use container's node_modules)
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - quant_network_dev
+    stdin_open: true
+    tty: true
+
+  # ChatBot API (Development with hot-reload)
+  chatbot:
+    build:
+      context: ./SL-ChatBot
+      dockerfile: ./chatbot/Dockerfile
+    container_name: sl_chatbot_dev
+    env_file:
+      - .env
+      - ./SL-ChatBot/.env
+    environment:
+      STOCK_LAB_API_URL: http://backend:8000/api/v1
+      PYTHONUNBUFFERED: 1
+      DEBUG: "true"
+    ports:
+      - "${CHATBOT_PORT:-8003}:8003"
+    volumes:
+      # Mount source code for hot-reload
+      - ./SL-ChatBot/chatbot/src:/app/src
+      - ./SL-ChatBot/api:/app/api
+      - ./SL-ChatBot/chatbot/config:/app/config
+      - ./SL-ChatBot/prompts:/app/prompts
+      - ./SL-ChatBot/chatbot/requirements.txt:/app/requirements.txt
+      - ./SL-ChatBot/chatbot/config.yaml:/app/config.yaml
+    networks:
+      - quant_network_dev
+    stdin_open: true
+    tty: true
+
+  # Redis Commander (Development Tool)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: sl_redis_commander_dev
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - quant_network_dev
+    depends_on:
+      - redis
+
+  # pgAdmin (PostgreSQL Web UI - Optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sl_pgadmin_dev
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@stacklab.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data_dev:/var/lib/pgadmin
+    networks:
+      - quant_network_dev
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  redis_data_dev:
+    driver: local
+  pgadmin_data_dev:
+    driver: local
+
+networks:
+  quant_network_dev:
+    driver: bridge

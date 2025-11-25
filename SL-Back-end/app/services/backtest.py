@@ -386,18 +386,21 @@ class BacktestEngine:
 
         self.hold_days = None
         if hold_days:
+            # 🔥 FIX: 기본값을 프론트엔드와 일치 ("전일 종가", 0)
+            # 캐시 키 일관성을 위해 정규화된 기본값 사용
             self.hold_days = {
                 "min_hold_days": hold_days.get('min_hold_days'),
                 "max_hold_days": hold_days.get('max_hold_days'),
-                "sell_price_basis": hold_days.get('sell_price_basis', 'CURRENT'),
-                "sell_price_offset": Decimal(str(hold_days.get('sell_price_offset'))) if hold_days.get('sell_price_offset') is not None else None
+                "sell_price_basis": hold_days.get('sell_price_basis', '전일 종가'),
+                "sell_price_offset": Decimal(str(hold_days.get('sell_price_offset', 0)))
             }
 
         self.condition_sell_meta = None
         if condition_sell:
+            # 🔥 FIX: 기본값을 프론트엔드와 일치
             self.condition_sell_meta = {
-                "sell_price_basis": condition_sell.get('sell_price_basis', 'CURRENT'),
-                "sell_price_offset": Decimal(str(condition_sell.get('sell_price_offset'))) if condition_sell.get('sell_price_offset') is not None else None
+                "sell_price_basis": condition_sell.get('sell_price_basis', '전일 종가'),
+                "sell_price_offset": Decimal(str(condition_sell.get('sell_price_offset', 0)))
             }
 
         # 매매 대상 필터 저장

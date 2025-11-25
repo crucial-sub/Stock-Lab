@@ -90,6 +90,58 @@ export interface BacktestConfigurationUILanguage {
     strategy_name: string;
   };
   configuration_fields: ConfigurationField[];
+  /** 백테스트 실행에 필요한 설정 (BacktestRunRequest 형태) */
+  backtest_config?: {
+    strategy_name: string;
+    is_day_or_month: string;
+    commission_rate: number;
+    slippage: number;
+    buy_logic: string;
+    priority_factor: string;
+    priority_order: string;
+    per_stock_ratio: number;
+    max_holdings: number;
+    max_buy_value: number | null;
+    max_daily_stock: number | null;
+    buy_price_basis: string;
+    buy_price_offset: number;
+    buy_conditions: {
+      name: string;
+      exp_left_side: string;
+      inequality: string;
+      exp_right_side: number;
+    }[];
+    target_and_loss: {
+      target_gain: number | null;
+      stop_loss: number | null;
+    } | null;
+    hold_days: {
+      min_hold_days: number;
+      max_hold_days: number;
+      sell_price_basis: string;
+      sell_price_offset: number;
+    } | null;
+    condition_sell: {
+      sell_conditions: {
+        name: string;
+        exp_left_side: string;
+        inequality: string;
+        exp_right_side: number;
+      }[];
+      sell_logic: string;
+      sell_price_basis: string;
+      sell_price_offset: number;
+    } | null;
+    trade_targets: {
+      use_all_stocks: boolean;
+      selected_universes?: string[];
+      selected_themes: string[];
+      selected_stocks: string[];
+      selected_stock_count?: number | null;
+      total_stock_count?: number;
+      total_theme_count?: number;
+    };
+  };
 }
 
 export interface ConfigurationField {
@@ -119,6 +171,8 @@ export interface ChatResponse {
   context?: string;
   sources?: any[];
   backtest_conditions?: DSLCondition[];  // 매수/매도 조건이 있을 경우
+  /** 백테스트 설정 (AI 어시스턴트에서 전략 선택 시) */
+  backtest_config?: BacktestConfigurationUILanguage["backtest_config"];
 }
 
 // ============ API Functions ============

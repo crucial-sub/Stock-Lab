@@ -20,6 +20,29 @@ from app.core.cache import cache
 logger = logging.getLogger(__name__)
 
 
+def _normalize_for_hash(obj: Any) -> Any:
+    """
+    해시 생성을 위한 데이터 정규화
+
+    Decimal, float, int를 모두 동일한 형태로 변환하여
+    워밍업 스크립트와 백테스트 실행 시 동일한 해시 생성 보장
+    """
+    from decimal import Decimal
+
+    if isinstance(obj, Decimal):
+        # Decimal을 float로 변환 (일관성)
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: _normalize_for_hash(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_normalize_for_hash(item) for item in obj]
+    elif isinstance(obj, (int, float)):
+        # int/float은 float으로 통일
+        return float(obj) if obj is not None else None
+    else:
+        return obj
+
+
 def generate_strategy_hash(buy_conditions: Any, trading_rules: Dict = None) -> str:
     """
     전략 조건으로 고유 해시 생성
@@ -30,10 +53,18 @@ def generate_strategy_hash(buy_conditions: Any, trading_rules: Dict = None) -> s
 
     Returns:
         8자리 해시 문자열
+
+    Note:
+        🔥 FIX: Decimal/int/float를 모두 float으로 정규화하여
+        워밍업과 백테스트 실행 시 동일한 해시 생성 보장
     """
+    # 데이터 정규화 (Decimal → float 변환)
+    normalized_buy = _normalize_for_hash(buy_conditions)
+    normalized_rules = _normalize_for_hash(trading_rules or {})
+
     strategy_data = {
-        'buy_conditions': buy_conditions,
-        'trading_rules': trading_rules or {}
+        'buy_conditions': normalized_buy,
+        'trading_rules': normalized_rules
     }
 
     # JSON으로 직렬화 (key 정렬로 일관성 보장)

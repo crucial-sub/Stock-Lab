@@ -86,21 +86,16 @@ export function FloatingChatWidget() {
 
       // 백테스트 조건이 있으면 자동 적용
       const bc = response.backtest_conditions;
-      if (bc) {
-        const mappedBuy: any[] = [];
-        const mappedSell: any[] = [];
-        if (Array.isArray(bc)) {
-          mappedBuy.push(...bc);
-        } else {
-          if (Array.isArray(bc.buy)) mappedBuy.push(...bc.buy);
-          if (Array.isArray(bc.sell)) mappedSell.push(...bc.sell);
-        }
-        if (mappedBuy.length > 0) {
-          setBuyConditionsUI([...buyConditionsUI, ...mappedBuy]);
-        }
-        if (mappedSell.length > 0) {
-          setSellConditionsUI([...sellConditionsUI, ...mappedSell]);
-        }
+      if (bc && Array.isArray(bc) && bc.length > 0) {
+        // DSLCondition[]을 BuyConditionUI[]로 변환하여 추가
+        const convertedConditions = bc.map((cond, idx) => ({
+          id: `dsl-${Date.now()}-${idx}`,
+          factorName: cond.factor,
+          subFactorName: "기본값",
+          operator: cond.operator,
+          value: String(cond.value ?? 0), // BuyConditionUI.value는 string 타입
+        }));
+        setBuyConditionsUI([...buyConditionsUI, ...convertedConditions]);
       }
 
       pushMessage({

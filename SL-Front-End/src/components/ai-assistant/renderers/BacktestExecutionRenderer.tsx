@@ -109,8 +109,8 @@ export function BacktestExecutionRenderer({
       return;
     }
 
-    // 시간 추적 시작
-    if (!startTimeRef.current && backtestStatus !== "error" && backtestStatus !== "failed") {
+    // 시간 추적 시작 (failed는 위에서 이미 return 처리됨)
+    if (!startTimeRef.current && backtestStatus !== "error") {
       startTimeRef.current = Date.now();
     }
 
@@ -207,7 +207,6 @@ export function BacktestExecutionRenderer({
         finalCapital: finalStats.final_value,
       },
       trades: [],
-      portfolio: [],
       yieldPoints: chartData.map(point => ({
         date: point.date,
         value: point.portfolioValue,
@@ -218,6 +217,7 @@ export function BacktestExecutionRenderer({
         sellCount: point.sellCount,
       })),
       summary: wsSummary || undefined,
+      createdAt: new Date().toISOString(),
     };
 
     console.log("✅ [BacktestExecutionRenderer] 변환된 결과:", convertedResult);

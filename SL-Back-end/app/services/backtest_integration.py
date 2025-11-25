@@ -302,13 +302,27 @@ def integrate_optimizations(backtest_engine):
         total_dates = len(unique_dates)
         logger.info(f"계산 대상: {total_dates}개 거래일")
 
-        # 4. 배치 캐시 조회
+        # 3.5 전략 해시 생성 (캐시 키 격리용)
+        from app.services.backtest_cache_optimized import generate_strategy_hash
+
+        strategy_hash = generate_strategy_hash(
+            buy_conditions=buy_conditions,
+            trading_rules={
+                'target_and_loss': backtest_engine.target_and_loss if hasattr(backtest_engine, 'target_and_loss') else None,
+                'hold_days': backtest_engine.hold_days if hasattr(backtest_engine, 'hold_days') else None,
+                'condition_sell_meta': backtest_engine.condition_sell_meta if hasattr(backtest_engine, 'condition_sell_meta') else None,
+            }
+        )
+        logger.info(f"🔐 전략 해시 생성: {strategy_hash} (전략별 캐시 격리)")
+
+        # 4. 배치 캐시 조회 (전략 해시 포함)
 
         cache_results = await optimized_cache.get_factors_batch(
             [d.date() for d in unique_dates],
             list(required_factors),
             target_themes,
-            target_stocks
+            target_stocks,
+            strategy_hash  # 🔥 FIX: 전략 해시 추가
         )
 
         # 5. 캐시 미스인 날짜만 계산
@@ -335,18 +349,75 @@ def integrate_optimizations(backtest_engine):
 
             # 🎯 팩터 의존성 분석 - 필요한 팩터만 계산
             factor_analyzer = FactorDependencyAnalyzer()
-            required_factors = set()
+            extracted_factors = set()
 
-            # buy_conditions 매개변수에서 직접 팩터 추출
+            # buy_conditions에서 필요한 팩터 추출
             if buy_conditions:
-                required_factors = factor_analyzer.extract_factors_from_conditions(
-                    conditions=buy_conditions
-                )
+                try:
+                    if isinstance(buy_conditions, dict) and 'expression' in buy_conditions:
+                        # 논리식 형태
+                        extracted_factors = factor_analyzer.extract_factors_from_conditions(
+                            buy_expression=buy_conditions
+                        )
+                    elif isinstance(buy_conditions, list):
+                        # 리스트 형태
+                        extracted_factors = factor_analyzer.extract_factors_from_conditions(
+                            conditions=buy_conditions
+                        )
+                except Exception as e:
+                    logger.warning(f"⚠️ 팩터 추출 실패: {e}")
 
-            # 필요한 팩터가 없으면 기본 팩터 세트 사용
-            if not required_factors:
-                logger.warning("⚠️ 조건식에서 팩터를 추출할 수 없음. 기본 팩터 세트 사용")
-                required_factors = {'PER', 'PBR', 'ROE', 'ROA', 'DEBT_RATIO', 'CURRENT_RATIO'}
+            # 필요한 팩터가 없으면 모든 팩터 계산 (안전장치)
+            if not extracted_factors:
+                logger.warning("⚠️ 조건식에서 팩터를 추출할 수 없음. 모든 팩터 계산")
+                # 모든 팩터를 포함 (안전하지만 성능 저하 가능)
+                extracted_factors = {
+                    # 가치 팩터
+                    'PER', 'PBR', 'PSR', 'PCR', 'EARNINGS_YIELD', 'BOOK_TO_MARKET',
+                    'EV_SALES', 'EV_EBITDA', 'GRAHAM_NUMBER', 'PRICE_TO_FCF', 'PS_RATIO',
+                    'CAPE_RATIO', 'PTBV', 'PEG', 'PEG_RATIO', 'EV_FCF',
+                    # 수익성 팩터
+                    'ROE', 'ROA', 'ROIC', 'OPERATING_MARGIN', 'NET_MARGIN', 'GPM', 'NPM', 'OPM',
+                    # 재무건전성 팩터
+                    'DEBT_RATIO', 'DEBTRATIO', 'CURRENT_RATIO', 'QUICK_RATIO', 'CASH_RATIO',
+                    'DEBT_TO_EQUITY', 'EQUITY_RATIO', 'INTEREST_COVERAGE', 'WORKING_CAPITAL_RATIO',
+                    # 성장 팩터
+                    'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y', 'REVENUE_GROWTH', 'EARNINGS_GROWTH_1Y',
+                    'EARNINGS_GROWTH_3Y', 'EARNINGS_GROWTH', 'OPERATING_INCOME_GROWTH',
+                    'OPERATING_INCOME_GROWTH_YOY', 'GROSS_PROFIT_GROWTH', 'OCF_GROWTH_1Y',
+                    'BOOK_VALUE_GROWTH_1Y', 'ASSET_GROWTH_1Y', 'SUSTAINABLE_GROWTH_RATE',
+                    # 배당 팩터
+                    'DIVIDEND_YIELD', 'DIVIDENDYIELD', 'DIVIDEND_GROWTH_3Y', 'DIVIDEND_GROWTH_YOY',
+                    # 모멘텀 팩터
+                    'MOMENTUM_1M', 'MOMENTUM_3M', 'MOMENTUM_6M', 'MOMENTUM_12M',
+                    'RETURN_1M', 'RETURN_3M', 'RETURN_6M', 'RETURN_12M', 'RET_3D', 'RET_8D',
+                    'RELATIVE_STRENGTH', 'VOLUME_MOMENTUM',
+                    # 52주 팩터
+                    'DISTANCE_FROM_52W_HIGH', 'DISTANCE_FROM_52W_LOW', 'PRICE_POSITION',
+                    'DAYS_FROM_52W_HIGH', 'DAYS_FROM_52W_LOW', 'WEEK_52_POSITION',
+                    # 변동성 팩터
+                    'VOLATILITY', 'VOLATILITY_20D', 'VOLATILITY_60D', 'VOLATILITY_90D',
+                    'DOWNSIDE_VOLATILITY', 'HISTORICAL_VOLATILITY_20', 'HISTORICAL_VOLATILITY_60',
+                    'PARKINSON_VOLATILITY', 'INTRADAY_VOLATILITY', 'BETA',
+                    # 유동성 팩터
+                    'AVG_TRADING_VALUE', 'TURNOVER_RATE', 'VOLUME_RATIO_20D',
+                    'AMIHUD_ILLIQUIDITY', 'VOLUME_PRICE_TREND',
+                    # 기술적 지표
+                    'RSI', 'RSI_14', 'BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'MACD',
+                    'MACD_SIGNAL', 'MACD_HISTOGRAM', 'STOCHASTIC_14', 'VOLUME_ROC',
+                    'MA_5', 'MA_20', 'MA_60', 'MA_120', 'MA_250', 'SMA', 'PRICE_VS_MA20',
+                    'ADX', 'AROON_UP', 'AROON_DOWN', 'ATR', 'CCI', 'MFI',
+                    'ULTIMATE_OSCILLATOR', 'WILLIAMS_R', 'TRIX', 'CMF', 'OBV', 'VWAP',
+                    # 기타 팩터
+                    'MARKET_CAP', 'OCF_RATIO', 'ASSET_TURNOVER', 'INVENTORY_TURNOVER',
+                    'FCF_YIELD', 'CHANGE_RATE', 'QUALITY_SCORE', 'ACCRUALS_RATIO',
+                    'ALTMAN_Z_SCORE', 'EARNINGS_QUALITY', 'MAX_DRAWDOWN', 'SHARPE_RATIO',
+                    'SORTINO_RATIO', 'ENTERPRISE_YIELD', 'PIOTROSKI_F_SCORE',
+                    'SHAREHOLDER_YIELD', 'EASE_OF_MOVEMENT', 'FORCE_INDEX',
+                    'GREENBLATT_RANK', 'MAGIC_FORMULA'
+                }
+
+            required_factors = extracted_factors
 
             # compute_mask 생성
             compute_mask = {
@@ -443,13 +514,14 @@ def integrate_optimizations(backtest_engine):
         else:
             logger.info(f"⚡ 팩터 계산 스킵: 모든 데이터 캐시 히트!")
 
-        # 7. 캐시 미스 결과 저장
+        # 7. 캐시 미스 결과 저장 (전략 해시 포함)
         if all_factors_by_date:
             await optimized_cache.set_factors_batch(
                 all_factors_by_date,
                 list(required_factors),
                 target_themes,
-                target_stocks
+                target_stocks,
+                strategy_hash  # 🔥 FIX: 전략 해시 추가
             )
 
         # 8. 캐시 히트 + 계산 결과 통합

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { PostSummary } from "@/lib/api/community";
 
 interface PostCardProps {
@@ -75,7 +76,9 @@ export function PostCard({ post, isSelected, onToggleSelect, onDelete }: PostCar
                 ))}
               </div>
             )}
-            <h3 className="text-[1.25rem] font-semibold text-[#000000]">{post.title}</h3>
+            <Link href={`/community/${post.postId}`} className="hover:underline">
+              <h3 className="text-[1.25rem] font-semibold text-[#000000]">{post.title}</h3>
+            </Link>
             <p className="text-[0.75rem] text-muted">{formatDate(post.createdAt)}</p>
           </div>
           <div className="flex items-center gap-2">

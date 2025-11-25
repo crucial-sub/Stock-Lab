@@ -21,6 +21,7 @@ interface TradePoint {
   holdingDays: number;
   price: number;
   quantity: number;
+  reason?: string;  // 매매 사유 추가
 }
 
 export function StockWiseReturnsChart({
@@ -65,6 +66,7 @@ export function StockWiseReturnsChart({
         holdingDays: holdingDays,
         price: trade.sellPrice,
         quantity: trade.quantity,
+        reason: trade.reason,  // 매매 사유 추가
       });
     });
 
@@ -119,7 +121,7 @@ export function StockWiseReturnsChart({
         valueYField: "profitRate",
         valueXField: "dateTimestamp",
         tooltip: am5.Tooltip.new(root, {
-          labelText: "{stockName}\n{type}: {profitRate.formatNumber('#.##')}%",
+          labelText: "",  // 빈 문자열로 설정 (커스텀 툴팁 사용)
         }),
         connect: false,
       }),
@@ -159,6 +161,10 @@ export function StockWiseReturnsChart({
         stroke: am5.color(0xffffff),
         strokeWidth: isSelected ? 3 : 2, // 선택된 점은 테두리도 두껍게
         cursorOverStyle: "pointer",
+        // 커스텀 툴팁 추가
+        tooltipText: isBuy
+          ? `${dataContext.stockName}\n매수`
+          : `${dataContext.stockName}\n매도: ${dataContext.profitRate.toFixed(2)}%`,
       });
 
       // 애니메이션 효과
@@ -246,6 +252,9 @@ export function StockWiseReturnsChart({
                     유니버스
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-text-muted">
+                    매매가격(원)
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-text-muted">
                     보유기간(일)
                   </th>
                   <th className="px-4 py-3 text-center font-medium text-text-muted">
@@ -260,7 +269,7 @@ export function StockWiseReturnsChart({
                 {selectedDateTrades.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-8 text-center text-text-muted"
                     >
                       거래 내역이 없습니다.
@@ -277,7 +286,11 @@ export function StockWiseReturnsChart({
                         {trade.stockName}
                       </td>
                       <td className="px-4 py-3 text-center text-text-body">
-                        코스닥성장
+                        {/* 종목 코드로 시장 판단: 6자리이고 0으로 시작하면 코스피, 아니면 코스닥 */}
+                        {trade.stockCode.length === 6 && trade.stockCode.startsWith('0') ? '코스피' : '코스닥'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-text-body">
+                        {trade.price.toLocaleString('ko-KR')}
                       </td>
                       <td className="px-4 py-3 text-right text-text-body">
                         {trade.holdingDays}
@@ -290,17 +303,19 @@ export function StockWiseReturnsChart({
                               : "text-blue-500"
                           }`}
                         >
-                          {trade.type === "buy" ? "목표가 매도" : "손절가 매도"}
+                          {trade.type === "buy" ? "팩터 기반 매수 (익일 시가)" : (trade.reason || "매도")}
                         </span>
                       </td>
                       <td
                         className={`px-4 py-3 text-right font-semibold ${
-                          trade.profitRate >= 0
+                          trade.type === "buy"
+                            ? "text-text-body"
+                            : trade.profitRate >= 0
                             ? "text-red-500"
                             : "text-blue-500"
                         }`}
                       >
-                        {trade.profitRate.toFixed(2)}
+                        {trade.type === "buy" ? "-" : trade.profitRate.toFixed(2)}
                       </td>
                     </tr>
                   ))

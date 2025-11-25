@@ -155,6 +155,8 @@ export interface BacktestResult {
     valuation: number;
     /** 수량 */
     quantity: number;
+    /** 매매 사유 */
+    reason?: string;
   }[];
   /** 수익률 차트 데이터 */
   yieldPoints: {

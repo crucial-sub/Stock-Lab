@@ -55,6 +55,7 @@ export interface MarketStock {
   name: string;
   tag: string;
   change: string;
+  changeRate: number;
   price: string;
   volume: string;
 }

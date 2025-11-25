@@ -63,6 +63,16 @@ const MarketInsightSectionComponent = ({
                   <span className="whitespace-normal break-keep text-[1rem] font-semibold text-text-body">
                     {stock.name}
                   </span>
+                  <span className="rounded-full bg-brand-purple px-3 pt-0.5 text-[0.75rem] font-semibold text-white">
+                    {stock.tag}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-[1rem] font-normal text-text-muted">
+                  <span className={stock.changeRate >= 0 ? "text-price-up" : "text-price-down"}>
+                    {stock.change}
+                  </span>
+                  <span>{stock.price}</span>
+                  <span>{stock.volume}</span>
                 </div>
                 <span className="text-[0.95rem] font-normal text-price-up">
                   {stock.change}

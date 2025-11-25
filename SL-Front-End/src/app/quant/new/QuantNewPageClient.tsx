@@ -84,6 +84,8 @@ export function QuantNewPageClient() {
     setHoldDays,
     setConditionSell,
     setTradeTargets,
+    setBuyConditionsUI,
+    setSellConditionsUI,
   } = useBacktestConfigStore();
   const reset = useBacktestConfigStore((state) => state.reset);
 
@@ -101,13 +103,17 @@ export function QuantNewPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 마운트 시 한 번만 실행
 
-  // 페이지 언마운트 시 cleanup
+  // 페이지 언마운트 시 cleanup (StrictMode 호환)
+  // 주의: 페이지를 완전히 떠날 때만 reset
   useEffect(() => {
+    // 언마운트 시 ref 초기화만 수행 (StrictMode에서 중복 호출 방지)
     return () => {
-      // 페이지를 떠날 때 store 초기화
-      reset();
+      // 다음 마운트에서 새로운 데이터를 로드할 수 있도록 ref만 초기화
+      // store reset은 새로운 페이지 진입 시 수행 (위의 useEffect에서)
+      conditionsAppliedRef.current = false;
+      cloneAppliedRef.current = false;
     };
-  }, [reset]);
+  }, []);
 
   useEffect(() => {
     if (conditionsAppliedRef.current) return;
@@ -186,10 +192,18 @@ export function QuantNewPageClient() {
     const loadCloneData = async () => {
       try {
         setIsLoadingClone(true);
-        cloneAppliedRef.current = true;
 
         // 원본 전략 데이터 가져오기
+        console.log("[QuantNewPageClient] 복제 데이터 로드 시작:", cloneParam);
         const cloneData = await communityApi.getCloneStrategyData(cloneParam);
+        console.log("[QuantNewPageClient] 복제 데이터 로드 성공:", cloneData);
+
+        // API 호출 성공 후에만 ref를 true로 설정 (실패 시 재시도 가능)
+        cloneAppliedRef.current = true;
+
+        // 기존 조건 초기화 (중복 방지)
+        setBuyConditionsUI([]);
+        setSellConditionsUI([]);
 
         // 기본 설정
         setStrategyName(cloneData.strategyName);
@@ -237,9 +251,6 @@ export function QuantNewPageClient() {
 
           // 매도 조건 UI 복원
           if (cloneData.conditionSell.sell_conditions && Array.isArray((cloneData.conditionSell as any).sell_conditions)) {
-            // 기존 매도 조건 UI 초기화 (필요시)
-            // setSellConditionsUI([]); // store에 이 함수가 있다면 사용, 없으면 생략
-
             (cloneData.conditionSell as any).sell_conditions.forEach((condition: any) => {
               const parsed = parseConditionString(condition.exp_left_side || "");
 

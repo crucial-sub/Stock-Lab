@@ -246,6 +246,11 @@ class SimulationSession(Base):
     description = Column(Text, nullable=True, comment="포트폴리오 설명")
     share_url = Column(String(100), nullable=True, unique=True, index=True, comment="공유 URL 슬러그")
 
+    # 포트폴리오 저장 관련 필드
+    is_portfolio = Column(Boolean, default=False, nullable=False, comment="포트폴리오로 저장 여부")
+    portfolio_name = Column(String(200), nullable=True, comment="포트폴리오 이름")
+    saved_at = Column(TIMESTAMP, nullable=True, comment="포트폴리오 저장 시간")
+
     # 커뮤니티 기능
     view_count = Column(Integer, default=0, comment="조회수")
     like_count = Column(Integer, default=0, comment="좋아요 수")
@@ -268,6 +273,8 @@ class SimulationSession(Base):
         Index('idx_simulation_sessions_status', 'status'),
         Index('idx_simulation_sessions_strategy_date', 'strategy_id', 'start_date', 'end_date'),
         Index('idx_simulation_sessions_user_created', 'user_id', 'created_at'),  # 마이페이지용
+        Index('idx_simulation_sessions_user_status_created', 'user_id', 'status', 'created_at'),  # 페이지네이션 최적화
+        Index('idx_simulation_sessions_strategy_status_completed', 'strategy_id', 'status', 'completed_at'),  # 랭킹 쿼리 최적화
         Index('idx_simulation_sessions_public_created', 'is_public', 'created_at'),  # 랭킹용
         Index('idx_simulation_sessions_share_url', 'share_url'),  # 공유 URL 조회
         {"comment": "시뮬레이션 세션 테이블"}

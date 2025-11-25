@@ -46,6 +46,7 @@ beautifulsoup4==4.12.2  # HTML 파싱 (news crawler)
 # 로깅 및 모니터링
 loguru==0.7.2  # 향상된 로깅
 prometheus-fastapi-instrumentator==6.1.0  # Prometheus 메트릭
+psutil==5.9.8  # 시스템 및 프로세스 모니터링 (메모리, CPU 사용량 추적)
 
 # 데이터 검증
 # pandera==0.18.0  # DataFrame 스키마 검증 - pandas 호환성 문제로 임시 제거

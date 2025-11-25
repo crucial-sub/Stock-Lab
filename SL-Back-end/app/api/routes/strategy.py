@@ -6,6 +6,7 @@ Strategy API 라우터
 """
 from datetime import datetime
 import logging
+import json
 from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,6 +15,7 @@ from sqlalchemy import select, and_, or_, desc, func, delete as sql_delete
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.cache import cache
 from app.models.simulation import (
     PortfolioStrategy,
     SimulationSession,
@@ -42,20 +44,64 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+async def _invalidate_ranking_cache():
+    """
+    랭킹 캐시 무효화 헬퍼 함수
+    strategy_ranking:* 패턴의 모든 캐시 키 삭제
+    """
+    try:
+        # Redis SCAN을 사용하여 패턴에 맞는 모든 키 조회
+        pattern = "strategy_ranking:*"
+        cursor = 0
+        deleted_count = 0
+
+        while True:
+            cursor, keys = await cache.redis.scan(cursor, match=pattern, count=100)
+            if keys:
+                await cache.redis.delete(*keys)
+                deleted_count += len(keys)
+            if cursor == 0:
+                break
+
+        logger.info(f"랭킹 캐시 {deleted_count}개 삭제됨")
+    except Exception as e:
+        logger.error(f"랭킹 캐시 무효화 중 오류: {e}")
+        raise
+
+
 @router.get("/strategies/my", response_model=MyStrategiesResponse)
 async def get_my_strategies(
+    page: int = Query(1, ge=1, description="페이지 번호"),
+    limit: int = Query(20, ge=1, le=100, description="페이지당 항목 수"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    내 백테스트 결과 목록 조회
-    - 로그인한 사용자의 모든 백테스트 결과 반환 (진행중/완료/실패 모두 포함)
+    내 백테스트 결과 목록 조회 (페이지네이션)
+    - 로그인한 사용자의 백테스트 결과 반환 (진행중/완료/실패 모두 포함)
     - 최신 순으로 정렬
+    - 기본: 페이지당 20개, 최대 100개
     """
     try:
         user_id = current_user.user_id
+        offset = (page - 1) * limit
 
-        # 1. 사용자의 모든 시뮬레이션 세션 조회 (전략 정보 포함)
+        # 1. 전체 개수 조회 (포트폴리오로 저장된 것만)
+        count_query = (
+            select(func.count())
+            .select_from(SimulationSession)
+            .where(
+                and_(
+                    SimulationSession.user_id == user_id,
+                    SimulationSession.is_portfolio == True
+                )
+            )
+        )
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
+
+        # 2. 사용자의 시뮬레이션 세션 조회 (페이지네이션 적용)
+        # 포트폴리오로 저장된 것만 조회
         sessions_query = (
             select(SimulationSession, PortfolioStrategy, SimulationStatistics)
             .join(
@@ -66,14 +112,21 @@ async def get_my_strategies(
                 SimulationStatistics,
                 SimulationStatistics.session_id == SimulationSession.session_id
             )
-            .where(SimulationSession.user_id == user_id)
-            .order_by(SimulationSession.created_at.desc())
+            .where(
+                and_(
+                    SimulationSession.user_id == user_id,
+                    SimulationSession.is_portfolio == True  # 포트폴리오로 저장된 것만
+                )
+            )
+            .order_by(SimulationSession.saved_at.desc())  # saved_at 기준으로 정렬
+            .offset(offset)
+            .limit(limit)
         )
 
         result = await db.execute(sessions_query)
         rows = result.all()
 
-        # 2. 백테스트 결과 리스트 생성
+        # 3. 백테스트 결과 리스트 생성
         my_strategies = []
         for session, strategy, stats in rows:
             # 간소화된 목록 아이템 생성
@@ -91,9 +144,15 @@ async def get_my_strategies(
             )
             my_strategies.append(strategy_item)
 
+        # 4. 다음 페이지 존재 여부 계산
+        has_next = (offset + limit) < total
+
         return MyStrategiesResponse(
             strategies=my_strategies,
-            total=len(my_strategies)
+            total=total,
+            page=page,
+            limit=limit,
+            has_next=has_next
         )
 
     except Exception as e:
@@ -116,7 +175,23 @@ async def get_public_Strategies_ranking(
     - is_public=True인 전략만 조회
     - 각 전략의 최신 백테스트 결과 기준으로 정렬
     - 익명 설정 및 전략 내용 숨김 설정 반영
+    - Redis 캐싱 적용 (TTL: 5분)
     """
+    # 캐시 키 생성
+    cache_key = f"strategy_ranking:{sort_by}:page_{page}:limit_{limit}"
+
+    # 캐시 조회
+    cached_data = await cache.get(cache_key)
+    if cached_data:
+        try:
+            cached_dict = json.loads(cached_data)
+            logger.info(f"랭킹 캐시 히트: {cache_key}")
+            return StrategyRankingResponse(**cached_dict)
+        except Exception as e:
+            logger.warning(f"캐시 데이터 파싱 실패: {e}")
+            # 캐시 데이터가 손상된 경우 삭제
+            await cache.delete(cache_key)
+
     try:
         # 1. 공개 전략 중 완료된 시뮬레이션이 있는 전략만 조회
         # Subquery: 각 전략의 최신 완료된 시뮬레이션 찾기
@@ -224,13 +299,24 @@ async def get_public_Strategies_ranking(
             )
             rankings.append(ranking_item)
 
-        return StrategyRankingResponse(
+        # 응답 생성
+        response = StrategyRankingResponse(
             rankings=rankings,
             total=total or 0,
             page=page,
             limit=limit,
             sort_by=sort_by
         )
+
+        # 캐시에 저장 (TTL: 5분)
+        try:
+            cache_data = response.model_dump()
+            await cache.set(cache_key, json.dumps(cache_data, default=str), ex=300)
+            logger.info(f"랭킹 캐시 저장: {cache_key}")
+        except Exception as cache_error:
+            logger.warning(f"캐시 저장 실패: {cache_error}")
+
+        return response
 
     except Exception as e:
         logger.error(f"공개 투자전략 랭킹 조회 실패: {e}", exc_info=True)
@@ -498,6 +584,14 @@ async def update_strategy_sharing_settings(
 
             except Exception as e:
                 logger.warning(f"⚠️ Redis 랭킹 동기화 실패 (무시): {e}")
+
+        # 🎯 5. 랭킹 캐시 무효화 (공개 설정이 변경된 경우)
+        if "is_public" in update_data or "is_anonymous" in update_data or "hide_strategy_details" in update_data:
+            try:
+                await _invalidate_ranking_cache()
+                logger.info("✅ 랭킹 캐시 무효화 완료")
+            except Exception as e:
+                logger.warning(f"⚠️ 랭킹 캐시 무효화 실패 (무시): {e}")
 
         return {
             "message": "공개 설정이 업데이트되었습니다",

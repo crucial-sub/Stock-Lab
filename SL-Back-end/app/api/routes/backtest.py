@@ -4,7 +4,7 @@
 - 결과 조회
 - 상태 확인
 """
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from typing import List, Optional, Dict, Any
@@ -208,6 +208,7 @@ class BacktestTrade(BaseModel):
     sell_price: float = Field(..., serialization_alias="sellPrice")
     profit: float = Field(..., serialization_alias="profit")
     profit_rate: float = Field(..., serialization_alias="profitRate")
+    holding_days: int = Field(..., serialization_alias="holdingDays")  # ✅ 보유기간 추가
     buy_date: str = Field(..., serialization_alias="buyDate")
     sell_date: str = Field(..., serialization_alias="sellDate")
     weight: float = Field(..., serialization_alias="weight")
@@ -227,6 +228,8 @@ class BacktestYieldPoint(BaseModel):
     cumulative_return: float = Field(..., serialization_alias="cumulativeReturn")  # 누적 수익률
     value: float  # 차트용 (cumulative_return과 동일, 하위 호환성)
     daily_drawdown: float = Field(default=0, serialization_alias="dailyDrawdown")  # 일일 낙폭 (%)
+    benchmark_return: float = Field(default=0, serialization_alias="benchmarkReturn")  # 벤치마크 일일 수익률 (%)
+    benchmark_cum_return: float = Field(default=0, serialization_alias="benchmarkCumReturn")  # 벤치마크 누적 수익률 (%)
     buy_count: int = Field(default=0, serialization_alias="buyCount")  # 당일 매수 횟수
     sell_count: int = Field(default=0, serialization_alias="sellCount")  # 당일 매도 횟수
 
@@ -335,26 +338,89 @@ async def run_backtest(
 
         # 🚀 벡터화 평가 지원: 유명 전략 사용 시 DB에서 expression과 conditions 로드
         loaded_strategy_config = None
-        if request.strategy_name and request.strategy_name in ['peter_lynch', 'warren_buffett', 'benjamin_graham']:
+        if request.strategy_name:
             from sqlalchemy import text
-            logger.info(f"🎯 유명 전략 감지: {request.strategy_name}")
+            logger.info(f"🎯 전략 감지: {request.strategy_name}")
 
+            # id 또는 name으로 조회 (한글/영문 모두 지원)
             result = await db.execute(
-                text('SELECT backtest_config FROM investment_strategies WHERE id = :id'),
-                {'id': request.strategy_name}
+                text('SELECT backtest_config FROM investment_strategies WHERE id = :id OR name = :name'),
+                {'id': request.strategy_name, 'name': request.strategy_name}
             )
             config = result.scalar_one_or_none()
 
-            if config and 'expression' in config and 'conditions' in config:
-                loaded_strategy_config = {
-                    'expression': config['expression'],
-                    'conditions': config['conditions'],
-                    'priority_factor': config.get('priority_factor', request.priority_factor),
-                    'priority_order': config.get('priority_order', request.priority_order)
-                }
-                logger.info(f"✅ 벡터화 설정 로드: expression={loaded_strategy_config['expression']}, conditions={len(loaded_strategy_config['conditions'])}개")
+            if config:
+                # Case 1: expression과 conditions가 이미 있는 경우 (peter_lynch 형식)
+                if 'expression' in config and 'conditions' in config:
+                    loaded_strategy_config = {
+                        'expression': config['expression'],
+                        'conditions': config['conditions'],
+                        'priority_factor': config.get('priority_factor', request.priority_factor),
+                        'priority_order': config.get('priority_order', request.priority_order)
+                    }
+                    logger.info(f"✅ 벡터화 설정 로드: expression={loaded_strategy_config['expression']}, conditions={len(loaded_strategy_config['conditions'])}개")
+
+                # Case 2: buy_conditions만 있는 경우 → 자동 변환
+                elif 'buy_conditions' in config and config['buy_conditions']:
+                    logger.info(f"🔄 buy_conditions → conditions 자동 변환 시작")
+
+                    def convert_buy_conditions(buy_conditions: list) -> tuple:
+                        """
+                        buy_conditions 형식을 벡터화 평가용 conditions로 변환
+
+                        입력 형식 (warren_buffett 등):
+                        {"name": "A", "inequality": ">", "exp_left_side": "기본값({ROE})", "exp_right_side": 12}
+
+                        출력 형식 (peter_lynch):
+                        {"id": "A", "factor": "ROE", "operator": ">", "value": 12}
+                        """
+                        import re
+                        conditions = []
+                        condition_ids = []
+
+                        for bc in buy_conditions:
+                            # 팩터 추출: "기본값({ROE})" → "ROE"
+                            exp_left = bc.get('exp_left_side', '')
+                            factor_match = re.search(r'\{([A-Z_0-9]+)\}', exp_left)
+                            if not factor_match:
+                                logger.warning(f"⚠️ 팩터 추출 실패: {exp_left}")
+                                continue
+
+                            factor = factor_match.group(1)
+                            condition_id = bc.get('name', f'C{len(conditions)}')
+                            operator = bc.get('inequality', '>')
+                            value = bc.get('exp_right_side', 0)
+
+                            conditions.append({
+                                'id': condition_id,
+                                'factor': factor,
+                                'operator': operator,
+                                'value': value
+                            })
+                            condition_ids.append(condition_id)
+
+                        # expression 생성: buy_logic에 따라 and/or 연결
+                        buy_logic = config.get('buy_logic', 'and')
+                        expression = f' {buy_logic} '.join(condition_ids)
+
+                        return expression, conditions
+
+                    expression, conditions = convert_buy_conditions(config['buy_conditions'])
+
+                    if conditions:
+                        loaded_strategy_config = {
+                            'expression': expression,
+                            'conditions': conditions,
+                            'priority_factor': config.get('priority_factor', request.priority_factor),
+                            'priority_order': config.get('priority_order', request.priority_order)
+                        }
+                        logger.info(f"✅ 자동 변환 완료: expression={expression}, conditions={len(conditions)}개")
+                    else:
+                        logger.warning(f"⚠️ 전략 '{request.strategy_name}' buy_conditions 변환 실패")
+                else:
+                    logger.warning(f"⚠️ 전략 '{request.strategy_name}' 설정에 expression/conditions/buy_conditions 없음")
             else:
-                logger.warning(f"⚠️ 전략 '{request.strategy_name}' 설정에 expression/conditions 없음")
+                logger.warning(f"⚠️ 전략 '{request.strategy_name}'을 DB에서 찾을 수 없음")
 
         # 1. 세션 ID 생성
         session_id = str(uuid.uuid4())
@@ -523,6 +589,7 @@ async def run_backtest(
             benchmark="KOSPI",
             status="PENDING",
             progress=0,
+            is_portfolio=True,  # 포트폴리오 목록에 표시되도록 설정
             created_at=datetime.now()
         )
         db.add(session)
@@ -830,6 +897,11 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
             amount = float(trade.amount) if trade.amount else 0
             initial_capital = float(session.initial_capital) if session.initial_capital else 1
 
+            # 보유 기간 계산 (영업일 기준)
+            holding_days = 0
+            if buy_trade:
+                holding_days = (trade.trade_date - buy_trade.trade_date).days
+
             trade_list.append(BacktestTrade(
                 stock_name=trade.stock_name,  # 이미 테이블에 저장되어 있음
                 stock_code=trade.stock_code,
@@ -837,6 +909,7 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
                 sell_price=float(trade.price),
                 profit=float(trade.profit) if trade.profit else 0,
                 profit_rate=float(trade.profit_rate) if trade.profit_rate else 0,
+                holding_days=holding_days,
                 buy_date=buy_trade.trade_date.isoformat() if buy_trade else "",
                 sell_date=trade.trade_date.isoformat(),
                 weight=float(amount / initial_capital * 100) if initial_capital > 0 else 0,
@@ -855,7 +928,16 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
         elif trade.trade_type == "SELL":
             daily_trade_counts[trade_date]["sell"] += 1
 
-    # 수익률 포인트 변환 (매수/매도 횟수 포함)
+    # 벤치마크 누적 수익률 계산 (일일 수익률을 누적)
+    benchmark_cum_returns = []
+    cumulative_benchmark = 0.0
+    for snap in snapshots:
+        daily_benchmark = float(snap.benchmark_return) if snap.benchmark_return else 0
+        # 단순 누적 (복리 고려 시: (1 + cumulative/100) * (1 + daily/100) - 1)
+        cumulative_benchmark += daily_benchmark
+        benchmark_cum_returns.append(cumulative_benchmark)
+
+    # 수익률 포인트 변환 (매수/매도 횟수 + 벤치마크 데이터 포함)
     yield_points = [
         {
             "date": snap.snapshot_date.isoformat(),
@@ -865,10 +947,13 @@ async def _get_new_backtest_result(db: AsyncSession, backtest_id: str, session: 
             "daily_return": float(snap.daily_return),
             "cumulative_return": float(snap.cumulative_return),
             "value": float(snap.cumulative_return),
+            "daily_drawdown": float(snap.drawdown) if hasattr(snap, 'drawdown') and snap.drawdown else 0,
+            "benchmark_return": float(snap.benchmark_return) if snap.benchmark_return else 0,
+            "benchmark_cum_return": benchmark_cum_returns[idx],
             "buy_count": daily_trade_counts[snap.snapshot_date.isoformat()]["buy"],
             "sell_count": daily_trade_counts[snap.snapshot_date.isoformat()]["sell"]
         }
-        for snap in snapshots
+        for idx, snap in enumerate(snapshots)
     ]
 
     # 유니버스 종목 조회 (BacktestSession에는 strategy_id가 없으므로 거래 종목에서 추론)
@@ -1036,6 +1121,15 @@ async def get_backtest_result(
     daily_result = await db.execute(daily_query)
     daily_values = daily_result.scalars().all()
 
+    # 🐛 DEBUG: Log daily values count
+    logger.info(f"🔍 Daily values query for session_id='{backtest_id}': found {len(daily_values)} records")
+    if len(daily_values) == 0:
+        # Try to query all sessions to see what exists
+        all_sessions_query = select(SimulationDailyValue.session_id).distinct()
+        all_sessions_result = await db.execute(all_sessions_query)
+        all_session_ids = [row[0] for row in all_sessions_result.all()]
+        logger.warning(f"⚠️ No daily values found for session_id='{backtest_id}'. All session_ids in DB: {all_session_ids[:10]}")
+
     # 5. 종목 코드 목록 추출 및 종목명 조회
     stock_codes = list(set([trade.stock_code for trade in trades]))
     companies_query = select(Company.stock_code, Company.company_name).where(Company.stock_code.in_(stock_codes))
@@ -1074,6 +1168,7 @@ async def get_backtest_result(
                 sell_price=float(trade.price),
                 profit=float(trade.realized_pnl),
                 profit_rate=float(trade.return_pct) if trade.return_pct else 0,
+                holding_days=trade.holding_days if trade.holding_days else 0,  # ✅ 보유기간 추가
                 buy_date=buy_trade.trade_date.isoformat() if buy_trade else "",
                 sell_date=trade.trade_date.isoformat(),
                 weight=float(amount / initial_capital * 100) if initial_capital > 0 else 0,
@@ -1090,7 +1185,9 @@ async def get_backtest_result(
             daily_return=float(dv.daily_return) if dv.daily_return else 0,
             cumulative_return=float(dv.cumulative_return) if dv.cumulative_return else 0,
             value=float(dv.cumulative_return) if dv.cumulative_return else 0,  # 차트용 (하위 호환성)
-            daily_drawdown=float(dv.daily_drawdown) if dv.daily_drawdown else 0  # 일일 낙폭
+            daily_drawdown=float(dv.daily_drawdown) if dv.daily_drawdown else 0,  # 일일 낙폭
+            benchmark_return=float(dv.benchmark_return) if dv.benchmark_return else 0,  # 벤치마크 일일 수익률
+            benchmark_cum_return=float(dv.benchmark_cum_return) if dv.benchmark_cum_return else 0  # 벤치마크 누적 수익률
         )
         for dv in daily_values
     ]
@@ -1276,10 +1373,12 @@ async def get_backtest_trades(
         trade_list.append({
             "stockName": stock_name_map.get(sell_trade.stock_code, sell_trade.stock_code),
             "stockCode": sell_trade.stock_code,
+            "quantity": sell_trade.quantity,  # ✅ 수량 추가
             "buyPrice": float(buy_trade.price) if buy_trade else 0.0,
             "sellPrice": float(sell_trade.price),
             "profit": float(sell_trade.realized_pnl),
             "profitRate": float(sell_trade.return_pct) if sell_trade.return_pct else 0.0,
+            "holdingDays": sell_trade.holding_days if sell_trade.holding_days else 0,  # ✅ 보유기간 추가
             "buyDate": buy_trade.trade_date.isoformat() if buy_trade else "",
             "sellDate": sell_trade.trade_date.isoformat(),
             "weight": float(sell_trade.amount / session.initial_capital * 100) if session.initial_capital else 0.0,
@@ -1859,39 +1958,109 @@ async def save_backtest_as_portfolio(
 ):
     """
     백테스트 결과를 포트폴리오로 저장
-
-    TODO: 실제 포트폴리오 저장 로직 구현 필요
-    현재는 404 에러 방지를 위한 스텁 엔드포인트입니다.
-
-    구현 필요 사항:
-    - PortfolioStrategy 레코드 생성
-    - 백테스트 설정 및 통계 복사
-    - 사용자별 포트폴리오 관리
+    - SimulationSession의 is_portfolio 플래그를 True로 설정
+    - 포트폴리오 이름 저장
+    - 통계 정보 확인
     """
-    # 백테스트 세션 확인
-    session_query = select(SimulationSession).where(SimulationSession.session_id == backtest_id)
-    session_result = await db.execute(session_query)
-    session = session_result.scalar_one_or_none()
+    try:
+        # 1. 백테스트 세션 확인
+        session_query = select(SimulationSession).where(SimulationSession.session_id == backtest_id)
+        session_result = await db.execute(session_query)
+        session = session_result.scalar_one_or_none()
 
-    if not session:
-        raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
+        if not session:
+            raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
 
-    # 포트폴리오 이름 (optional, 프론트엔드에서 전달될 수 있음)
-    portfolio_name = request.get("name", f"백테스트_{backtest_id[:8]}")
+        # 2. 권한 확인 (옵셔널 - 로그인한 경우만)
+        if current_user and session.user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="이 백테스트를 저장할 권한이 없습니다"
+            )
 
-    # TODO: 실제 저장 로직 구현
-    # - PortfolioStrategy 생성
-    # - InvestmentStrategy 연결
-    # - 전략 설정 복사
-    # - 통계 정보 저장
+        # 3. 상태 확인 (완료된 백테스트만 저장 허용)
+        if session.status != "COMPLETED":
+            raise HTTPException(
+                status_code=400,
+                detail=f"백테스트 상태가 {session.status}입니다. 완료된 백테스트만 포트폴리오로 저장할 수 있습니다"
+            )
 
-    logger.info(f"포트폴리오 저장 요청 - backtest_id: {backtest_id}, name: {portfolio_name}")
+        # 4. 통계 정보 확인 (필수)
+        stats_query = select(SimulationStatistics).where(
+            SimulationStatistics.session_id == backtest_id
+        )
+        stats_result = await db.execute(stats_query)
+        statistics = stats_result.scalar_one_or_none()
 
-    return {
-        "success": True,
-        "message": "포트폴리오 저장 기능은 개발 중입니다. 향후 업데이트 예정입니다.",
-        "portfolio_id": None  # TODO: 실제 포트폴리오 ID 반환
-    }
+        if not statistics:
+            raise HTTPException(
+                status_code=400,
+                detail="백테스트 통계가 없어 포트폴리오로 저장할 수 없습니다"
+            )
+
+        # 5. 포트폴리오로 저장
+        portfolio_name = request.get("name", "")
+        if not portfolio_name:
+            # 기본 이름 생성
+            portfolio_name = f"{session.session_name or '백테스트'}_포트폴리오"
+
+        # is_portfolio 플래그 설정
+        session.is_portfolio = True
+        session.portfolio_name = portfolio_name
+        session.saved_at = func.now()
+
+        # 6. portfolio_strategies 테이블 업데이트 (포트폴리오 목록에 표시하기 위해)
+        # simulation_sessions는 이미 strategy_id를 가지고 있으므로,
+        # portfolio_strategies의 strategy_name만 업데이트
+        from app.models.simulation import PortfolioStrategy
+
+        if session.strategy_id:
+            strategy_query = select(PortfolioStrategy).where(
+                PortfolioStrategy.strategy_id == session.strategy_id
+            )
+            strategy_result = await db.execute(strategy_query)
+            strategy = strategy_result.scalar_one_or_none()
+
+            if strategy:
+                # 기존 전략의 이름을 포트폴리오 이름으로 업데이트
+                strategy.strategy_name = portfolio_name
+                strategy.updated_at = func.now()
+                logger.info(f"📊 portfolio_strategies 업데이트: {portfolio_name}")
+            else:
+                logger.warning(f"⚠️ strategy_id {session.strategy_id}에 해당하는 전략을 찾을 수 없습니다")
+
+        # 7. DB 커밋
+        await db.commit()
+
+        logger.info(f"✅ 포트폴리오 저장 완료 - ID: {backtest_id}, 이름: {portfolio_name}")
+
+        def _safe_float(value: Any, default: float = 0.0) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        return {
+            "success": True,
+            "message": "포트폴리오가 성공적으로 저장되었습니다",
+            "portfolio_id": session.session_id,
+            "portfolio_name": portfolio_name,
+            "statistics": {
+                "total_return": _safe_float(statistics.total_return),
+                "annualized_return": _safe_float(statistics.annualized_return),
+                "max_drawdown": _safe_float(statistics.max_drawdown)
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"포트폴리오 저장 실패: {e}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"포트폴리오 저장 중 오류가 발생했습니다: {str(e)}"
+        )
 
 
 @router.post("/cache/clear")
@@ -1951,3 +2120,47 @@ async def clear_backtest_cache(
     except Exception as e:
         logger.error(f"캐시 클리어 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"캐시 클리어 실패: {str(e)}")
+
+
+@router.websocket("/ws/backtest/{backtest_id}")
+async def backtest_websocket(
+    websocket: WebSocket,
+    backtest_id: str
+):
+    """
+    백테스트 실시간 진행 상황 WebSocket
+
+    클라이언트는 백테스트 시작 후 이 엔드포인트에 연결하여
+    실시간으로 차트 데이터를 받을 수 있습니다.
+
+    메시지 타입:
+    - progress: 일별 포트폴리오 가치 업데이트
+    - trade: 거래 내역
+    - completed: 백테스트 완료
+    - error: 에러 발생
+    """
+    from app.services.backtest_websocket import ws_manager
+
+    try:
+        await ws_manager.connect(backtest_id, websocket)
+        logger.info(f"📡 백테스트 WebSocket 연결: {backtest_id}")
+
+        # 연결 유지 (클라이언트가 메시지를 보낼 수 있도록)
+        while True:
+            try:
+                # 클라이언트로부터 메시지 수신 (ping/pong)
+                data = await websocket.receive_text()
+
+                # ping 메시지에 대한 응답
+                if data == "ping":
+                    await websocket.send_json({"type": "pong"})
+
+            except WebSocketDisconnect:
+                logger.info(f"📡 백테스트 WebSocket 연결 해제: {backtest_id}")
+                break
+            except Exception as e:
+                logger.error(f"WebSocket 에러: {e}")
+                break
+
+    finally:
+        ws_manager.disconnect(backtest_id, websocket)

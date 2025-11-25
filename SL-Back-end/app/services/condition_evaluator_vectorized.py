@@ -84,17 +84,16 @@ class VectorizedConditionEvaluator:
 
             # 5. 한 번에 모든 종목 평가!
             try:
-                self.logger.debug(f"🔍 생성된 쿼리: {query_str[:200]}...")  # 처음 200자만 출력
                 selected = date_data.query(query_str)
                 selected_stocks = selected['stock_code'].tolist()
-                self.logger.debug(f"✅ 벡터화 평가 성공: {len(selected_stocks)}개 종목 선택")
+                # 🚀 OPTIMIZATION: INFO 레벨로만 요약 로깅
+                if len(selected_stocks) > 0:
+                    self.logger.info(f"✅ 조건 충족: {len(selected_stocks)}개 종목")
                 return selected_stocks
 
             except Exception as e:
                 # query 실패 시 폴백 (기존 방식)
-                self.logger.warning(f"❌ 벡터화 쿼리 실패 ({e})")
-                self.logger.warning(f"   실패한 쿼리: {query_str[:500]}")  # 처음 500자 출력
-                self.logger.warning(f"   폴백 모드 사용")
+                self.logger.warning(f"❌ 벡터화 쿼리 실패, 폴백 모드 사용: {str(e)[:100]}")
                 return self._evaluate_fallback(date_data, expression, conditions)
 
         except Exception as e:

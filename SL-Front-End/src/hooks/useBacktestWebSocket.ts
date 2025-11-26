@@ -42,10 +42,33 @@ export interface ErrorMessage {
   message: string;
 }
 
+/**
+ * 백테스트 준비 단계 메시지
+ * - 서버에서 데이터 로딩, 팩터 계산 등 준비 과정 중 전송
+ */
+export interface PreparationMessage {
+  type: "preparation";
+  stage: "LOADING_PRICE_DATA" | "LOADING_FINANCIAL_DATA" | "CALCULATING_FACTORS" | "PREPARING_SIMULATION";
+  stage_number: number;
+  total_stages: number;
+  message: string;
+}
+
+/**
+ * 준비 단계 정보 타입
+ */
+export interface PreparationStage {
+  stage: PreparationMessage["stage"];
+  stageNumber: number;
+  totalStages: number;
+  message: string;
+}
+
 export type WebSocketMessage =
   | ProgressMessage
   | CompletedMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | PreparationMessage;
 
 /**
  * 차트 데이터 포인트
@@ -78,6 +101,8 @@ export interface UseBacktestWebSocketReturn {
   statistics: CompletedMessage["statistics"] | null;
   /** AI 요약 (마크다운) */
   summary: string | null;
+  /** 현재 준비 단계 정보 (백테스트 시작 전) */
+  preparationStage: PreparationStage | null;
 }
 
 /**
@@ -114,6 +139,8 @@ export function useBacktestWebSocket(
   const [statistics, setStatistics] =
     useState<CompletedMessage["statistics"] | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  // 📡 준비 단계 상태 추가
+  const [preparationStage, setPreparationStage] = useState<PreparationStage | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -160,10 +187,26 @@ export function useBacktestWebSocket(
           const message: WebSocketMessage = JSON.parse(event.data);
 
           switch (message.type) {
+            // 📡 준비 단계 메시지 처리
+            case "preparation":
+              console.log(
+                `🔄 준비 단계: [${message.stage_number}/${message.total_stages}] ${message.stage} - ${message.message}`,
+              );
+              setPreparationStage({
+                stage: message.stage,
+                stageNumber: message.stage_number,
+                totalStages: message.total_stages,
+                message: message.message,
+              });
+              break;
+
             case "progress":
               console.log(
                 `📊 진행률: ${message.progress_percent}% (수익률: ${message.cumulative_return.toFixed(2)}%)`,
               );
+
+              // 시뮬레이션 시작됨 -> 준비 단계 완료
+              setPreparationStage(null);
 
               const newDataPoint = {
                 date: message.date,
@@ -190,6 +233,7 @@ export function useBacktestWebSocket(
             case "completed":
               console.log("✅ 백테스트 완료:", message.statistics);
               console.log("📝 AI 요약 수신:", message.summary?.length || 0, "글자");
+              setPreparationStage(null); // 준비 단계 초기화
               setStatistics(message.statistics);
               setSummary(message.summary || null);
               setIsCompleted(true);
@@ -199,6 +243,7 @@ export function useBacktestWebSocket(
 
             case "error":
               console.error("❌ 백테스트 에러:", message.message);
+              setPreparationStage(null); // 준비 단계 초기화
               setError(message.message);
               ws.close();
               break;
@@ -259,5 +304,6 @@ export function useBacktestWebSocket(
     error,
     statistics,
     summary,
+    preparationStage,
   };
 }

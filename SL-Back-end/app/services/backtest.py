@@ -415,10 +415,22 @@ class BacktestEngine:
         self.target_universes = target_universes or []
 
         try:
+            # 📡 웹소켓 매니저 import (준비 단계 전송용)
+            from app.services.backtest_websocket import ws_manager
+
             # 1. 데이터 준비
             logger.info(f"백테스트 시작: {backtest_id}")
             logger.info(f"📅 백테스트 기간: {start_date} ~ {end_date}")
             logger.info(f"매매 대상 필터 - 테마: {self.target_themes}, 종목: {self.target_stocks}, 유니버스: {self.target_universes}")
+
+            # 📡 준비 단계 1: 가격 데이터 로딩
+            await ws_manager.send_preparation_stage(
+                backtest_id=str(backtest_id),
+                stage="LOADING_PRICE_DATA",
+                stage_number=1,
+                total_stages=4,
+                message="주가 데이터를 불러오는 중..."
+            )
 
             # 순차 데이터 로딩 (SQLAlchemy AsyncSession은 동시 작업 미지원)
             price_data = await self._load_price_data(start_date, end_date, target_themes, target_stocks, target_universes)
@@ -426,6 +438,15 @@ class BacktestEngine:
             # 🔥 가격 데이터에서 실제 선택된 종목 코드 추출 (테마 필터링 결과 반영)
             actual_stocks = price_data['stock_code'].unique().tolist() if not price_data.empty else []
             logger.info(f"🎯 실제 선택된 종목: {len(actual_stocks)}개")
+
+            # 📡 준비 단계 2: 재무 데이터 로딩
+            await ws_manager.send_preparation_stage(
+                backtest_id=str(backtest_id),
+                stage="LOADING_FINANCIAL_DATA",
+                stage_number=2,
+                total_stages=4,
+                message=f"재무 데이터를 불러오는 중... ({len(actual_stocks)}개 종목)"
+            )
 
             financial_data = await self._load_financial_data(start_date, end_date, actual_stocks)
 
@@ -528,12 +549,30 @@ class BacktestEngine:
                             exp_right_side=exp_right_side
                         ))
 
+            # 📡 준비 단계 3: 팩터 계산
+            await ws_manager.send_preparation_stage(
+                backtest_id=str(backtest_id),
+                stage="CALCULATING_FACTORS",
+                stage_number=3,
+                total_stages=4,
+                message="매수 조건 팩터를 계산하는 중..."
+            )
+
             # 최적화된 팩터 계산 호출
             logger.info("최적화된 팩터 계산 사용")
             factor_data = await self._calculate_all_factors_optimized(
                 price_data, financial_data, start_date, end_date,
                 buy_conditions=backtest_conditions,
                 priority_factor=priority_factor
+            )
+
+            # 📡 준비 단계 4: 시뮬레이션 준비
+            await ws_manager.send_preparation_stage(
+                backtest_id=str(backtest_id),
+                stage="PREPARING_SIMULATION",
+                stage_number=4,
+                total_stages=4,
+                message="시뮬레이션을 준비하는 중..."
             )
 
             # 3. 벤치마크 데이터 로드

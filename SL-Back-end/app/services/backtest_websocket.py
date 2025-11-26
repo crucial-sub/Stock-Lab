@@ -40,6 +40,49 @@ class BacktestWebSocketManager:
             else:
                 logger.info(f"🔌 WebSocket 연결 해제: {backtest_id} (남은 {len(self.active_connections[backtest_id])}개)")
 
+    async def send_preparation_stage(
+        self,
+        backtest_id: str,
+        stage: str,
+        stage_number: int,
+        total_stages: int,
+        message: str = ""
+    ):
+        """
+        백테스트 준비 단계 전송
+
+        Args:
+            backtest_id: 백테스트 세션 ID
+            stage: 현재 단계 이름 (LOADING_PRICE_DATA, LOADING_FINANCIAL_DATA, CALCULATING_FACTORS, PREPARING_SIMULATION)
+            stage_number: 현재 단계 번호 (1-4)
+            total_stages: 총 단계 수 (4)
+            message: 추가 메시지 (선택)
+        """
+        if backtest_id not in self.active_connections:
+            logger.warning(f"⚠️ 준비 단계 전송 실패: {backtest_id} - 활성 연결 없음")
+            return
+
+        logger.info(f"📊 준비 단계 전송: {backtest_id} - [{stage_number}/{total_stages}] {stage}")
+
+        preparation_message = {
+            "type": "preparation",
+            "stage": stage,
+            "stage_number": stage_number,
+            "total_stages": total_stages,
+            "message": message
+        }
+
+        disconnected = set()
+        for websocket in self.active_connections[backtest_id]:
+            try:
+                await websocket.send_json(preparation_message)
+            except Exception as e:
+                logger.error(f"WebSocket 전송 실패: {e}")
+                disconnected.add(websocket)
+
+        for ws in disconnected:
+            self.disconnect(backtest_id, ws)
+
     async def send_progress(
         self,
         backtest_id: str,

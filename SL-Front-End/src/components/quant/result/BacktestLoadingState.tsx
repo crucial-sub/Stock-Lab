@@ -8,9 +8,30 @@
  * - WebSocket으로 실시간 데이터 수신
  */
 
-import { useBacktestWebSocket } from "@/hooks/useBacktestWebSocket";
+import { useBacktestWebSocket, type PreparationStage } from "@/hooks/useBacktestWebSocket";
 import { useRouter } from "next/navigation";
 import { TradingActivityChart } from "./TradingActivityChart";
+
+/**
+ * 준비 단계 라벨 매핑
+ * - 서버에서 전송하는 단계 코드를 한국어 라벨로 변환
+ */
+const STAGE_LABELS: Record<PreparationStage["stage"], string> = {
+  LOADING_PRICE_DATA: "가격 데이터 로딩",
+  LOADING_FINANCIAL_DATA: "재무 데이터 로딩",
+  CALCULATING_FACTORS: "팩터 계산",
+  PREPARING_SIMULATION: "시뮬레이션 준비",
+};
+
+/**
+ * 준비 단계 순서 (UI 표시용)
+ */
+const STAGE_ORDER: PreparationStage["stage"][] = [
+  "LOADING_PRICE_DATA",
+  "LOADING_FINANCIAL_DATA",
+  "CALCULATING_FACTORS",
+  "PREPARING_SIMULATION",
+];
 
 interface BacktestLoadingStateProps {
   backtestId: string;
@@ -71,6 +92,7 @@ export function BacktestLoadingState({
     progress: wsProgress,
     isCompleted,
     error: wsError,
+    preparationStage,
   } = useBacktestWebSocket(backtestId, webSocketEnabled);
 
   // WebSocket 데이터와 초기 props 데이터 병합
@@ -237,26 +259,70 @@ export function BacktestLoadingState({
                     <span>백테스트 데이터를 준비하고 있습니다</span>
                   </div>
                   <p className="text-sm text-blue-700">
-                    종목 데이터를 로드하고 전략 조건을 분석 중입니다...
+                    {preparationStage?.message || "종목 데이터를 로드하고 전략 조건을 분석 중입니다..."}
                   </p>
                 </div>
               </div>
 
-              {/* 단계별 진행 표시 */}
-              <div className="grid grid-cols-3 gap-3 text-xs">
-                <div className="flex items-center gap-2 text-blue-700">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-ping" />
-                  <span>데이터 로딩</span>
-                </div>
-                <div className="flex items-center gap-2 text-blue-600 opacity-70">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full" />
-                  <span>조건 분석</span>
-                </div>
-                <div className="flex items-center gap-2 text-blue-600 opacity-50">
-                  <div className="w-2 h-2 bg-blue-300 rounded-full" />
-                  <span>시뮬레이션 준비</span>
-                </div>
+              {/* 📡 실제 준비 단계별 진행 표시 (서버에서 실시간 수신) */}
+              <div className="grid grid-cols-4 gap-3 text-xs">
+                {STAGE_ORDER.map((stage, index) => {
+                  const stageNumber = index + 1;
+                  const currentStageNumber = preparationStage?.stageNumber || 0;
+
+                  // 단계 상태 결정
+                  const isCompleted = currentStageNumber > stageNumber;
+                  const isActive = currentStageNumber === stageNumber;
+                  const isPending = currentStageNumber < stageNumber;
+
+                  return (
+                    <div
+                      key={stage}
+                      className={`flex items-center gap-2 transition-all duration-300 ${
+                        isCompleted
+                          ? "text-green-700"
+                          : isActive
+                          ? "text-blue-700"
+                          : "text-blue-500 opacity-50"
+                      }`}
+                    >
+                      {/* 상태 아이콘 */}
+                      {isCompleted ? (
+                        <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      ) : isActive ? (
+                        <div className="w-4 h-4 bg-blue-500 rounded-full animate-ping" />
+                      ) : (
+                        <div className="w-4 h-4 bg-blue-300 rounded-full" />
+                      )}
+                      {/* 단계 라벨 */}
+                      <span className={isActive ? "font-semibold" : ""}>
+                        {STAGE_LABELS[stage]}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* 준비 단계 진행률 바 */}
+              {preparationStage && (
+                <div className="mt-4">
+                  <div className="w-full bg-blue-200 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-blue-600 h-full transition-all duration-500 ease-out"
+                      style={{
+                        width: `${(preparationStage.stageNumber / preparationStage.totalStages) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-blue-600 mt-1 text-center">
+                    준비 단계 {preparationStage.stageNumber} / {preparationStage.totalStages}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

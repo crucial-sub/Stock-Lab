@@ -128,11 +128,10 @@ export function BacktestLoadingChart({
       keepTargetHover: true,
       animationDuration: 0,
     });
-    xAxisTooltip.get("background").setAll({
+    xAxisTooltip.get("background")?.setAll({
       fill: am5.color(0x000000),
       stroke: am5.color(0x000000),
       fillOpacity: 1,
-      cornerRadius: 6,
     });
     xAxisTooltip.label.setAll({
       text: "{valueX.formatDate('yyyy.MM.dd')}",
@@ -157,11 +156,6 @@ export function BacktestLoadingChart({
     xAxis.set("tooltip", xAxisTooltip);
     xAxisTooltip.label.setAll({ text: "{value.formatDate('yyyy.MM.dd')}" });
     xAxis.get("tooltip")?.label.setAll({ text: "{valueX.formatDate('yyyy.MM.dd')}" });
-    xAxis.get("tooltip")?.set("dateFormats", {
-      day: "yyyy.MM.dd",
-      month: "yyyy.MM.dd",
-      year: "yyyy.MM.dd",
-    });
     xAxis.set("tooltipDateFormat", "yyyy.MM.dd");
     xAxisRenderer.grid.template.setAll({ strokeOpacity: 0.05 });
 
@@ -293,7 +287,6 @@ export function BacktestLoadingChart({
       xAxis: xAxis,
       yAxis: yAxisReturn,
     });
-    cursor.set("tooltipDateFormat", "yyyy.MM.dd");
 
     // 커서 스타일 설정 - 세로선만 표시
     cursor.lineX.setAll({
@@ -306,8 +299,6 @@ export function BacktestLoadingChart({
     });
 
     chart.set("cursor", cursor);
-    cursor.set("xTooltip", xAxisTooltip);
-    cursor.get("xTooltip")?.label.setAll({ text: "{valueX.formatDate('yyyy.MM.dd')}" });
     chart.plotContainer.set("mask", undefined);
 
     // 범례 제거 - 오른쪽 y축처럼 보이는 범례 삭제

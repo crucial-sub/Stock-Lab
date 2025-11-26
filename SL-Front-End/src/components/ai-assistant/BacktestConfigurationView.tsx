@@ -34,13 +34,16 @@ export function BacktestConfigurationView({ uiLanguage }: BacktestConfigurationV
     const startDate = (startField?.default_value as string | undefined)?.replace(/-/g, "") ?? "20210101";
     const endDate = (endField?.default_value as string | undefined)?.replace(/-/g, "") ?? "20241231";
 
+    // API 응답의 backtest_config를 BacktestRunRequest 타입으로 변환
+    const baseConfig = uiLanguage.backtest_config as Partial<BacktestRunRequest>;
+
     return {
-      ...uiLanguage.backtest_config,
+      ...baseConfig,
       strategy_name: uiLanguage.strategy.strategy_name,
       initial_investment: initialInvestment,
       start_date: startDate,
       end_date: endDate,
-    };
+    } as BacktestRunRequest;
   }, [uiLanguage]);
 
   const handleRun = async () => {

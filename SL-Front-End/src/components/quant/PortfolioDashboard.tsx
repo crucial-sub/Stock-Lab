@@ -49,7 +49,7 @@ export function PortfolioDashboard({
       </h1>
 
       {/* 대시보드 카드 그리드 */}
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* 총 자산 */}
         <div className="bg-[#AC64FF0D] border border-[#AC64FF33] rounded-lg px-5 py-5 h-[9.25rem]">
           <div className="flex items-center justify-between mb-6">

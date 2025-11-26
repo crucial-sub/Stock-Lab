@@ -90,6 +90,8 @@ export interface BacktestConfigurationUILanguage {
     strategy_name: string;
   };
   configuration_fields: ConfigurationField[];
+  /** 백테스트 실행 설정 (API 응답에서 제공) */
+  backtest_config?: Record<string, unknown>;
 }
 
 export interface ConfigurationField {
@@ -118,7 +120,8 @@ export interface ChatResponse {
   ui_language?: UILanguage;
   context?: string;
   sources?: any[];
-  backtest_conditions?: DSLCondition[];  // 매수/매도 조건이 있을 경우
+  /** 매수/매도 조건 - 배열 또는 {buy, sell} 객체 형태 */
+  backtest_conditions?: DSLCondition[] | { buy?: DSLCondition[]; sell?: DSLCondition[] };
 }
 
 // ============ API Functions ============

@@ -308,6 +308,11 @@ export function AIHelperSidebar({
           ? backtestConditions.sell
           : [];
 
+        // backtest_config는 ui_language가 backtest_configuration 타입일 때만 존재
+        const backtestConfig = response.ui_language?.type === "backtest_configuration"
+          ? (response.ui_language as import("@/lib/api/chatbot").BacktestConfigurationUILanguage).backtest_config
+          : undefined;
+
         addMessage({
           role: "assistant",
           content: response.answer,
@@ -315,7 +320,7 @@ export function AIHelperSidebar({
           backtestConditionsSell: sellConditions,
           appliedBuy: false,
           appliedSell: false,
-          backtestConfig: response.backtest_config,
+          backtestConfig,
         });
 
       } catch (error) {

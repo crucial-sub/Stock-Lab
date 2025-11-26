@@ -198,9 +198,9 @@ const PortfolioCardComponent = ({
       </div>
 
       {/* 푸터: 날짜 정보 */}
-      <div className="flex items-center justify-between text-sm text-muted">
-        <span>최종 수정일 : {lastModified}</span>
-        <span>생성일자 : {createdAt}</span>
+      <div className="flex items-center justify-between text-xs sm:text-sm text-muted gap-2 flex-wrap">
+        <span className="whitespace-nowrap truncate">수정: {lastModified}</span>
+        <span className="whitespace-nowrap truncate">생성: {createdAt}</span>
       </div>
     </div>
   );

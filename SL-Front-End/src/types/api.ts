@@ -91,6 +91,7 @@ export interface BacktestRunRequest {
     // UI 전용 필드 (백엔드 요청에는 포함되지 않음)
     selected_stock_count?: number; // 선택된 종목 수
     total_stock_count?: number; // 전체 종목 수
+    total_theme_count?: number; // 전체 테마 수
   };
 }
 
@@ -170,6 +171,8 @@ export interface BacktestResult {
     dailyDrawdown?: number;
     buyCount?: number;
     sellCount?: number;
+    /** 벤치마크 누적 수익률 (KOSPI 등) */
+    benchmarkCumReturn?: number;
   }[];
   /** 유니버스 종목 목록 */
   universeStocks?: UniverseStock[];

@@ -46,7 +46,7 @@ const TargetSelectionTab = lazy(
  */
 export function QuantNewPageClient() {
   // Zustand store에서 탭 상태 가져오기
-  const { activeTab } = useQuantTabStore();
+  const { activeTab, setActiveTab } = useQuantTabStore();
 
   // 요약 패널 열림/닫힘 상태
   const [isSummaryPanelOpen, setIsSummaryPanelOpen] = useState(true);
@@ -89,22 +89,16 @@ export function QuantNewPageClient() {
   } = useBacktestConfigStore();
   const reset = useBacktestConfigStore((state) => state.reset);
 
-  // 페이지 진입 시 query parameter가 없으면 store 초기화
+  // 새 전략 페이지 진입 시 상태 초기화 (캐시 복귀 포함)
   useEffect(() => {
-    const conditionsParam = searchParams.get("conditions");
-    const cloneParam = searchParams.get("clone");
-
-    // query parameter가 없으면 store 초기화
-    if (!conditionsParam && !cloneParam) {
-      reset();
-      conditionsAppliedRef.current = false;
-      cloneAppliedRef.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 마운트 시 한 번만 실행
+    reset();
+    setActiveTab("buy");
+    conditionsAppliedRef.current = false;
+    cloneAppliedRef.current = false;
+  }, [reset, setActiveTab]); // 마운트 시 한 번만 실행
 
   // 페이지 언마운트 시 cleanup (StrictMode 호환)
-  // 주의: 페이지를 완전히 떠날 때만 reset
+  // 상태 초기화는 진입 시 처리하므로 여기서는 ref만 리셋
   useEffect(() => {
     // 언마운트 시 ref 초기화만 수행 (StrictMode에서 중복 호출 방지)
     return () => {

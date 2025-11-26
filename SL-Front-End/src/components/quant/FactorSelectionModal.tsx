@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { createPortal } from "react-dom";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import type { Factor, SubFactor } from "@/types/api";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 
 interface FactorSelectionModalProps {
   isOpen: boolean;
@@ -23,7 +23,14 @@ interface FactorSelectionModalProps {
 }
 
 /**
- * 팩터 선택 모달 - 디자인 시안 기반 재구현
+ * 팩터 선택 모달 (반응형)
+ *
+ * @features
+ * - 모바일: 전체 화면 모달
+ * - 태블릿/데스크톱: 중앙 정렬 모달 (최대 700px)
+ * - 터치 친화적인 버튼 크기 (44px 이상)
+ * - 스크롤 가능한 콘텐츠 영역
+ *
  * 1단계: 팩터 선택
  * 2단계: 서브팩터(함수) 선택
  * 3단계: 인자(argument) 선택 (서브팩터가 인자를 가진 경우)
@@ -139,51 +146,86 @@ export function FactorSelectionModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
       style={{ zIndex: 99999 }}
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-lg shadow-2xl w-[700px] max-h-[90vh] overflow-hidden flex flex-col relative"
+        className={[
+          "bg-white shadow-2xl flex flex-col relative",
+          // 모바일: 전체 화면 (하단에서 올라오는 시트)
+          "w-full h-[90vh] rounded-t-2xl",
+          // 태블릿/데스크톱: 중앙 모달
+          "sm:w-[90vw] sm:max-w-[700px] sm:h-auto sm:max-h-[90vh] sm:rounded-lg",
+        ].join(" ")}
         style={{ zIndex: 100000 }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* 모바일 드래그 핸들 */}
+        <div className="sm:hidden flex justify-center pt-3 pb-2">
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
+
         {/* 모달 헤더 */}
-        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <div className="flex gap-8">
+        <div className="border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+          <div className="flex gap-4 sm:gap-8 overflow-x-auto">
             <button
               onClick={() => setCurrentTab("factor")}
-              className={`text-base font-semibold pb-1 transition-colors ${
-                currentTab === "factor" ? "text-brand-primary" : "text-gray-400"
-              }`}
+              className={[
+                "text-sm sm:text-base font-semibold pb-1 transition-colors whitespace-nowrap",
+                "min-h-[2.75rem] flex items-center",
+                currentTab === "factor" ? "text-brand-purple" : "text-gray-400",
+              ].join(" ")}
             >
               팩터 선택하기
             </button>
             <button
               onClick={() => setCurrentTab("subfactor")}
               disabled={!selectedFactor}
-              className={`text-base font-semibold pb-1 transition-colors ${
+              className={[
+                "text-sm sm:text-base font-semibold pb-1 transition-colors whitespace-nowrap",
+                "min-h-[2.75rem] flex items-center",
                 currentTab === "subfactor" && selectedFactor
-                  ? "text-brand-primary"
-                  : "text-gray-400 disabled:cursor-not-allowed"
-              }`}
+                  ? "text-brand-purple"
+                  : "text-gray-400 disabled:cursor-not-allowed",
+              ].join(" ")}
             >
               함수 선택하기
             </button>
           </div>
+          {/* 데스크톱 닫기 버튼 */}
+          <button
+            onClick={handleClose}
+            className="hidden sm:flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="닫기"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
 
         {/* 모달 컨텐츠 */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {isLoadingFactors || isLoadingSubFactors ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-600">데이터를 불러오는 중...</div>
             </div>
           ) : currentTab === "factor" ? (
             /* === 팩터 선택 탭 === */
-            <div className="grid grid-cols-2 gap-6">
+            <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4 sm:gap-6">
               {/* 좌측: 팩터 목록 (카테고리별 그룹화) */}
-              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+              <div className="space-y-4 max-h-[40vh] sm:max-h-[500px] overflow-y-auto pr-2">
                 {Object.entries(groupedFactors).map(
                   ([category, categoryFactors]) => (
                     <div key={category}>
@@ -195,11 +237,13 @@ export function FactorSelectionModal({
                           <li key={factor.id}>
                             <button
                               onClick={() => handleFactorSelect(factor)}
-                              className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                              className={[
+                                "w-full text-left px-3 py-3 sm:py-2 rounded text-sm transition-colors",
+                                "min-h-[2.75rem]",
                                 selectedFactor?.id === factor.id
                                   ? "bg-brand-primary text-white font-medium"
-                                  : "text-gray-700 hover:bg-gray-50"
-                              }`}
+                                  : "text-gray-700 hover:bg-gray-50",
+                              ].join(" ")}
                             >
                               • {factor.display_name}
                             </button>
@@ -212,7 +256,7 @@ export function FactorSelectionModal({
               </div>
 
               {/* 우측: 선택된 팩터 정보 */}
-              <div className="pl-6 border-l border-gray-200">
+              <div className="pt-4 sm:pt-0 sm:pl-6 border-t sm:border-t-0 sm:border-l border-gray-200">
                 <h3 className="text-sm font-bold text-gray-900 mb-4">
                   선택된 팩터:{" "}
                   <span className="text-brand-primary">
@@ -242,7 +286,7 @@ export function FactorSelectionModal({
             </div>
           ) : (
             /* === 서브팩터(함수) 선택 탭 === */
-            <div className="grid grid-cols-2 gap-6">
+            <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4 sm:gap-6">
               {/* 좌측: 서브팩터 목록 (라디오 버튼 스타일) */}
               <div>
                 <h3 className="text-sm font-bold text-gray-900 mb-3">
@@ -251,20 +295,19 @@ export function FactorSelectionModal({
                 <ul className="space-y-2">
                   {subFactors.map((subFactor) => (
                     <li key={subFactor.id}>
-                      <label className="flex items-center gap-2 cursor-pointer group">
+                      <label className="flex items-center gap-3 cursor-pointer group min-h-[2.75rem] py-2">
                         <input
                           type="radio"
                           name="subfactor"
                           checked={selectedSubFactor?.id === subFactor.id}
                           onChange={() => handleSubFactorSelect(subFactor)}
-                          className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
+                          className="w-5 h-5 sm:w-4 sm:h-4 text-brand-primary focus:ring-brand-primary"
                         />
                         <span
-                          className={`text-sm ${
-                            selectedSubFactor?.id === subFactor.id
+                          className={`text-sm ${selectedSubFactor?.id === subFactor.id
                               ? "text-brand-primary font-medium"
                               : "text-gray-700 group-hover:text-gray-900"
-                          }`}
+                            }`}
                         >
                           {subFactor.display_name}
                         </span>
@@ -275,7 +318,7 @@ export function FactorSelectionModal({
               </div>
 
               {/* 우측: 선택된 서브팩터 정보 + 인자 선택 */}
-              <div className="pl-6 border-l border-gray-200">
+              <div className="pt-4 sm:pt-0 sm:pl-6 border-t sm:border-t-0 sm:border-l border-gray-200">
                 {selectedSubFactor ? (
                   <div className="space-y-4">
                     {/* 함수 설명 */}
@@ -303,21 +346,20 @@ export function FactorSelectionModal({
                             {selectedSubFactor.arguments.map((arg) => (
                               <label
                                 key={arg}
-                                className="flex items-center gap-2 cursor-pointer group"
+                                className="flex items-center gap-3 cursor-pointer group min-h-[2.75rem] py-2"
                               >
                                 <input
                                   type="radio"
                                   name="argument"
                                   checked={selectedArgument === arg}
                                   onChange={() => setSelectedArgument(arg)}
-                                  className="w-4 h-4 text-brand-primary focus:ring-brand-primary"
+                                  className="w-5 h-5 sm:w-4 sm:h-4 text-brand-primary focus:ring-brand-primary"
                                 />
                                 <span
-                                  className={`text-sm ${
-                                    selectedArgument === arg
+                                  className={`text-sm ${selectedArgument === arg
                                       ? "text-brand-primary font-medium"
                                       : "text-gray-700 group-hover:text-gray-900"
-                                  }`}
+                                    }`}
                                 >
                                   {arg}
                                 </span>
@@ -329,12 +371,12 @@ export function FactorSelectionModal({
 
                     {/* 조건식 미리보기 */}
                     {selectedFactor && selectedSubFactor && (
-                      <div className="mt-6 pt-4 border-t border-gray-200">
+                      <div className="mt-4 sm:mt-6 pt-4 border-t border-gray-200">
                         <h4 className="text-sm font-semibold text-gray-800 mb-2">
                           조건식 미리보기
                         </h4>
                         <div className="bg-gray-50 p-3 rounded">
-                          <p className="text-sm font-mono text-brand-primary mb-1">
+                          <p className="text-sm font-mono text-brand-primary mb-1 break-all">
                             {getPreviewExpression()}
                           </p>
                           <p className="text-xs text-gray-600">
@@ -353,14 +395,18 @@ export function FactorSelectionModal({
         </div>
 
         {/* 모달 푸터 */}
-        <div className="border-t border-gray-200 px-6 py-4 flex justify-center gap-3">
+        <div className="border-t border-gray-200 px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-center gap-3">
           <button
             onClick={
               currentTab === "factor"
                 ? handleClose
                 : () => setCurrentTab("factor")
             }
-            className="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors text-sm font-medium"
+            className={[
+              "px-6 py-3 sm:py-2 border border-gray-300 rounded text-gray-700",
+              "hover:bg-gray-50 transition-colors text-sm font-medium",
+              "min-h-[2.75rem] order-2 sm:order-1",
+            ].join(" ")}
           >
             {currentTab === "factor" ? "취소" : "이전 단계"}
           </button>
@@ -371,7 +417,12 @@ export function FactorSelectionModal({
             disabled={
               currentTab === "factor" ? !selectedFactor : !isConfirmEnabled()
             }
-            className="px-6 py-2 bg-brand-purple text-white rounded font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className={[
+              "px-6 py-3 sm:py-2 bg-brand-purple text-white rounded font-medium",
+              "hover:opacity-90 transition-opacity",
+              "disabled:opacity-50 disabled:cursor-not-allowed text-sm",
+              "min-h-[2.75rem] order-1 sm:order-2",
+            ].join(" ")}
           >
             {currentTab === "factor" ? "다음 단계" : "선택 완료"}
           </button>

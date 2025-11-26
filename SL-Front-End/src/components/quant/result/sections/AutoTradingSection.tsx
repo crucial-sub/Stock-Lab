@@ -1,12 +1,15 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import {
   type AutoTradingStrategyResponse,
   type DeactivationConditions,
   autoTradingApi,
 } from "@/lib/api/auto-trading";
+import { kiwoomApi } from "@/lib/api/kiwoom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface AutoTradingSectionProps {
   sessionId: string;
@@ -18,6 +21,7 @@ export function AutoTradingSection({
   sessionStatus,
 }: AutoTradingSectionProps) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [isActivating, setIsActivating] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [showCapitalInput, setShowCapitalInput] = useState(false);
@@ -25,6 +29,9 @@ export function AutoTradingSection({
   const [deactivationConditions, setDeactivationConditions] = useState<DeactivationConditions | null>(null);
   const [allocatedCapital, setAllocatedCapital] = useState<string>("50000000");
   const [strategyName, setStrategyName] = useState<string>("");
+  const [isCheckingKiwoom, setIsCheckingKiwoom] = useState(false);
+  // 증권 계좌 미연동 시 표시할 확인 모달 상태
+  const [showKiwoomRequiredModal, setShowKiwoomRequiredModal] = useState(false);
 
   // 내 가상매매 전략 목록 조회
   const { data: strategies, isLoading } = useQuery({
@@ -80,12 +87,37 @@ export function AutoTradingSection({
     },
   });
 
-  const handleActivate = () => {
+  // 가상매매 활성화 버튼 클릭 시 키움증권 연동 상태 확인
+  const handleActivate = async () => {
     if (sessionStatus?.toUpperCase() !== "COMPLETED") {
       alert("백테스트가 완료된 후에 활성화할 수 있습니다.");
       return;
     }
-    setShowCapitalInput(true);
+
+    // 키움증권 연동 상태 확인
+    setIsCheckingKiwoom(true);
+    try {
+      const status = await kiwoomApi.getStatus();
+
+      if (!status.is_connected) {
+        // 증권 계좌 미연동 시 커스텀 모달 표시
+        setShowKiwoomRequiredModal(true);
+        return;
+      }
+
+      // 연동되어 있으면 기존 로직대로 모달창 열기
+      setShowCapitalInput(true);
+    } catch (error) {
+      console.error("키움증권 연동 상태 확인 실패:", error);
+      alert("증권 계좌 연동 상태 확인에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setIsCheckingKiwoom(false);
+    }
+  };
+
+  // 키움증권 연동 필요 모달에서 확인 클릭 시 마이페이지로 이동
+  const handleKiwoomRequiredConfirm = () => {
+    router.push("/mypage");
   };
 
   const handleConfirmActivate = () => {
@@ -167,27 +199,25 @@ export function AutoTradingSection({
               <button
                 onClick={handleActivate}
                 disabled={
-                  isActivating || sessionStatus?.toUpperCase() !== "COMPLETED"
+                  isActivating || isCheckingKiwoom || sessionStatus?.toUpperCase() !== "COMPLETED"
                 }
-                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                  sessionStatus?.toUpperCase() !== "COMPLETED"
+                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${sessionStatus?.toUpperCase() !== "COMPLETED"
                     ? "bg-gray-300 cursor-not-allowed"
-                    : isActivating
+                    : isActivating || isCheckingKiwoom
                       ? "bg-red-400 cursor-wait"
                       : "bg-red-500 hover:bg-red-600"
-                }`}
+                  }`}
               >
-                {isActivating ? "활성화 중..." : "가상매매 활성화"}
+                {isCheckingKiwoom ? "확인 중..." : isActivating ? "활성화 중..." : "가상매매 활성화"}
               </button>
             ) : (
               <button
                 onClick={handleDeactivate}
                 disabled={isDeactivating}
-                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                  isDeactivating
+                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${isDeactivating
                     ? "bg-gray-400 cursor-wait"
                     : "bg-gray-500 hover:bg-gray-600"
-                }`}
+                  }`}
               >
                 {isDeactivating ? "비활성화 중..." : "가상매매 비활성화"}
               </button>
@@ -374,6 +404,18 @@ export function AutoTradingSection({
           </div>
         </div>
       )}
+
+      {/* 키움증권 연동 필요 모달 */}
+      <ConfirmModal
+        isOpen={showKiwoomRequiredModal}
+        onClose={() => setShowKiwoomRequiredModal(false)}
+        onConfirm={handleKiwoomRequiredConfirm}
+        title="증권 계좌 등록 필요"
+        message="가상매매를 활성화하려면 키움증권 계좌 연동이 필요합니다. 마이페이지에서 증권 계좌를 등록하시겠습니까?"
+        confirmText="계좌 등록하기"
+        cancelText="취소"
+        iconType="warning"
+      />
     </>
   );
 }

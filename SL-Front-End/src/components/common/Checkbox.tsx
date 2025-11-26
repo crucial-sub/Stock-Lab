@@ -78,7 +78,7 @@ export function Checkbox({
       />
 
       {/* 라벨 텍스트 */}
-      {label && <span className={`whitespace-nowrap`}>{label}</span>}
+      {label && <span className="text-sm sm:text-base truncate max-w-[80px] sm:max-w-none">{label}</span>}
     </button>
   );
 }

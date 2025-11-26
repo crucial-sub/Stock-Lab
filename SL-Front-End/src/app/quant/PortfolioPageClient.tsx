@@ -300,7 +300,7 @@ export function PortfolioPageClient({
   });
 
   return (
-    <main className="flex-1 px-[18.75rem] py-[3.75rem] overflow-auto">
+    <main className="flex-1 px-4 sm:px-8 md:px-12 lg:px-20 xl:px-32 2xl:px-48 py-8 sm:py-12 lg:py-[3.75rem] overflow-auto">
       {/* 대시보드 */}
       <PortfolioDashboard
         totalAssets={totalAssets}
@@ -326,7 +326,7 @@ export function PortfolioPageClient({
         </div>
 
         {/* 포트폴리오 그리드 */}
-        <div className="grid grid-cols-3 gap-[20px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
           {/* 새로 만들기 카드 */}
           <CreatePortfolioCard />
 

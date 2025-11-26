@@ -926,14 +926,14 @@ export function AIAssistantPageClient({
           </div>
         ) : (
           /* 초기 화면 */
-          <div className="relative flex min-h-[100vh] w-full flex-col items-center">
+          <div className="flex flex-1 w-full flex-col items-center overflow-y-auto min-h-0">
             {/* 타이틀 */}
-            <span className="text-[2rem] font-semibold text-black text-center mt-[5rem] mb-[20rem]">
+            <span className="text-[2rem] font-semibold text-black text-center mt-[3rem] mb-[2rem] shrink-0">
               궁금한 내용을 AI에게 확인해보세요!
             </span>
 
             {/* 큰 카드 */}
-            <div className="w-full max-w-[1000px] mb-[1.5rem]">
+            <div className="w-full max-w-[1000px] mb-[1.5rem] px-4 shrink-0">
               <StrategyCard
                 question={largeSample.question}
                 description={largeSample.description}
@@ -943,7 +943,7 @@ export function AIAssistantPageClient({
             </div>
 
             {/* 작은 카드 그리드 (2x2) */}
-            <div className="grid w-full max-w-[1000px] grid-cols-2 gap-x-[1.5rem] gap-y-[1.5rem] mb-[1rem] mx-auto">
+            <div className="grid w-full max-w-[1000px] grid-cols-1 sm:grid-cols-2 gap-4 mb-[1rem] px-4 shrink-0">
               {smallSample.map((strategy) => (
                 <StrategyCard
                   key={strategy.id}
@@ -953,10 +953,11 @@ export function AIAssistantPageClient({
               ))}
             </div>
 
-            <div className="w-full max-w-[1000px] flex-1" />
+            {/* 하단 스페이서 */}
+            <div className="flex-1 min-h-[2rem]" />
 
-            {/* AI 입력창 */}
-            <div className="sticky bottom-[0px] w-full max-w-[1000px] backdrop-blur-md py-4">
+            {/* AI 입력창 - 하단 고정 */}
+            <div className="sticky bottom-0 w-full max-w-[1000px] py-4 px-4 shrink-0">
               <AISearchInput
                 placeholder="만들고 싶은 전략을 AI에게 요청하세요!"
                 onSubmit={handleAISubmit}

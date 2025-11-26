@@ -88,6 +88,8 @@ class VectorizedConditionEvaluator:
 
             # 5. 한 번에 모든 종목 평가!
             try:
+                # 디버그: 사용 가능한 컬럼 확인
+                self.logger.debug(f"📊 date_data columns: {list(date_data.columns)}")
                 selected = date_data.query(query_str)
                 # 결과 일관성을 위해 stock_code 정렬 (환경 간 동일한 순서 보장)
                 selected_stocks = sorted(selected['stock_code'].tolist())
@@ -153,8 +155,10 @@ class VectorizedConditionEvaluator:
                 continue
 
             factor = cond.get('factor', '').upper()
-            operator = cond.get('operator', '>')
-            value = cond.get('value', 0)
+            # 'operator' 또는 'inequality' 필드 지원
+            operator = cond.get('operator') or cond.get('inequality', '>')
+            # 'value' 또는 'exp_right_side' 필드 지원
+            value = cond.get('value') if cond.get('value') is not None else cond.get('exp_right_side', 0)
 
             # 팩터명이 없으면 exp_left_side에서 추출 시도
             if not factor and 'exp_left_side' in cond:
@@ -238,8 +242,10 @@ class VectorizedConditionEvaluator:
             # 각 조건 평가
             for cond_id, cond in condition_map.items():
                 factor = cond.get('factor', '').upper()
-                operator = cond.get('operator', '>')
-                threshold = cond.get('value', 0)
+                # 'operator' 또는 'inequality' 필드 지원
+                operator = cond.get('operator') or cond.get('inequality', '>')
+                # 'value' 또는 'exp_right_side' 필드 지원
+                threshold = cond.get('value') if cond.get('value') is not None else cond.get('exp_right_side', 0)
 
                 # 팩터명이 없으면 exp_left_side에서 추출 시도
                 if not factor and 'exp_left_side' in cond:

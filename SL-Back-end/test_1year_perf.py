@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-빠른 성능 테스트 - 2개월 기간
+1년 백테스트 성능 테스트 - 20초 이내 목표
 """
 
 import asyncio
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# 불필요한 로그 레벨 조정
+logging.getLogger('app.services.factor_integration').setLevel(logging.WARNING)
+logging.getLogger('app.services.backtest_websocket').setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 import sys
@@ -18,46 +21,28 @@ sys.path.insert(0, '/Users/a2/Desktop/Stock-Lab-Demo/SL-Back-end')
 
 from app.core.database import AsyncSessionLocal
 from app.services.backtest import BacktestEngine
-from sqlalchemy import text
 
 
-async def run_quick_test():
-    """2개월 백테스트 성능 테스트"""
+async def run_1year_test():
+    """1년 백테스트 성능 테스트"""
 
-    # 2개월 기간 (2024-09-01 ~ 2024-10-31)
-    start_date = datetime.strptime("20240901", "%Y%m%d").date()
+    # 1년 기간 (2023-11-01 ~ 2024-10-31)
+    start_date = datetime.strptime("20231101", "%Y%m%d").date()
     end_date = datetime.strptime("20241031", "%Y%m%d").date()
 
     logger.info("="*60)
-    logger.info("🚀 백테스트 성능 테스트 시작")
-    logger.info(f"   기간: {start_date} ~ {end_date} (2개월)")
+    logger.info("🚀 1년 백테스트 성능 테스트")
+    logger.info(f"   기간: {start_date} ~ {end_date}")
+    logger.info("   목표: 20초 이내")
     logger.info("="*60)
 
     total_start = time.time()
     backtest_id = uuid4()
 
     async with AsyncSessionLocal() as db:
-        # 🔧 FK 오류 방지: simulation_sessions 테이블에 먼저 레코드 생성
-        try:
-            await db.execute(text("""
-                INSERT INTO simulation_sessions (session_id, session_name, status, start_date, end_date, initial_capital, created_at, updated_at)
-                VALUES (:session_id, :session_name, :status, :start_date, :end_date, :initial_capital, NOW(), NOW())
-                ON CONFLICT (session_id) DO NOTHING
-            """), {
-                "session_id": str(backtest_id),
-                "session_name": "성능 테스트",
-                "status": "RUNNING",
-                "start_date": start_date,
-                "end_date": end_date,
-                "initial_capital": 10000000
-            })
-            await db.commit()
-            logger.info(f"✅ 세션 생성 완료: {backtest_id}")
-        except Exception as e:
-            logger.warning(f"세션 생성 실패 (이미 존재할 수 있음): {e}")
-            await db.rollback()  # 트랜잭션 롤백하여 다음 쿼리가 실행될 수 있게 함
-
         engine = BacktestEngine(db=db)
+        # 🚀 테스트 모드: DB 저장 및 WebSocket 전송 스킵
+        engine.skip_db_save = True
 
         result = await engine.run_backtest(
             backtest_id=backtest_id,
@@ -84,21 +69,23 @@ async def run_quick_test():
     total_elapsed = time.time() - total_start
 
     logger.info("="*60)
-    logger.info(f"⚡ 총 실행 시간: {total_elapsed:.2f}초")
+    logger.info(f"⏱️ 총 실행 시간: {total_elapsed:.2f}초")
     logger.info("="*60)
 
-    if result:
-        logger.info(f"📊 총 수익률: {result.total_return:.2f}%")
-        logger.info(f"📊 총 거래 수: {result.total_trades}")
+    if result and result.statistics:
+        stats = result.statistics
+        logger.info(f"📊 총 수익률: {stats.total_return:.2f}%")
+        logger.info(f"📊 총 거래 수: {stats.total_trades}")
 
     # 20초 목표 달성 여부
     if total_elapsed <= 20:
-        logger.info("✅ 목표 달성: 20초 이내 완료!")
+        logger.info("🎉 목표 달성: 20초 이내 완료!")
     else:
         logger.warning(f"⚠️ 목표 미달: {total_elapsed:.2f}초 > 20초")
+        logger.warning(f"   초과 시간: {total_elapsed - 20:.2f}초")
 
     return total_elapsed
 
 
 if __name__ == "__main__":
-    asyncio.run(run_quick_test())
+    asyncio.run(run_1year_test())

@@ -207,28 +207,39 @@ class UltraFastCalculator:
 
             # 2. Numpy 배열 변환 (메모리 효율적)
             stocks = filtered_data.select('stock_code').unique().to_numpy().flatten()
-            dates = filtered_data.select('date').unique().sort().to_numpy().flatten()
+            dates_np = filtered_data.select('date').unique().sort('date').to_numpy().flatten()
+
+            # numpy datetime64를 Python date로 변환 (딕셔너리 조회용)
+            import pandas as pd
+            dates_py = [pd.Timestamp(d).date() for d in dates_np]
 
             # 3. 가격 행렬 생성 (n_stocks x n_days)
             n_stocks = len(stocks)
-            n_days = len(dates)
+            n_days = len(dates_np)
             price_matrix = np.zeros((n_stocks, n_days), dtype=np.float32)
 
             stock_to_idx = {stock: idx for idx, stock in enumerate(stocks)}
-            date_to_idx = {date: idx for idx, date in enumerate(dates)}
+            date_to_idx = {d: idx for idx, d in enumerate(dates_py)}
 
-            # 가격 데이터 채우기
+            # 가격 데이터 채우기 (row['date']도 numpy datetime64일 수 있음)
             for row in filtered_data.iter_rows(named=True):
                 stock_idx = stock_to_idx[row['stock_code']]
-                date_idx = date_to_idx[row['date']]
-                price_matrix[stock_idx, date_idx] = float(row['close_price'])
+                row_date = row['date']
+                # numpy datetime64 또는 datetime을 date로 변환
+                if hasattr(row_date, 'date') and callable(row_date.date):
+                    row_date = row_date.date()
+                elif isinstance(row_date, np.datetime64):
+                    row_date = pd.Timestamp(row_date).date()
+                date_idx = date_to_idx.get(row_date)
+                if date_idx is not None:
+                    price_matrix[stock_idx, date_idx] = float(row['close_price'])
 
             # 4. 병렬 계산 (Numba JIT)
             logger.info(f"🚀 Numba JIT 병렬 계산 시작 ({n_stocks}개 종목 × {n_days}일)")
 
-            # 모멘텀 (4가지 기간)
-            momentum_1m = self._calculate_momentum_numba(price_matrix, dates, 20)
-            momentum_3m = self._calculate_momentum_numba(price_matrix, dates, 60)
+            # 모멘텀 (4가지 기간) - Numba에는 numpy array 전달
+            momentum_1m = self._calculate_momentum_numba(price_matrix, dates_np, 20)
+            momentum_3m = self._calculate_momentum_numba(price_matrix, dates_np, 60)
 
             # RSI
             rsi = self._calculate_rsi_numba(price_matrix, 14)
@@ -245,8 +256,10 @@ class UltraFastCalculator:
             macd_signal = self._calculate_ema_numba(macd_line, 9)
             macd_histogram = macd_line - macd_signal
 
-            # 5. calc_date의 인덱스 찾기
-            calc_date_idx = date_to_idx.get(calc_date)
+            # 5. calc_date의 인덱스 찾기 (datetime과 date 타입 모두 지원)
+            # calc_date가 datetime이면 date로 변환
+            lookup_date = calc_date.date() if hasattr(calc_date, 'date') and callable(calc_date.date) else calc_date
+            calc_date_idx = date_to_idx.get(lookup_date)
             if calc_date_idx is None:
                 return {}
 

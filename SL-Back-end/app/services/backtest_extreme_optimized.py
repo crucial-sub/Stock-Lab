@@ -882,8 +882,9 @@ class ExtremeOptimizer:
             for i, calc_date in enumerate(calc_dates):
                 if i % 50 == 0:
                     logger.info(f"진행 중: {i}/{len(calc_dates)} 날짜 처리 완료")
+                # 🔧 FIX: stock_prices_pl 전달하여 PBR/PER 계산 시 날짜 비교 오류 방지
                 all_results[calc_date] = self.calculate_all_indicators_extreme(
-                    price_pl, None, calc_date, None  # 재무 데이터 None (캐시 사용)
+                    price_pl, None, calc_date, stock_prices_pl  # 재무 데이터 None (캐시 사용), stock_prices_pl 전달
                 )
                 # 재무 팩터 병합
                 for stock_code in all_results[calc_date]:
@@ -1854,9 +1855,17 @@ class ExtremeOptimizer:
             # trade_date 컬럼 사용 (실제 데이터 구조에 맞춤)
             date_col = 'trade_date' if 'trade_date' in price_pl.columns else 'date'
 
+            # 🔧 FIX: date 컬럼이 String 타입이면 Date 타입으로 변환
+            if price_pl.schema[date_col] == pl.String:
+                logger.debug(f"🔄 {date_col} 컬럼을 String→Date 타입으로 변환")
+                price_pl = price_pl.with_columns(
+                    pl.col(date_col).str.to_date('%Y-%m-%d')
+                )
+
+            # 🔧 FIX: Polars는 Python date 객체 대신 pl.lit()로 변환 필요
             filtered_data = price_pl.filter(
-                (pl.col(date_col) >= min_date) &
-                (pl.col(date_col) <= calc_date)
+                (pl.col(date_col) >= pl.lit(min_date)) &
+                (pl.col(date_col) <= pl.lit(calc_date))
             ).sort(by=['stock_code', date_col])
 
             if filtered_data.is_empty():
@@ -1958,9 +1967,16 @@ class ExtremeOptimizer:
             stock_info_dict = {}
             if stock_prices_pl is not None and not stock_prices_pl.is_empty():
                 logger.info(f"💹 상장주식수 데이터 있음: {len(stock_prices_pl)}건")
+                # 🔧 FIX: trade_date 컬럼이 String 타입이면 Date 타입으로 변환
+                if stock_prices_pl.schema.get('trade_date') == pl.String:
+                    logger.debug(f"🔄 stock_prices_pl trade_date 컬럼을 String→Date 타입으로 변환")
+                    stock_prices_pl = stock_prices_pl.with_columns(
+                        pl.col('trade_date').str.to_date('%Y-%m-%d')
+                    )
                 # calc_date에 가장 가까운 날짜의 상장주식수 및 시가총액 가져오기
+                # 🔧 FIX: Polars는 Python date 객체 대신 pl.lit()로 변환 필요
                 stock_info_filtered = stock_prices_pl.filter(
-                    pl.col('trade_date') <= calc_date
+                    pl.col('trade_date') <= pl.lit(calc_date)
                 ).sort(by=['company_id', 'trade_date'], descending=[False, True])
 
                 # 각 종목별 최신 데이터

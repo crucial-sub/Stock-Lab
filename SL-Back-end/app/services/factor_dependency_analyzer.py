@@ -118,10 +118,27 @@ class FactorDependencyAnalyzer:
                     factor_name = condition.get('factor')
                     if factor_name:
                         required_factors.add(factor_name.upper())
+                    # 🔥 FIX: exp_left_side에서 팩터명 추출 (예: "기본값({PER})" → "PER")
+                    elif 'exp_left_side' in condition:
+                        exp_left = condition.get('exp_left_side', '')
+                        # {FACTOR_NAME} 패턴 추출
+                        import re
+                        match = re.search(r'\{([^}]+)\}', exp_left)
+                        if match:
+                            extracted_factor = match.group(1).upper()
+                            required_factors.add(extracted_factor)
+                            logger.debug(f"exp_left_side에서 팩터 추출: {extracted_factor}")
                 # Pydantic 모델인 경우
                 elif hasattr(condition, 'factor'):
                     if condition.factor:
                         required_factors.add(condition.factor.upper())
+                    # 🔥 FIX: exp_left_side에서도 추출
+                    elif hasattr(condition, 'exp_left_side') and condition.exp_left_side:
+                        import re
+                        match = re.search(r'\{([^}]+)\}', condition.exp_left_side)
+                        if match:
+                            extracted_factor = match.group(1).upper()
+                            required_factors.add(extracted_factor)
 
         # 2. 논리식 조건에서 팩터 추출
         if buy_expression:

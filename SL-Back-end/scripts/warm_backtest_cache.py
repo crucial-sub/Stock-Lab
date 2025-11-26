@@ -24,7 +24,6 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.core.database import AsyncSessionLocal
-from app.services.backtest_integration import integrate_optimizations
 from app.services.backtest import BacktestEngine
 
 logging.basicConfig(
@@ -115,14 +114,9 @@ async def main():
     logger.info("=" * 80)
 
     async with AsyncSessionLocal() as db:
-        # 백테스트 엔진 생성 및 최적화 적용
+        # 백테스트 엔진 생성 (최적화는 엔진 내부에 통합)
         engine = BacktestEngine(db)
-
-        try:
-            integrate_optimizations(engine)
-            logger.info("✅ 최적화 모듈 적용 완료")
-        except Exception as e:
-            logger.warning(f"⚠️ 최적화 모듈 적용 실패: {e}")
+        logger.info("✅ BacktestEngine 초기화 완료 (최적화 내장)")
 
         # 각 기간별로 캐시 워밍업
         for period_name, days in COMMON_PERIODS:

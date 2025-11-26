@@ -27,7 +27,6 @@ sys.path.insert(0, str(project_root))
 
 from app.core.database import AsyncSessionLocal
 from app.services.backtest import BacktestEngine
-from app.services.backtest_integration import integrate_optimizations
 from app.services.backtest_cache_optimized import generate_strategy_hash
 
 # 로깅 설정
@@ -179,7 +178,6 @@ async def warm_price_data_for_all_strategies():
 
     async with AsyncSessionLocal() as db:
         engine = BacktestEngine(db)
-        integrate_optimizations(engine)
 
         # 모든 전략의 테마 수집
         all_themes = set()
@@ -214,7 +212,6 @@ async def warm_factor_data_for_strategy(strategy_name: str, config: dict, strate
 
     async with AsyncSessionLocal() as db:
         engine = BacktestEngine(db)
-        integrate_optimizations(engine)
 
         themes = config["themes"]
         themes_str = ','.join(sorted(themes))

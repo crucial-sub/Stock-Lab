@@ -2167,3 +2167,151 @@ async def backtest_websocket(
 
     finally:
         ws_manager.disconnect(backtest_id, websocket)
+
+
+# ==================== 히스토리 조회 API ====================
+
+class BacktestHistoryItem(BaseModel):
+    """백테스트 히스토리 항목"""
+    session_id: str = Field(..., serialization_alias="sessionId")
+    session_name: Optional[str] = Field(None, serialization_alias="sessionName")
+    status: str
+    start_date: str = Field(..., serialization_alias="startDate")
+    end_date: str = Field(..., serialization_alias="endDate")
+    initial_capital: float = Field(..., serialization_alias="initialCapital")
+    total_return: Optional[float] = Field(None, serialization_alias="totalReturn")
+    annualized_return: Optional[float] = Field(None, serialization_alias="annualizedReturn")
+    max_drawdown: Optional[float] = Field(None, serialization_alias="maxDrawdown")
+    sharpe_ratio: Optional[float] = Field(None, serialization_alias="sharpeRatio")
+    total_trades: Optional[int] = Field(None, serialization_alias="totalTrades")
+    win_rate: Optional[float] = Field(None, serialization_alias="winRate")
+    created_at: datetime = Field(..., serialization_alias="createdAt")
+    completed_at: Optional[datetime] = Field(None, serialization_alias="completedAt")
+
+    class Config:
+        populate_by_name = True
+
+
+class BacktestHistoryResponse(BaseModel):
+    """백테스트 히스토리 응답"""
+    strategy_id: str = Field(..., serialization_alias="strategyId")
+    strategy_name: str = Field(..., serialization_alias="strategyName")
+    total_count: int = Field(..., serialization_alias="totalCount")
+    history: List[BacktestHistoryItem]
+
+    class Config:
+        populate_by_name = True
+
+
+@router.get("/strategy/{strategy_id}/history", response_model=BacktestHistoryResponse)
+async def get_strategy_backtest_history(
+    strategy_id: str,
+    page: int = 1,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    전략의 백테스트 히스토리 조회
+
+    동일 전략(strategy_id)으로 실행된 모든 백테스트 결과를 시간순으로 조회합니다.
+    과거 결과와 비교하거나, 조건 변경에 따른 성과 차이를 분석할 수 있습니다.
+    """
+    # 1. 전략 정보 조회
+    strategy_query = select(PortfolioStrategy).where(PortfolioStrategy.strategy_id == strategy_id)
+    strategy_result = await db.execute(strategy_query)
+    strategy = strategy_result.scalar_one_or_none()
+
+    if not strategy:
+        raise HTTPException(status_code=404, detail="전략을 찾을 수 없습니다")
+
+    # 2. 해당 전략의 백테스트 세션 수 조회
+    count_query = select(func.count()).where(SimulationSession.strategy_id == strategy_id)
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar()
+
+    # 3. 백테스트 세션 목록 조회 (페이지네이션, 최신순)
+    offset = (page - 1) * limit
+    sessions_query = (
+        select(SimulationSession)
+        .where(SimulationSession.strategy_id == strategy_id)
+        .order_by(SimulationSession.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    sessions_result = await db.execute(sessions_query)
+    sessions = sessions_result.scalars().all()
+
+    # 4. 각 세션의 통계 조회
+    session_ids = [s.session_id for s in sessions]
+    stats_query = select(SimulationStatistics).where(SimulationStatistics.session_id.in_(session_ids))
+    stats_result = await db.execute(stats_query)
+    stats_map = {s.session_id: s for s in stats_result.scalars().all()}
+
+    # 5. 히스토리 항목 생성
+    history_items = []
+    for session in sessions:
+        stats = stats_map.get(session.session_id)
+
+        history_items.append(BacktestHistoryItem(
+            session_id=session.session_id,
+            session_name=session.session_name,
+            status=session.status.lower() if session.status else "pending",
+            start_date=session.start_date.isoformat() if session.start_date else "",
+            end_date=session.end_date.isoformat() if session.end_date else "",
+            initial_capital=float(session.initial_capital) if session.initial_capital else 0,
+            total_return=float(stats.total_return) if stats and stats.total_return else None,
+            annualized_return=float(stats.annualized_return) if stats and stats.annualized_return else None,
+            max_drawdown=float(stats.max_drawdown) if stats and stats.max_drawdown else None,
+            sharpe_ratio=float(stats.sharpe_ratio) if stats and stats.sharpe_ratio else None,
+            total_trades=stats.total_trades if stats else None,
+            win_rate=float(stats.win_rate) if stats and stats.win_rate else None,
+            created_at=session.created_at,
+            completed_at=session.completed_at
+        ))
+
+    return BacktestHistoryResponse(
+        strategy_id=strategy_id,
+        strategy_name=strategy.strategy_name,
+        total_count=total_count,
+        history=history_items
+    )
+
+
+@router.delete("/backtest/{backtest_id}")
+async def delete_backtest(
+    backtest_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    백테스트 결과 삭제
+
+    특정 백테스트 결과만 삭제합니다. 전략은 유지됩니다.
+    본인이 생성한 백테스트만 삭제할 수 있습니다.
+    """
+    # 1. 세션 조회 및 권한 확인
+    session_query = select(SimulationSession).where(SimulationSession.session_id == backtest_id)
+    session_result = await db.execute(session_query)
+    session = session_result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="백테스트를 찾을 수 없습니다")
+
+    if str(session.user_id) != str(current_user.user_id):
+        raise HTTPException(status_code=403, detail="본인의 백테스트만 삭제할 수 있습니다")
+
+    # 2. 관련 데이터 삭제 (CASCADE로 자동 삭제되지만 명시적으로 처리)
+    from sqlalchemy import delete
+    from app.models.simulation import SimulationDailyValue, SimulationTrade, SimulationPosition, SimulationStatistics
+
+    await db.execute(delete(SimulationDailyValue).where(SimulationDailyValue.session_id == backtest_id))
+    await db.execute(delete(SimulationTrade).where(SimulationTrade.session_id == backtest_id))
+    await db.execute(delete(SimulationPosition).where(SimulationPosition.session_id == backtest_id))
+    await db.execute(delete(SimulationStatistics).where(SimulationStatistics.session_id == backtest_id))
+    await db.execute(delete(SimulationSession).where(SimulationSession.session_id == backtest_id))
+
+    await db.commit()
+
+    logger.info(f"🗑️ 백테스트 삭제 완료: {backtest_id}")
+
+    return {"message": "백테스트가 삭제되었습니다", "backtest_id": backtest_id}

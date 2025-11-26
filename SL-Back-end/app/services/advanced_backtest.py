@@ -187,13 +187,8 @@ async def _run_backtest_async(
             # BacktestEngine 생성 (최적화 적용)
             engine = BacktestEngine(db)
 
-            # 🚀 최적화 모듈 통합
-            try:
-                from app.services.backtest_integration import integrate_optimizations
-                integrate_optimizations(engine)
-                logger.info("✅ 백테스트 최적화 모듈 적용 완료!")
-            except Exception as e:
-                logger.warning(f"⚠️ 최적화 모듈 적용 실패 (기본 모드로 실행): {e}")
+            # 최적화는 BacktestEngine 내부에 통합되어 있음
+            logger.info("✅ BacktestEngine 초기화 완료 (최적화 내장)")
 
             import re
 
@@ -457,6 +452,8 @@ async def _run_backtest_async(
 
             # 🎯 랭킹 업데이트 (공개 전략인 경우)
             try:
+                from sqlalchemy import select
+                from app.models.portfolio import PortfolioStrategy
                 from app.services.ranking_service import get_ranking_service
 
                 # 전략 공개 여부 확인

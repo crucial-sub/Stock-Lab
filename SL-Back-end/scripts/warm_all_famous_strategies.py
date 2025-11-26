@@ -34,7 +34,6 @@ sys.path.insert(0, str(project_root))
 
 from app.core.database import AsyncSessionLocal
 from app.services.backtest import BacktestEngine
-from app.services.backtest_integration import integrate_optimizations
 from app.services.backtest_cache_optimized import generate_strategy_hash
 
 # 로깅 설정
@@ -256,15 +255,29 @@ def generate_all_strategy_hashes():
 
     hashes = {}
     for strategy_id, config in STRATEGIES_CONFIG.items():
+        # 🔥 FIX: buy_conditions 구조를 백테스트 실행 시와 동일하게 맞춤
+        # backtest.py:356-360에서 loaded_strategy_config에 priority_factor, priority_order 추가됨
+        # DB에 priority_factor가 없으면 request.priority_factor(빈 문자열)가 사용됨
         buy_conditions = {
             "expression": config["expression"],
-            "conditions": config["conditions"]
+            "conditions": config["conditions"],
+            "priority_factor": config.get("priority_factor"),  # DB에 없으면 None
+            "priority_order": config.get("priority_order", "desc")  # 기본값: desc
         }
+        # 🔥 프론트엔드 → 백엔드 API 요청과 동일한 구조로 설정 (해시 일치 보장)
+        # 프론트엔드에서 전송하는 값: sell_price_basis="전일 종가", sell_price_offset=0
         trading_rules = {
-            "target_gain": config["target_gain"],
-            "stop_loss": config["stop_loss"],
-            "min_hold_days": config["min_hold_days"],
-            "max_hold_days": config["max_hold_days"]
+            "target_and_loss": {
+                "target_gain": config["target_gain"],
+                "stop_loss": config["stop_loss"]
+            },
+            "hold_days": {
+                "min_hold_days": config["min_hold_days"],
+                "max_hold_days": config["max_hold_days"],
+                "sell_price_basis": "전일 종가",  # 프론트엔드 기본값
+                "sell_price_offset": 0            # 프론트엔드 기본값 (Decimal(0)으로 정규화됨)
+            },
+            "condition_sell_meta": None
         }
         strategy_hash = generate_strategy_hash(buy_conditions, trading_rules)
         hashes[strategy_id] = strategy_hash
@@ -284,7 +297,6 @@ async def warm_price_data_for_all_strategies():
 
     async with AsyncSessionLocal() as db:
         engine = BacktestEngine(db)
-        integrate_optimizations(engine)
 
         # 모든 전략의 테마 수집
         all_themes = set()
@@ -319,7 +331,6 @@ async def warm_factor_data_for_strategy(strategy_id: str, config: dict, strategy
 
     async with AsyncSessionLocal() as db:
         engine = BacktestEngine(db)
-        integrate_optimizations(engine)
 
         themes = config["themes"]
         themes_str = ','.join(sorted(themes))
@@ -349,11 +360,15 @@ async def warm_factor_data_for_strategy(strategy_id: str, config: dict, strategy
         # 진행률 업데이트 간격 설정 (10% 단위)
         progress_interval = max(1, len(dates) // 10)
 
+        # 캐시 직접 사용 (OptimizedCacheManager가 아닌 core.cache)
+        from app.core.cache import get_cache
+        cache = get_cache()
+
         for i, calc_date in enumerate(dates, 1):
             cache_key = f"backtest_optimized:factors:{calc_date}:{themes_str}:{strategy_hash}"
 
             # 캐시 확인
-            cached = await optimized_cache.get(cache_key)
+            cached = await cache.get(cache_key)
             if cached is not None:
                 cached_count += 1
                 # 진행률 로그 (10% 단위)
@@ -372,11 +387,17 @@ async def warm_factor_data_for_strategy(strategy_id: str, config: dict, strategy
                 )
 
                 if not factors.empty:
-                    # 캐시 저장
-                    await optimized_cache.set_factors_batch(
-                        cache_key=cache_key,
-                        factors_df=factors
-                    )
+                    # 캐시 저장: DataFrame을 직렬화하여 저장
+                    import lz4.frame
+                    import pickle
+
+                    # DataFrame을 pickle로 직렬화
+                    serialized = pickle.dumps(factors)
+                    # LZ4 압축
+                    compressed = lz4.frame.compress(serialized)
+
+                    # 캐시 저장 (TTL=영구, 30일)
+                    await cache.set(cache_key, compressed, ttl=30*24*3600)
                     new_cached += 1
 
                     # 진행률 로그 (10% 단위)

@@ -110,7 +110,7 @@ export function BacktestExecutionRenderer({
       return;
     }
 
-    // 시간 추적 시작 (실패/에러가 아닌 경우만)
+    // 시간 추적 시작 (위에서 failed/error는 이미 return 처리됨)
     if (!startTimeRef.current) {
       startTimeRef.current = Date.now();
     }
@@ -217,8 +217,8 @@ export function BacktestExecutionRenderer({
         buyCount: point.buyCount,
         sellCount: point.sellCount,
       })),
-      createdAt: new Date().toISOString(),
       summary: wsSummary || undefined,
+      createdAt: new Date().toISOString(),
     };
 
     console.log("✅ [BacktestExecutionRenderer] 변환된 결과:", convertedResult);

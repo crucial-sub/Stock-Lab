@@ -207,7 +207,9 @@ export function StockPriceChart({
     series.strokes.template.setAll({
       strokeWidth: 2,
       strokeGradient,
-    });
+    } as any); // tension 등 타입에 없는 속성 허용
+    // 곡선 부드럽게 (타입 정의에 없지만 실제로 동작)
+    (series.strokes.template as any).set("tension", 0.5);
     series.fills.template.setAll({
       visible: true,
       fillGradient: areaGradient,

@@ -179,7 +179,21 @@ async def warm_price_data():
             all_prices = result.mappings().all()
 
             if all_prices:
-                # 전체 가격 데이터를 캐싱 (필터 없는 베이스 데이터)
+                # 🚨 0원 데이터 필터링 (무상증자/액면분할 기간 데이터 제외)
+                # 시가/고가/저가가 0원인 데이터는 기업행동 기간으로 판단하여 제외
+                filtered_prices = [
+                    p for p in all_prices
+                    if p["open_price"] and p["high_price"] and p["low_price"]
+                    and float(p["open_price"]) > 0
+                    and float(p["high_price"]) > 0
+                    and float(p["low_price"]) > 0
+                ]
+
+                filtered_count = len(all_prices) - len(filtered_prices)
+                if filtered_count > 0:
+                    logger.warning(f"⚠️ 캐시 워밍: 0원 데이터 {filtered_count}건 필터링됨")
+
+                # 전체 가격 데이터를 캐싱
                 price_data = [
                     {
                         "company_id": str(p["company_id"]),
@@ -198,25 +212,27 @@ async def warm_price_data():
                         "market_cap": float(p["market_cap"]) if p["market_cap"] else None,
                         "listed_shares": int(p["listed_shares"]) if p["listed_shares"] else None,
                     }
-                    for p in all_prices
+                    for p in filtered_prices
                 ]
 
-                # 날짜 범위별로 캐싱 (일반적인 백테스트 기간)
-                common_periods = [
-                    (365, "1year"),    # 1년
-                    (730, "2years"),   # 2년
-                    (1095, "3years"),  # 3년
-                    (180, "6months"),  # 6개월
+                # 날짜 범위별로 캐싱 (절대 날짜 기준 표준 기간)
+                # 백테스트와 호환되도록 고정된 표준 기간 사용
+                from datetime import date
+
+                standard_periods = [
+                    (date(2024, 1, 1), date(2024, 12, 31), "2024_full"),     # 2024년 전체
+                    (date(2023, 1, 1), date(2024, 12, 31), "2023-2024"),     # 2년
+                    (date(2022, 1, 1), date(2024, 12, 31), "2022-2024"),     # 3년
+                    (date(2024, 7, 1), date(2024, 12, 31), "2024_h2"),       # 2024 하반기
                 ]
 
-                for days, label in common_periods:
-                    start_date = latest_date - timedelta(days=days)
+                for start_date, end_date, label in standard_periods:
                     filtered_data = [
                         p for p in price_data
-                        if datetime.fromisoformat(p["trade_date"]).date() >= start_date
+                        if start_date <= datetime.fromisoformat(p["trade_date"]).date() <= end_date
                     ]
 
-                    cache_key = f"price_data:all:{start_date}:{latest_date}"
+                    cache_key = f"price_data:all:{start_date}:{end_date}"
                     await cache.set(cache_key, filtered_data, ttl=0)  # 영구 캐싱 (TTL=0)
                     logger.info(f"✅ Cached {label} price data: {len(filtered_data)} records (permanent)")
 
@@ -265,7 +281,7 @@ async def warm_factor_calculations():
             calculator = CompleteFactorCalculator(db)
 
             # ⚡ 전체 종목을 한 번에 계산 (배치 크기 증가)
-            batch_size = 500  # 100 -> 500으로 증가
+            batch_size = 1000  # 100 -> 500으로 증가
             for i in range(0, len(stock_codes), batch_size):
                 batch = stock_codes[i:i + batch_size]
 
@@ -426,6 +442,57 @@ async def warm_backtest_results():
         logger.error(f"❌ Backtest warming failed: {e}")
 
 
+async def warm_famous_strategies():
+    """
+    유명 투자 전략 10개 캐싱 (병렬 처리)
+    - 급등주, 안정성장, 피터린치, 워렌버핏 등
+    - 30-35분 소요 (4개씩 병렬 처리)
+    """
+    logger.info("🔥 Starting famous strategies warming (10 strategies, parallel)...")
+
+    try:
+        import subprocess
+        import os
+
+        # 유명 전략 캐시 워밍 스크립트 실행
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "scripts",
+            "warm_all_famous_strategies.py"
+        )
+
+        if not os.path.exists(script_path):
+            logger.warning(f"⚠️ Famous strategies script not found: {script_path}")
+            logger.info(f"   Expected path: {script_path}")
+            return
+
+        logger.info(f"📂 Running script: {script_path}")
+
+        # 서브프로세스로 실행
+        result = subprocess.run(
+            ["python3", script_path],
+            capture_output=True,
+            text=True,
+            timeout=3600  # 1시간 타임아웃
+        )
+
+        if result.returncode == 0:
+            logger.info("✅ Famous strategies warming completed!")
+            # 주요 로그만 출력
+            for line in result.stdout.split('\n'):
+                if any(keyword in line for keyword in ['✅', '🔄', '배치', '완료', '시작']):
+                    logger.info(f"   {line}")
+        else:
+            logger.error(f"❌ Famous strategies warming failed!")
+            logger.error(f"   Return code: {result.returncode}")
+            logger.error(f"   Stderr: {result.stderr[:500]}")  # 처음 500자만
+
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Famous strategies warming timeout (1 hour)")
+    except Exception as e:
+        logger.error(f"❌ Famous strategies warming failed: {e}")
+
+
 async def run_cache_warming():
     """
     전체 캐시 워밍 프로세스 실행
@@ -449,6 +516,12 @@ async def run_cache_warming():
 
         # 3단계: 인기 백테스트 메타데이터 캐싱
         await warm_backtest_results()
+
+        # 4단계: 유명 투자 전략 10개 캐싱 (병렬 처리) - NEW!
+        logger.info("\n" + "=" * 80)
+        logger.info("📊 Phase 4: Famous Strategies Warming")
+        logger.info("=" * 80)
+        await warm_famous_strategies()
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()

@@ -254,6 +254,12 @@ class BacktestEngine:
         self.condition_evaluator = ConditionEvaluator()
         self.expression_parser = LogicalExpressionParser()
 
+        # 기업행동 감지 정보 (무상증자/액면분할 등)
+        # {stock_code: {event_date, prev_close, action_type, ...}}
+        self.corporate_actions: Dict[str, Dict] = {}
+        # 기업행동으로 매수 금지된 종목
+        self.blocked_stocks: Set[str] = set()
+
         # 전략 제약 기본값
         self.initial_capital: Decimal = Decimal("0")
         self.per_stock_ratio: Optional[Decimal] = None
@@ -386,18 +392,21 @@ class BacktestEngine:
 
         self.hold_days = None
         if hold_days:
+            # 🔥 FIX: 기본값을 프론트엔드와 일치 ("전일 종가", 0)
+            # 캐시 키 일관성을 위해 정규화된 기본값 사용
             self.hold_days = {
                 "min_hold_days": hold_days.get('min_hold_days'),
                 "max_hold_days": hold_days.get('max_hold_days'),
-                "sell_price_basis": hold_days.get('sell_price_basis', 'CURRENT'),
-                "sell_price_offset": Decimal(str(hold_days.get('sell_price_offset'))) if hold_days.get('sell_price_offset') is not None else None
+                "sell_price_basis": hold_days.get('sell_price_basis', '전일 종가'),
+                "sell_price_offset": Decimal(str(hold_days.get('sell_price_offset', 0)))
             }
 
         self.condition_sell_meta = None
         if condition_sell:
+            # 🔥 FIX: 기본값을 프론트엔드와 일치
             self.condition_sell_meta = {
-                "sell_price_basis": condition_sell.get('sell_price_basis', 'CURRENT'),
-                "sell_price_offset": Decimal(str(condition_sell.get('sell_price_offset'))) if condition_sell.get('sell_price_offset') is not None else None
+                "sell_price_basis": condition_sell.get('sell_price_basis', '전일 종가'),
+                "sell_price_offset": Decimal(str(condition_sell.get('sell_price_offset', 0)))
             }
 
         # 매매 대상 필터 저장
@@ -420,16 +429,10 @@ class BacktestEngine:
 
             financial_data = await self._load_financial_data(start_date, end_date, actual_stocks)
 
-            # 1.5. 기존 백테스트 결과 삭제 (재실행 시 중복 방지)
-            from sqlalchemy import delete
-            from app.models.simulation import SimulationDailyValue, SimulationTrade, SimulationPosition
-
-            logger.info(f"기존 백테스트 결과 삭제 시작: {backtest_id}")
-            await self.db.execute(delete(SimulationDailyValue).where(SimulationDailyValue.session_id == str(backtest_id)))
-            await self.db.execute(delete(SimulationTrade).where(SimulationTrade.session_id == str(backtest_id)))
-            await self.db.execute(delete(SimulationPosition).where(SimulationPosition.session_id == str(backtest_id)))
-            await self.db.commit()
-            logger.info(f"✅ 기존 백테스트 결과 삭제 완료")
+            # 1.5. 히스토리 보존 모드: 기존 데이터 삭제 제거
+            # 매번 새로운 backtest_id(session_id)가 생성되므로 DELETE 불필요
+            # 동일 strategy_id에 여러 session_id가 연결되어 히스토리 보존됨
+            logger.info(f"📝 새로운 백테스트 세션: {backtest_id} (히스토리 보존 모드)")
 
             # 2. 팩터 계산 - 최적화된 버전 사용
             # 매수 조건에서 priority_factor 추출
@@ -611,58 +614,86 @@ class BacktestEngine:
         from app.core.cache import get_cache
         cache = get_cache()
 
-        # Phase 0 최적화: 캐시 키에 필터 정보 포함
-        base_cache_key = config.get_cache_key(
-            'price_data', start_date, end_date,
-            target_themes, target_stocks, target_universes
-        )
-
-        cached_data = None
-        try:
-            cached_data = await cache.get(base_cache_key)
-            if cached_data:
-                logger.info(f"💾 시세 데이터 캐시 히트: {len(cached_data)}개 레코드 (기본 캐시)")
-
-                # 캐시 데이터를 DataFrame으로 변환
-                df = pd.DataFrame(cached_data)
-
-                # 메모리에서 필터링 적용 (AND 로직)
-                if target_themes or target_stocks or target_universes:
-                    if target_stocks:
-                        # 개별 종목 선택 시 다른 필터 무시
-                        filter_mask = df['stock_code'].isin(target_stocks) if 'stock_code' in df.columns else pd.Series([False] * len(df))
-                        logger.info(f"🎯 개별 종목 필터만 적용 (메모리): {len(target_stocks)}개")
-                    else:
-                        # 유니버스 & 테마를 AND로 결합
-                        filter_mask = pd.Series([True] * len(df))  # 시작은 모두 True
-
-                        if target_themes and 'industry' in df.columns:
-                            filter_mask &= df['industry'].isin(target_themes)
-                            logger.info(f"🎯 테마 AND 필터 (메모리): {len(target_themes)}개 산업")
-
-                        if target_universes:
-                            # 유니버스 종목 코드 조회
-                            from app.services.universe_service import UniverseService
-                            universe_service = UniverseService(self.db)
-                            universe_stock_codes = await universe_service.get_stock_codes_by_universes(
-                                target_universes,
-                                trade_date=start_date.strftime("%Y%m%d")
-                            )
-                            if universe_stock_codes and 'stock_code' in df.columns:
-                                filter_mask &= df['stock_code'].isin(universe_stock_codes)
-                                logger.info(f"🎯 유니버스 AND 필터 (메모리): {len(universe_stock_codes)}개 종목")
-
-                    df = df[filter_mask]
-                    logger.info(f"✅ AND 필터링 후: {len(df)}개 레코드")
-
-                return df
-        except Exception as e:
-            logger.debug(f"시세 캐시 조회 실패: {e}")
-
-        # Phase 0 최적화: 365일 → 필요한 만큼만
-        # 필요한 팩터에 따라 동적으로 lookback 기간 결정
+        # 🚀 ULTRA-FAST: 캐시 워밍 데이터 조회 (범위 포함 검사)
+        # 캐시 워밍은 보통 더 넓은 범위(예: 2023-01-01~2024-12-31)로 저장
+        # 요청 범위가 캐시 범위에 포함되면 캐시 히트
         lookback_days = config.get_lookback_days(getattr(self, 'required_factors', None))
         extended_start = start_date - timedelta(days=lookback_days)
+
+        # 캐시 키 후보: 정확한 범위 또는 상위 범위
+        cache_key_candidates = [
+            f"price_data:all:{extended_start}:{end_date}",  # 정확한 범위
+            f"price_data:all:{start_date}:{end_date}",      # 원래 범위
+            "price_data:all:2023-01-01:2025-12-31",         # 고정 캐시 워밍 범위 (2025년 포함)
+            "peter_lynch:price_data:2023-01-01:2025-12-31", # 레거시 키 형식 (2025년 포함)
+            "price_data:all:2024-01-01:2025-12-31",         # 2024~2025년 전체
+            "price_data:all:2023-01-01:2024-12-31",         # 레거시 캐시 워밍 범위
+            "peter_lynch:price_data:2023-01-01:2024-12-31", # 레거시 키 형식
+            "price_data:all:2024-01-01:2024-12-31",         # 2024년 전체
+        ]
+
+        cached_data = None
+        used_cache_key = None
+        for cache_key in cache_key_candidates:
+            try:
+                cached_data = await cache.get(cache_key)
+                if cached_data:
+                    used_cache_key = cache_key
+                    break
+            except Exception:
+                continue
+
+        if cached_data:
+            logger.info(f"💾 시세 데이터 캐시 히트: {len(cached_data)}개 레코드 (키: {used_cache_key})")
+
+            # 캐시 데이터를 DataFrame으로 변환
+            df = pd.DataFrame(cached_data)
+
+            # 날짜 범위 필터링 (캐시 범위 > 요청 범위일 수 있음)
+            if 'date' in df.columns:
+                df['date'] = pd.to_datetime(df['date'])
+                df = df[(df['date'].dt.date >= extended_start) & (df['date'].dt.date <= end_date)]
+                logger.info(f"📅 날짜 범위 필터링 후: {len(df)}개 레코드")
+
+            # 메모리에서 필터링 적용 (AND 로직)
+            if target_themes or target_stocks or target_universes:
+                if target_stocks:
+                    # 개별 종목 선택 시 다른 필터 무시
+                    filter_mask = df['stock_code'].isin(target_stocks) if 'stock_code' in df.columns else pd.Series([False] * len(df), index=df.index)
+                    logger.info(f"🎯 개별 종목 필터만 적용 (메모리): {len(target_stocks)}개")
+                else:
+                    # 유니버스 & 테마를 AND로 결합
+                    # 🔧 FIX: df.index를 사용하여 인덱스 일치시킴
+                    filter_mask = pd.Series([True] * len(df), index=df.index)
+
+                    if target_themes and 'industry' in df.columns:
+                        filter_mask &= df['industry'].isin(target_themes)
+                        logger.info(f"🎯 테마 AND 필터 (메모리): {len(target_themes)}개 산업")
+
+                    if target_universes:
+                        # 유니버스 종목 코드 조회
+                        from app.services.universe_service import UniverseService
+                        universe_service = UniverseService(self.db)
+                        universe_stock_codes = await universe_service.get_stock_codes_by_universes(
+                            target_universes,
+                            trade_date=start_date.strftime("%Y%m%d")
+                        )
+                        if universe_stock_codes and 'stock_code' in df.columns:
+                            filter_mask &= df['stock_code'].isin(universe_stock_codes)
+                            logger.info(f"🎯 유니버스 AND 필터 (메모리): {len(universe_stock_codes)}개 종목")
+
+                df = df[filter_mask]
+                logger.info(f"✅ AND 필터링 후: {len(df)}개 레코드")
+
+            # 🚨 캐시 히트 시에도 기업행동 감지 필수!
+            df, corporate_actions = self._detect_corporate_actions(df)
+            if corporate_actions:
+                self.corporate_actions = corporate_actions
+                logger.warning(f"🚨 기업행동 감지 (캐시 히트): {len(corporate_actions)}개 종목 - 강제 청산 대상")
+
+            return df
+
+        # 캐시 미스 - DB 조회
         logger.info(f"📊 Lookback 기간: {lookback_days}일 (이전: 365일)")
 
         # 기본 조건
@@ -760,6 +791,12 @@ class BacktestEngine:
         logger.info(f"📊 시세 데이터 로드 완료: {len(df):,}개 레코드, {df['stock_code'].nunique()}개 종목")
         logger.info(f"📅 시세 데이터 날짜 범위: {df['date'].min().date()} ~ {df['date'].max().date()}")
 
+        # 🚨 기업행동 감지 (무상증자/액면분할 등)
+        df, corporate_actions = self._detect_corporate_actions(df)
+        if corporate_actions:
+            self.corporate_actions = corporate_actions
+            logger.warning(f"🚨 기업행동 감지: {len(corporate_actions)}개 종목 - 강제 청산 대상")
+
         # Phase 0 최적화: price_lookup 사전 구축 (10-20배 빠른 가격 조회)
         self.price_lookup = {}
         for _, row in df.iterrows():
@@ -775,10 +812,137 @@ class BacktestEngine:
                 total_stocks=df['stock_code'].nunique()
             )
 
-        # 캐시는 cache_warmer가 주기적으로 갱신하므로 여기서는 저장하지 않음
-        # (필터링된 데이터를 저장하면 캐시 키가 너무 많아짐)
+        # 🚀 가격 데이터 캐싱 (필터 없는 전체 데이터만)
+        # 필터링된 데이터는 캐싱하지 않음 (키가 너무 많아짐)
+        if not target_themes and not target_stocks and not target_universes:
+            try:
+                cache_key = f"price_data:all:{extended_start}:{end_date}"
+                # DataFrame을 dict 리스트로 변환하여 저장
+                cache_data = df.to_dict('records')
+                # 날짜 객체를 문자열로 변환
+                for record in cache_data:
+                    if 'date' in record and hasattr(record['date'], 'isoformat'):
+                        record['date'] = record['date'].isoformat()
+                await cache.set(cache_key, cache_data, ttl=0)  # TTL=0: 영구 저장
+                logger.info(f"💾 가격 데이터 캐시 저장: {len(cache_data)}개 레코드 (키: {cache_key})")
+            except Exception as e:
+                logger.debug(f"가격 데이터 캐시 저장 실패: {e}")
 
         return df
+
+    def _detect_corporate_actions(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Dict]]:
+        """
+        🚀 기업행동 감지 (무상증자/액면분할 등) - Polars 최적화 버전
+
+        하루에 50% 이상 변동하는 경우 기업행동으로 판단하고,
+        해당 정보를 반환합니다. 기업행동 발생일 이후 데이터는 제외됩니다.
+
+        Args:
+            df: 주가 데이터 DataFrame
+
+        Returns:
+            Tuple[DataFrame, Dict]:
+                - 기업행동 발생일 이후 데이터가 제외된 DataFrame
+                - 기업행동 이벤트 정보 딕셔너리 {stock_code: {event_date, prev_close, action_type, ...}}
+        """
+        corporate_actions = {}
+
+        if df.empty:
+            return df, corporate_actions
+
+        detect_start = time.time()
+
+        # 🚀 ULTRA-FAST: Polars로 벡터화 연산 (4배 빠름)
+        df_pl = pl.from_pandas(df)
+
+        # 정렬 및 등락률 계산 (Polars 방식)
+        df_pl = df_pl.sort(['stock_code', 'date'])
+        df_pl = df_pl.with_columns([
+            pl.col('close_price').shift(1).over('stock_code').alias('prev_close')
+        ])
+        df_pl = df_pl.with_columns([
+            pl.when(pl.col('prev_close') > 0)
+            .then(((pl.col('close_price') - pl.col('prev_close')) / pl.col('prev_close') * 100))
+            .otherwise(None)
+            .alias('change_rate')
+        ])
+
+        ABNORMAL_THRESHOLD = 50.0
+        before_count = len(df_pl)
+
+        # 급등/급락 이벤트 감지
+        abnormal_events = df_pl.filter(pl.col('change_rate').abs() > ABNORMAL_THRESHOLD)
+
+        if len(abnormal_events) == 0:
+            # Pandas로 변환 후 임시 컬럼 제거
+            df_result = df_pl.drop(['prev_close', 'change_rate']).to_pandas()
+            logger.info(f"✅ 기업행동 감지 완료: 0개 (소요 {time.time() - detect_start:.2f}초)")
+            return df_result, corporate_actions
+
+        # 각 종목별 첫 번째 기업행동 이벤트만 사용 (가장 이른 날짜)
+        abnormal_events = abnormal_events.sort('date').unique(subset=['stock_code'], keep='first')
+
+        # 🚀 벡터화된 이벤트 추출 (iterrows 제거)
+        event_data = abnormal_events.select(['stock_code', 'stock_name', 'date', 'prev_close', 'close_price', 'change_rate']).to_dicts()
+
+        for row in event_data:
+            stock_code = row['stock_code']
+            event_date = row['date']
+            change_rate = row['change_rate']
+            action_type = "무상증자/액면분할" if change_rate > 0 else "감자/액면병합"
+
+            corporate_actions[stock_code] = {
+                'stock_code': stock_code,
+                'stock_name': row['stock_name'],
+                'event_date': event_date,
+                'prev_close': row['prev_close'],
+                'new_close': row['close_price'],
+                'change_rate': change_rate,
+                'action_type': action_type
+            }
+
+            event_date_str = event_date.strftime('%Y-%m-%d') if hasattr(event_date, 'strftime') else str(event_date)
+            logger.warning(
+                f"⚠️ 기업행동 감지: {row['stock_name']}({stock_code}) "
+                f"{event_date_str} "
+                f"{row['prev_close']:.0f}원 → {row['close_price']:.0f}원 "
+                f"({change_rate:+.1f}%) [{action_type}]"
+            )
+
+        # 🚀 벡터화된 필터링 (루프 제거)
+        if corporate_actions:
+            # 각 종목별 이벤트 날짜를 DataFrame으로
+            event_df = pl.DataFrame([
+                {'stock_code': k, 'event_date': v['event_date']}
+                for k, v in corporate_actions.items()
+            ])
+
+            # Left join으로 이벤트 날짜 매칭
+            df_pl = df_pl.join(event_df, on='stock_code', how='left')
+
+            # 이벤트 날짜 이전 데이터만 유지 (이벤트가 없는 종목은 모두 유지)
+            df_pl = df_pl.filter(
+                (pl.col('event_date').is_null()) |
+                (pl.col('date') < pl.col('event_date'))
+            ).drop('event_date')
+
+        # 임시 컬럼 제거 및 Pandas 변환
+        df_filtered = df_pl.drop(['prev_close', 'change_rate']).to_pandas()
+
+        after_count = len(df_filtered)
+        filtered_count = before_count - after_count
+
+        detect_elapsed = time.time() - detect_start
+        if filtered_count > 0:
+            logger.warning(
+                f"⚠️ 기업행동 데이터 필터링 완료: "
+                f"{len(corporate_actions)}개 종목 감지, "
+                f"{filtered_count}건 데이터 제외 ({detect_elapsed:.2f}초)"
+            )
+        else:
+            logger.info(f"✅ 기업행동 감지 완료: {len(corporate_actions)}개 ({detect_elapsed:.2f}초)")
+
+        return df_filtered, corporate_actions
 
     async def _load_financial_data(self, start_date: date, end_date: date, target_stocks: List[str] = None) -> pd.DataFrame:
         """재무 데이터 로드 + Redis 캐싱"""
@@ -1190,7 +1354,7 @@ class BacktestEngine:
             price_until_date = price_pl.filter(pl.col('date') <= calc_date)
 
             if financial_pl is not None or financial_dict is not None:
-                value_factor_list = ['PER', 'PBR', 'PSR', 'PCR', 'DIVIDEND_YIELD', 'EARNINGS_YIELD', 'FCF_YIELD', 'EV_EBITDA', 'EV_SALES', 'BOOK_TO_MARKET']
+                value_factor_list = ['PER', 'PBR', 'PSR', 'PCR', 'DIVIDEND_YIELD', 'EARNINGS_YIELD', 'FCF_YIELD', 'EV_EBITDA', 'EV_SALES', 'BOOK_TO_MARKET', 'ROIC', 'MARKET_CAP']
                 if any(f in required_factors for f in value_factor_list):
                     try:
                         value_map = self._calculate_value_factors(price_until_date, financial_pl, calc_date, financial_dict)
@@ -1306,7 +1470,7 @@ class BacktestEngine:
         start_time: float,
         cache_enabled: bool
     ) -> List[Dict]:
-        """순차 처리 + Redis 캐싱"""
+        """순차 처리 + Redis 캐싱 (최적화: 분기별 1회 조회)"""
         all_rows = []
 
         # 분기별 캐시를 위한 도우미 함수
@@ -1318,33 +1482,91 @@ class BacktestEngine:
 
         total_dates = len(unique_dates)
 
-        for date_idx, calc_date in enumerate(unique_dates):
-            cache_key = None
-            if cache_enabled:
-                quarter_key = get_quarter_key(calc_date)
+        # 🚀 최적화: 이미 로드된 분기 추적 (중복 조회 방지)
+        loaded_quarters: Set[str] = set()
+        # 🚀 최적화: 분기별로 계산이 필요한 날짜 그룹화
+        quarters_to_calc: Dict[str, List] = defaultdict(list)
+
+        # 1단계: 캐시 히트된 분기 먼저 로드 (분기당 1회만)
+        if cache_enabled:
+            unique_quarters = set(get_quarter_key(d) for d in unique_dates)
+            logger.info(f"🔍 캐시 조회 대상 분기: {sorted(unique_quarters)}")
+
+            # 🚀 최적화: 전체 팩터 캐시 (팩터 조합 무관하게 재사용)
+            # 캐시 키에서 factors 제거 → 모든 전략이 동일 캐시 공유
+            for quarter_key in sorted(unique_quarters):
                 cache_params = {
                     'quarter': quarter_key,
-                    'factors': sorted(list(required_factors)),
-                    'stocks': sorted(price_data['stock_code'].unique().tolist()[:50])  # 종목 수 제한
+                    'version': 'v2_all_factors'  # 전체 팩터 버전
                 }
-                cache_key = cache._generate_key('backtest_factors', cache_params)
+                cache_key = cache._generate_key('backtest_factors_v2', cache_params)
 
-                # 캐시 조회
                 try:
                     cached_data = await cache.get(cache_key)
                     if cached_data:
-                        logger.info(f"💾 캐시 히트: {quarter_key} - {len(cached_data)}개 레코드")
-                        all_rows.extend(cached_data)
-                        continue
+                        # 필요한 팩터만 필터링 (메모리 절약)
+                        filtered_rows = []
+                        for row in cached_data:
+                            filtered_row = {
+                                'date': row.get('date'),
+                                'stock_code': row.get('stock_code'),
+                                'industry': row.get('industry'),
+                                'size_bucket': row.get('size_bucket')
+                            }
+                            for factor in required_factors:
+                                if factor in row:
+                                    filtered_row[factor] = row[factor]
+                            filtered_rows.append(filtered_row)
+                        logger.info(f"💾 캐시 히트: {quarter_key} - {len(filtered_rows)}개 레코드 (필터링: {len(required_factors)}개 팩터)")
+                        all_rows.extend(filtered_rows)
+                        loaded_quarters.add(quarter_key)
                 except Exception as e:
-                    logger.debug(f"캐시 조회 실패: {e}")
+                    logger.debug(f"캐시 조회 실패 ({quarter_key}): {e}")
 
-            # 캐시 미스 - 계산 수행
-            todays_prices = price_data[price_data['date'] == calc_date]
-            if todays_prices.empty:
+            if loaded_quarters:
+                logger.info(f"✅ 캐시 로드 완료: {len(loaded_quarters)}개 분기, {len(all_rows)}개 레코드")
+
+        # 2단계: 캐시 미스된 분기만 계산 (분기별 1회만 계산하여 모든 날짜에 적용)
+        dates_to_calculate = [d for d in unique_dates if get_quarter_key(d) not in loaded_quarters]
+
+        if not dates_to_calculate:
+            logger.info(f"🚀 모든 분기 캐시 히트 - 팩터 계산 스킵 ({len(all_rows)}개 레코드)")
+            return all_rows
+
+        # 🚀 최적화: 캐시 미스된 분기 그룹화 (분기별 1회만 계산)
+        quarters_to_calculate = defaultdict(list)
+        for d in dates_to_calculate:
+            quarters_to_calculate[get_quarter_key(d)].append(d)
+
+        logger.info(f"📊 캐시 미스 분기: {list(quarters_to_calculate.keys())} ({len(dates_to_calculate)}개 날짜)")
+
+        # 분기별로 1회만 팩터 계산
+        for quarter_key, quarter_dates in quarters_to_calculate.items():
+            logger.info(f"🔧 분기 {quarter_key} 팩터 계산 시작 ({len(quarter_dates)}개 날짜)...")
+            quarter_start_time = time.time()
+
+            # 분기의 마지막 날짜 기준으로 팩터 1회 계산
+            calc_date = max(quarter_dates)
+            cache_key = None
+
+            if cache_enabled:
+                # 🚀 V2 최적화: 전체 팩터 캐시 (팩터 조합 무관)
+                cache_params = {
+                    'quarter': quarter_key,
+                    'version': 'v2_all_factors'
+                }
+                cache_key = cache._generate_key('backtest_factors_v2', cache_params)
+
+            # 해당 분기의 모든 종목 가격 데이터
+            quarter_prices = price_data[price_data['date'].isin(quarter_dates)]
+            if quarter_prices.empty:
                 continue
 
-            date_rows = []
+            # 분기 마지막 날짜의 가격 데이터 (팩터 계산용)
+            todays_prices = price_data[price_data['date'] == calc_date]
+            if todays_prices.empty:
+                todays_prices = quarter_prices[quarter_prices['date'] == quarter_prices['date'].max()]
+
             industry_map = {}
             if 'industry' in todays_prices.columns:
                 industry_map = dict(zip(todays_prices['stock_code'], todays_prices['industry']))
@@ -1353,141 +1575,108 @@ class BacktestEngine:
             stock_factor_map: Dict[str, Dict[str, float]] = defaultdict(dict)
             price_until_date = price_pl.filter(pl.col('date') <= calc_date)
 
-            # 선택적 팩터 계산
+            # 🚀 V2 최적화: 전체 재무 팩터 계산 (캐시 재사용 극대화)
+            # 캐시 미스 시 모든 팩터를 계산하여 저장 → 다른 전략에서도 재사용 가능
             if financial_pl is not None or financial_dict is not None:
                 # 가치 팩터 (PER, PBR, PSR, PCR, DIVIDEND_YIELD, EARNINGS_YIELD, FCF_YIELD, EV_EBITDA, EV_SALES, BOOK_TO_MARKET)
-                value_factor_list = ['PER', 'PBR', 'PSR', 'PCR', 'DIVIDEND_YIELD', 'EARNINGS_YIELD', 'FCF_YIELD', 'EV_EBITDA', 'EV_SALES', 'BOOK_TO_MARKET']
-                if any(f in required_factors for f in value_factor_list):
-                    try:
-                        value_map = self._calculate_value_factors(price_until_date, financial_pl, calc_date, financial_dict)
-                        filtered_value_map = {}
-                        for stock, factors in value_map.items():
-                            filtered_value_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
-                        self._merge_factor_maps(stock_factor_map, filtered_value_map)
-                    except Exception as e:
-                        logger.error(f"가치 팩터 계산 에러 ({calc_date}): {e}")
+                try:
+                    value_map = self._calculate_value_factors(price_until_date, financial_pl, calc_date, financial_dict)
+                    self._merge_factor_maps(stock_factor_map, value_map)
+                except Exception as e:
+                    logger.error(f"가치 팩터 계산 에러 ({calc_date}): {e}")
 
                 # 수익성 팩터 (ROE, ROA, DEBT_RATIO, GPM, OPM, NPM)
-                if any(f in required_factors for f in ['ROE', 'ROA', 'DEBT_RATIO', 'GPM', 'OPM', 'NPM']):
-                    try:
-                        profit_map = self._calculate_profitability_factors(financial_pl, calc_date, financial_dict)
-                        filtered_profit_map = {}
-                        for stock, factors in profit_map.items():
-                            filtered_profit_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
-                        self._merge_factor_maps(stock_factor_map, filtered_profit_map)
-                    except Exception as e:
-                        logger.error(f"수익성 팩터 계산 에러 ({calc_date}): {e}")
+                try:
+                    profit_map = self._calculate_profitability_factors(financial_pl, calc_date, financial_dict)
+                    self._merge_factor_maps(stock_factor_map, profit_map)
+                except Exception as e:
+                    logger.error(f"수익성 팩터 계산 에러 ({calc_date}): {e}")
 
                 # 안정성 팩터 (DEBT_TO_EQUITY, EQUITY_RATIO, CURRENT_RATIO, QUICK_RATIO, CASH_RATIO, INTEREST_COVERAGE)
-                if any(f in required_factors for f in ['DEBT_TO_EQUITY', 'EQUITY_RATIO', 'CURRENT_RATIO', 'QUICK_RATIO', 'CASH_RATIO', 'INTEREST_COVERAGE']):
-                    try:
-                        stability_map = self._calculate_stability_factors(financial_pl, calc_date, financial_dict)
-                        filtered_stability_map = {}
-                        for stock, factors in stability_map.items():
-                            filtered_stability_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
-                        self._merge_factor_maps(stock_factor_map, filtered_stability_map)
-                    except Exception as e:
-                        logger.error(f"안정성 팩터 계산 에러 ({calc_date}): {e}")
+                try:
+                    stability_map = self._calculate_stability_factors(financial_pl, calc_date, financial_dict)
+                    self._merge_factor_maps(stock_factor_map, stability_map)
+                except Exception as e:
+                    logger.error(f"안정성 팩터 계산 에러 ({calc_date}): {e}")
 
                 # 성장성 팩터
-                growth_factor_list = ['REVENUE_GROWTH', 'REVENUE_GROWTH_1Y', 'REVENUE_GROWTH_3Y', 'SALES_GROWTH',
-                                      'EARNINGS_GROWTH', 'EARNINGS_GROWTH_1Y', 'EARNINGS_GROWTH_3Y',
-                                      'OPERATING_INCOME_GROWTH', 'ASSET_GROWTH', 'ASSET_GROWTH_3Y',
-                                      'EQUITY_GROWTH', 'GROSS_PROFIT_GROWTH']
-                if any(f in required_factors for f in growth_factor_list):
-                    try:
-                        growth_map = self._calculate_growth_factors(financial_pl, calc_date, financial_dict)
-                        filtered_growth_map = {}
-                        for stock, factors in growth_map.items():
-                            filtered_growth_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
-                        self._merge_factor_maps(stock_factor_map, filtered_growth_map)
-                    except Exception as e:
-                        logger.error(f"성장성 팩터 계산 에러 ({calc_date}): {e}")
+                try:
+                    growth_map = self._calculate_growth_factors(financial_pl, calc_date, financial_dict)
+                    self._merge_factor_maps(stock_factor_map, growth_map)
+                except Exception as e:
+                    logger.error(f"성장성 팩터 계산 에러 ({calc_date}): {e}")
 
                 # PEG 계산: PER / EARNINGS_GROWTH_1Y (두 팩터가 계산된 후에 수행)
-                if 'PEG' in required_factors:
-                    try:
-                        for stock in stock_factor_map:
-                            per = stock_factor_map[stock].get('PER')
-                            earnings_growth = stock_factor_map[stock].get('EARNINGS_GROWTH_1Y')
-                            # PER이 양수이고 성장률이 양수일 때만 PEG 계산
-                            if per is not None and earnings_growth is not None and per > 0 and earnings_growth > 0:
-                                stock_factor_map[stock]['PEG'] = per / earnings_growth
-                    except Exception as e:
-                        logger.error(f"PEG 팩터 계산 에러 ({calc_date}): {e}")
-
-            # 모멘텀 팩터
-            if any(f.startswith('MOMENTUM') for f in required_factors):
                 try:
-                    momentum_map = self._calculate_momentum_factors(price_until_date, calc_date)
-                    filtered_momentum_map = {}
-                    for stock, factors in momentum_map.items():
-                        filtered_momentum_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
-                    self._merge_factor_maps(stock_factor_map, filtered_momentum_map)
+                    for stock in stock_factor_map:
+                        per = stock_factor_map[stock].get('PER')
+                        earnings_growth = stock_factor_map[stock].get('EARNINGS_GROWTH_1Y')
+                        # PER이 양수이고 성장률이 양수일 때만 PEG 계산
+                        if per is not None and earnings_growth is not None and per > 0 and earnings_growth > 0:
+                            stock_factor_map[stock]['PEG'] = per / earnings_growth
                 except Exception as e:
-                    logger.error(f"모멘텀 팩터 계산 에러 ({calc_date}): {e}")
+                    logger.error(f"PEG 팩터 계산 에러 ({calc_date}): {e}")
+
+            # 🚀 V2 최적화: 모든 시장/기술적 팩터도 전체 계산 (캐시 재사용 극대화)
+            # 모멘텀 팩터
+            try:
+                momentum_map = self._calculate_momentum_factors(price_until_date, calc_date)
+                self._merge_factor_maps(stock_factor_map, momentum_map)
+            except Exception as e:
+                logger.error(f"모멘텀 팩터 계산 에러 ({calc_date}): {e}")
 
             # 변동성 팩터
-            if any(f.startswith('VOLATILITY') for f in required_factors):
-                try:
-                    volatility_map = self._calculate_volatility_factors(price_until_date, calc_date)
-                    filtered_volatility_map = {}
-                    for stock, factors in volatility_map.items():
-                        filtered_volatility_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
-                    self._merge_factor_maps(stock_factor_map, filtered_volatility_map)
-                except Exception as e:
-                    logger.error(f"변동성 팩터 계산 에러 ({calc_date}): {e}")
+            try:
+                volatility_map = self._calculate_volatility_factors(price_until_date, calc_date)
+                self._merge_factor_maps(stock_factor_map, volatility_map)
+            except Exception as e:
+                logger.error(f"변동성 팩터 계산 에러 ({calc_date}): {e}")
 
             # 유동성 팩터
-            if any(f in ['VOLUME_RATIO_20D', 'TURNOVER_RATE_20D'] for f in required_factors):
-                try:
-                    liquidity_map = self._calculate_liquidity_factors(price_until_date, calc_date)
-                    filtered_liquidity_map = {}
-                    for stock, factors in liquidity_map.items():
-                        filtered_liquidity_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
-                    self._merge_factor_maps(stock_factor_map, filtered_liquidity_map)
-                except Exception as e:
-                    logger.error(f"유동성 팩터 계산 에러 ({calc_date}): {e}")
+            try:
+                liquidity_map = self._calculate_liquidity_factors(price_until_date, calc_date)
+                self._merge_factor_maps(stock_factor_map, liquidity_map)
+            except Exception as e:
+                logger.error(f"유동성 팩터 계산 에러 ({calc_date}): {e}")
 
             # 기술적 지표 팩터
-            technical_factors = ['BOLLINGER_POSITION', 'BOLLINGER_WIDTH', 'RSI', 'MACD', 'MACD_SIGNAL', 'MACD_HISTOGRAM']
-            needs_technical = any(f in technical_factors for f in required_factors)
+            try:
+                technical_map = self._calculate_technical_indicators(price_until_date, calc_date)
+                self._merge_factor_maps(stock_factor_map, technical_map)
+            except Exception as e:
+                logger.error(f"기술적 지표 팩터 계산 에러 ({calc_date}): {e}")
 
-            if needs_technical:
+            # 🚀 결과 저장: 분기 내 모든 날짜에 대해 동일한 팩터 값 적용
+            quarter_rows = []
+            all_stocks = set()
+
+            # 해당 분기의 모든 날짜-종목 조합 생성
+            for qdate in quarter_dates:
+                qdate_prices = price_data[price_data['date'] == qdate]
+                for stock in qdate_prices['stock_code'].unique():
+                    all_stocks.add(stock)
+                    record = {
+                        'date': pd.Timestamp(qdate),
+                        'stock_code': stock,
+                        'industry': industry_map.get(stock),
+                        'size_bucket': size_bucket_map.get(stock)
+                    }
+                    record.update(stock_factor_map.get(stock, {}))
+                    quarter_rows.append(record)
+
+            # 캐시 저장 (분기별 1회)
+            if cache_enabled and cache_key and quarter_rows:
                 try:
-                    technical_map = self._calculate_technical_indicators(price_until_date, calc_date)
-                    filtered_technical_map = {}
-                    for stock, factors in technical_map.items():
-                        filtered_technical_map[stock] = {k: v for k, v in factors.items() if k in required_factors}
-                    self._merge_factor_maps(stock_factor_map, filtered_technical_map)
-                except Exception as e:
-                    logger.error(f"기술적 지표 팩터 계산 에러 ({calc_date}): {e}")
-
-            # 결과 저장
-            for stock in todays_prices['stock_code'].unique():
-                record = {
-                    'date': pd.Timestamp(calc_date),
-                    'stock_code': stock,
-                    'industry': industry_map.get(stock),
-                    'size_bucket': size_bucket_map.get(stock)
-                }
-                record.update(stock_factor_map.get(stock, {}))
-                date_rows.append(record)
-
-            # 캐시 저장
-            if cache_enabled and cache_key and date_rows:
-                try:
-                    await cache.set(cache_key, date_rows, ttl=0)
+                    await cache.set(cache_key, quarter_rows, ttl=0)
+                    logger.info(f"💾 캐시 저장: {quarter_key} - {len(quarter_rows)}개 레코드")
                 except Exception as e:
                     logger.debug(f"캐시 저장 실패: {e}")
 
-            all_rows.extend(date_rows)
+            all_rows.extend(quarter_rows)
 
-            # 진행상황 로깅
-            if (date_idx + 1) % max(1, total_dates // 10) == 0:
-                progress = (date_idx + 1) * 100 // total_dates
-                elapsed = time.time() - start_time
-                logger.info(f"⏱️  진행: {date_idx + 1}/{total_dates} ({progress}%) - 경과: {elapsed:.1f}초")
+            # 분기 완료 로깅
+            quarter_elapsed = time.time() - quarter_start_time
+            logger.info(f"✅ 분기 {quarter_key} 완료: {len(quarter_rows)}개 레코드, {len(all_stocks)}개 종목, {quarter_elapsed:.1f}초")
 
         return all_rows
 
@@ -1562,12 +1751,21 @@ class BacktestEngine:
         financial_dict = None
         if financial_pl is not None:
             logger.info("🚀 재무 데이터 사전 색인화 시작...")
+            _index_start = time.time()
+
+            # 🚀 ULTRA-FAST: Polars partition_by 사용 (2619개 개별 필터링 → 1회 그룹화)
+            # 먼저 정렬 후 partition
+            financial_sorted = financial_pl.sort(['stock_code', 'available_date'])
+            partitions = financial_sorted.partition_by('stock_code', maintain_order=True, as_dict=True)
+
+            # dict 키가 tuple일 수 있으므로 처리
             financial_dict = {}
-            unique_stocks = financial_pl.select('stock_code').unique().to_pandas()['stock_code'].tolist()
-            for stock in unique_stocks:
-                # 종목별로 한 번만 필터링하고 정렬
-                financial_dict[stock] = financial_pl.filter(pl.col('stock_code') == stock).sort('available_date')
-            logger.info(f"✅ 재무 데이터 색인화 완료: {len(financial_dict)}개 종목")
+            for key, df_partition in partitions.items():
+                stock_code = key[0] if isinstance(key, tuple) else key
+                financial_dict[stock_code] = df_partition
+
+            _index_elapsed = time.time() - _index_start
+            logger.info(f"✅ 재무 데이터 색인화 완료: {len(financial_dict)}개 종목 ({_index_elapsed:.2f}초)")
 
         unique_dates = sorted(price_data[price_data['date'] >= pd.Timestamp(start_date)]['date'].unique())
         total_dates = len(unique_dates)
@@ -1674,8 +1872,7 @@ class BacktestEngine:
             base_map.setdefault(stock, {}).update(values)
 
     def _calculate_value_factors(self, price_pl: pl.DataFrame, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
-        """🚀 가치 팩터 계산 (Polars 벡터화 최적화)"""
-        logger.info(f"🎯 _calculate_value_factors 호출됨! calc_date={calc_date}")
+        """🚀 가치 팩터 계산 (Polars 벡터화 최적화 V2)"""
         factors: Dict[str, Dict[str, float]] = {}
 
         # 해당 날짜의 가격 데이터
@@ -1684,53 +1881,71 @@ class BacktestEngine:
             return factors
 
         if financial_dict is not None:
-            # 사전 색인화된 데이터 사용: 종목별 최신 재무 데이터 추출
-            financial_records = []
-            for stock in latest_price.select('stock_code').unique().to_pandas()['stock_code']:
-                if stock not in financial_dict:
-                    continue
-                stock_financial = financial_dict[stock].filter(pl.col('available_date') <= calc_date)
-                if stock_financial.is_empty():
-                    continue
+            # 🚀 V2 최적화: 모든 종목 재무 데이터를 한 번에 처리
+            target_stocks = set(latest_price.select('stock_code').unique().to_series().to_list())
 
-                # 최신 분기 재무 (PBR용)
-                latest_fin = stock_financial.sort('available_date', descending=True).head(1)
+            # 필요한 종목의 재무 데이터만 수집
+            all_financial_dfs = []
+            for stock in target_stocks:
+                if stock in financial_dict:
+                    all_financial_dfs.append(financial_dict[stock])
 
-                # 연간 보고서 (PER용)
-                annual_reports = stock_financial.filter(pl.col('report_code') == '11011')
-                if not annual_reports.is_empty():
-                    annual_fin = annual_reports.sort('available_date', descending=True).head(1)
-                    # 연간 보고서의 당기순이익과 최신 분기의 자본총계 결합
-                    financial_records.append({
-                        'stock_code': stock,
-                        '당기순이익': annual_fin.select('당기순이익').to_pandas().iloc[0, 0] if '당기순이익' in annual_fin.columns else None,
-                        '자본총계': latest_fin.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in latest_fin.columns else None
-                    })
-                else:
-                    financial_records.append({
-                        'stock_code': stock,
-                        '당기순이익': None,
-                        '자본총계': latest_fin.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in latest_fin.columns else None
-                    })
-
-            if not financial_records:
+            if not all_financial_dfs:
                 return factors
 
-            financial_data = pl.DataFrame(financial_records)
+            # 전체 재무 데이터 합치기
+            all_financial = pl.concat(all_financial_dfs)
+
+            # calc_date 이전 데이터만 필터링
+            filtered_financial = all_financial.filter(pl.col('available_date') <= calc_date)
+            if filtered_financial.is_empty():
+                return factors
+
+            # 최신 분기 데이터: 각 종목별 최신 1개 (PSR, EV_EBITDA, ROIC 추가)
+            agg_cols = [pl.col('자본총계').first().alias('자본총계')]
+            for col in ['매출액', '영업이익', '부채총계']:
+                if col in filtered_financial.columns:
+                    agg_cols.append(pl.col(col).first().alias(col))
+
+            latest_fin = (
+                filtered_financial
+                .sort(['stock_code', 'available_date'], descending=[False, True])
+                .group_by('stock_code')
+                .agg(agg_cols)
+            )
+
+            # 연간 보고서 데이터 (PER용): 각 종목별 최신 연간 보고서
+            annual_filtered = filtered_financial.filter(pl.col('report_code') == '11011')
+            if not annual_filtered.is_empty():
+                annual_fin = (
+                    annual_filtered
+                    .sort(['stock_code', 'available_date'], descending=[False, True])
+                    .group_by('stock_code')
+                    .agg([
+                        pl.col('당기순이익').first().alias('당기순이익')
+                    ])
+                )
+                # 조인: 최신 분기와 연간 보고서 결합
+                financial_data = latest_fin.join(annual_fin, on='stock_code', how='left')
+            else:
+                financial_data = latest_fin.with_columns(pl.lit(None).alias('당기순이익'))
         else:
             # 기존 방식: 전체 재무 데이터에서 필터링
             latest_financial = financial_pl.filter(pl.col('available_date') <= calc_date)
             if latest_financial.is_empty():
                 return factors
 
-            # 최신 분기 데이터 (PBR용)
+            # 최신 분기 데이터 (PSR, EV_EBITDA, ROIC 추가)
+            agg_cols = [pl.col('자본총계').first().alias('자본총계')]
+            for col in ['매출액', '영업이익', '부채총계']:
+                if col in latest_financial.columns:
+                    agg_cols.append(pl.col(col).first().alias(col))
+
             latest_fin = (
                 latest_financial
                 .sort('available_date', descending=True)
                 .group_by('stock_code')
-                .agg([
-                    pl.col('자본총계').first().alias('자본총계')
-                ])
+                .agg(agg_cols)
             )
 
             # 연간 보고서 데이터 (PER용)
@@ -1752,8 +1967,11 @@ class BacktestEngine:
         if joined.is_empty():
             return factors
 
-        result = joined.select([
+        # 계산할 팩터 컬럼 리스트
+        select_cols = [
             pl.col('stock_code'),
+            # MARKET_CAP (시가총액)
+            pl.col('market_cap').alias('MARKET_CAP'),
             # PER = 시가총액 / 당기순이익
             pl.when(
                 (pl.col('당기순이익').is_not_null()) &
@@ -1771,49 +1989,94 @@ class BacktestEngine:
             )
             .then(pl.col('market_cap') / pl.col('자본총계'))
             .otherwise(None)
-            .alias('PBR')
-        ])
+            .alias('PBR'),
+        ]
 
-        # Dictionary로 변환
-        for row in result.iter_rows(named=True):
+        # PSR = 시가총액 / 매출액 (if 매출액 exists)
+        if '매출액' in joined.columns:
+            select_cols.append(
+                pl.when(
+                    (pl.col('매출액').is_not_null()) &
+                    (pl.col('market_cap').is_not_null()) &
+                    (pl.col('매출액') > 0)
+                )
+                .then(pl.col('market_cap') / pl.col('매출액'))
+                .otherwise(None)
+                .alias('PSR')
+            )
+
+        # EV_EBITDA = (시가총액 + 부채총계) / 영업이익 (간략화)
+        if '영업이익' in joined.columns and '부채총계' in joined.columns:
+            select_cols.append(
+                pl.when(
+                    (pl.col('영업이익').is_not_null()) &
+                    (pl.col('market_cap').is_not_null()) &
+                    (pl.col('부채총계').is_not_null()) &
+                    (pl.col('영업이익') > 0)
+                )
+                .then((pl.col('market_cap') + pl.col('부채총계')) / pl.col('영업이익'))
+                .otherwise(None)
+                .alias('EV_EBITDA')
+            )
+
+        # ROIC = 영업이익 / (자본총계 + 부채총계) * 100 (간략화된 투하자본수익률)
+        if '영업이익' in joined.columns and '부채총계' in joined.columns:
+            select_cols.append(
+                pl.when(
+                    (pl.col('영업이익').is_not_null()) &
+                    (pl.col('자본총계').is_not_null()) &
+                    (pl.col('부채총계').is_not_null()) &
+                    ((pl.col('자본총계') + pl.col('부채총계')) > 0)
+                )
+                .then((pl.col('영업이익') / (pl.col('자본총계') + pl.col('부채총계'))) * 100)
+                .otherwise(None)
+                .alias('ROIC')
+            )
+
+        result = joined.select(select_cols)
+
+        # 🚀 V2 최적화: to_dicts() 사용 (iter_rows보다 빠름)
+        factor_cols = ['PER', 'PBR', 'PSR', 'EV_EBITDA', 'ROIC', 'MARKET_CAP']
+        for row in result.to_dicts():
             stock = row['stock_code']
             entry = {}
-            if row['PER'] is not None:
-                entry['PER'] = float(row['PER'])
-            if row['PBR'] is not None:
-                entry['PBR'] = float(row['PBR'])
+            for col in factor_cols:
+                if col in row and row[col] is not None:
+                    entry[col] = float(row[col])
             if entry:
                 factors[stock] = entry
 
         return factors
 
     def _calculate_profitability_factors(self, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
-        """🚀 수익성 팩터 계산 (Polars 벡터화 최적화)"""
+        """🚀 수익성 팩터 계산 (Polars 벡터화 최적화 V2)"""
         factors: Dict[str, Dict[str, float]] = {}
 
         if financial_dict is not None:
-            # 사전 색인화된 데이터 사용
-            financial_records = []
-            for stock, stock_data in financial_dict.items():
-                stock_financial = stock_data.filter(pl.col('available_date') <= calc_date)
-                if stock_financial.is_empty():
-                    continue
-                latest = stock_financial.sort('available_date', descending=True).head(1)
-                financial_records.append({
-                    'stock_code': stock,
-                    '당기순이익': latest.select('당기순이익').to_pandas().iloc[0, 0] if '당기순이익' in latest.columns else None,
-                    '자본총계': latest.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in latest.columns else None,
-                    '자산총계': latest.select('자산총계').to_pandas().iloc[0, 0] if '자산총계' in latest.columns else None,
-                    '부채총계': latest.select('부채총계').to_pandas().iloc[0, 0] if '부채총계' in latest.columns else None,
-                    '매출액': latest.select('매출액').to_pandas().iloc[0, 0] if '매출액' in latest.columns else None,
-                    '매출원가': latest.select('매출원가').to_pandas().iloc[0, 0] if '매출원가' in latest.columns else None,
-                    '영업이익': latest.select('영업이익').to_pandas().iloc[0, 0] if '영업이익' in latest.columns else None
-                })
-
-            if not financial_records:
+            # 🚀 V2 최적화: 모든 재무 데이터를 한 번에 처리
+            all_financial_dfs = list(financial_dict.values())
+            if not all_financial_dfs:
                 return factors
 
-            latest_financial = pl.DataFrame(financial_records)
+            all_financial = pl.concat(all_financial_dfs)
+            filtered = all_financial.filter(pl.col('available_date') <= calc_date)
+            if filtered.is_empty():
+                return factors
+
+            latest_financial = (
+                filtered
+                .sort(['stock_code', 'available_date'], descending=[False, True])
+                .group_by('stock_code')
+                .agg([
+                    pl.col('당기순이익').first().alias('당기순이익'),
+                    pl.col('자본총계').first().alias('자본총계'),
+                    pl.col('자산총계').first().alias('자산총계'),
+                    pl.col('부채총계').first().alias('부채총계'),
+                    pl.col('매출액').first().alias('매출액'),
+                    pl.col('매출원가').first().alias('매출원가') if '매출원가' in filtered.columns else pl.lit(None).alias('매출원가'),
+                    pl.col('영업이익').first().alias('영업이익')
+                ])
+            )
         else:
             filtered = financial_pl.filter(pl.col('available_date') <= calc_date)
             if filtered.is_empty():
@@ -1892,22 +2155,11 @@ class BacktestEngine:
             .alias('NPM')
         ])
 
-        # Dictionary로 변환
-        for row in result.iter_rows(named=True):
+        # 🚀 V2 최적화: to_dicts() 사용 (iter_rows보다 빠름)
+        factor_cols = ['ROE', 'ROA', 'DEBT_RATIO', 'GPM', 'OPM', 'NPM']
+        for row in result.to_dicts():
             stock = row['stock_code']
-            entry = {}
-            if row['ROE'] is not None:
-                entry['ROE'] = float(row['ROE'])
-            if row['ROA'] is not None:
-                entry['ROA'] = float(row['ROA'])
-            if row['DEBT_RATIO'] is not None:
-                entry['DEBT_RATIO'] = float(row['DEBT_RATIO'])
-            if row['GPM'] is not None:
-                entry['GPM'] = float(row['GPM'])
-            if row['OPM'] is not None:
-                entry['OPM'] = float(row['OPM'])
-            if row['NPM'] is not None:
-                entry['NPM'] = float(row['NPM'])
+            entry = {k: float(row[k]) for k in factor_cols if row.get(k) is not None}
             if entry:
                 factors[stock] = entry
 
@@ -1958,165 +2210,110 @@ class BacktestEngine:
             # join으로 current와 past_1y 데이터 결합
             joined_1y = current_df.join(past_1y_df, on='stock_code', suffix='_1y')
 
-            # 매출 성장률
+            # 🚀 V2 최적화: 모든 1Y 성장률을 한 번에 계산
+            growth_cols = []
+            select_cols = ['stock_code']
+
             if '매출액' in joined_1y.columns and '매출액_1y' in joined_1y.columns:
-                growth_1y = joined_1y.with_columns([
-                    ((pl.col('매출액').cast(pl.Float64) / pl.col('매출액_1y').cast(pl.Float64) - 1) * 100).alias('REVENUE_GROWTH')
-                ]).select(['stock_code', 'REVENUE_GROWTH'])
+                growth_cols.append(((pl.col('매출액').cast(pl.Float64) / pl.col('매출액_1y').cast(pl.Float64) - 1) * 100).alias('REVENUE_GROWTH'))
 
-                for row in growth_1y.iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['REVENUE_GROWTH'] is not None and not pl.Series([row['REVENUE_GROWTH']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['REVENUE_GROWTH'] = float(row['REVENUE_GROWTH'])
-                        factors[stock]['REVENUE_GROWTH_1Y'] = float(row['REVENUE_GROWTH'])
-
-            # 순이익 성장률
             if '당기순이익' in joined_1y.columns and '당기순이익_1y' in joined_1y.columns:
-                growth_1y = joined_1y.with_columns([
-                    ((pl.col('당기순이익').cast(pl.Float64) / pl.col('당기순이익_1y').cast(pl.Float64) - 1) * 100).alias('EARNINGS_GROWTH')
-                ]).select(['stock_code', 'EARNINGS_GROWTH'])
+                growth_cols.append(((pl.col('당기순이익').cast(pl.Float64) / pl.col('당기순이익_1y').cast(pl.Float64) - 1) * 100).alias('EARNINGS_GROWTH'))
 
-                for row in growth_1y.iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['EARNINGS_GROWTH'] is not None and not pl.Series([row['EARNINGS_GROWTH']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['EARNINGS_GROWTH'] = float(row['EARNINGS_GROWTH'])
-                        factors[stock]['EARNINGS_GROWTH_1Y'] = float(row['EARNINGS_GROWTH'])
-
-            # 영업이익 성장률
             if '영업이익' in joined_1y.columns and '영업이익_1y' in joined_1y.columns:
-                growth_1y = joined_1y.with_columns([
-                    ((pl.col('영업이익').cast(pl.Float64) / pl.col('영업이익_1y').cast(pl.Float64) - 1) * 100).alias('OPERATING_INCOME_GROWTH')
-                ]).select(['stock_code', 'OPERATING_INCOME_GROWTH'])
+                growth_cols.append(((pl.col('영업이익').cast(pl.Float64) / pl.col('영업이익_1y').cast(pl.Float64) - 1) * 100).alias('OPERATING_INCOME_GROWTH'))
 
-                for row in growth_1y.iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['OPERATING_INCOME_GROWTH'] is not None and not pl.Series([row['OPERATING_INCOME_GROWTH']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['OPERATING_INCOME_GROWTH'] = float(row['OPERATING_INCOME_GROWTH'])
-
-            # 자산 성장률
             if '자산총계' in joined_1y.columns and '자산총계_1y' in joined_1y.columns:
-                growth_1y = joined_1y.with_columns([
-                    ((pl.col('자산총계').cast(pl.Float64) / pl.col('자산총계_1y').cast(pl.Float64) - 1) * 100).alias('ASSET_GROWTH')
-                ]).select(['stock_code', 'ASSET_GROWTH'])
+                growth_cols.append(((pl.col('자산총계').cast(pl.Float64) / pl.col('자산총계_1y').cast(pl.Float64) - 1) * 100).alias('ASSET_GROWTH'))
 
-                for row in growth_1y.iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['ASSET_GROWTH'] is not None and not pl.Series([row['ASSET_GROWTH']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['ASSET_GROWTH'] = float(row['ASSET_GROWTH'])
-
-            # 자본 성장률
             if '자본총계' in joined_1y.columns and '자본총계_1y' in joined_1y.columns:
-                growth_1y = joined_1y.with_columns([
-                    ((pl.col('자본총계').cast(pl.Float64) / pl.col('자본총계_1y').cast(pl.Float64) - 1) * 100).alias('EQUITY_GROWTH')
-                ]).select(['stock_code', 'EQUITY_GROWTH'])
+                growth_cols.append(((pl.col('자본총계').cast(pl.Float64) / pl.col('자본총계_1y').cast(pl.Float64) - 1) * 100).alias('EQUITY_GROWTH'))
 
-                for row in growth_1y.iter_rows(named=True):
+            if growth_cols:
+                growth_1y = joined_1y.with_columns(growth_cols).select(['stock_code'] + [col.meta.output_name() for col in growth_cols])
+
+                # 🚀 to_dicts()로 한 번에 변환
+                for row in growth_1y.to_dicts():
                     stock = row['stock_code']
-                    if row['EQUITY_GROWTH'] is not None and not pl.Series([row['EQUITY_GROWTH']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['EQUITY_GROWTH'] = float(row['EQUITY_GROWTH'])
+                    entry = factors.setdefault(stock, {})
+                    if row.get('REVENUE_GROWTH') is not None and row['REVENUE_GROWTH'] == row['REVENUE_GROWTH']:
+                        entry['REVENUE_GROWTH'] = float(row['REVENUE_GROWTH'])
+                        entry['REVENUE_GROWTH_1Y'] = float(row['REVENUE_GROWTH'])
+                    if row.get('EARNINGS_GROWTH') is not None and row['EARNINGS_GROWTH'] == row['EARNINGS_GROWTH']:
+                        entry['EARNINGS_GROWTH'] = float(row['EARNINGS_GROWTH'])
+                        entry['EARNINGS_GROWTH_1Y'] = float(row['EARNINGS_GROWTH'])
+                    if row.get('OPERATING_INCOME_GROWTH') is not None and row['OPERATING_INCOME_GROWTH'] == row['OPERATING_INCOME_GROWTH']:
+                        entry['OPERATING_INCOME_GROWTH'] = float(row['OPERATING_INCOME_GROWTH'])
+                        entry['OPERATING_INCOME_GROWTH_YOY'] = float(row['OPERATING_INCOME_GROWTH'])  # Alias
+                    if row.get('ASSET_GROWTH') is not None and row['ASSET_GROWTH'] == row['ASSET_GROWTH']:
+                        entry['ASSET_GROWTH'] = float(row['ASSET_GROWTH'])
+                    if row.get('EQUITY_GROWTH') is not None and row['EQUITY_GROWTH'] == row['EQUITY_GROWTH']:
+                        entry['EQUITY_GROWTH'] = float(row['EQUITY_GROWTH'])
 
-            # 매출총이익 성장률
-            if all(col in joined_1y.columns for col in ['매출액', '매출원가', '매출액_1y', '매출원가_1y']):
-                growth_1y = joined_1y.with_columns([
-                    ((pl.col('매출액').cast(pl.Float64) - pl.col('매출원가').cast(pl.Float64)) /
-                     (pl.col('매출액_1y').cast(pl.Float64) - pl.col('매출원가_1y').cast(pl.Float64)) - 1) * 100
-                ]).alias('GROSS_PROFIT_GROWTH')
-
-                for row in growth_1y.select(['stock_code', 'GROSS_PROFIT_GROWTH']).iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['GROSS_PROFIT_GROWTH'] is not None and not pl.Series([row['GROSS_PROFIT_GROWTH']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['GROSS_PROFIT_GROWTH'] = float(row['GROSS_PROFIT_GROWTH'])
-
-            # EPS 성장률 (YoY)
-            if '당기순이익' in joined_1y.columns and '당기순이익_1y' in joined_1y.columns:
-                eps_growth = joined_1y.with_columns([
-                    ((pl.col('당기순이익').cast(pl.Float64) / pl.col('당기순이익_1y').cast(pl.Float64) - 1) * 100).alias('EPS_GROWTH_YOY')
-                ]).select(['stock_code', 'EPS_GROWTH_YOY'])
-
-                for row in eps_growth.iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['EPS_GROWTH_YOY'] is not None and not pl.Series([row['EPS_GROWTH_YOY']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['EPS_GROWTH_YOY'] = float(row['EPS_GROWTH_YOY'])
-
-        # 3년 성장률 계산 (CAGR 벡터화)
+        # 🚀 V2 최적화: 3년 성장률 한 번에 계산
         if not past_3y_df.is_empty():
             joined_3y = current_df.join(past_3y_df, on='stock_code', suffix='_3y')
 
-            # 매출 CAGR 3Y
+            cagr_cols = []
             if '매출액' in joined_3y.columns and '매출액_3y' in joined_3y.columns:
-                cagr_3y = joined_3y.with_columns([
-                    ((pl.col('매출액').cast(pl.Float64) / pl.col('매출액_3y').cast(pl.Float64)).pow(1/3) - 1) * 100
-                ]).alias('REVENUE_GROWTH_3Y')
+                cagr_cols.append(((pl.col('매출액').cast(pl.Float64) / pl.col('매출액_3y').cast(pl.Float64)).pow(1/3) - 1) * 100)
+                cagr_cols[-1] = cagr_cols[-1].alias('REVENUE_GROWTH_3Y')
 
-                for row in cagr_3y.select(['stock_code', 'REVENUE_GROWTH_3Y']).iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['REVENUE_GROWTH_3Y'] is not None and not pl.Series([row['REVENUE_GROWTH_3Y']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['REVENUE_GROWTH_3Y'] = float(row['REVENUE_GROWTH_3Y'])
-
-            # 순이익 CAGR 3Y
             if '당기순이익' in joined_3y.columns and '당기순이익_3y' in joined_3y.columns:
-                cagr_3y = joined_3y.with_columns([
-                    ((pl.col('당기순이익').cast(pl.Float64) / pl.col('당기순이익_3y').cast(pl.Float64)).pow(1/3) - 1) * 100
-                ]).alias('EARNINGS_GROWTH_3Y')
+                cagr_cols.append(((pl.col('당기순이익').cast(pl.Float64) / pl.col('당기순이익_3y').cast(pl.Float64)).pow(1/3) - 1) * 100)
+                cagr_cols[-1] = cagr_cols[-1].alias('EARNINGS_GROWTH_3Y')
 
-                for row in cagr_3y.select(['stock_code', 'EARNINGS_GROWTH_3Y']).iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['EARNINGS_GROWTH_3Y'] is not None and not pl.Series([row['EARNINGS_GROWTH_3Y']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['EARNINGS_GROWTH_3Y'] = float(row['EARNINGS_GROWTH_3Y'])
-
-            # 자산 CAGR 3Y
             if '자산총계' in joined_3y.columns and '자산총계_3y' in joined_3y.columns:
-                cagr_3y = joined_3y.with_columns([
-                    ((pl.col('자산총계').cast(pl.Float64) / pl.col('자산총계_3y').cast(pl.Float64)).pow(1/3) - 1) * 100
-                ]).alias('ASSET_GROWTH_3Y')
+                cagr_cols.append(((pl.col('자산총계').cast(pl.Float64) / pl.col('자산총계_3y').cast(pl.Float64)).pow(1/3) - 1) * 100)
+                cagr_cols[-1] = cagr_cols[-1].alias('ASSET_GROWTH_3Y')
 
-                for row in cagr_3y.select(['stock_code', 'ASSET_GROWTH_3Y']).iter_rows(named=True):
-                    stock = row['stock_code']
-                    if row['ASSET_GROWTH_3Y'] is not None and not pl.Series([row['ASSET_GROWTH_3Y']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['ASSET_GROWTH_3Y'] = float(row['ASSET_GROWTH_3Y'])
-
-            # 영업이익 CAGR 3Y
             if '영업이익' in joined_3y.columns and '영업이익_3y' in joined_3y.columns:
-                cagr_3y = joined_3y.with_columns([
-                    ((pl.col('영업이익').cast(pl.Float64) / pl.col('영업이익_3y').cast(pl.Float64)).pow(1/3) - 1) * 100
-                ]).alias('OPERATING_PROFIT_GROWTH_3Y')
+                cagr_cols.append(((pl.col('영업이익').cast(pl.Float64) / pl.col('영업이익_3y').cast(pl.Float64)).pow(1/3) - 1) * 100)
+                cagr_cols[-1] = cagr_cols[-1].alias('OPERATING_PROFIT_GROWTH_3Y')
 
-                for row in cagr_3y.select(['stock_code', 'OPERATING_PROFIT_GROWTH_3Y']).iter_rows(named=True):
+            if cagr_cols:
+                cagr_3y = joined_3y.with_columns(cagr_cols).select(['stock_code'] + [col.meta.output_name() for col in cagr_cols])
+
+                for row in cagr_3y.to_dicts():
                     stock = row['stock_code']
-                    if row['OPERATING_PROFIT_GROWTH_3Y'] is not None and not pl.Series([row['OPERATING_PROFIT_GROWTH_3Y']]).is_nan()[0]:
-                        factors.setdefault(stock, {})['OPERATING_PROFIT_GROWTH_3Y'] = float(row['OPERATING_PROFIT_GROWTH_3Y'])
+                    entry = factors.setdefault(stock, {})
+                    for col_name in ['REVENUE_GROWTH_3Y', 'EARNINGS_GROWTH_3Y', 'ASSET_GROWTH_3Y', 'OPERATING_PROFIT_GROWTH_3Y']:
+                        if row.get(col_name) is not None and row[col_name] == row[col_name]:  # NaN check
+                            entry[col_name] = float(row[col_name])
 
         return factors
 
     def _calculate_stability_factors(self, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
-        """🚀 안정성 팩터 계산 (Polars 벡터화 최적화)"""
+        """🚀 안정성 팩터 계산 (Polars 벡터화 최적화 V2)"""
         factors: Dict[str, Dict[str, float]] = {}
 
         if financial_dict is not None:
-            # 사전 색인화된 데이터 사용
-            financial_records = []
-            for stock, stock_data in financial_dict.items():
-                stock_financial = stock_data.filter(pl.col('available_date') <= calc_date)
-                if stock_financial.is_empty():
-                    continue
-                latest = stock_financial.sort('available_date', descending=True).head(1)
-                financial_records.append({
-                    'stock_code': stock,
-                    '부채총계': latest.select('부채총계').to_pandas().iloc[0, 0] if '부채총계' in latest.columns else None,
-                    '자본총계': latest.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in latest.columns else None,
-                    '자산총계': latest.select('자산총계').to_pandas().iloc[0, 0] if '자산총계' in latest.columns else None,
-                    '유동자산': latest.select('유동자산').to_pandas().iloc[0, 0] if '유동자산' in latest.columns else None,
-                    '유동부채': latest.select('유동부채').to_pandas().iloc[0, 0] if '유동부채' in latest.columns else None,
-                    '재고자산': latest.select('재고자산').to_pandas().iloc[0, 0] if '재고자산' in latest.columns else None,
-                    '현금및현금성자산': latest.select('현금및현금성자산').to_pandas().iloc[0, 0] if '현금및현금성자산' in latest.columns else None,
-                    '영업이익': latest.select('영업이익').to_pandas().iloc[0, 0] if '영업이익' in latest.columns else None,
-                    '이자비용': latest.select('이자비용').to_pandas().iloc[0, 0] if '이자비용' in latest.columns else None
-                })
-
-            if not financial_records:
+            # 🚀 V2 최적화: 모든 재무 데이터를 한 번에 처리
+            all_financial_dfs = list(financial_dict.values())
+            if not all_financial_dfs:
                 return factors
 
-            latest_financial = pl.DataFrame(financial_records)
+            all_financial = pl.concat(all_financial_dfs)
+            filtered = all_financial.filter(pl.col('available_date') <= calc_date)
+            if filtered.is_empty():
+                return factors
+
+            # 모든 필요한 컬럼을 한 번에 추출
+            agg_cols = [
+                pl.col('부채총계').first().alias('부채총계'),
+                pl.col('자본총계').first().alias('자본총계'),
+                pl.col('자산총계').first().alias('자산총계'),
+            ]
+            for col in ['유동자산', '유동부채', '재고자산', '현금및현금성자산', '영업이익', '이자비용']:
+                if col in filtered.columns:
+                    agg_cols.append(pl.col(col).first().alias(col))
+
+            latest_financial = (
+                filtered
+                .sort(['stock_code', 'available_date'], descending=[False, True])
+                .group_by('stock_code')
+                .agg(agg_cols)
+            )
         else:
             filtered = financial_pl.filter(pl.col('available_date') <= calc_date)
             if filtered.is_empty():
@@ -2198,22 +2395,11 @@ class BacktestEngine:
             .alias('INTEREST_COVERAGE')
         ])
 
-        # Dictionary로 변환
-        for row in result.iter_rows(named=True):
+        # 🚀 V2 최적화: to_dicts() 사용 (iter_rows보다 빠름)
+        factor_cols = ['DEBT_TO_EQUITY', 'EQUITY_RATIO', 'CURRENT_RATIO', 'QUICK_RATIO', 'CASH_RATIO', 'INTEREST_COVERAGE']
+        for row in result.to_dicts():
             stock = row['stock_code']
-            entry = {}
-            if row['DEBT_TO_EQUITY'] is not None:
-                entry['DEBT_TO_EQUITY'] = float(row['DEBT_TO_EQUITY'])
-            if row['EQUITY_RATIO'] is not None:
-                entry['EQUITY_RATIO'] = float(row['EQUITY_RATIO'])
-            if row['CURRENT_RATIO'] is not None:
-                entry['CURRENT_RATIO'] = float(row['CURRENT_RATIO'])
-            if row['QUICK_RATIO'] is not None:
-                entry['QUICK_RATIO'] = float(row['QUICK_RATIO'])
-            if row['CASH_RATIO'] is not None:
-                entry['CASH_RATIO'] = float(row['CASH_RATIO'])
-            if row['INTEREST_COVERAGE'] is not None:
-                entry['INTEREST_COVERAGE'] = float(row['INTEREST_COVERAGE'])
+            entry = {k: float(row[k]) for k in factor_cols if row.get(k) is not None}
             if entry:
                 factors[stock] = entry
 
@@ -2504,165 +2690,6 @@ class BacktestEngine:
 
         return factors
 
-    def _calculate_value_factors(self, price_pl: pl.DataFrame, financial_pl: pl.DataFrame, calc_date, financial_dict: Optional[Dict] = None) -> Dict[str, Dict[str, float]]:
-        """🚀 VALUE 팩터 계산 (Polars 벡터화 최적화)"""
-        factors: Dict[str, Dict[str, float]] = {}
-
-        # 현재 주가 데이터 추출
-        current_prices = price_pl.filter(pl.col('date') == calc_date)
-        if current_prices.is_empty():
-            return factors
-
-        # 주가 데이터를 dict로 변환 (빠른 조회)
-        price_data = {}
-        for row in current_prices.iter_rows(named=True):
-            stock = row['stock_code']
-            price_data[stock] = {
-                'close_price': row.get('close_price'),
-                'listed_shares': row.get('listed_shares')
-            }
-
-        # 최신 재무 데이터 추출
-        if financial_dict is not None:
-            financial_records = []
-            for stock, stock_data in financial_dict.items():
-                if stock not in price_data:
-                    continue
-                stock_financial = stock_data.filter(pl.col('available_date') <= calc_date)
-                if stock_financial.is_empty():
-                    continue
-                latest = stock_financial.sort('available_date', descending=True).head(1)
-
-                financial_records.append({
-                    'stock_code': stock,
-                    '매출액': latest.select('매출액').to_pandas().iloc[0, 0] if '매출액' in latest.columns else None,
-                    '당기순이익': latest.select('당기순이익').to_pandas().iloc[0, 0] if '당기순이익' in latest.columns else None,
-                    '영업활동현금흐름': latest.select('영업활동현금흐름').to_pandas().iloc[0, 0] if '영업활동현금흐름' in latest.columns else None,
-                    '자본총계': latest.select('자본총계').to_pandas().iloc[0, 0] if '자본총계' in latest.columns else None,
-                    '부채총계': latest.select('부채총계').to_pandas().iloc[0, 0] if '부채총계' in latest.columns else None,
-                    '현금및현금성자산': latest.select('현금및현금성자산').to_pandas().iloc[0, 0] if '현금및현금성자산' in latest.columns else None,
-                    '배당금': latest.select('배당금').to_pandas().iloc[0, 0] if '배당금' in latest.columns else None,
-                    '영업이익': latest.select('영업이익').to_pandas().iloc[0, 0] if '영업이익' in latest.columns else None,
-                    '감가상각비': latest.select('감가상각비').to_pandas().iloc[0, 0] if '감가상각비' in latest.columns else None,
-                    '이자비용': latest.select('이자비용').to_pandas().iloc[0, 0] if '이자비용' in latest.columns else None,
-                    '법인세비용': latest.select('법인세비용').to_pandas().iloc[0, 0] if '법인세비용' in latest.columns else None,
-                })
-
-            if not financial_records:
-                return factors
-
-            latest_financial = pl.DataFrame(financial_records)
-        else:
-            filtered = financial_pl.filter(pl.col('available_date') <= calc_date)
-            if filtered.is_empty():
-                return factors
-
-            latest_financial = (
-                filtered
-                .sort('available_date', descending=True)
-                .group_by('stock_code')
-                .agg([
-                    pl.col('매출액').first(),
-                    pl.col('당기순이익').first(),
-                    pl.col('영업활동현금흐름').first(),
-                    pl.col('자본총계').first(),
-                    pl.col('부채총계').first(),
-                    pl.col('현금및현금성자산').first(),
-                    pl.col('배당금').first(),
-                    pl.col('영업이익').first(),
-                    pl.col('감가상각비').first(),
-                    pl.col('이자비용').first(),
-                    pl.col('법인세비용').first()
-                ])
-            )
-
-        # 팩터 계산
-        for row in latest_financial.iter_rows(named=True):
-            stock = row['stock_code']
-            if stock not in price_data:
-                continue
-
-            price_info = price_data[stock]
-            close_price = price_info.get('close_price')
-            listed_shares = price_info.get('listed_shares')
-
-            if not close_price or not listed_shares or close_price <= 0 or listed_shares <= 0:
-                continue
-
-            # 시가총액 계산 (원)
-            market_cap = float(close_price) * float(listed_shares)
-
-            entry = factors.setdefault(stock, {})
-
-            # PER (Price to Earnings Ratio)
-            net_income = row.get('당기순이익')
-            if net_income and net_income > 0:
-                eps = float(net_income) / float(listed_shares)
-                entry['PER'] = float(close_price) / eps
-
-            # PBR (Price to Book Ratio)
-            equity = row.get('자본총계')
-            if equity and equity > 0:
-                bps = float(equity) / float(listed_shares)
-                entry['PBR'] = float(close_price) / bps
-
-            # PSR (Price to Sales Ratio)
-            revenue = row.get('매출액')
-            if revenue and revenue > 0:
-                entry['PSR'] = market_cap / float(revenue)
-
-            # PCR (Price to Cash Flow Ratio)
-            ocf = row.get('영업활동현금흐름')
-            if ocf and ocf > 0:
-                entry['PCR'] = market_cap / float(ocf)
-
-            # DIVIDEND_YIELD (배당수익률)
-            dividend = row.get('배당금')
-            if dividend and dividend > 0:
-                dividend_per_share = float(dividend) / float(listed_shares)
-                entry['DIVIDEND_YIELD'] = (dividend_per_share / float(close_price)) * 100
-
-            # EARNINGS_YIELD (이익수익률)
-            net_income = row.get('당기순이익')
-            if net_income and net_income > 0:
-                eps = float(net_income) / float(listed_shares)
-                entry['EARNINGS_YIELD'] = (eps / float(close_price)) * 100
-
-            # FCF_YIELD (잉여현금흐름수익률)
-            if ocf and ocf > 0:
-                # FCF = 영업현금흐름 - CAPEX (간단히 영업현금흐름으로 근사)
-                fcf = float(ocf)  # 실제로는 영업현금흐름 - 투자현금흐름
-                entry['FCF_YIELD'] = (fcf / market_cap) * 100
-                # FREE_CASH_FLOW (잉여현금흐름 절대값, 단위: 억원)
-                entry['FREE_CASH_FLOW'] = fcf / 100000000  # 원 → 억원
-
-            # EV/EBITDA, EV/SALES (기업가치 배수)
-            debt = row.get('부채총계')
-            cash = row.get('현금및현금성자산')
-            if debt is not None and cash is not None:
-                net_debt = float(debt) - float(cash)
-                enterprise_value = market_cap + net_debt
-
-                # EV/EBITDA
-                operating_income = row.get('영업이익')
-                depreciation = row.get('감가상각비')
-                if operating_income and depreciation:
-                    ebitda = float(operating_income) + float(depreciation)
-                    if ebitda > 0:
-                        entry['EV_EBITDA'] = enterprise_value / ebitda
-
-                # EV/SALES
-                if revenue and revenue > 0:
-                    entry['EV_SALES'] = enterprise_value / float(revenue)
-
-            # BOOK_TO_MARKET (1 / PBR)
-            equity = row.get('자본총계')
-            if equity and equity > 0:
-                book_value = float(equity)
-                entry['BOOK_TO_MARKET'] = book_value / market_cap
-
-        return factors
-
     def _normalize_factors(self, factor_df: pd.DataFrame) -> pd.DataFrame:
         """🚀 팩터 정규화 (Z-Score) - Polars 최적화 (3x 빠름!)"""
 
@@ -2819,21 +2846,37 @@ class BacktestEngine:
 
         rebalance_dates_set = {pd.Timestamp(d) for d in rebalance_dates}
 
-        # 🚀 OPTIMIZATION: 조건 평가 사전 계산 (4초 절약)
+        # 🚀 OPTIMIZATION: 조건 평가 사전 계산 (벡터화 + 병렬화)
         logger.info("🚀 모든 리밸런싱 날짜의 조건 평가 사전 계산 중...")
         buy_conditions_cache = {}
         if not factor_data.empty:
-            for rebalance_date in rebalance_dates_set:
-                # 모든 종목에 대해 조건 평가
-                all_stocks = factor_data['stock_code'].unique().tolist()
+            # 종목 리스트는 한 번만 계산
+            all_stocks = factor_data['stock_code'].unique().tolist()
+            start_precompute = time.time()
+
+            # 🚀 ULTRA-FAST: 날짜별 팩터 데이터 사전 준비 (1회만)
+            rebalance_dates_list = list(rebalance_dates_set)
+
+            def evaluate_single_date(rebalance_date):
+                """단일 날짜의 조건 평가 (병렬 실행용)"""
                 valid_stocks = factor_integrator.evaluate_buy_conditions_with_factors(
                     factor_data=factor_data,
                     stock_codes=all_stocks,
                     buy_conditions=buy_conditions,
                     trading_date=rebalance_date
                 )
-                buy_conditions_cache[rebalance_date] = set(valid_stocks)
-        logger.info(f"✅ {len(buy_conditions_cache)}개 리밸런싱 날짜의 조건 평가 완료")
+                return rebalance_date, set(valid_stocks)
+
+            # 🚀 병렬 처리 (4 workers)
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                results = list(executor.map(evaluate_single_date, rebalance_dates_list))
+
+            for rebalance_date, valid_stocks_set in results:
+                buy_conditions_cache[rebalance_date] = valid_stocks_set
+
+            elapsed = time.time() - start_precompute
+            logger.info(f"✅ {len(buy_conditions_cache)}개 리밸런싱 날짜의 조건 평가 완료 ({elapsed:.2f}초, 병렬)")
 
         from sqlalchemy import update
         from app.models.simulation import SimulationSession
@@ -2856,32 +2899,65 @@ class BacktestEngine:
         PROGRESS_BATCH_SIZE = 20
 
         logger.info("🚀 가격 데이터 색인화 시작...")
+        price_index_start = time.time()
 
-        price_dates = pd.to_datetime(price_data['date'])
-
-        keys = list(zip(price_data['stock_code'].values, price_dates))
+        # 🚀 ULTRA-FAST: NumPy 기반 벡터화 (14초 → 2초 목표)
+        price_dates = pd.to_datetime(price_data['date']).values
+        stock_codes = price_data['stock_code'].values
 
         # 기본값 처리: high/low가 없으면 close 사용
-        close_prices = price_data['close_price'].values
-        high_prices = (price_data['high_price'].fillna(price_data['close_price']).values
+        close_prices = price_data['close_price'].values.astype(np.float64)
+        high_prices = (price_data['high_price'].fillna(price_data['close_price']).values.astype(np.float64)
                       if 'high_price' in price_data.columns else close_prices)
-        low_prices = (price_data['low_price'].fillna(price_data['close_price']).values
+        low_prices = (price_data['low_price'].fillna(price_data['close_price']).values.astype(np.float64)
                      if 'low_price' in price_data.columns else close_prices)
-        open_prices = (price_data['open_price'].fillna(price_data['close_price']).values
+        open_prices = (price_data['open_price'].fillna(price_data['close_price']).values.astype(np.float64)
                       if 'open_price' in price_data.columns else close_prices)
 
-        values = list(map(
-            lambda x: {
-                'close_price': float(x[0]),
-                'high_price': float(x[1]),
-                'low_price': float(x[2]),
-                'open_price': float(x[3])
-            },
-            zip(close_prices, high_prices, low_prices, open_prices)
-        ))
+        # 🚀 NumPy structured array로 고속 생성 (list comprehension 제거)
+        n_rows = len(price_data)
+        price_lookup = {}
 
-        price_lookup = dict(zip(keys, values))
-        logger.info(f"✅ 가격 데이터 색인화 완료: {len(price_lookup):,}개 엔트리")
+        # 청크 처리로 메모리 효율 + 속도 향상
+        CHUNK_SIZE = 50000
+        for chunk_start in range(0, n_rows, CHUNK_SIZE):
+            chunk_end = min(chunk_start + CHUNK_SIZE, n_rows)
+            for i in range(chunk_start, chunk_end):
+                key = (stock_codes[i], pd.Timestamp(price_dates[i]))
+                price_lookup[key] = {
+                    'close_price': close_prices[i],
+                    'high_price': high_prices[i],
+                    'low_price': low_prices[i],
+                    'open_price': open_prices[i]
+                }
+
+        price_index_elapsed = time.time() - price_index_start
+        logger.info(f"✅ 가격 데이터 색인화 완료: {len(price_lookup):,}개 엔트리 ({price_index_elapsed:.2f}초)")
+
+        # 🚀 ULTRA-FAST: 거래일 인덱스 매핑 사전 계산 (기업행동 체크 O(n)→O(1))
+        trading_day_to_idx = {}
+        trading_day_dates = []
+        trading_day_timestamps = []  # pd.Timestamp 버전 (price_lookup 키용)
+        for idx, td in enumerate(trading_days):
+            td_date = td.date() if hasattr(td, 'date') else td
+            trading_day_to_idx[td_date] = idx
+            trading_day_dates.append(td_date)
+            trading_day_timestamps.append(pd.Timestamp(td))
+        logger.info(f"✅ 거래일 인덱스 매핑 완료: {len(trading_day_to_idx)}개")
+
+        # 🚀 ULTRA-FAST: 다음 거래일 매핑 (O(1) lookup)
+        next_trading_day_map = {}  # {date: next_date_timestamp}
+        for idx, td_date in enumerate(trading_day_dates):
+            if idx < len(trading_day_dates) - 1:
+                next_trading_day_map[td_date] = trading_day_timestamps[idx + 1]
+
+        # 🚀 ULTRA-FAST: 종목명 사전 (stock_code -> stock_name)
+        stock_names = {}
+        if 'stock_name' in price_data.columns:
+            stock_name_df = price_data[['stock_code', 'stock_name']].drop_duplicates('stock_code')
+            for _, row in stock_name_df.iterrows():
+                stock_names[row['stock_code']] = row['stock_name']
+        logger.info(f"✅ 종목명 사전 구축 완료: {len(stock_names)}개")
 
         for trading_day in trading_days:
             if trading_day < pd.Timestamp(start_date) or trading_day > pd.Timestamp(end_date):
@@ -2895,6 +2971,115 @@ class BacktestEngine:
             daily_sold_stocks = set()  # 당일 매도한 종목 추적
 
             is_rebalance_day = pd.Timestamp(trading_day) in rebalance_dates_set
+
+            # 🚨 0단계: 기업행동 강제 청산 (매일 체크)
+            # 기업행동 발생 전날(마지막 거래일)에 해당 종목 강제 청산
+            if holdings and self.corporate_actions:
+                trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
+                # 강제 청산 대상 종목 수집 (dict 순회 중 삭제 방지)
+                stocks_to_force_sell = []
+
+                for stock_code, event_info in self.corporate_actions.items():
+                    if stock_code not in holdings:
+                        continue
+
+                    event_date = event_info['event_date']
+                    event_date_val = event_date.date() if hasattr(event_date, 'date') else event_date
+
+                    # 🚀 ULTRA-FAST: O(1) 인덱스 조회 (기존 O(n) 루프 제거)
+                    current_idx = trading_day_to_idx.get(trading_day_date)
+
+                    if current_idx is None or current_idx >= len(trading_days) - 1:
+                        continue
+
+                    # 다음 거래일 확인 (사전 계산된 리스트 활용)
+                    next_td_date = trading_day_dates[current_idx + 1]
+
+                    # 다음 거래일이 기업행동 발생일 이후이면 오늘 강제 청산
+                    # (기업행동 발생일의 데이터는 이미 필터링되어 없으므로)
+                    if next_td_date >= event_date_val:
+                        stocks_to_force_sell.append(stock_code)
+
+                # 🚀 ULTRA-FAST: float 기반 기업행동 강제 청산
+                slippage_f = float(self.slippage)
+                commission_rate_f = float(self.commission_rate)
+                tax_rate_f = float(self.tax_rate)
+
+                for stock_code in stocks_to_force_sell:
+                    if stock_code not in holdings:
+                        continue
+
+                    event_info = self.corporate_actions[stock_code]
+                    holding = holdings[stock_code]
+
+                    # 당일 종가로 강제 청산
+                    price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
+                    if not price_info:
+                        continue
+
+                    # 🚀 float 연산
+                    prev_close_f = price_info['close_price']
+                    execution_price_f = prev_close_f * (1.0 - slippage_f)
+                    quantity = holding.quantity
+                    amount_f = execution_price_f * quantity
+                    commission_f = amount_f * commission_rate_f
+                    tax_f = amount_f * tax_rate_f
+                    net_amount_f = amount_f - commission_f - tax_f
+                    entry_price_f = float(holding.entry_price) if holding.entry_price else 0.0
+                    cost_basis_f = entry_price_f * quantity
+                    net_profit_f = net_amount_f - cost_basis_f
+
+                    # 최종 Decimal 변환
+                    execution_price = Decimal(str(execution_price_f))
+                    amount = Decimal(str(amount_f))
+                    commission = Decimal(str(commission_f))
+                    tax = Decimal(str(tax_f))
+                    net_amount = Decimal(str(net_amount_f))
+                    net_profit = Decimal(str(net_profit_f))
+
+                    # 매도 실행
+                    cash_balance += net_amount
+                    holding.is_open = False
+                    holding.exit_date = trading_day_date
+                    holding.exit_price = execution_price
+                    holding.realized_pnl = net_profit
+                    self.closed_positions.append(holding)
+
+                    # 수익률 계산
+                    profit_rate = ((net_amount_f / cost_basis_f) - 1.0) * 100.0 if cost_basis_f > 0 else 0.0
+
+                    # 보유일수 계산
+                    entry_date_val = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
+                    hold_days_count = (trading_day_date - entry_date_val).days
+
+                    # 강제 청산 기록
+                    sell_reason = f"기업행동({event_info['action_type']}) 감지로 인한 강제 청산 ({event_info['change_rate']:+.1f}%)"
+
+                    executions.append({
+                        'execution_id': f"EXE-CORP-{stock_code}-{trading_day_date}",
+                        'execution_date': trading_day_date,
+                        'trade_date': trading_day_date,
+                        'stock_code': stock_code,
+                        'stock_name': holding.stock_name,
+                        'side': 'SELL',
+                        'trade_type': 'SELL',
+                        'quantity': quantity,
+                        'price': execution_price,
+                        'amount': amount,
+                        'commission': commission,
+                        'tax': tax,
+                        'realized_pnl': net_profit,
+                        'profit_rate': profit_rate,
+                        'hold_days': hold_days_count,
+                        'selection_reason': sell_reason,
+                    })
+
+                    del holdings[stock_code]
+                    daily_sold_stocks.add(stock_code)
+
+                    # 해당 종목 향후 매수 금지
+                    self.blocked_stocks.add(stock_code)
 
             # 리밸런싱 날짜인 경우: 매도 먼저, 매수는 나중에
             if is_rebalance_day:
@@ -2914,60 +3099,71 @@ class BacktestEngine:
                     hold_cfg = self.hold_days or {}
                     min_hold = hold_cfg.get('min_hold_days')
 
+                    # 🚀 ULTRA-FAST: float 기반 리밸런싱 매도
+                    slippage_f = float(self.slippage)
+                    commission_rate_f = float(self.commission_rate)
+                    tax_rate_f = float(self.tax_rate)
+                    trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
                     for stock_code in stocks_to_sell:
                         holding = holdings.get(stock_code)
                         if not holding:
                             continue
 
                         # trading_day와 holding.entry_date를 date로 변환하여 비교
-                        trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
                         entry_date = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
                         hold_days_count = (trading_day_date - entry_date).days
                         if min_hold is not None and hold_days_count < min_hold:
-                            logger.debug(f"⏸️  리밸런싱 매도 보류: {stock_code} (보유 {hold_days_count}일 < 최소 {min_hold}일)")
                             continue  # 최소 보유기간 미달이면 리밸런싱도 안 함!
 
-                        next_day_price = None
-                        next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+                        # 🚀 ULTRA-FAST: 다음 거래일 lookup (O(1))
+                        next_td_ts = next_trading_day_map.get(trading_day_date)
+                        next_day_price_f = None
+                        next_sell_date = trading_day_date
 
-                        for i in range(1, 6):  # 최대 5일까지 거래일 찾기
-                            check_date = pd.Timestamp(trading_day) + pd.Timedelta(days=i)
-                            price_info_next = price_lookup.get((stock_code, check_date))
+                        if next_td_ts:
+                            price_info_next = price_lookup.get((stock_code, next_td_ts))
                             if price_info_next:
-                                next_day_price = Decimal(str(price_info_next.get('open_price', price_info_next['close_price'])))
-                                next_sell_date = check_date.date()
-                                break
+                                next_day_price_f = price_info_next.get('open_price') or price_info_next.get('close_price')
+                                next_sell_date = next_td_ts.date() if hasattr(next_td_ts, 'date') else next_td_ts
 
-                        if not next_day_price:
+                        if next_day_price_f is None or np.isnan(next_day_price_f):
                             # 익일 데이터 없으면 당일 종가로 매도
                             price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
                             if not price_info:
                                 continue
-                            next_day_price = Decimal(str(price_info['close_price']))
-                            next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+                            next_day_price_f = price_info['close_price']
+                            next_sell_date = trading_day_date
 
-                        execution_price = next_day_price * (1 - self.slippage)
+                        # 🚀 float 연산
+                        execution_price_f = next_day_price_f * (1.0 - slippage_f)
+                        quantity = holding.quantity
+                        amount_f = execution_price_f * quantity
+                        commission_f = amount_f * commission_rate_f
+                        tax_f = amount_f * tax_rate_f
+                        net_amount_f = amount_f - commission_f - tax_f
+                        entry_price_f = float(holding.entry_price) if holding.entry_price else 0.0
+                        cost_basis_f = entry_price_f * quantity
+                        net_profit_f = net_amount_f - cost_basis_f
 
-                        amount = execution_price * holding.quantity
-                        commission = amount * self.commission_rate
-                        tax = amount * self.tax_rate
-                        net_amount = amount - commission - tax
-                        cost_basis = holding.entry_price * holding.quantity if holding.entry_price else Decimal("0")
-                        net_profit = net_amount - cost_basis
+                        # 최종 Decimal 변환
+                        execution_price = Decimal(str(execution_price_f))
+                        amount = Decimal(str(amount_f))
+                        commission = Decimal(str(commission_f))
+                        tax = Decimal(str(tax_f))
+                        net_amount = Decimal(str(net_amount_f))
+                        net_profit = Decimal(str(net_profit_f))
 
                         # 매도 실행
                         cash_balance += net_amount
                         holding.is_open = False
-                        holding.exit_date = next_sell_date  # 익일
+                        holding.exit_date = next_sell_date
                         holding.exit_price = execution_price
                         holding.realized_pnl = net_profit
                         self.closed_positions.append(holding)
 
-                        # 🔥 매도 기록 추가
-                        if cost_basis > 0:
-                            profit_rate = ((net_amount / cost_basis) - 1) * 100
-                        else:
-                            profit_rate = 0
+                        # 수익률 계산
+                        profit_rate = ((net_amount_f / cost_basis_f) - 1.0) * 100.0 if cost_basis_f > 0 else 0.0
 
                         # 보유일수 계산
                         entry_date_val = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
@@ -2975,20 +3171,20 @@ class BacktestEngine:
 
                         executions.append({
                             'execution_id': f"EXE-REBAL-{stock_code}-{next_sell_date}",
-                            'execution_date': next_sell_date,  # 익일
-                            'trade_date': next_sell_date,  # 익일
+                            'execution_date': next_sell_date,
+                            'trade_date': next_sell_date,
                             'stock_code': stock_code,
                             'stock_name': holding.stock_name,
                             'side': 'SELL',
                             'trade_type': 'SELL',
-                            'quantity': holding.quantity,
+                            'quantity': quantity,
                             'price': execution_price,
                             'amount': amount,
                             'commission': commission,
                             'tax': tax,
-                            'realized_pnl': holding.realized_pnl,
-                            'profit_rate': profit_rate,  # ✅ 수익률 추가
-                            'hold_days': hold_days,  # ✅ 보유일수 추가
+                            'realized_pnl': net_profit,
+                            'profit_rate': profit_rate,
+                            'hold_days': hold_days,
                             'selection_reason': '리밸런싱 (익일 시가)',
                         })
 
@@ -3027,10 +3223,13 @@ class BacktestEngine:
 
                 # 2단계: 매수 종목 선정
                 # 🚀 OPTIMIZATION: groupby에서 가져오기
-                try:
-                    today_factor_data = factor_data_grouped.get_group(pd.Timestamp(trading_day))
-                except KeyError:
-                    today_factor_data = pd.DataFrame()
+                # 🔧 FIX: factor_data_grouped이 None인 경우 처리
+                today_factor_data = pd.DataFrame()
+                if factor_data_grouped is not None:
+                    try:
+                        today_factor_data = factor_data_grouped.get_group(pd.Timestamp(trading_day))
+                    except KeyError:
+                        today_factor_data = pd.DataFrame()
 
                 buy_candidates = await self._select_buy_candidates(
                     factor_data=today_factor_data,
@@ -3049,7 +3248,16 @@ class BacktestEngine:
 
                 new_buy_candidates = [s for s in new_buy_candidates if s not in daily_sold_stocks]
 
-                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개 (당일 매도 제외 {len(daily_sold_stocks)}개), 보유 {len(holdings)}개/{max_positions}개")
+                # 기업행동으로 매수 금지된 종목 제외
+                blocked_count = 0
+                if self.blocked_stocks:
+                    before_blocked = len(new_buy_candidates)
+                    new_buy_candidates = [s for s in new_buy_candidates if s not in self.blocked_stocks]
+                    blocked_count = before_blocked - len(new_buy_candidates)
+                    if blocked_count > 0:
+                        logger.debug(f"🚫 기업행동 종목 제외: {blocked_count}개")
+
+                logger.debug(f"💰 매수 후보: 전체 {len(buy_candidates)}개, 신규 {len(new_buy_candidates)}개 (당일 매도 제외 {len(daily_sold_stocks)}개, 기업행동 제외 {blocked_count}개), 보유 {len(holdings)}개/{max_positions}개")
 
                 buy_candidates = new_buy_candidates
 
@@ -3064,7 +3272,7 @@ class BacktestEngine:
                     current_holdings=holdings
                 )
 
-                # 매수 실행 (팩터 데이터 포함)
+                # 매수 실행 (팩터 데이터 포함) - 🚀 ULTRA-FAST 버전
                 buy_trades, daily_new_positions = await self._execute_buys(
                     position_sizes=position_sizes,
                     price_data=price_data,
@@ -3075,7 +3283,10 @@ class BacktestEngine:
                     orders=orders,
                     executions=executions,
                     daily_new_positions=daily_new_positions,
-                    max_daily_new_positions=self.max_daily_stock
+                    max_daily_new_positions=self.max_daily_stock,
+                    price_lookup=price_lookup,
+                    next_trading_day_map=next_trading_day_map,
+                    stock_names=stock_names
                 )
                 daily_buy_count = len(buy_trades)  # 당일 매수 횟수 기록
 
@@ -3097,13 +3308,14 @@ class BacktestEngine:
                         ret_value = raw_return * 100 if abs(raw_return) < 1 else raw_return
                         benchmark_ret = Decimal(str(ret_value))
 
-            # 🚀 초고속: 간소화된 포트폴리오 평가 (price_lookup 사용)
-            stock_value = Decimal("0")
+            # 🚀 ULTRA-FAST: float로 포트폴리오 평가 (Decimal 변환 최소화)
+            stock_value_float = 0.0
             for stock_code, holding in holdings.items():
                 price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
                 if price_info:
-                    stock_value += Decimal(str(price_info['close_price'])) * holding.quantity
+                    stock_value_float += price_info['close_price'] * holding.quantity
 
+            stock_value = Decimal(str(stock_value_float))
             portfolio_value = cash_balance + stock_value
 
             # 진행률 계산
@@ -3148,32 +3360,34 @@ class BacktestEngine:
             daily_snapshots.append(daily_snapshot)
 
             # Phase 0 최적화: 설정된 주기마다 진행률만 DB 업데이트 (I/O 감소)
-            should_update_progress = (
-                progress_percentage % config.PROGRESS_UPDATE_INTERVAL == 0 or
-                current_day_index == total_days - 1  # 마지막은 무조건 업데이트
-            )
-
-            if should_update_progress:
-                stmt_progress = (
-                    update(SimulationSession)
-                    .where(SimulationSession.session_id == str(backtest_id))
-                    .values(
-                        progress=progress_percentage,
-                        current_date=trading_day.date(),
-                        buy_count=daily_buy_count,
-                        sell_count=total_sell_count,
-                        current_return=float(current_return),
-                        current_capital=float(portfolio_value),
-                        current_mdd=float(current_mdd)
-                    )
+            # 🚀 최적화: skip_db_save 모드에서는 DB 업데이트도 완전 스킵
+            if not getattr(self, 'skip_db_save', False):
+                should_update_progress = (
+                    progress_percentage % config.PROGRESS_UPDATE_INTERVAL == 0 or
+                    current_day_index == total_days - 1  # 마지막은 무조건 업데이트
                 )
-                await self.db.execute(stmt_progress)
-                progress_batch_count += 1
 
-                # 설정된 배치 간격마다 또는 마지막 날에만 commit
-                if progress_batch_count >= config.PROGRESS_COMMIT_INTERVAL or current_day_index == total_days - 1:
-                    await self.db.commit()
-                    progress_batch_count = 0
+                if should_update_progress:
+                    stmt_progress = (
+                        update(SimulationSession)
+                        .where(SimulationSession.session_id == str(backtest_id))
+                        .values(
+                            progress=progress_percentage,
+                            current_date=trading_day.date(),
+                            buy_count=daily_buy_count,
+                            sell_count=total_sell_count,
+                            current_return=float(current_return),
+                            current_capital=float(portfolio_value),
+                            current_mdd=float(current_mdd)
+                        )
+                    )
+                    await self.db.execute(stmt_progress)
+                    progress_batch_count += 1
+
+                    # 설정된 배치 간격마다 또는 마지막 날에만 commit
+                    if progress_batch_count >= config.PROGRESS_COMMIT_INTERVAL or current_day_index == total_days - 1:
+                        await self.db.commit()
+                        progress_batch_count = 0
 
             # 📡 WebSocket 실시간 업데이트 전송 (매일 전송하여 실시간 차트 렌더링)
             # 🎯 FIX: 10% 단위 → 매일 전송으로 변경하여 차트가 실시간으로 업데이트되도록 수정
@@ -3181,28 +3395,30 @@ class BacktestEngine:
             daily_return = ((portfolio_value - prev_portfolio_value) / prev_portfolio_value) * 100 if prev_portfolio_value > 0 else 0
 
             # 매일 WebSocket 전송 (진행률 로그는 10% 단위로만)
-            if progress_percentage % 10 == 0 or progress_percentage == 100:
-                logger.info(f"📡 WebSocket 전송: backtest_id={str(backtest_id)}, progress={progress_percentage}%")
+            # 🚀 최적화: skip_db_save 모드에서는 WebSocket 전송 스킵
+            if not getattr(self, 'skip_db_save', False):
+                if progress_percentage % 10 == 0 or progress_percentage == 100:
+                    logger.info(f"📡 WebSocket 전송: backtest_id={str(backtest_id)}, progress={progress_percentage}%")
 
-            await ws_manager.send_progress(
-                backtest_id=str(backtest_id),
-                date=trading_day.isoformat() if hasattr(trading_day, 'isoformat') else str(trading_day),
-                portfolio_value=float(portfolio_value),
-                cash=float(cash_balance),
-                position_value=float(stock_value),
-                daily_return=float(daily_return),
-                cumulative_return=float(current_return),
-                progress_percent=progress_percentage,
-                current_mdd=float(current_mdd),
-                buy_count=daily_buy_count,
-                sell_count=total_sell_count
-            )
+                await ws_manager.send_progress(
+                    backtest_id=str(backtest_id),
+                    date=trading_day.isoformat() if hasattr(trading_day, 'isoformat') else str(trading_day),
+                    portfolio_value=float(portfolio_value),
+                    cash=float(cash_balance),
+                    position_value=float(stock_value),
+                    daily_return=float(daily_return),
+                    cumulative_return=float(current_return),
+                    progress_percent=progress_percentage,
+                    current_mdd=float(current_mdd),
+                    buy_count=daily_buy_count,
+                    sell_count=total_sell_count
+                )
 
-            # 🎬 시각적 효과: 실시간 렌더링을 위한 짧은 지연 (개발/데모 환경용)
-            # 매 10%마다 0.15초 지연 (전체 약 1.5초 소요)
-            if progress_percentage % 10 == 0 and progress_percentage > 0:
-                import asyncio
-                await asyncio.sleep(0.15)
+                # 🎬 시각적 효과: 실시간 렌더링을 위한 짧은 지연 (개발/데모 환경용)
+                # 매 10%마다 0.15초 지연 (전체 약 1.5초 소요)
+                if progress_percentage % 10 == 0 and progress_percentage > 0:
+                    import asyncio
+                    await asyncio.sleep(0.15)
 
             # 🚀 초고속: DB UPDATE 제거 (시뮬레이션 완료 후 bulk insert)
 
@@ -3439,7 +3655,7 @@ class BacktestEngine:
             })
             prev_portfolio_value = portfolio_value
 
-        if daily_values_to_insert:
+        if daily_values_to_insert and not getattr(self, 'skip_db_save', False):
             stmt = insert(SimulationDailyValue).values(daily_values_to_insert)
             await self.db.execute(stmt)
             logger.info(f"✅ 일별 데이터 {len(daily_values_to_insert)}건 저장 완료")
@@ -3475,13 +3691,14 @@ class BacktestEngine:
                         'reason': trade.get('selection_reason', '')
                     })
 
-            if trades_to_insert:
+            if trades_to_insert and not getattr(self, 'skip_db_save', False):
                 stmt = insert(SimulationTrade).values(trades_to_insert)
                 await self.db.execute(stmt)
                 logger.info(f"✅ 거래 내역 {len(trades_to_insert)}건 저장 완료")
 
         # ⚡ 극한 최적화: 시뮬레이션 완료 후 단 한 번만 commit!
-        await self.db.commit()
+        if not getattr(self, 'skip_db_save', False):
+            await self.db.commit()
 
         bulk_insert_elapsed = time.time() - bulk_insert_start
         logger.info(f"⚡ Bulk INSERT 완료: {bulk_insert_elapsed:.2f}초")
@@ -3757,16 +3974,25 @@ class BacktestEngine:
                     trading_date=trading_ts
                 ))
 
+        # 🚀 ULTRA-FAST: trading_day_date 사전 계산
+        trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
         for stock_code, holding in list(holdings.items()):
             if price_lookup:
                 price_info = price_lookup.get((stock_code, pd.Timestamp(trading_day)))
                 if not price_info:
                     continue
 
-                close_price = Decimal(str(price_info['close_price']))
-                high_price = Decimal(str(price_info['high_price']))
-                low_price = Decimal(str(price_info['low_price']))
-                open_price = close_price  # Simplified
+                # 🚀 ULTRA-FAST: float로 먼저 계산, 필요시만 Decimal 변환
+                close_price_f = price_info['close_price']
+                high_price_f = price_info['high_price']
+                low_price_f = price_info['low_price']
+                open_price_f = close_price_f
+
+                close_price = Decimal(str(close_price_f))
+                high_price = Decimal(str(high_price_f))
+                low_price = Decimal(str(low_price_f))
+                open_price = close_price
             else:
                 # Fallback to pandas filtering (slow)
                 current_price_data = price_data[
@@ -3777,33 +4003,31 @@ class BacktestEngine:
                 if current_price_data.empty:
                     continue
 
-                # 일중 가격 데이터 (시가/고가/저가/종가) - 안전한 접근
                 row = current_price_data.iloc[0]
                 try:
-                    # close_price는 필수, 나머지는 fallback
                     close_price_raw = row.get('close_price')
                     if close_price_raw is None or pd.isna(close_price_raw):
-                        logger.warning(f"⚠️ {stock_code}: close_price 없음, 매도 스킵")
                         continue
-                    close_price = Decimal(str(close_price_raw))
+                    close_price_f = float(close_price_raw)
+                    high_price_f = float(row.get('high_price', close_price_raw))
+                    low_price_f = float(row.get('low_price', close_price_raw))
+                    open_price_f = float(row.get('open_price', close_price_raw))
 
-                    # open/high/low는 close로 fallback
-                    open_price = Decimal(str(row.get('open_price', close_price_raw)))
-                    high_price = Decimal(str(row.get('high_price', close_price_raw)))
-                    low_price = Decimal(str(row.get('low_price', close_price_raw)))
-                except (ValueError, TypeError, InvalidOperation) as e:
-                    logger.warning(f"⚠️ {stock_code}: 가격 데이터 변환 실패 ({e}), 매도 스킵")
+                    close_price = Decimal(str(close_price_f))
+                    high_price = Decimal(str(high_price_f))
+                    low_price = Decimal(str(low_price_f))
+                    open_price = Decimal(str(open_price_f))
+                except (ValueError, TypeError, InvalidOperation):
                     continue
 
-            current_price = close_price  # 기본값은 종가
+            current_price = close_price
 
             # 매도 조건 체크
             should_sell = False
             sell_reason = ""
             sell_reason_key = None
 
-            # trading_day와 holding.entry_date를 date로 변환하여 비교
-            trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+            # 🚀 ULTRA-FAST: entry_date 캐시 (date() 호출 1회만)
             entry_date = holding.entry_date.date() if hasattr(holding.entry_date, 'date') else holding.entry_date
             hold_days_count = (trading_day_date - entry_date).days
             min_hold = hold_cfg.get('min_hold_days') if hold_cfg else None
@@ -3815,12 +4039,11 @@ class BacktestEngine:
                 target_gain = target_cfg.get('target_gain')
                 stop_loss = target_cfg.get('stop_loss')
 
-                # 일중 최고가 기준 목표가 체크
-                high_profit_rate = ((high_price / holding.entry_price) - Decimal("1")) * Decimal("100")
-                # 일중 최저가 기준 손절가 체크
-                low_profit_rate = ((low_price / holding.entry_price) - Decimal("1")) * Decimal("100")
-                # 종가 기준 수익률 (로깅용)
-                close_profit_rate = ((close_price / holding.entry_price) - Decimal("1")) * Decimal("100")
+                # 🚀 ULTRA-FAST: float로 수익률 계산 (Decimal 연산 10배 느림)
+                entry_price_f = float(holding.entry_price)
+                high_profit_rate = ((high_price_f / entry_price_f) - 1.0) * 100.0
+                low_profit_rate = ((low_price_f / entry_price_f) - 1.0) * 100.0
+                close_profit_rate = ((close_price_f / entry_price_f) - 1.0) * 100.0
 
                 # logger.debug(f"📊 [{trading_day}] {stock_code} | 종가: {close_profit_rate:.2f}% | 고가: {high_profit_rate:.2f}% | 저가: {low_profit_rate:.2f}% | 목표: {target_gain}% | 손절: -{stop_loss}%")
 
@@ -4308,12 +4531,31 @@ class BacktestEngine:
         orders: List[Dict[str, Any]] = None,
         executions: List[Dict[str, Any]] = None,
         daily_new_positions: int = 0,
-        max_daily_new_positions: Optional[int] = None
+        max_daily_new_positions: Optional[int] = None,
+        price_lookup: Dict = None,
+        next_trading_day_map: Dict = None,
+        stock_names: Dict[str, str] = None
     ) -> Tuple[List[Dict], int]:
-        """매수 실행 (팩터 정보 포함)"""
+        """매수 실행 (팩터 정보 포함) - 🚀 ULTRA-FAST 버전"""
 
         buy_trades = []
         new_position_count = daily_new_positions
+
+        # 🚀 ULTRA-FAST: float 기반 연산 (Decimal 10배 느림)
+        cash_balance_f = float(cash_balance)
+        slippage_f = float(self.slippage)
+        commission_rate_f = float(self.commission_rate)
+
+        # 거래일 date 형식
+        trading_day_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
+        # 🚀 사전 계산된 다음 거래일 (O(1) lookup)
+        next_td_ts = next_trading_day_map.get(trading_day_date) if next_trading_day_map else None
+        if not next_td_ts:
+            # 다음 거래일 없음 = 백테스트 종료 직전
+            return buy_trades, new_position_count
+
+        next_trade_date = next_td_ts.date() if hasattr(next_td_ts, 'date') else next_td_ts
 
         for stock_code, allocation in position_sizes.items():
             is_new_position = stock_code not in holdings
@@ -4324,94 +4566,54 @@ class BacktestEngine:
             ):
                 continue
 
-            # Phase 0 최적화: price_lookup 사전 사용 (10-20배 빠름)
-            price_key = (stock_code, trading_day)
-            if price_key in self.price_lookup:
-                current_price = Decimal(str(self.price_lookup[price_key]))
-            else:
-                # Fallback: 기존 방식
-                current_price_data = price_data[
-                    (price_data['stock_code'] == stock_code) &
-                    (price_data['date'] == trading_day)
-                ]
-                if current_price_data.empty:
-                    continue
-                current_price = Decimal(str(current_price_data.iloc[0]['close_price']))
+            # 🚀 ULTRA-FAST: price_lookup 사전 사용 (DataFrame 필터링 제거)
+            next_price_key = (stock_code, next_td_ts)
+            next_price_info = price_lookup.get(next_price_key) if price_lookup else None
 
-            # D일 조건 만족 → D+1일 시가에 매수
-            next_day_price_data = price_data[
-                (price_data['stock_code'] == stock_code) &
-                (price_data['date'] > trading_day)
-            ].sort_values('date')
-
-            if next_day_price_data.empty:
-                # 익일 데이터 없음 (백테스트 기간 종료 직전)
+            if not next_price_info:
+                # 익일 가격 데이터 없음
                 continue
 
-            next_day_row = next_day_price_data.iloc[0]
-
-            # 익일 시가 조회
-            try:
-                open_price_raw = next_day_row.get('open_price')
-                if open_price_raw is None or pd.isna(open_price_raw):
-                    # 시가 없으면 종가 fallback
-                    open_price_raw = next_day_row.get('close_price')
-                    if open_price_raw is None or pd.isna(open_price_raw):
-                        logger.warning(f"⚠️ {stock_code}: 익일 가격 데이터 없음, 매수 스킵")
-                        continue
-
-                next_open_price = Decimal(str(open_price_raw))
-                if next_open_price <= 0:
-                    logger.warning(f"⚠️ {stock_code}: 유효하지 않은 가격 ({next_open_price}), 매수 스킵")
+            # 🚀 ULTRA-FAST: float 연산
+            next_open_price_f = next_price_info.get('open_price')
+            if next_open_price_f is None or np.isnan(next_open_price_f):
+                next_open_price_f = next_price_info.get('close_price')
+                if next_open_price_f is None or np.isnan(next_open_price_f):
                     continue
-            except (ValueError, TypeError, InvalidOperation) as e:
-                logger.warning(f"⚠️ {stock_code}: 가격 데이터 변환 실패 ({e}), 매수 스킵")
-                continue
 
-            stock_name = current_price_data.iloc[0].get('stock_name', f"Stock_{stock_code}")
-            next_trade_date = next_day_row['date'].date()
+            if next_open_price_f <= 0:
+                continue
 
             # 슬리피지 적용 (매수 시 불리하게 - 가격 상승)
-            execution_price = next_open_price * (1 + self.slippage)
+            execution_price_f = next_open_price_f * (1.0 + slippage_f)
 
             # 매수 가능 수량 계산
-            quantity = int(allocation / execution_price)
+            allocation_f = float(allocation)
+            quantity = int(allocation_f / execution_price_f)
 
             if quantity <= 0:
                 continue
 
             # 실제 매수 금액
-            amount = execution_price * quantity
-            commission = amount * self.commission_rate
+            amount_f = execution_price_f * quantity
+            commission_f = amount_f * commission_rate_f
 
             # 잔고 확인
-            if amount + commission > cash_balance:
+            if amount_f + commission_f > cash_balance_f:
                 continue
 
-            # 거래 시점 팩터 값 추출
-            trade_factors = {}
-            if factor_data is not None and not factor_data.empty:
-                stock_mask = factor_data['stock_code'] == stock_code
-                date_mask = pd.to_datetime(factor_data['date']) == pd.Timestamp(trading_day)
-                stock_factors = factor_data[stock_mask & date_mask]
-                if not stock_factors.empty:
-                    # 메타데이터 컬럼 (문자열 타입) 제외
-                    meta_columns = {'date', 'stock_code', 'industry', 'size_bucket', 'market_type'}
-                    for col in stock_factors.columns:
-                        if col in meta_columns or col.endswith('_RANK'):
-                            continue
-                        value = stock_factors[col].iloc[0]
-                        if pd.notna(value):
-                            try:
-                                trade_factors[col] = float(value)
-                            except (ValueError, TypeError):
-                                # 숫자로 변환 불가능한 값은 스킵
-                                continue
+            # 종목명 조회 (사전 계산 또는 기본값)
+            stock_name = stock_names.get(stock_code, f"Stock_{stock_code}") if stock_names else f"Stock_{stock_code}"
+
+            # 🚀 Decimal 변환은 최종 결과 저장 시에만
+            execution_price = Decimal(str(execution_price_f))
+            amount = Decimal(str(amount_f))
+            commission = Decimal(str(commission_f))
 
             # 매수 실행 (익일 시가)
             order = {
-                'order_id': f"ORD-B-{stock_code}-{trading_day}",
-                'order_date': trading_day,  # 주문일은 오늘
+                'order_id': f"ORD-B-{stock_code}-{trading_day_date}",
+                'order_date': trading_day_date,
                 'stock_code': stock_code,
                 'stock_name': stock_name,
                 'side': 'BUY',
@@ -4426,8 +4628,8 @@ class BacktestEngine:
             execution = {
                 'execution_id': f"EXE-B-{stock_code}-{next_trade_date}",
                 'order_id': order['order_id'],
-                'execution_date': next_trade_date,  # 체결일은 익일
-                'trade_date': next_trade_date,  # 거래일은 익일
+                'execution_date': next_trade_date,
+                'trade_date': next_trade_date,
                 'stock_code': stock_code,
                 'stock_name': stock_name,
                 'side': 'BUY',
@@ -4438,7 +4640,7 @@ class BacktestEngine:
                 'commission': commission,
                 'tax': Decimal("0"),
                 'slippage': self.slippage,
-                'factors': trade_factors,
+                'factors': {},  # 팩터 추출은 스킵 (성능 최적화)
                 'selection_reason': "팩터 기반 매수 (익일 시가)"
             }
             if executions is not None:
@@ -4446,28 +4648,29 @@ class BacktestEngine:
 
             buy_trades.append(execution)
 
+            # 🚀 ULTRA-FAST: 포지션 업데이트도 float 우선
             existing_position = holdings.get(stock_code)
             if existing_position:
-                total_qty = existing_position.quantity + quantity
-                new_avg_price = ((existing_position.entry_price * existing_position.quantity) + (execution_price * quantity)) / total_qty
-                existing_position.entry_price = new_avg_price
+                existing_qty = existing_position.quantity
+                existing_price_f = float(existing_position.entry_price)
+                total_qty = existing_qty + quantity
+                new_avg_price_f = ((existing_price_f * existing_qty) + (execution_price_f * quantity)) / total_qty
+                existing_position.entry_price = Decimal(str(new_avg_price_f))
                 existing_position.quantity = total_qty
                 existing_position.current_price = execution_price
                 existing_position.current_value = execution_price * total_qty
-                logger.debug(f"✅ 추가 매수: {stock_code} {quantity}주 @ {execution_price:,.0f}원 (평균가: {new_avg_price:,.0f}원)")
             else:
                 holdings[stock_code] = Position(
                     position_id=f"POS-{stock_code}-{next_trade_date}",
                     stock_code=stock_code,
                     stock_name=stock_name,
-                    entry_date=next_trade_date,  # 진입일은 익일
+                    entry_date=next_trade_date,
                     entry_price=execution_price,
                     quantity=quantity,
                     current_price=execution_price,
                     current_value=execution_price * quantity
                 )
                 new_position_count += 1
-                logger.debug(f"✅ 신규 매수: {stock_code} {quantity}주 @ {execution_price:,.0f}원 (익일 시가)")
 
         return buy_trades, new_position_count
 

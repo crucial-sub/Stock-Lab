@@ -20,8 +20,8 @@ import type {
   SubFactor,
   Themes,
 } from "@/types/api";
-export type { BacktestRunRequest } from "@/types/api";
 import { axiosInstance, axiosServerInstance } from "../axios";
+export type { BacktestRunRequest } from "@/types/api";
 
 /**
  * 백테스트 실행
@@ -173,6 +173,7 @@ export interface BacktestStatus {
   currentMdd?: number;
   startDate?: string;
   endDate?: string;
+  /** 에러 발생 시 에러 메시지 */
   errorMessage?: string;
   yieldPoints?: Array<{
     date: string;
@@ -184,6 +185,7 @@ export interface BacktestStatus {
     positionValue?: number;
     dailyReturn?: number;
     value?: number;
+    /** 현재 MDD (%) */
     currentMdd?: number;
   }>;
 }

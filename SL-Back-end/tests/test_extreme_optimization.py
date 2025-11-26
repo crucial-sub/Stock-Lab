@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.core.database import get_db_context
 from app.services.backtest import BacktestEngine
-from app.services.backtest_integration import integrate_optimizations
 
 
 async def test_backtest_performance():
@@ -57,10 +56,8 @@ async def test_backtest_performance():
         # 백테스트 엔진 생성
         engine = BacktestEngine(db)
 
-        # 최적화 통합
-        print("🚀 극한 최적화 모듈 통합 중...")
-        integrate_optimizations(engine)
-        print("✅ 최적화 모듈 통합 완료")
+        # 최적화는 BacktestEngine 내부에 통합
+        print("🚀 BacktestEngine 초기화 완료 (최적화 내장)")
         print()
 
         # SimpleCondition 클래스 정의 (BacktestEngine 내부 클래스와 동일)

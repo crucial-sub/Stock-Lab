@@ -590,7 +590,7 @@ async def run_backtest(
             benchmark="KOSPI",
             status="PENDING",
             progress=0,
-            is_portfolio=True,  # 포트폴리오 목록에 표시되도록 설정
+            is_portfolio=False,  # "포트폴리오로 저장" 버튼 클릭 시에만 True로 변경
             created_at=datetime.now()
         )
         db.add(session)

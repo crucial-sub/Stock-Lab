@@ -40,15 +40,19 @@ function abbreviateStrategyName(name: string): string {
 
 /**
  * 포트폴리오 이름 생성 함수
- * 형식: {userName}_{전략명 축약}_{MMDD}
- * 예: 박중섭_캐시우드_1125
+ * 형식: {userName}_{전략명 축약}_{MMDDHHmmss}
+ * 예: 박중섭_캐시우드_1125143052
+ * - 시분초를 포함하여 중복 방지
  */
 function generatePortfolioName(userName: string, strategyName: string): string {
   const abbreviatedName = abbreviateStrategyName(strategyName);
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-  return `${userName}_${abbreviatedName}_${month}${day}`;
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  return `${userName}_${abbreviatedName}_${month}${day}${hours}${minutes}${seconds}`;
 }
 
 /**

@@ -241,7 +241,7 @@ export function FactorSelectionModal({
                                 "w-full text-left px-3 py-3 sm:py-2 rounded text-sm transition-colors",
                                 "min-h-[2.75rem]",
                                 selectedFactor?.id === factor.id
-                                  ? "bg-brand-primary text-white font-medium"
+                                  ? "bg-brand-purple text-white font-medium"
                                   : "text-gray-700 hover:bg-gray-50",
                               ].join(" ")}
                             >
@@ -305,8 +305,8 @@ export function FactorSelectionModal({
                         />
                         <span
                           className={`text-sm ${selectedSubFactor?.id === subFactor.id
-                              ? "text-brand-primary font-medium"
-                              : "text-gray-700 group-hover:text-gray-900"
+                            ? "text-brand-primary font-medium"
+                            : "text-gray-700 group-hover:text-gray-900"
                             }`}
                         >
                           {subFactor.display_name}
@@ -357,8 +357,8 @@ export function FactorSelectionModal({
                                 />
                                 <span
                                   className={`text-sm ${selectedArgument === arg
-                                      ? "text-brand-primary font-medium"
-                                      : "text-gray-700 group-hover:text-gray-900"
+                                    ? "text-brand-primary font-medium"
+                                    : "text-gray-700 group-hover:text-gray-900"
                                     }`}
                                 >
                                   {arg}

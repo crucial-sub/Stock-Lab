@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { communityQueryKey, useCloneStrategyMutation } from "@/hooks/useCommunityQuery";
 import { strategyApi, type PublicStrategyListItem } from "@/lib/api/strategy";
 
@@ -78,20 +79,48 @@ export function PublicStrategiesPageClient() {
   const [activeFilter, setActiveFilter] = useState<FilterValue>("all");
   const [sortValue, setSortValue] = useState<SortValue>("returnDesc");
 
-  // 전략 복제 핸들러
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 복제 확인 모달 상태
+  const [cloneConfirmModal, setCloneConfirmModal] = useState<{
+    isOpen: boolean;
+    sessionId: string;
+    strategyName: string;
+  }>({ isOpen: false, sessionId: "", strategyName: "" });
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
+
+  // 전략 복제 확인 모달 열기
   const handleCloneStrategy = (sessionId: string, strategyName: string) => {
-    if (
-      confirm(`"${strategyName}" 전략을 내 포트폴리오에 복제하시겠습니까?`)
-    ) {
-      cloneStrategyMutation.mutate(sessionId, {
-        onSuccess: () => {
-          alert("전략이 성공적으로 복제되었습니다.");
-        },
-        onError: (error) => {
-          alert(`복제 실패: ${error.message}`);
-        },
-      });
-    }
+    setCloneConfirmModal({ isOpen: true, sessionId, strategyName });
+  };
+
+  // 전략 복제 확인 핸들러
+  const handleConfirmClone = () => {
+    const { sessionId } = cloneConfirmModal;
+    setCloneConfirmModal({ isOpen: false, sessionId: "", strategyName: "" });
+
+    cloneStrategyMutation.mutate(sessionId, {
+      onSuccess: () => {
+        showAlert("복제 완료", "전략이 성공적으로 복제되었습니다.", "success");
+      },
+      onError: (error) => {
+        showAlert("복제 실패", error.message, "error");
+      },
+    });
   };
 
   const {
@@ -319,6 +348,30 @@ export function PublicStrategiesPageClient() {
           </>
         )}
       </div>
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
+
+      {/* 복제 확인 모달 */}
+      <ConfirmModal
+        isOpen={cloneConfirmModal.isOpen}
+        onClose={() => setCloneConfirmModal({ isOpen: false, sessionId: "", strategyName: "" })}
+        onConfirm={handleConfirmClone}
+        title="전략 복제"
+        message={`"${cloneConfirmModal.strategyName}" 전략을 내 포트폴리오에 복제하시겠습니까?`}
+        confirmText="복제"
+        cancelText="취소"
+        iconType="question"
+      />
     </div>
   );
 }

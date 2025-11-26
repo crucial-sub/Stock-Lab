@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { authApi } from "@/lib/api/auth";
 
 interface PasswordChangeModalProps {
@@ -17,6 +18,7 @@ export function PasswordChangeModal({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   if (!isOpen) return null;
 
@@ -51,8 +53,7 @@ export function PasswordChangeModal({
         new_password: newPassword,
       });
 
-      alert("비밀번호가 성공적으로 변경되었습니다");
-      handleClose();
+      setShowSuccessModal(true);
     } catch (err: unknown) {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
@@ -69,6 +70,12 @@ export function PasswordChangeModal({
     setConfirmPassword("");
     setError(null);
     onClose();
+  };
+
+  // 성공 모달 확인 후 닫기
+  const handleSuccessConfirm = () => {
+    setShowSuccessModal(false);
+    handleClose();
   };
 
   return (
@@ -146,6 +153,18 @@ export function PasswordChangeModal({
           </button>
         </div>
       </div>
+
+      {/* 성공 모달 */}
+      <ConfirmModal
+        isOpen={showSuccessModal}
+        onClose={handleSuccessConfirm}
+        onConfirm={handleSuccessConfirm}
+        title="비밀번호 변경 완료"
+        message="비밀번호가 성공적으로 변경되었습니다."
+        confirmText="확인"
+        iconType="success"
+        alertOnly
+      />
     </div>
   );
 }

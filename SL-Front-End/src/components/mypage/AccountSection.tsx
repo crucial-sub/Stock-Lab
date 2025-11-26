@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { KiwoomConnectModal } from "@/components/modal/KiwoomConnectModal";
-import { kiwoomApi } from "@/lib/api/kiwoom";
 import { autoTradingApi } from "@/lib/api/auto-trading";
+import { kiwoomApi } from "@/lib/api/kiwoom";
 import { formatAmount, formatPercent, getProfitColor } from "@/lib/formatters";
+import { useCallback, useEffect, useState } from "react";
 
 export function AccountSection() {
   const [isKiwoomConnected, setIsKiwoomConnected] = useState(false);
@@ -14,6 +15,12 @@ export function AccountSection() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  // 연동 해제 관련 모달 상태
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showDisconnectSuccess, setShowDisconnectSuccess] = useState(false);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  // 연동 성공 모달 상태
+  const [showConnectSuccess, setShowConnectSuccess] = useState(false);
 
   const fetchAccountBalance = async () => {
     setIsLoading(true);
@@ -59,14 +66,18 @@ export function AccountSection() {
   const handleKiwoomSuccess = () => {
     setIsKiwoomConnected(true);
     fetchAccountBalance();
+    // 연동 성공 모달 표시
+    setShowConnectSuccess(true);
   };
 
-  const handleDisconnect = async () => {
-    const confirmed = window.confirm(
-      "키움증권 연동을 해제하시겠습니까?\n\n해제 시 가상매매 기능을 사용할 수 없습니다.\n활성화된 가상매매 전략이 있다면 먼저 비활성화해주세요."
-    );
+  // 연동 해제 버튼 클릭 시 확인 모달 표시
+  const handleDisconnect = () => {
+    setShowDisconnectConfirm(true);
+  };
 
-    if (!confirmed) return;
+  // 연동 해제 확인 모달에서 확인 클릭 시 실제 해제 수행
+  const handleConfirmDisconnect = async () => {
+    setShowDisconnectConfirm(false);
 
     try {
       setIsDisconnecting(true);
@@ -74,12 +85,13 @@ export function AccountSection() {
       setIsKiwoomConnected(false);
       setAccountBalance(null);
       setAllocatedCapital(0);
-      alert("키움증권 연동이 해제되었습니다.");
+      // 성공 모달 표시
+      setShowDisconnectSuccess(true);
     } catch (err: unknown) {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
           ?.detail || "연동 해제에 실패했습니다.";
-      alert(errorMessage);
+      setDisconnectError(errorMessage);
     } finally {
       setIsDisconnecting(false);
     }
@@ -237,6 +249,54 @@ export function AccountSection() {
         isOpen={isKiwoomModalOpen}
         onClose={() => setIsKiwoomModalOpen(false)}
         onSuccess={handleKiwoomSuccess}
+      />
+
+      {/* 연동 해제 확인 모달 */}
+      <ConfirmModal
+        isOpen={showDisconnectConfirm}
+        onClose={() => setShowDisconnectConfirm(false)}
+        onConfirm={handleConfirmDisconnect}
+        title="키움증권 연동을 해제하시겠습니까?"
+        message={`해제 시 가상매매 기능을 사용할 수 없습니다.\n활성화된 가상매매 전략이 있다면 먼저 비활성화해주세요.`}
+        confirmText="확인"
+        cancelText="취소"
+        iconType="warning"
+      />
+
+      {/* 연동 해제 성공 모달 */}
+      <ConfirmModal
+        isOpen={showDisconnectSuccess}
+        onClose={() => setShowDisconnectSuccess(false)}
+        onConfirm={() => setShowDisconnectSuccess(false)}
+        title="키움증권 연동이 해제되었습니다."
+        message=""
+        confirmText="확인"
+        iconType="success"
+        alertOnly
+      />
+
+      {/* 연동 해제 에러 모달 */}
+      <ConfirmModal
+        isOpen={!!disconnectError}
+        onClose={() => setDisconnectError(null)}
+        onConfirm={() => setDisconnectError(null)}
+        title="연동 해제 실패"
+        message={disconnectError || ""}
+        confirmText="확인"
+        iconType="error"
+        alertOnly
+      />
+
+      {/* 연동 성공 모달 */}
+      <ConfirmModal
+        isOpen={showConnectSuccess}
+        onClose={() => setShowConnectSuccess(false)}
+        onConfirm={() => setShowConnectSuccess(false)}
+        title="키움증권 연동이 완료되었습니다!"
+        message=""
+        confirmText="확인"
+        iconType="success"
+        alertOnly
       />
     </section>
   );

@@ -114,15 +114,13 @@ export function useStrategyList() {
   /**
    * 선택된 전략 삭제
    * - 서버 API 호출 및 캐시 무효화
+   * - 확인 및 결과 알림은 컴포넌트에서 처리 (ConfirmModal 사용)
+   * @returns { success: boolean, message: string } 삭제 결과
    */
-  const deleteSelectedStrategies = async () => {
-    if (selectedIds.length === 0) return;
-
-    const confirmed = window.confirm(
-      `선택한 ${selectedIds.length}개의 백테스트를 삭제하시겠습니까?`,
-    );
-
-    if (!confirmed) return;
+  const deleteSelectedStrategies = async (): Promise<{ success: boolean; message: string }> => {
+    if (selectedIds.length === 0) {
+      return { success: false, message: "삭제할 항목을 선택해주세요." };
+    }
 
     try {
       // API 호출 - 백테스트 세션 삭제
@@ -136,10 +134,10 @@ export function useStrategyList() {
       // 선택 상태 초기화
       setSelectedIds([]);
 
-      alert("백테스트가 삭제되었습니다.");
+      return { success: true, message: "백테스트가 삭제되었습니다." };
     } catch (error) {
       console.error("백테스트 삭제 실패:", error);
-      alert("백테스트 삭제 중 오류가 발생했습니다.");
+      return { success: false, message: "백테스트 삭제 중 오류가 발생했습니다." };
     }
   };
 

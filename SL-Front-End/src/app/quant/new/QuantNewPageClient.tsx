@@ -12,6 +12,7 @@
 
 import { lazy, Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import QuantStrategySummaryPanel from "@/components/quant/layout/QuantStrategySummaryPanel";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
@@ -53,6 +54,23 @@ export function QuantNewPageClient() {
   const conditionsAppliedRef = useRef(false);
   const cloneAppliedRef = useRef(false);
   const [isLoadingClone, setIsLoadingClone] = useState(false);
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   // React Query로 데이터 fetch (클라이언트 사이드)
   // 데이터는 하위 컴포넌트에서 사용하므로 여기서는 캐싱 목적으로만 fetch
@@ -273,7 +291,7 @@ export function QuantNewPageClient() {
         window.history.replaceState({}, "", url.toString());
       } catch (error) {
         console.error("복제 데이터 로드 실패:", error);
-        alert("전략 복제에 실패했습니다. 다시 시도해주세요.");
+        showAlert("복제 실패", "전략 복제에 실패했습니다. 다시 시도해주세요.", "error");
       } finally {
         setIsLoadingClone(false);
       }
@@ -320,6 +338,18 @@ export function QuantNewPageClient() {
         activeTab={activeTab}
         isOpen={isSummaryPanelOpen}
         setIsOpen={setIsSummaryPanelOpen}
+      />
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
       />
     </div>
   );

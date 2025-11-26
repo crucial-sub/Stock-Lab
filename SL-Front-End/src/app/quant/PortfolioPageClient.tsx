@@ -1,5 +1,6 @@
 "use client";
 
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { CreatePortfolioCard } from "@/components/quant/CreatePortfolioCard";
 import { PortfolioCard } from "@/components/quant/PortfolioCard";
@@ -61,6 +62,17 @@ export function PortfolioPageClient({
   const [editingValue, setEditingValue] = useState<string>("");
   const [isRenaming, setIsRenaming] = useState(false);
 
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 삭제 확인 모달 상태
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState(false);
+
   // 포트폴리오 선택/해제 핸들러
   const handleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -99,22 +111,30 @@ export function PortfolioPageClient({
     router.push(`/quant/result/${id}`);
   };
 
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
+
   // 선택 항목 삭제 핸들러
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     // 선택된 항목이 없으면 종료
     if (selectedIds.size === 0) {
-      alert("삭제할 포트폴리오를 선택해주세요.");
+      showAlert("알림", "삭제할 포트폴리오를 선택해주세요.", "warning");
       return;
     }
 
-    // 사용자 확인
-    const confirmed = window.confirm(
-      `선택한 ${selectedIds.size}개의 포트폴리오를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`,
-    );
+    // 삭제 확인 모달 표시
+    setDeleteConfirmModal(true);
+  };
 
-    if (!confirmed) {
-      return;
-    }
+  // 삭제 확인 후 실제 삭제 수행
+  const handleConfirmDelete = async () => {
+    setDeleteConfirmModal(false);
 
     try {
       setIsDeleting(true);
@@ -132,7 +152,7 @@ export function PortfolioPageClient({
       setSelectedIds(new Set());
 
       // 성공 메시지
-      alert(`${sessionIds.length}개의 포트폴리오가 삭제되었습니다.`);
+      showAlert("삭제 완료", `${sessionIds.length}개의 포트폴리오가 삭제되었습니다.`, "success");
 
       // 페이지 새로고침 (대시보드 통계 업데이트를 위해)
       router.refresh();
@@ -149,7 +169,7 @@ export function PortfolioPageClient({
         )?.response?.data?.detail ||
         (error as { message?: string })?.message ||
         "포트폴리오 삭제 중 오류가 발생했습니다.";
-      alert(errorMessage);
+      showAlert("삭제 실패", errorMessage, "error");
     } finally {
       setIsDeleting(false);
     }
@@ -160,7 +180,7 @@ export function PortfolioPageClient({
     portfolio: Pick<Portfolio, "id" | "strategyId" | "title">,
   ) => {
     if (!portfolio.strategyId) {
-      alert("공유할 전략 정보를 찾을 수 없습니다.");
+      showAlert("알림", "공유할 전략 정보를 찾을 수 없습니다.", "warning");
       return;
     }
     setShareTarget(portfolio);
@@ -188,9 +208,9 @@ export function PortfolioPageClient({
         }),
       ]);
 
-      alert("포트폴리오가 공유 설정되었습니다.");
       setIsShareModalOpen(false);
       setShareTarget(null);
+      showAlert("공유 완료", "전략이 성공적으로 공유되었습니다.", "success");
     } catch (error: unknown) {
       console.error("포트폴리오 공유 설정 실패:", error);
       const errorMessage =
@@ -229,7 +249,7 @@ export function PortfolioPageClient({
 
     const trimmedName = editingValue.trim();
     if (!trimmedName) {
-      alert("전략 이름을 입력해주세요.");
+      showAlert("알림", "전략 이름을 입력해주세요.", "warning");
       return;
     }
 
@@ -284,7 +304,7 @@ export function PortfolioPageClient({
         )?.response?.data?.detail ||
         (error as { message?: string })?.message ||
         "전략 이름 수정 중 문제가 발생했습니다.";
-      alert(errorMessage);
+      showAlert("수정 실패", errorMessage, "error");
     } finally {
       setIsRenaming(false);
     }
@@ -359,6 +379,30 @@ export function PortfolioPageClient({
           setShareTarget(null);
         }}
         onConfirm={handleShareConfirm}
+      />
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
+
+      {/* 삭제 확인 모달 */}
+      <ConfirmModal
+        isOpen={deleteConfirmModal}
+        onClose={() => setDeleteConfirmModal(false)}
+        onConfirm={handleConfirmDelete}
+        title="포트폴리오 삭제"
+        message={`선택한 ${selectedIds.size}개의 포트폴리오를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`}
+        confirmText="삭제"
+        cancelText="취소"
+        iconType="warning"
       />
     </main>
   );

@@ -65,6 +65,17 @@ class VectorizedConditionEvaluator:
 
             # 2. 대상 종목만 필터링
             if stock_codes:
+                factor_stocks = set(date_data['stock_code'].unique())
+                target_stocks = set(stock_codes)
+                intersection = factor_stocks & target_stocks
+
+                # 🔍 DEBUG: 종목 불일치 원인 파악
+                if not intersection:
+                    self.logger.warning(
+                        f"⚠️ 종목 불일치! factor_data 종목: {len(factor_stocks)}개 (예: {list(factor_stocks)[:5]}), "
+                        f"대상 종목: {len(target_stocks)}개 (예: {list(target_stocks)[:5]})"
+                    )
+
                 date_data = date_data[date_data['stock_code'].isin(stock_codes)]
 
             if date_data.empty:

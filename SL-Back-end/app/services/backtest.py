@@ -1527,6 +1527,13 @@ class BacktestEngine:
         quarters_to_calc: Dict[str, List] = defaultdict(list)
 
         # 1단계: 캐시 히트된 분기 먼저 로드 (분기당 1회만)
+        # 🔧 FIX: 캐시된 날짜 추적하여 누락된 날짜 검증
+        cached_dates: Set = set()
+
+        # 🔧 FIX: price_data의 종목 코드 추출 (캐시 필터링용)
+        price_stock_codes = set(price_data['stock_code'].unique()) if not price_data.empty else set()
+        logger.info(f"🎯 현재 백테스트 대상 종목: {len(price_stock_codes)}개")
+
         if cache_enabled:
             unique_quarters = set(get_quarter_key(d) for d in unique_dates)
             logger.info(f"🔍 캐시 조회 대상 분기: {sorted(unique_quarters)}")
@@ -1543,12 +1550,28 @@ class BacktestEngine:
                 try:
                     cached_data = await cache.get(cache_key)
                     if cached_data:
-                        # 필요한 팩터만 필터링 (메모리 절약)
+                        # 🔧 FIX: 캐시에서 현재 백테스트 종목만 필터링
                         filtered_rows = []
                         for row in cached_data:
+                            stock_code = row.get('stock_code')
+
+                            # 🔧 FIX: 현재 백테스트 대상 종목만 포함
+                            if price_stock_codes and stock_code not in price_stock_codes:
+                                continue
+
+                            # 🔧 FIX: 캐시된 날짜 추적
+                            row_date = row.get('date')
+                            if row_date:
+                                if isinstance(row_date, str):
+                                    cached_dates.add(pd.Timestamp(row_date).date())
+                                elif hasattr(row_date, 'date'):
+                                    cached_dates.add(row_date.date())
+                                else:
+                                    cached_dates.add(row_date)
+
                             filtered_row = {
-                                'date': row.get('date'),
-                                'stock_code': row.get('stock_code'),
+                                'date': row_date,
+                                'stock_code': stock_code,
                                 'industry': row.get('industry'),
                                 'size_bucket': row.get('size_bucket')
                             }
@@ -1556,17 +1579,27 @@ class BacktestEngine:
                                 if factor in row:
                                     filtered_row[factor] = row[factor]
                             filtered_rows.append(filtered_row)
-                        logger.info(f"💾 캐시 히트: {quarter_key} - {len(filtered_rows)}개 레코드 (필터링: {len(required_factors)}개 팩터)")
+                        logger.info(f"💾 캐시 히트: {quarter_key} - {len(filtered_rows)}개 레코드 (종목 필터링: {len(price_stock_codes)}개)")
                         all_rows.extend(filtered_rows)
                         loaded_quarters.add(quarter_key)
                 except Exception as e:
                     logger.debug(f"캐시 조회 실패 ({quarter_key}): {e}")
 
             if loaded_quarters:
-                logger.info(f"✅ 캐시 로드 완료: {len(loaded_quarters)}개 분기, {len(all_rows)}개 레코드")
+                logger.info(f"✅ 캐시 로드 완료: {len(loaded_quarters)}개 분기, {len(all_rows)}개 레코드, 캐시된 날짜: {len(cached_dates)}개")
 
-        # 2단계: 캐시 미스된 분기만 계산 (분기별 1회만 계산하여 모든 날짜에 적용)
-        dates_to_calculate = [d for d in unique_dates if get_quarter_key(d) not in loaded_quarters]
+        # 2단계: 캐시 미스된 분기 또는 누락된 날짜 계산
+        # 🔧 FIX: 분기 캐시 히트여도 실제 날짜가 누락되면 재계산
+        def normalize_date(d):
+            """날짜를 date 객체로 정규화"""
+            if hasattr(d, 'date'):
+                return d.date()
+            return d
+
+        dates_to_calculate = [d for d in unique_dates if normalize_date(d) not in cached_dates]
+
+        if dates_to_calculate and loaded_quarters:
+            logger.warning(f"⚠️ 캐시 히트했지만 {len(dates_to_calculate)}개 날짜 누락 - 추가 계산 필요")
 
         if not dates_to_calculate:
             logger.info(f"🚀 모든 분기 캐시 히트 - 팩터 계산 스킵 ({len(all_rows)}개 레코드)")

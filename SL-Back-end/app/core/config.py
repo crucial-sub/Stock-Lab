@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # 정의되지 않은 환경변수 무시
 
     def validate_settings(self) -> None:
         """설정 값 검증 및 경고 출력"""

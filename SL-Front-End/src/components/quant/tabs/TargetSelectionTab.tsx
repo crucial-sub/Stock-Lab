@@ -227,6 +227,8 @@ export default function TargetSelectionTab() {
           total_stock_count: finalTotalCount,
           total_theme_count: industries.length,  // 전체 테마 수 추가
         },
+        // 전략 포트폴리오 페이지에서 실행한 백테스트는 자동으로 내 목록에 저장
+        is_portfolio: true,
       };
 
       console.log("=== 백테스트 요청 데이터 ===");

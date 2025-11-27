@@ -176,26 +176,24 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
         },
         "peter_lynch": {
-            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C and D and E and F)
-            "expression": "A and B and C and D and E and F",
+            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C and D)
+            # PEG 대신 EARNINGS_GROWTH_1Y + PER 조합으로 성장주 가치투자 구현
+            # ROA 제거 (ROE와 중복되는 수익성 지표)
+            "expression": "A and B and C and D",
             "conditions": [
-                {"id": "A", "factor": "PER", "operator": "<", "value": 40},
-                {"id": "B", "factor": "PEG", "operator": ">", "value": 0},
-                {"id": "C", "factor": "PEG", "operator": "<", "value": 2.0},
-                {"id": "D", "factor": "DEBT_RATIO", "operator": "<", "value": 180},
-                {"id": "E", "factor": "ROE", "operator": ">", "value": 3},
-                {"id": "F", "factor": "ROA", "operator": ">", "value": 0.5},
+                {"id": "A", "factor": "PER", "operator": "<", "value": 25},
+                {"id": "B", "factor": "EARNINGS_GROWTH_1Y", "operator": ">", "value": 10},
+                {"id": "C", "factor": "DEBT_RATIO", "operator": "<", "value": 180},
+                {"id": "D", "factor": "ROE", "operator": ">", "value": 5},
             ],
             # UI 표시용
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 40},
-                {"name": "B", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0},
-                {"name": "C", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 2.0},
-                {"name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 180},
-                {"name": "E", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 3},
-                {"name": "F", "exp_left_side": "기본값({ROA})", "inequality": ">", "exp_right_side": 0.5},
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 25},
+                {"name": "B", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 10},
+                {"name": "C", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 180},
+                {"name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 5},
             ],
-            "priority_factor": "기본값({PEG})",
+            "priority_factor": "기본값({ROE})",
             "priority_order": "desc",
             "per_stock_ratio": 4,
             "max_holdings": 15,
@@ -221,13 +219,14 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
             "condition_sell": {
                 # 🚀 벡터화 평가: sell_conditions와 동기화됨
+                # PEG 대신 PER 과대평가 신호 사용
                 "expression": "A or B",
                 "conditions": [
-                    {"id": "A", "factor": "PEG", "operator": ">", "value": 2.5},
+                    {"id": "A", "factor": "PER", "operator": ">", "value": 35},
                     {"id": "B", "factor": "DEBT_RATIO", "operator": ">", "value": 200},
                 ],
                 "sell_conditions": [
-                    {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 2.5},
+                    {"name": "A", "exp_left_side": "기본값({PER})", "inequality": ">", "exp_right_side": 35},
                     {"name": "B", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": ">", "exp_right_side": 200}
                 ],
                 "sell_logic": "or",
@@ -236,24 +235,21 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
         },
         "warren_buffett": {
-            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C and D and E and F)
-            "expression": "A and B and C and D and E and F",
+            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C and D)
+            # EARNINGS_GROWTH_1Y 제거 (성장 지표 - 변동성 큼)
+            "expression": "A and B and C and D",
             "conditions": [
                 {"id": "A", "factor": "ROE", "operator": ">", "value": 12},
-                {"id": "B", "factor": "CURRENT_RATIO", "operator": ">", "value": 1.2},
-                {"id": "C", "factor": "PER", "operator": "<", "value": 20},
-                {"id": "D", "factor": "PBR", "operator": "<", "value": 2.0},
-                {"id": "E", "factor": "DEBT_RATIO", "operator": "<", "value": 170},
-                {"id": "F", "factor": "EARNINGS_GROWTH_1Y", "operator": ">", "value": 5},
+                {"id": "B", "factor": "PER", "operator": "<", "value": 20},
+                {"id": "C", "factor": "PBR", "operator": "<", "value": 2.0},
+                {"id": "D", "factor": "DEBT_RATIO", "operator": "<", "value": 170},
             ],
             # UI 표시용
             "buy_conditions": [
                 {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12},
-                {"name": "B", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.2},
-                {"name": "C", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20},
-                {"name": "D", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0},
-                {"name": "E", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 170},
-                {"name": "F", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 5}
+                {"name": "B", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 20},
+                {"name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0},
+                {"name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 170},
             ],
             "priority_factor": "기본값({PBR})",
             "priority_order": "asc",
@@ -404,28 +400,23 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
         },
         "charlie_munger": {
-            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C and D and E and F and G)
-            "expression": "A and B and C and D and E and F and G",
+            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C and D)
+            # ROIC 제거 (ROE와 중복되는 수익성 지표), REVENUE_GROWTH_1Y 제거 (성장 지표)
+            "expression": "A and B and C and D",
             "conditions": [
-                {"id": "A", "factor": "ROIC", "operator": ">", "value": 12},
-                {"id": "B", "factor": "PER", "operator": "<", "value": 14},
-                {"id": "C", "factor": "PBR", "operator": "<", "value": 2.0},
-                {"id": "D", "factor": "ROE", "operator": ">", "value": 12},
-                {"id": "E", "factor": "REVENUE_GROWTH_1Y", "operator": ">", "value": 10},
-                {"id": "F", "factor": "DEBT_RATIO", "operator": "<", "value": 70},
-                {"id": "G", "factor": "CURRENT_RATIO", "operator": ">", "value": 1.5},
+                {"id": "A", "factor": "PER", "operator": "<", "value": 14},
+                {"id": "B", "factor": "PBR", "operator": "<", "value": 2.0},
+                {"id": "C", "factor": "ROE", "operator": ">", "value": 12},
+                {"id": "D", "factor": "DEBT_RATIO", "operator": "<", "value": 70},
             ],
             # UI 표시용
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": ">", "exp_right_side": 12},
-                {"name": "B", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 14},
-                {"name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0},
-                {"name": "D", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12},
-                {"name": "E", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 10},
-                {"name": "F", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 70},
-                {"name": "G", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.5}
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 14},
+                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0},
+                {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 12},
+                {"name": "D", "exp_left_side": "기본값({DEBT_RATIO})", "inequality": "<", "exp_right_side": 70},
             ],
-            "priority_factor": "기본값({ROIC})",
+            "priority_factor": "기본값({ROE})",
             "priority_order": "desc",
             "per_stock_ratio": 4,
             "max_holdings": 15,
@@ -451,13 +442,14 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
             "condition_sell": {
                 # 🚀 벡터화 평가: sell_conditions와 동기화됨
+                # ROIC → ROE로 변경 (매수 조건과 일관성)
                 "expression": "A or B",
                 "conditions": [
-                    {"id": "A", "factor": "ROIC", "operator": "<", "value": 8},
+                    {"id": "A", "factor": "ROE", "operator": "<", "value": 8},
                     {"id": "B", "factor": "PBR", "operator": ">", "value": 2.3},
                 ],
                 "sell_conditions": [
-                    {"name": "A", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 8},
+                    {"name": "A", "exp_left_side": "기본값({ROE})", "inequality": "<", "exp_right_side": 8},
                     {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.3}
                 ],
                 "sell_logic": "or",
@@ -466,26 +458,21 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
         },
         "glenn_welling": {
-            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C and D and E and F)
-            "expression": "A and B and C and D and E and F",
+            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C)
+            # PSR → PER로 대체 (데이터 가용성 높음)
+            "expression": "A and B and C",
             "conditions": [
-                {"id": "A", "factor": "EV_EBITDA", "operator": "<", "value": 10},
-                {"id": "B", "factor": "ROIC", "operator": "<", "value": 12},
-                {"id": "C", "factor": "PBR", "operator": "<", "value": 2.0},
-                {"id": "D", "factor": "PSR", "operator": "<", "value": 2.0},
-                {"id": "E", "factor": "PEG", "operator": ">", "value": 0},
-                {"id": "F", "factor": "PEG", "operator": "<", "value": 1.2},
+                {"id": "A", "factor": "PER", "operator": "<", "value": 15},
+                {"id": "B", "factor": "PBR", "operator": "<", "value": 2.0},
+                {"id": "C", "factor": "ROE", "operator": ">", "value": 8},
             ],
             # UI 표시용
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({EV_EBITDA})", "inequality": "<", "exp_right_side": 10},
-                {"name": "B", "exp_left_side": "기본값({ROIC})", "inequality": "<", "exp_right_side": 12},
-                {"name": "C", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0},
-                {"name": "D", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 2.0},
-                {"name": "E", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0},
-                {"name": "F", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 1.2},
+                {"name": "A", "exp_left_side": "기본값({PER})", "inequality": "<", "exp_right_side": 15},
+                {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": "<", "exp_right_side": 2.0},
+                {"name": "C", "exp_left_side": "기본값({ROE})", "inequality": ">", "exp_right_side": 8},
             ],
-            "priority_factor": "기본값({EV_EBITDA})",
+            "priority_factor": "기본값({PER})",
             "priority_order": "asc",
             "per_stock_ratio": 6,
             "max_holdings": 12,
@@ -511,13 +498,14 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
             "condition_sell": {
                 # 🚀 벡터화 평가: sell_conditions와 동기화됨
+                # PSR → PER로 변경
                 "expression": "A or B",
                 "conditions": [
-                    {"id": "A", "factor": "EV_EBITDA", "operator": ">", "value": 12},
+                    {"id": "A", "factor": "PER", "operator": ">", "value": 25},
                     {"id": "B", "factor": "PBR", "operator": ">", "value": 2.2},
                 ],
                 "sell_conditions": [
-                    {"name": "A", "exp_left_side": "기본값({EV_EBITDA})", "inequality": ">", "exp_right_side": 12},
+                    {"name": "A", "exp_left_side": "기본값({PER})", "inequality": ">", "exp_right_side": 25},
                     {"name": "B", "exp_left_side": "기본값({PBR})", "inequality": ">", "exp_right_side": 2.2}
                 ],
                 "sell_logic": "or",
@@ -526,22 +514,20 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
         },
         "cathie_wood": {
-            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C and D and E)
-            "expression": "A and B and C and D and E",
+            # 🚀 벡터화 평가: buy_conditions와 동기화됨 (A and B and C)
+            # 캐시우드 철학: 혁신 + 고성장 + 상승 모멘텀
+            # PSR → DISTANCE_FROM_52W_HIGH로 대체 (52주 신고가 근처 = 강한 모멘텀)
+            "expression": "A and B and C",
             "conditions": [
-                {"id": "A", "factor": "PEG", "operator": ">", "value": 0},
-                {"id": "B", "factor": "PEG", "operator": "<", "value": 3},
-                {"id": "C", "factor": "PSR", "operator": "<", "value": 30},
-                {"id": "D", "factor": "REVENUE_GROWTH_1Y", "operator": ">", "value": 10},
-                {"id": "E", "factor": "CURRENT_RATIO", "operator": ">", "value": 1.2},
+                {"id": "A", "factor": "EARNINGS_GROWTH_1Y", "operator": ">", "value": 3},
+                {"id": "B", "factor": "DISTANCE_FROM_52W_HIGH", "operator": ">", "value": -50},
+                {"id": "C", "factor": "REVENUE_GROWTH_1Y", "operator": ">", "value": 0},
             ],
             # UI 표시용
             "buy_conditions": [
-                {"name": "A", "exp_left_side": "기본값({PEG})", "inequality": ">", "exp_right_side": 0},
-                {"name": "B", "exp_left_side": "기본값({PEG})", "inequality": "<", "exp_right_side": 3},
-                {"name": "C", "exp_left_side": "기본값({PSR})", "inequality": "<", "exp_right_side": 30},
-                {"name": "D", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 10},
-                {"name": "E", "exp_left_side": "기본값({CURRENT_RATIO})", "inequality": ">", "exp_right_side": 1.2}
+                {"name": "A", "exp_left_side": "기본값({EARNINGS_GROWTH_1Y})", "inequality": ">", "exp_right_side": 3},
+                {"name": "B", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": ">", "exp_right_side": -50},
+                {"name": "C", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": ">", "exp_right_side": 0},
             ],
             "priority_factor": "기본값({REVENUE_GROWTH_1Y})",
             "priority_order": "desc",
@@ -569,13 +555,14 @@ def create_backtest_config(strategy_id: str, conditions: list) -> dict:
             },
             "condition_sell": {
                 # 🚀 벡터화 평가: sell_conditions와 동기화됨
+                # PSR → DISTANCE_FROM_52W_HIGH로 변경 (모멘텀 상실 시 매도)
                 "expression": "A or B",
                 "conditions": [
-                    {"id": "A", "factor": "PSR", "operator": ">", "value": 30},
+                    {"id": "A", "factor": "DISTANCE_FROM_52W_HIGH", "operator": "<", "value": -50},
                     {"id": "B", "factor": "REVENUE_GROWTH_1Y", "operator": "<", "value": 5},
                 ],
                 "sell_conditions": [
-                    {"name": "A", "exp_left_side": "기본값({PSR})", "inequality": ">", "exp_right_side": 30},
+                    {"name": "A", "exp_left_side": "기본값({DISTANCE_FROM_52W_HIGH})", "inequality": "<", "exp_right_side": -50},
                     {"name": "B", "exp_left_side": "기본값({REVENUE_GROWTH_1Y})", "inequality": "<", "exp_right_side": 5}
                 ],
                 "sell_logic": "or",

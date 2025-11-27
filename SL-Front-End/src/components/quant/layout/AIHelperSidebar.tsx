@@ -308,10 +308,12 @@ export function AIHelperSidebar({
           ? backtestConditions.sell
           : [];
 
-        // backtest_config는 ui_language가 backtest_configuration 타입일 때만 존재
+        // backtest_config는 ui_language 또는 response 직접에서 추출
+        // 1) ui_language.backtest_config (backtest_configuration 타입일 때)
+        // 2) response.backtest_config (직접 응답에 포함된 경우 fallback)
         const backtestConfig = response.ui_language?.type === "backtest_configuration"
           ? (response.ui_language as import("@/lib/api/chatbot").BacktestConfigurationUILanguage).backtest_config
-          : undefined;
+          : response.backtest_config;
 
         addMessage({
           role: "assistant",

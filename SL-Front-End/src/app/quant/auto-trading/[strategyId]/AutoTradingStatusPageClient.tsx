@@ -214,7 +214,7 @@ export function AutoTradingStatusPageClient({
     <main className="flex-1 px-[18.75rem] py-[3.75rem] overflow-auto">
       {/* 헤더 */}
       <PageHeader
-        title="🤖 증권사 연동 실시간 가상매매"
+        title="📈 키움증권 연동 실시간 가상매매"
         subtitle={`${strategy.strategy_name || "가상매매 전략"} • ${strategy.is_active ? "활성화" : "비활성화"}`}
         onBack={() => router.push("/quant")}
       />
@@ -495,7 +495,7 @@ export function AutoTradingStatusPageClient({
 
                 {/* 가상매매 실행 정보 */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
-                  <h3 className="font-semibold text-blue-900 mb-2">🎯 가상매매 실행 정보</h3>
+                  <h3 className="font-semibold text-blue-900 mb-2">📈 가상매매 실행 정보</h3>
                   <div className="grid grid-cols-2 gap-3 text-sm text-blue-700 mb-3">
                     <div>
                       <span className="text-gray-600">종목당 비중:</span> <span className="font-semibold">{strategy.per_stock_ratio}%</span>

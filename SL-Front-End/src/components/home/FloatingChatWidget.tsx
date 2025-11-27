@@ -42,16 +42,17 @@ export function FloatingChatWidget() {
     setSellConditionsUI,
   } = useBacktestConfigStore();
 
-  // 랜딩 페이지에서는 챗봇을 숨김
-  if (pathname === "/landing") {
-    return null;
-  }
-
+  // 메시지 추가 시 자동 스크롤 (모든 Hook은 조건부 return 전에 호출)
   useEffect(() => {
     if (isOpen && endRef.current) {
       endRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
+
+  // 랜딩 페이지에서는 챗봇을 숨김 (모든 Hook 호출 이후에 조건부 return)
+  if (pathname === "/landing") {
+    return null;
+  }
 
   const handleToggle = () => {
     setIsOpen((prev) => !prev);

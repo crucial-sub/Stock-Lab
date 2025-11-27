@@ -96,6 +96,11 @@ export function SideNav({ serverHasToken }: SideNavProps) {
   const pathname = usePathname();
   const router = useRouter();
 
+  // 랜딩 페이지에서는 사이드바를 숨김
+  if (pathname === "/landing") {
+    return null;
+  }
+
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {

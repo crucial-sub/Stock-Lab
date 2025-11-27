@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, type FormEvent, type KeyboardEvent } from "react";
+import { usePathname } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -27,6 +28,7 @@ const WELCOME_MESSAGE: WidgetMessage = {
 };
 
 export function FloatingChatWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<WidgetMessage[]>([WELCOME_MESSAGE]);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -39,6 +41,11 @@ export function FloatingChatWidget() {
     setBuyConditionsUI,
     setSellConditionsUI,
   } = useBacktestConfigStore();
+
+  // 랜딩 페이지에서는 챗봇을 숨김
+  if (pathname === "/landing") {
+    return null;
+  }
 
   useEffect(() => {
     if (isOpen && endRef.current) {

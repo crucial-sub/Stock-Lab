@@ -4106,47 +4106,69 @@ class BacktestEngine:
                 sell_reason_key = "condition"
 
             if should_sell:
-                # D일 매도 조건 만족 → D+1일 시가에 매도
-                if price_lookup:
-                    # 익일 찾기
-                    next_day = trading_day + pd.Timedelta(days=1)
-                    max_lookforward = 5  # 최대 5일까지 거래일 찾기
-                    next_day_price = None
-                    next_sell_date = None
+                # 매도 가격 및 날짜 결정
+                # 손절/익절인 경우: 정확한 가격에서 당일 매도
+                # 기타 조건인 경우: 익일 시가에 매도
 
-                    for i in range(max_lookforward):
-                        check_date = trading_day + pd.Timedelta(days=i+1)
-                        price_info_next = price_lookup.get((stock_code, check_date))
-                        if price_info_next:
-                            next_day_price = Decimal(str(price_info_next.get('open_price', price_info_next['close_price'])))
-                            next_sell_date = check_date.date()
-                            break
+                if sell_reason_key in ["stop", "target"]:
+                    # 손절/익절: 정확한 가격에서 당일 매도
+                    entry_price_f = float(holding.entry_price)
 
-                    if not next_day_price:
-                        # 익일 데이터 없으면 당일 종가로 매도
-                        next_day_price = close_price
-                        next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+                    if sell_reason_key == "stop" and stop_loss is not None:
+                        # 손절: 정확히 -10%인 가격에서 매도 (예: entry * 0.90)
+                        exact_price_f = entry_price_f * (1.0 - float(stop_loss) / 100.0)
+                        next_day_price = Decimal(str(exact_price_f))
+                        logger.debug(f"손절 매도: {stock_code} - 진입가 {entry_price_f:,.0f}원 → 손절가 {exact_price_f:,.0f}원 (-{stop_loss}%)")
+                    else:  # target
+                        # 익절: 정확히 +20%인 가격에서 매도 (예: entry * 1.20)
+                        exact_price_f = entry_price_f * (1.0 + float(target_gain) / 100.0)
+                        next_day_price = Decimal(str(exact_price_f))
+                        logger.debug(f"익절 매도: {stock_code} - 진입가 {entry_price_f:,.0f}원 → 익절가 {exact_price_f:,.0f}원 (+{target_gain}%)")
+
+                    # 당일 매도
+                    next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+
                 else:
-                    # Fallback: pandas로 익일 조회
-                    next_day_data = price_data[
-                        (price_data['stock_code'] == stock_code) &
-                        (price_data['date'] > trading_day)
-                    ].sort_values('date')
+                    # 기타 조건 (보유일수, 조건부 매도 등): D일 조건 만족 → D+1일 시가에 매도
+                    if price_lookup:
+                        # 익일 찾기
+                        next_day = trading_day + pd.Timedelta(days=1)
+                        max_lookforward = 5  # 최대 5일까지 거래일 찾기
+                        next_day_price = None
+                        next_sell_date = None
 
-                    if not next_day_data.empty:
-                        next_row = next_day_data.iloc[0]
-                        next_day_price = Decimal(str(next_row.get('open_price', next_row['close_price'])))
-                        next_sell_date = next_row['date'].date()
+                        for i in range(max_lookforward):
+                            check_date = trading_day + pd.Timedelta(days=i+1)
+                            price_info_next = price_lookup.get((stock_code, check_date))
+                            if price_info_next:
+                                next_day_price = Decimal(str(price_info_next.get('open_price', price_info_next['close_price'])))
+                                next_sell_date = check_date.date()
+                                break
+
+                        if not next_day_price:
+                            # 익일 데이터 없으면 당일 종가로 매도
+                            next_day_price = close_price
+                            next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
                     else:
-                        # 익일 데이터 없으면 당일 종가로 매도
-                        next_day_price = close_price
-                        next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
+                        # Fallback: pandas로 익일 조회
+                        next_day_data = price_data[
+                            (price_data['stock_code'] == stock_code) &
+                            (price_data['date'] > trading_day)
+                        ].sort_values('date')
+
+                        if not next_day_data.empty:
+                            next_row = next_day_data.iloc[0]
+                            next_day_price = Decimal(str(next_row.get('open_price', next_row['close_price'])))
+                            next_sell_date = next_row['date'].date()
+                        else:
+                            # 익일 데이터 없으면 당일 종가로 매도
+                            next_day_price = close_price
+                            next_sell_date = trading_day.date() if hasattr(trading_day, 'date') else trading_day
 
                 # 매도 실행
                 quantity = holding.quantity
 
-                # 🔧 FIX: 모든 매도를 익일 시가로 통일 (현실적인 백테스트)
-                # D일 조건 충족 → D+1일 시가에 매도
+                # 슬리피지 적용
                 execution_price = next_day_price * (1 - self.slippage)
 
                 amount = execution_price * quantity

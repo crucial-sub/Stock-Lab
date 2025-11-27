@@ -149,6 +149,9 @@ class BacktestRequest(BaseModel):
     is_anonymous: Optional[bool] = False
     hide_strategy_details: Optional[bool] = False
 
+    # 포트폴리오 저장 설정 (전략 포트폴리오 페이지에서 실행 시 True)
+    is_portfolio: Optional[bool] = False
+
 
 class BacktestResponse(BaseModel):
     """백테스트 응답"""
@@ -590,7 +593,7 @@ async def run_backtest(
             benchmark="KOSPI",
             status="PENDING",
             progress=0,
-            is_portfolio=True,  # 포트폴리오 목록에 표시되도록 설정
+            is_portfolio=request.is_portfolio or False,  # 전략 포트폴리오 페이지에서 실행 시 True
             created_at=datetime.now()
         )
         db.add(session)

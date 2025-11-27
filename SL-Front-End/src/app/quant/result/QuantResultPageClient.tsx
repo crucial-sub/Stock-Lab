@@ -12,6 +12,7 @@
  * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
@@ -57,6 +58,18 @@ export function QuantResultPageClient({
   const [isEditingName, setIsEditingName] = useState(false);
   const [editInputValue, setEditInputValue] = useState("");
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 공유 해제 확인 모달 상태
+  const [showUnshareConfirm, setShowUnshareConfirm] = useState(false);
+
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -182,6 +195,15 @@ export function QuantResultPageClient({
     }
   }, [hasEditedName, resolvedStrategyName]);
 
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
+
   const updateNameMutation = useMutation({
     mutationFn: (name: string) => {
       if (!strategyId) {
@@ -214,10 +236,12 @@ export function QuantResultPageClient({
       );
     },
     onError: (error: any) => {
-      alert(
+      showAlert(
+        "이름 수정 실패",
         error?.response?.data?.detail ||
         error?.message ||
         "백테스트 이름을 수정하지 못했습니다.",
+        "error"
       );
     },
   });
@@ -242,7 +266,7 @@ export function QuantResultPageClient({
     if (!nextName) return;
 
     if (!strategyId) {
-      alert("전략 ID를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.");
+      showAlert("알림", "전략 ID를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.", "warning");
       return;
     }
 
@@ -254,17 +278,25 @@ export function QuantResultPageClient({
     try {
       const response = await communityApi.cloneStrategy(backtestId);
 
-      // 복제 성공 메시지
-      alert(`전략이 성공적으로 복제되었습니다!\n\n복제된 전략: ${response.message}\n포트폴리오 목록으로 이동합니다.`);
+      // 복제 성공 - 모달 표시 후 페이지 이동
+      setAlertModal({
+        isOpen: true,
+        title: "복제 완료",
+        message: `전략이 성공적으로 복제되었습니다!\n\n복제된 전략: ${response.message}\n포트폴리오 목록으로 이동합니다.`,
+        iconType: "success",
+      });
 
-      // 포트폴리오 목록 페이지로 이동 (서버 데이터 새로고침 필요)
-      // window.location.href 사용하여 서버 데이터를 강제로 새로고침
-      window.location.href = "/quant";
+      // 모달이 닫힌 후 페이지 이동을 위해 setTimeout 사용
+      setTimeout(() => {
+        window.location.href = "/quant";
+      }, 1500);
     } catch (error: any) {
-      alert(
+      showAlert(
+        "복제 실패",
         error?.response?.data?.detail ||
         error?.message ||
-        "전략 복제에 실패했습니다."
+        "전략 복제에 실패했습니다.",
+        "error"
       );
     }
   };
@@ -272,14 +304,18 @@ export function QuantResultPageClient({
   // 전략 공유 토글 핸들러
   const handleToggleShare = () => {
     if (isPublic) {
-      // 공유 해제
-      if (confirm("전략 공유를 해제하시겠습니까?")) {
-        handleShareConfirm({ description: "", isAnonymous: false });
-      }
+      // 공유 해제 확인 모달 표시
+      setShowUnshareConfirm(true);
     } else {
       // 공유 설정 모달 열기
       setIsShareModalOpen(true);
     }
+  };
+
+  // 공유 해제 확인 핸들러
+  const handleConfirmUnshare = () => {
+    setShowUnshareConfirm(false);
+    handleShareConfirm({ description: "", isAnonymous: false });
   };
 
   // 공유 설정 확인 핸들러
@@ -288,7 +324,7 @@ export function QuantResultPageClient({
     isAnonymous: boolean;
   }) => {
     if (!strategyId) {
-      alert("전략 ID를 찾을 수 없습니다.");
+      showAlert("알림", "전략 ID를 찾을 수 없습니다.", "warning");
       return;
     }
 
@@ -303,18 +339,22 @@ export function QuantResultPageClient({
           description: params.description,
         });
       }
-      alert(
+      showAlert(
+        isPublic ? "공유 해제 완료" : "공유 완료",
         isPublic
           ? "전략 공유가 해제되었습니다."
-          : "전략이 성공적으로 공유되었습니다."
+          : "전략이 성공적으로 공유되었습니다.",
+        "success"
       );
       setIsShareModalOpen(false);
       queryClient.invalidateQueries({ queryKey: ["myStrategies"] });
     } catch (error: any) {
-      alert(
+      showAlert(
+        "공유 설정 실패",
         error?.response?.data?.detail ||
         error?.message ||
-        "전략 공유 설정에 실패했습니다."
+        "전략 공유 설정에 실패했습니다.",
+        "error"
       );
     }
   };
@@ -595,6 +635,30 @@ export function QuantResultPageClient({
         initialIsAnonymous={false}
         onClose={() => setIsShareModalOpen(false)}
         onConfirm={handleShareConfirm}
+      />
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
+
+      {/* 공유 해제 확인 모달 */}
+      <ConfirmModal
+        isOpen={showUnshareConfirm}
+        onClose={() => setShowUnshareConfirm(false)}
+        onConfirm={handleConfirmUnshare}
+        title="공유 해제"
+        message="전략 공유를 해제하시겠습니까?"
+        confirmText="해제"
+        cancelText="취소"
+        iconType="question"
       />
     </div>
   );

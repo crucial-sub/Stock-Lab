@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState, useEffect } from "react";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { communityApi, PostSummary } from "@/lib/api/community";
 import { PostCard } from "./PostCard";
 
@@ -17,6 +18,26 @@ export function MyPostsSection({ userId }: MyPostsSectionProps) {
   const [sortBy, setSortBy] = useState<"latest" | "views" | "likes">("latest");
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 삭제 확인 모달 상태
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState(false);
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   // 게시물 불러오기
   useEffect(() => {
@@ -88,15 +109,19 @@ export function MyPostsSection({ userId }: MyPostsSectionProps) {
     setSelectedPostIds(newSelected);
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (selectedPostIds.size === 0) {
-      alert("삭제할 게시물을 선택해주세요");
+      showAlert("알림", "삭제할 게시물을 선택해주세요.", "warning");
       return;
     }
 
-    if (!confirm(`선택한 ${selectedPostIds.size}개의 게시물을 삭제하시겠습니까?`)) {
-      return;
-    }
+    // 삭제 확인 모달 표시
+    setDeleteConfirmModal(true);
+  };
+
+  // 삭제 확인 후 실제 삭제 수행
+  const handleConfirmDelete = async () => {
+    setDeleteConfirmModal(false);
 
     try {
       // 선택된 게시물 삭제
@@ -109,10 +134,10 @@ export function MyPostsSection({ userId }: MyPostsSectionProps) {
       // 삭제된 게시물 제거
       setPosts((prev) => prev.filter((post) => !selectedPostIds.has(post.postId)));
       setSelectedPostIds(new Set());
-      alert("게시물이 삭제되었습니다");
+      showAlert("삭제 완료", "게시물이 삭제되었습니다.", "success");
     } catch (error) {
       console.error("게시물 삭제 실패:", error);
-      alert("게시물 삭제에 실패했습니다");
+      showAlert("삭제 실패", "게시물 삭제에 실패했습니다.", "error");
     }
   };
 
@@ -120,10 +145,10 @@ export function MyPostsSection({ userId }: MyPostsSectionProps) {
     try {
       await communityApi.deletePost(postId);
       setPosts((prev) => prev.filter((post) => post.postId !== postId));
-      alert("게시물이 삭제되었습니다");
+      showAlert("삭제 완료", "게시물이 삭제되었습니다.", "success");
     } catch (error) {
       console.error("게시물 삭제 실패:", error);
-      alert("게시물 삭제에 실패했습니다");
+      showAlert("삭제 실패", "게시물 삭제에 실패했습니다.", "error");
     }
   };
 
@@ -242,6 +267,30 @@ export function MyPostsSection({ userId }: MyPostsSectionProps) {
           </div>
         )}
       </div>
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
+
+      {/* 삭제 확인 모달 */}
+      <ConfirmModal
+        isOpen={deleteConfirmModal}
+        onClose={() => setDeleteConfirmModal(false)}
+        onConfirm={handleConfirmDelete}
+        title="게시물 삭제"
+        message={`선택한 ${selectedPostIds.size}개의 게시물을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`}
+        confirmText="삭제"
+        cancelText="취소"
+        iconType="warning"
+      />
     </section>
   );
 }

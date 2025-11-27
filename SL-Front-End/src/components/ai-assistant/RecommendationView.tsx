@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { RecommendationUILanguage, parseDSL } from "@/lib/api/chatbot";
 
 interface RecommendationViewProps {
@@ -17,6 +18,23 @@ export function RecommendationView({ uiLanguage }: RecommendationViewProps) {
   const { recommendations, user_profile_summary } = uiLanguage;
   const router = useRouter();
   const [loadingStrategy, setLoadingStrategy] = useState<string | null>(null);
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   /**
    * 백테스트 버튼 클릭 핸들러
@@ -42,7 +60,7 @@ export function RecommendationView({ uiLanguage }: RecommendationViewProps) {
       router.push(`/quant/new?${queryParams.toString()}`);
     } catch (error) {
       console.error("DSL 변환 실패:", error);
-      alert("전략 조건을 변환하는 중 오류가 발생했습니다. 다시 시도해주세요.");
+      showAlert("조건 변환 실패", "전략 조건을 변환하는 중 오류가 발생했습니다. 다시 시도해주세요.", "error");
     } finally {
       setLoadingStrategy(null);
     }
@@ -234,6 +252,18 @@ export function RecommendationView({ uiLanguage }: RecommendationViewProps) {
           </div>
         ))}
       </div>
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
     </div>
   );
 }

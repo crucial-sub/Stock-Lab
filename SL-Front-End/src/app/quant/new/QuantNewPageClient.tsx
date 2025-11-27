@@ -12,6 +12,7 @@
 
 import { lazy, Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import QuantStrategySummaryPanel from "@/components/quant/layout/QuantStrategySummaryPanel";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
@@ -46,13 +47,30 @@ const TargetSelectionTab = lazy(
  */
 export function QuantNewPageClient() {
   // Zustand store에서 탭 상태 가져오기
-  const { activeTab } = useQuantTabStore();
+  const { activeTab, setActiveTab } = useQuantTabStore();
 
   // 요약 패널 열림/닫힘 상태
   const [isSummaryPanelOpen, setIsSummaryPanelOpen] = useState(true);
   const conditionsAppliedRef = useRef(false);
   const cloneAppliedRef = useRef(false);
   const [isLoadingClone, setIsLoadingClone] = useState(false);
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   // React Query로 데이터 fetch (클라이언트 사이드)
   // 데이터는 하위 컴포넌트에서 사용하므로 여기서는 캐싱 목적으로만 fetch
@@ -89,22 +107,16 @@ export function QuantNewPageClient() {
   } = useBacktestConfigStore();
   const reset = useBacktestConfigStore((state) => state.reset);
 
-  // 페이지 진입 시 query parameter가 없으면 store 초기화
+  // 새 전략 페이지 진입 시 상태 초기화 (캐시 복귀 포함)
   useEffect(() => {
-    const conditionsParam = searchParams.get("conditions");
-    const cloneParam = searchParams.get("clone");
-
-    // query parameter가 없으면 store 초기화
-    if (!conditionsParam && !cloneParam) {
-      reset();
-      conditionsAppliedRef.current = false;
-      cloneAppliedRef.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 마운트 시 한 번만 실행
+    reset();
+    setActiveTab("buy");
+    conditionsAppliedRef.current = false;
+    cloneAppliedRef.current = false;
+  }, [reset, setActiveTab]); // 마운트 시 한 번만 실행
 
   // 페이지 언마운트 시 cleanup (StrictMode 호환)
-  // 주의: 페이지를 완전히 떠날 때만 reset
+  // 상태 초기화는 진입 시 처리하므로 여기서는 ref만 리셋
   useEffect(() => {
     // 언마운트 시 ref 초기화만 수행 (StrictMode에서 중복 호출 방지)
     return () => {
@@ -279,7 +291,7 @@ export function QuantNewPageClient() {
         window.history.replaceState({}, "", url.toString());
       } catch (error) {
         console.error("복제 데이터 로드 실패:", error);
-        alert("전략 복제에 실패했습니다. 다시 시도해주세요.");
+        showAlert("복제 실패", "전략 복제에 실패했습니다. 다시 시도해주세요.", "error");
       } finally {
         setIsLoadingClone(false);
       }
@@ -326,6 +338,18 @@ export function QuantNewPageClient() {
         activeTab={activeTab}
         isOpen={isSummaryPanelOpen}
         setIsOpen={setIsSummaryPanelOpen}
+      />
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
       />
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { PostSummary } from "@/lib/api/community";
 
 interface PostCardProps {
@@ -15,6 +16,17 @@ interface PostCardProps {
 export function PostCard({ post, isSelected, onToggleSelect, onDelete }: PostCardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 삭제 확인 모달 상태
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState(false);
 
   // 메뉴 외부 클릭 감지
   useEffect(() => {
@@ -48,15 +60,23 @@ export function PostCard({ post, isSelected, onToggleSelect, onDelete }: PostCar
   };
 
   const handleEdit = () => {
-    alert("게시물 수정 기능은 추후 구현 예정입니다.");
+    setAlertModal({
+      isOpen: true,
+      title: "알림",
+      message: "게시물 수정 기능은 추후 구현 예정입니다.",
+      iconType: "info",
+    });
     setIsMenuOpen(false);
   };
 
   const handleDeleteClick = () => {
-    if (confirm("정말로 이 게시물을 삭제하시겠습니까?")) {
-      onDelete();
-    }
+    setDeleteConfirmModal(true);
     setIsMenuOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    setDeleteConfirmModal(false);
+    onDelete();
   };
 
   return (
@@ -150,6 +170,30 @@ export function PostCard({ post, isSelected, onToggleSelect, onDelete }: PostCar
           </div>
         </div>
       </div>
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
+
+      {/* 삭제 확인 모달 */}
+      <ConfirmModal
+        isOpen={deleteConfirmModal}
+        onClose={() => setDeleteConfirmModal(false)}
+        onConfirm={handleConfirmDelete}
+        title="게시물 삭제"
+        message="정말로 이 게시물을 삭제하시겠습니까?"
+        confirmText="삭제"
+        cancelText="취소"
+        iconType="warning"
+      />
     </div>
   );
 }

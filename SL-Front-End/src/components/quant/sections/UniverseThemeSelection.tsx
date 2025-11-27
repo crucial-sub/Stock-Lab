@@ -26,7 +26,7 @@ export function UniverseThemeSelection({
       {/* 업종(테마) 선택 섹션 */}
       <div>
         <div className="flex items-center gap-3 mb-3">
-          <span className="font-semibold">업종 (86)</span>
+          <span className="font-semibold whitespace-nowrap">업종 (86)</span>
           <Checkbox
             checked={isAllIndustriesSelected}
             onChange={onToggleAllIndustries}
@@ -34,7 +34,8 @@ export function UniverseThemeSelection({
             variant="danger"
           />
         </div>
-        <div className="grid grid-cols-6 gap-3">
+        {/* 반응형 그리드 - 화면 크기에 따라 컬럼 수 조정 */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2 sm:gap-3">
           {industries.map((industry) => (
             <Checkbox
               key={industry}

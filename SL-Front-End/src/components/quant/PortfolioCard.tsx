@@ -78,7 +78,7 @@ const PortfolioCardComponent = ({
   // 수익률이 양수인지 판단
   const isPositive = profitRate >= 0;
 
-  // 가상매매 카드인지 판단
+  // 키움증권 연동 카드인지 판단
   const isAutoTrading = id.startsWith("auto-");
 
   const handleRename = (event: MouseEvent) => {
@@ -179,11 +179,11 @@ const PortfolioCardComponent = ({
         {isAutoTrading ? (
           isActive ? (
             <span className="inline-block bg-green-500 font-semibold px-4 py-1 rounded-full text-white">
-              가상매매 중
+              키움증권 연동 가상매매 중
             </span>
           ) : (
             <span className="inline-block bg-gray-400 font-semibold px-4 py-1 rounded-full text-white">
-              가상매매 종료
+              키움증권 연동 가상매매 종료
             </span>
           )
         ) : isActive ? (
@@ -198,9 +198,9 @@ const PortfolioCardComponent = ({
       </div>
 
       {/* 푸터: 날짜 정보 */}
-      <div className="flex items-center justify-between text-sm text-muted">
-        <span>최종 수정일 : {lastModified}</span>
-        <span>생성일자 : {createdAt}</span>
+      <div className="flex items-center justify-between text-xs sm:text-sm text-muted gap-2 flex-wrap">
+        <span className="whitespace-nowrap truncate">수정: {lastModified}</span>
+        <span className="whitespace-nowrap truncate">생성: {createdAt}</span>
       </div>
     </div>
   );

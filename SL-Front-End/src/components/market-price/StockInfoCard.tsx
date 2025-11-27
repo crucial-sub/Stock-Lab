@@ -145,7 +145,7 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
       : "0.00";
 
   return (
-    <article className="flex flex-col min-w-[45rem] gap-5 bg-white p-8 text-strong">
+    <article className="flex flex-col w-full gap-4 sm:gap-5 bg-white p-4 sm:p-6 md:p-8 text-strong">
       <header className="text-start">
         <p className="text-[0.75rem] font-normal text-muted">
           {basicInfo.marketType || "코스피"} | {code}
@@ -179,17 +179,21 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
           기준
         </p>
       </header>
-      <div className="flex flex-wrap justify-center gap-2">
+      {/* 기간 선택 탭 - 반응형 */}
+      <div className="flex flex-wrap justify-center gap-1 sm:gap-2">
         {periodTabs.map((tab) => {
           const isActive = tab === activePeriod;
           return (
             <button
               key={tab}
               type="button"
-              className={`rounded-full px-[0.75rem] pt-[0.25rem] pb-[0.15rem] text-[0.875rem] font-normal transition ${isActive
-                ? "bg-brand-purple text-white font-semibold"
-                : "text-muted font-normal"
-                }`}
+              className={[
+                "rounded-full px-3 py-2 text-sm sm:text-base font-normal transition",
+                "min-h-[2.75rem] sm:min-h-0",
+                isActive
+                  ? "bg-brand-purple text-white font-semibold"
+                  : "text-muted font-normal",
+              ].join(" ")}
               onClick={() => setActivePeriod(tab)}
             >
               {tab}
@@ -216,20 +220,19 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         </span>{" "}
         {changeStats[0].value.includes("+") ? "증가했어요 😊" : "감소했어요 🥲"}
       </p>
-      <div className="grid md:grid-cols-3 pt-[12px]">
-        {changeStats.map((stat, index) => {
+      {/* 가격 변동 통계 그리드 - 반응형 */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-3">
+        {changeStats.map((stat) => {
           const isPositive = stat.value.includes("+");
-          const valueColor = isPositive
-            ? "text-price-up "
-            : "text-price-down";
+          const valueColor = isPositive ? "text-price-up" : "text-price-down";
 
           return (
             <div
               key={stat.label}
-              className={`flex flex-col gap-1 text-center`}
+              className="flex flex-col gap-1 text-center p-2 sm:p-0 rounded-lg sm:rounded-none bg-gray-50 sm:bg-transparent"
             >
-              <span className="text-[0.875rem] font-normal text-muted">{stat.label}</span>
-              <span className={`text-[1.125rem] font-semibold ${valueColor}`}>
+              <span className="text-sm font-normal text-muted">{stat.label}</span>
+              <span className={`text-base sm:text-lg font-semibold ${valueColor}`}>
                 {stat.value}
               </span>
             </div>
@@ -261,17 +264,18 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
         <p className="pt-[0.25rem] text-[0.75rem] font-normal text-muted">
           {basicInfo.industry || "산업 정보 없음"}
         </p>
-        <div className="pt-[1rem] grid md:grid-cols-3">
-          {overviewStats.map((stat, index) => {
+        {/* 개요 통계 그리드 - 반응형 */}
+        <div className="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          {overviewStats.map((stat) => {
             return (
               <div
                 key={stat.label}
-                className={`flex flex-col gap-1 text-center`}
+                className="flex flex-col gap-1 text-center p-2 sm:p-0 rounded-lg sm:rounded-none bg-gray-50 sm:bg-transparent"
               >
-                <p className="text-[0.75rem] font-normal text-muted">
+                <p className="text-xs font-normal text-muted">
                   {stat.label}
                 </p>
-                <p className="text-[1.125rem] font-semibold text-strong">
+                <p className="text-base sm:text-lg font-semibold text-strong">
                   {stat.value}
                 </p>
               </div>
@@ -308,16 +312,20 @@ export function StockInfoCard({ name, code }: StockInfoCardProps) {
   );
 }
 
+/**
+ * 반응형 구분선 컴포넌트
+ * 모바일: -1rem margin, 데스크톱: -2rem margin으로 전체 너비 확장
+ */
 function Divider() {
   return (
     <div
-      className="h-[1rem] my-2 w-full"
-      style={{
-        backgroundColor: "#F8F8F8",
-        marginLeft: "-2rem",
-        marginRight: "-2rem",
-        width: "calc(100% + 4rem)",
-      }}
+      className={[
+        "h-4 my-2 bg-[#F8F8F8]",
+        // 모바일: -1rem (p-4에 맞춤), 데스크톱: -2rem (p-8에 맞춤)
+        "-mx-4 sm:-mx-6 md:-mx-8",
+        // calc로 전체 너비 확장
+        "w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] md:w-[calc(100%+4rem)]",
+      ].join(" ")}
     />
   );
 }
@@ -411,11 +419,12 @@ function _DiagnosisCircle({ score, delta }: DiagnosisCircleProps) {
 }
 
 /**
- * 스켈레톤 UI - 데이터 로딩 중에도 실제 콘텐츠와 비슷한 크기의 뼈대를 표시
+ * 스켈레톤 UI - 반응형 로딩 표시
+ * 실제 콘텐츠와 동일한 반응형 레이아웃 적용
  */
 function StockInfoSkeleton() {
   return (
-    <article className="flex flex-col gap-[1.25rem] bg-white p-[2rem] text-text-strong w-[800px]">
+    <article className="flex flex-col gap-4 sm:gap-5 bg-white p-4 sm:p-6 md:p-8 text-text-strong w-full">
       {/* 헤더 스켈레톤 */}
       <header className="text-start">
         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-2" />
@@ -425,12 +434,12 @@ function StockInfoSkeleton() {
         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
       </header>
 
-      {/* 기간 탭 스켈레톤 */}
-      <div className="flex flex-wrap justify-center gap-3">
-        {Array.from({ length: 7 }).map((_, i) => (
+      {/* 기간 탭 스켈레톤 - 반응형 */}
+      <div className="flex flex-wrap justify-center gap-2">
+        {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="h-8 w-16 bg-gray-200 rounded-[8px] animate-pulse"
+            className="h-11 sm:h-8 w-14 sm:w-16 bg-gray-200 rounded-full animate-pulse"
           />
         ))}
       </div>
@@ -441,12 +450,12 @@ function StockInfoSkeleton() {
       <Divider />
 
       {/* 주가 변동 텍스트 스켈레톤 */}
-      <div className="h-6 w-full bg-gray-200 rounded animate-pulse" />
+      <div className="h-6 w-full max-w-xs bg-gray-200 rounded animate-pulse" />
 
-      {/* 가격 변동 통계 스켈레톤 */}
-      <div className="grid md:grid-cols-3 pt-[0.5rem] gap-4">
+      {/* 가격 변동 통계 스켈레톤 - 반응형 */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-2">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="flex flex-col gap-1">
+          <div key={i} className="flex flex-col gap-1 items-center p-2 sm:p-0 rounded-lg sm:rounded-none bg-gray-50 sm:bg-transparent">
             <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
             <div className="h-6 w-32 bg-gray-300 rounded animate-pulse" />
           </div>
@@ -455,23 +464,13 @@ function StockInfoSkeleton() {
 
       <Divider />
 
-      {/* 종목 진단 점수 스켈레톤 */}
-      <section className="rounded-[8px] bg-white">
-        <div className="h-7 w-40 bg-gray-300 rounded animate-pulse mb-4" />
-        <div className="py-[1rem] flex items-center justify-center">
-          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
-        </div>
-      </section>
-
-      <Divider />
-
       {/* 개요 스켈레톤 */}
-      <section className="rounded-[8px]">
+      <section className="rounded-lg">
         <div className="h-7 w-24 bg-gray-300 rounded animate-pulse mb-2" />
-        <div className="h-4 w-full bg-gray-200 rounded animate-pulse mb-4" />
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="h-4 w-full max-w-xs bg-gray-200 rounded animate-pulse mb-4" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex flex-col gap-1">
+            <div key={i} className="flex flex-col gap-1 items-center p-2 sm:p-0 rounded-lg sm:rounded-none bg-gray-50 sm:bg-transparent">
               <div className="h-4 w-16 bg-gray-200 rounded animate-pulse" />
               <div className="h-6 w-24 bg-gray-300 rounded animate-pulse" />
             </div>
@@ -482,9 +481,9 @@ function StockInfoSkeleton() {
       <Divider />
 
       {/* 수급점수 스켈레톤 */}
-      <section className="pt-[1rem]">
+      <section className="pt-4">
         <div className="h-7 w-32 bg-gray-300 rounded animate-pulse mb-2" />
-        <div className="h-4 w-full bg-gray-200 rounded animate-pulse" />
+        <div className="h-4 w-full max-w-xs bg-gray-200 rounded animate-pulse" />
       </section>
     </article>
   );

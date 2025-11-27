@@ -96,6 +96,7 @@ export function TradingActivityChart({
     );
 
     // Y축 (수익률) - 왼쪽 (고정 범위로 기준선 안정화)
+    // 매수/매도도 이 축을 공유 (0% 기준선에서 위/아래로 표시)
     const yAxisReturn = chart.yAxes.push(
       am5xy.ValueAxis.new(root, {
         renderer: am5xy.AxisRendererY.new(root, {
@@ -108,18 +109,9 @@ export function TradingActivityChart({
       }),
     );
 
-    // Y축 (거래 횟수) - 오른쪽 (레이블 숨김, 수익률 축과 0점 동기화)
-    const yAxis = chart.yAxes.push(
-      am5xy.ValueAxis.new(root, {
-        renderer: am5xy.AxisRendererY.new(root, {
-          opposite: true,
-          visible: false, // 오른쪽 y축 레이블 숨김
-        }),
-        // 수익률 축과 0점을 공유하도록 동기화
-        syncWithAxis: yAxisReturn,
-        strictMinMax: true, // 기준선 고정
-      }),
-    );
+    // 매수/매도 시리즈도 수익률 축(yAxisReturn)을 사용
+    // 오른쪽 y축 완전 제거
+    const yAxis = yAxisReturn;
 
     // 매수 시리즈 (빨간색 바, 위로)
     const buySeries = chart.series.push(
@@ -133,7 +125,7 @@ export function TradingActivityChart({
         stroke: am5.color(0xff6b6b),
         clustered: false,
         tooltip: am5.Tooltip.new(root, {
-          labelText: "매수: {valueY}회",
+          labelText: "매수: {buyCount}회",
         }),
       }),
     );
@@ -158,7 +150,7 @@ export function TradingActivityChart({
         stroke: am5.color(0x5470c6),
         clustered: false,
         tooltip: am5.Tooltip.new(root, {
-          labelText: "매도: {valueY}회",
+          labelText: "매도: {sellCount}회",
         }),
       }),
     );
@@ -243,11 +235,17 @@ export function TradingActivityChart({
     }
 
     // 새 데이터만 차트에 추가 (전체 재생성 없이 증분 업데이트)
+    // 매수/매도 횟수를 수익률 축 스케일에 맞게 변환 (1회 = 10% 높이)
+    const TRADE_SCALE = 10;
     newPoints.forEach((point) => {
+      const buyCount = point.buyCount || 0;
+      const sellCount = point.sellCount || 0;
       const dataPoint = {
         date: new Date(point.date).getTime(),
-        buy: point.buyCount || 0,
-        sell: -(point.sellCount || 0), // 매도는 음수 (아래로 표시)
+        buy: buyCount * TRADE_SCALE, // 매수: 0% 위로 (양수)
+        sell: -sellCount * TRADE_SCALE, // 매도: 0% 아래로 (음수)
+        buyCount: buyCount, // 툴팁용 원본 값
+        sellCount: sellCount, // 툴팁용 원본 값
         return: point.cumulativeReturn || 0,
       };
 

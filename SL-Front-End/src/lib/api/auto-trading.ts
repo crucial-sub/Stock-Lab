@@ -229,7 +229,7 @@ export interface DeactivationConditions {
 
 export const autoTradingApi = {
   /**
-   * 가상매매 활성화
+   * 키움증권 연동 활성화
    */
   activateAutoTrading: async (
     request: AutoTradingActivateRequest,
@@ -254,7 +254,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 가상매매 비활성화
+   * 키움증권 연동 비활성화
    */
   deactivateAutoTrading: async (
     strategyId: string,
@@ -268,7 +268,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 가상매매 전략 이름 수정
+   * 키움증권 연동 전략 이름 수정
    */
   updateStrategyName: async (
     strategyId: string,
@@ -283,7 +283,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 가상매매 전략 상태 조회
+   * 키움증권 연동 전략 상태 조회
    */
   getAutoTradingStatus: async (
     strategyId: string,
@@ -295,7 +295,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 내 가상매매 전략 목록 조회
+   * 내 키움증권 연동 전략 목록 조회
    */
   getMyAutoTradingStrategies: async (): Promise<
     AutoTradingStrategyResponse[]
@@ -307,7 +307,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 내 가상매매 전략 목록 조회 (서버 사이드)
+   * 내 키움증권 연동 전략 목록 조회 (서버 사이드)
    */
   getMyAutoTradingStrategiesServer: async (
     token: string,
@@ -327,7 +327,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 가상매매 수동 실행 (테스트용)
+   * 키움증권 연동 수동 실행 (테스트용)
    */
   executeAutoTrading: async (
     strategyId: string,

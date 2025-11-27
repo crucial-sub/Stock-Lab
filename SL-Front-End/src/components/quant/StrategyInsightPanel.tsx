@@ -285,7 +285,7 @@ export function StrategyInsightPanel({
         </div>
       ) : !selectedPortfolio?.isActive ? (
         <div className="mt-6 rounded-2xl bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-          선택한 전략은 아직 가상 매매가 시작되지 않았습니다. 가상매매를
+          선택한 전략은 아직 가상매매가 시작되지 않았습니다. 키움증권 연동을
           활성화하면 실시간 리포트를 볼 수 있습니다.
         </div>
       ) : (

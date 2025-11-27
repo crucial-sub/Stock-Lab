@@ -1002,17 +1002,9 @@ class BacktestEngine:
                 IncomeStatement.account_nm.in_([
                     # 매출액 (연도별로 다른 이름)
                     '매출액', '매출', '영업수익', '수익(매출액)',
-                    # 이익 관련
                     '영업이익', '영업이익(손실)',
                     '당기순이익', '당기순이익(손실)',
-                    '매출총이익',
-                    # 비용 관련
-                    '매출원가',
-                    '판매비와관리비', '판매비및일반관리비',
-                    '이자비용', '금융비용',
-                    '법인세비용',
-                    # 기타
-                    '영업외수익', '영업외비용'
+                    '매출총이익', '매출원가'
                 ])
             )
         ).order_by(Company.stock_code, FinancialStatement.bsns_year, FinancialStatement.reprt_code)
@@ -1034,16 +1026,9 @@ class BacktestEngine:
                 FinancialStatement.bsns_year >= start_year,
                 FinancialStatement.bsns_year <= end_year,
                 BalanceSheet.account_nm.in_([
-                    # 기본 계정
                     '자산총계', '자본총계', '부채총계',
-                    '유동자산', '비유동자산', '유동부채', '비유동부채',
-                    # 유동성 관련
-                    '현금및현금성자산', '단기금융상품', '단기투자자산',
-                    '재고자산', '매출채권', '매입채무',
-                    # 부채 관련
-                    '단기차입금', '장기차입금',
-                    # 기타
-                    '기타유동자산', '기타비유동자산'
+                    '유동자산', '유동부채', '비유동부채',
+                    '현금및현금성자산', '단기차입금', '장기차입금'
                 ])
             )
         ).order_by(Company.stock_code, FinancialStatement.bsns_year, FinancialStatement.reprt_code)
@@ -1535,7 +1520,7 @@ class BacktestEngine:
 
             if needs_growth:
                 try:
-                    growth_map = self._calculate_growth_factors(financial_until_date, calc_date, None)
+                    growth_map = self._calculate_growth_factors(financial_until_date, calc_date)
                     filtered_growth_map = {stock: {k: v for k, v in factors.items() if k in required_factors} for stock, factors in growth_map.items()}
                     self._merge_factor_maps(stock_factor_map, filtered_growth_map)
                 except Exception as e:
@@ -2459,22 +2444,21 @@ class BacktestEngine:
             if filtered.is_empty():
                 return factors
 
-            # 컬럼 존재 여부 확인하여 조건부로 추가
-            agg_cols = [
-                pl.col('부채총계').first().alias('부채총계'),
-                pl.col('자본총계').first().alias('자본총계'),
-                pl.col('자산총계').first().alias('자산총계')
-            ]
-
-            for col in ['유동자산', '유동부채', '재고자산', '현금및현금성자산', '영업이익', '이자비용']:
-                if col in filtered.columns:
-                    agg_cols.append(pl.col(col).first().alias(col))
-
             latest_financial = (
                 filtered
                 .sort('available_date', descending=True)
                 .group_by('stock_code')
-                .agg(agg_cols)
+                .agg([
+                    pl.col('부채총계').first().alias('부채총계'),
+                    pl.col('자본총계').first().alias('자본총계'),
+                    pl.col('자산총계').first().alias('자산총계'),
+                    pl.col('유동자산').first().alias('유동자산'),
+                    pl.col('유동부채').first().alias('유동부채'),
+                    pl.col('재고자산').first().alias('재고자산'),
+                    pl.col('현금및현금성자산').first().alias('현금및현금성자산'),
+                    pl.col('영업이익').first().alias('영업이익'),
+                    pl.col('이자비용').first().alias('이자비용')
+                ])
             )
 
         result = latest_financial.select([
@@ -2649,7 +2633,7 @@ class BacktestEngine:
         return factors
 
     def _calculate_volatility_factors(self, price_pl: pl.DataFrame, calc_date) -> Dict[str, Dict[str, float]]:
-        """🚀 변동성 팩터 계산 (Polars 벡터화 최적화)"""
+        """변동성 팩터 계산"""
         factors: Dict[str, Dict[str, float]] = {}
         lookback = 60
         past_date = calc_date - pd.Timedelta(days=lookback * 2)
@@ -2662,35 +2646,24 @@ class BacktestEngine:
         if period_prices.is_empty():
             return factors
 
-        # 🚀 최적화: Polars 벡터화 - 종목별 그룹 처리
-        # 각 종목별로 수익률의 표준편차 계산 (annualized)
-        result = (
-            period_prices
-            .sort(['stock_code', 'date'])
-            .with_columns([
-                # 종목별 수익률 계산
-                (pl.col('close_price').pct_change().over('stock_code')).alias('returns')
-            ])
-            .filter(pl.col('returns').is_not_null())  # NaN 제거
-            .group_by('stock_code')
-            .agg([
-                pl.col('returns').count().alias('count'),
-                (pl.col('returns').std() * np.sqrt(252) * 100).alias('VOLATILITY')
-            ])
-            .filter(pl.col('count') >= 20)  # 최소 20개 데이터 필요
-        )
+        for stock in period_prices.select('stock_code').unique().to_pandas()['stock_code']:
+            stock_prices = period_prices.filter(pl.col('stock_code') == stock).sort('date')
+            if len(stock_prices) < 20:
+                continue
 
-        # Dictionary로 변환
-        for row in result.to_dicts():
-            stock = row['stock_code']
-            volatility = row.get('VOLATILITY')
-            if volatility is not None and not np.isnan(volatility):
-                factors[stock] = {'VOLATILITY': float(volatility)}
+            prices_pd = stock_prices.select('close_price').to_pandas()
+            returns = prices_pd['close_price'].pct_change().dropna()
+            if returns.empty:
+                continue
+
+            entry = factors.setdefault(stock, {})
+            volatility = returns.std() * np.sqrt(252) * 100
+            entry['VOLATILITY'] = float(volatility)
 
         return factors
 
     def _calculate_liquidity_factors(self, price_pl: pl.DataFrame, calc_date) -> Dict[str, Dict[str, float]]:
-        """🚀 유동성 팩터 계산 (Polars 벡터화 최적화)"""
+        """유동성 팩터 계산"""
         factors: Dict[str, Dict[str, float]] = {}
         lookback = 20
         past_date = calc_date - pd.Timedelta(days=lookback * 2)
@@ -2703,72 +2676,27 @@ class BacktestEngine:
         if period_prices.is_empty():
             return factors
 
-        # 🚀 최적화: Polars 벡터화 - 한 번에 모든 종목 처리
-        # 최근 20일 데이터만 필터링
-        recent_data = (
-            period_prices
-            .sort(['stock_code', 'date'], descending=[False, True])
-            .with_columns([
-                pl.col('date').rank('ordinal').over('stock_code').alias('rank')
-            ])
-            .filter(pl.col('rank') <= lookback)
-        )
+        for stock in period_prices.select('stock_code').unique().to_pandas()['stock_code']:
+            stock_data = period_prices.filter(pl.col('stock_code') == stock).sort('date', descending=True).head(lookback)
+            if stock_data.is_empty():
+                continue
 
-        # 평균 거래대금 계산
-        avg_trading_df = (
-            recent_data
-            .group_by('stock_code')
-            .agg([
-                pl.col('trading_value').mean().alias('AVG_TRADING_VALUE')
-            ])
-            .filter(pl.col('AVG_TRADING_VALUE').is_not_null())
-        )
+            entry = factors.setdefault(stock, {})
+            avg_value = stock_data.select('trading_value').mean().to_pandas().iloc[0, 0]
+            if avg_value:
+                entry['AVG_TRADING_VALUE'] = float(avg_value)
 
-        # 회전율 계산 (volume, listed_shares 존재 시)
-        has_listed = 'listed_shares' in recent_data.columns
-        if has_listed and 'volume' in recent_data.columns:
-            turnover_df = (
-                recent_data
-                .group_by('stock_code')
-                .agg([
-                    pl.col('volume').mean().alias('avg_volume'),
-                    pl.col('listed_shares').last().alias('listed_shares')
-                ])
-                .filter(
-                    (pl.col('avg_volume').is_not_null()) &
-                    (pl.col('listed_shares').is_not_null()) &
-                    (pl.col('listed_shares') > 0)
-                )
-                .with_columns([
-                    ((pl.col('avg_volume') / pl.col('listed_shares')) * 100).alias('TURNOVER_RATE')
-                ])
-            )
-
-            # Join 두 결과
-            result = avg_trading_df.join(
-                turnover_df.select(['stock_code', 'TURNOVER_RATE']),
-                on='stock_code',
-                how='left'
-            )
-        else:
-            result = avg_trading_df
-
-        # Dictionary로 변환
-        for row in result.to_dicts():
-            stock = row['stock_code']
-            entry = {}
-            if row.get('AVG_TRADING_VALUE') is not None:
-                entry['AVG_TRADING_VALUE'] = float(row['AVG_TRADING_VALUE'])
-            if has_listed and row.get('TURNOVER_RATE') is not None:
-                entry['TURNOVER_RATE'] = float(row['TURNOVER_RATE'])
-
-            if entry:
-                factors[stock] = entry
+            has_listed = 'listed_shares' in stock_data.columns
+            if has_listed:
+                avg_volume = stock_data.select('volume').mean().to_pandas().iloc[0, 0]
+                listed_shares = stock_data.select('listed_shares').to_pandas().iloc[0, 0]
+                if avg_volume and listed_shares and listed_shares > 0:
+                    entry['TURNOVER_RATE'] = float(avg_volume) / float(listed_shares) * 100
 
         return factors
 
     def _calculate_technical_indicators(self, price_pl: pl.DataFrame, calc_date) -> Dict[str, Dict[str, float]]:
-        """🚀 기술적 지표 계산 (볼린저 밴드, RSI, MACD 등) - 부분 Polars 최적화"""
+        """기술적 지표 계산 (볼린저 밴드, RSI, MACD 등)"""
         factors: Dict[str, Dict[str, float]] = {}
         lookback = 60  # 60일 데이터 필요 (볼린저 밴드 20일 + 여유)
         past_date = calc_date - pd.Timedelta(days=lookback * 2)
@@ -2781,97 +2709,36 @@ class BacktestEngine:
         if period_prices.is_empty():
             return factors
 
-        # 🚀 OPTIMIZED: Bollinger Bands와 Volume 지표는 Polars로 벡터화
-        try:
-            # 볼린저 밴드 계산 (Polars 벡터화)
-            bollinger_result = (
-                period_prices
-                .sort(['stock_code', 'date'])
-                .with_columns([
-                    pl.col('close_price').rolling_mean(window_size=20, min_periods=20).over('stock_code').alias('ma_20'),
-                    pl.col('close_price').rolling_std(window_size=20, min_periods=20).over('stock_code').alias('std_20'),
-                ])
-                .group_by('stock_code')
-                .agg([
-                    pl.col('close_price').last().alias('current_price'),
-                    pl.col('ma_20').last().alias('ma_20'),
-                    pl.col('std_20').last().alias('std_20'),
-                ])
-                .filter(
-                    pl.col('ma_20').is_not_null() &
-                    pl.col('std_20').is_not_null() &
-                    (pl.col('std_20') > 0)
-                )
-                .with_columns([
-                    ((pl.col('current_price') - pl.col('ma_20')) / (2 * pl.col('std_20'))).alias('BOLLINGER_POSITION'),
-                    ((4 * pl.col('std_20')) / pl.col('ma_20') * 100).alias('BOLLINGER_WIDTH'),
-                ])
-            )
-
-            # Bollinger Band 결과를 factors에 저장
-            for row in bollinger_result.iter_rows(named=True):
-                stock = row['stock_code']
-                entry = factors.setdefault(stock, {})
-                if row['BOLLINGER_POSITION'] is not None:
-                    entry['BOLLINGER_POSITION'] = float(row['BOLLINGER_POSITION'])
-                if row['BOLLINGER_WIDTH'] is not None:
-                    entry['BOLLINGER_WIDTH'] = float(row['BOLLINGER_WIDTH'])
-
-            # Volume 지표 계산 (Polars 벡터화)
-            if 'volume' in period_prices.columns:
-                volume_result = (
-                    period_prices
-                    .sort(['stock_code', 'date'])
-                    .with_columns([
-                        pl.col('volume').rolling_mean(window_size=20, min_periods=20).over('stock_code').alias('avg_vol_20'),
-                        pl.col('date').rank('ordinal', descending=True).over('stock_code').alias('rank'),
-                    ])
-                    .filter(pl.col('rank') <= 20)  # 최근 20일
-                    .group_by('stock_code')
-                    .agg([
-                        pl.col('volume').filter(pl.col('rank') == 1).first().alias('current_vol'),
-                        pl.col('volume').filter(pl.col('rank') == 20).first().alias('past_vol'),
-                        pl.col('avg_vol_20').filter(pl.col('rank') == 1).first().alias('avg_vol_20'),
-                    ])
-                    .filter(
-                        pl.col('current_vol').is_not_null() &
-                        pl.col('past_vol').is_not_null() &
-                        (pl.col('past_vol') > 0)
-                    )
-                    .with_columns([
-                        (((pl.col('current_vol') / pl.col('past_vol')) - 1) * 100).alias('VOLUME_ROC'),
-                        ((pl.col('current_vol') / pl.col('avg_vol_20')) * 100).alias('VOLUME_RATIO'),
-                    ])
-                )
-
-                # Volume 결과를 factors에 저장
-                for row in volume_result.iter_rows(named=True):
-                    stock = row['stock_code']
-                    entry = factors.setdefault(stock, {})
-                    if row['VOLUME_ROC'] is not None:
-                        entry['VOLUME_ROC'] = float(row['VOLUME_ROC'])
-                    if row['VOLUME_RATIO'] is not None and row['avg_vol_20'] is not None and row['avg_vol_20'] > 0:
-                        entry['VOLUME_RATIO'] = float(row['VOLUME_RATIO'])
-
-        except Exception as e:
-            logger.warning(f"기술적 지표 벡터화 계산 실패: {e}")
-
-        # ⚠️ TODO: RSI, MACD, STOCHASTIC은 복잡한 계산으로 현재는 Pandas 유지
-        # 향후 Polars의 ewm_mean(), rolling_apply() 등을 활용한 최적화 가능
-        for stock in period_prices.select('stock_code').unique().to_series().to_list():
+        for stock in period_prices.select('stock_code').unique().to_pandas()['stock_code']:
             stock_data = period_prices.filter(pl.col('stock_code') == stock).sort('date')
             if stock_data.is_empty():
                 continue
 
             # Pandas로 변환하여 계산
             stock_pd = stock_data.to_pandas()
-            if len(stock_pd) < 14:  # RSI 최소 14일 필요
+            if len(stock_pd) < 20:  # 최소 20일 데이터 필요
                 continue
 
             entry = factors.setdefault(stock, {})
 
             try:
+                # 볼린저 밴드 (20일 이동평균, 2 표준편차)
                 closes = stock_pd['close_price'].values
+                ma_20 = pd.Series(closes).rolling(window=20).mean()
+                std_20 = pd.Series(closes).rolling(window=20).std()
+
+                current_price = closes[-1]
+                current_ma = ma_20.iloc[-1]
+                current_std = std_20.iloc[-1]
+
+                if pd.notna(current_ma) and pd.notna(current_std) and current_std > 0:
+                    # 볼린저 밴드 포지션: -1 (하단) ~ 0 (중간) ~ 1 (상단)
+                    bollinger_position = (current_price - current_ma) / (2 * current_std)
+                    entry['BOLLINGER_POSITION'] = float(bollinger_position)
+
+                    # 볼린저 밴드 폭 (변동성 지표)
+                    bb_width = (4 * current_std) / current_ma * 100
+                    entry['BOLLINGER_WIDTH'] = float(bb_width)
 
                 # RSI (14일)
                 if len(closes) >= 14:
@@ -2928,14 +2795,28 @@ class BacktestEngine:
                             entry['STOCHASTIC_D'] = float(d)
                             entry['STOCHASTIC'] = float(k)  # 기본값은 %K
 
+                # VOLUME_ROC (Volume Rate of Change)
+                if 'volume' in stock_pd.columns and len(stock_pd) >= 20:
+                    volumes = stock_pd['volume'].values
+                    current_vol = volumes[-1]
+                    past_vol = volumes[-20]  # 20일 전
+                    if past_vol and past_vol > 0:
+                        vol_roc = ((current_vol / past_vol) - 1) * 100
+                        entry['VOLUME_ROC'] = float(vol_roc)
+
+                    # 평균 거래량 대비 현재 거래량
+                    avg_vol_20 = pd.Series(volumes).rolling(window=20).mean().iloc[-1]
+                    if pd.notna(avg_vol_20) and avg_vol_20 > 0:
+                        entry['VOLUME_RATIO'] = (current_vol / avg_vol_20) * 100
+
             except Exception as e:
-                logger.warning(f"복잡한 기술적 지표 계산 실패 [{stock}]: {e}")
+                logger.warning(f"기술적 지표 계산 실패 [{stock}]: {e}")
                 continue
 
         return factors
 
     def _calculate_moving_averages(self, price_pl: pl.DataFrame, calc_date) -> Dict[str, Dict[str, float]]:
-        """🚀 이동평균 팩터 계산 (5일, 20일, 60일, 120일, 250일) - Polars 벡터화 최적화"""
+        """🚀 이동평균 팩터 계산 (5일, 20일, 60일, 120일, 250일) - Polars 벡터화"""
         factors: Dict[str, Dict[str, float]] = {}
         max_lookback = 250  # 250일 MA 필요
         past_date = calc_date - pd.Timedelta(days=max_lookback * 2)  # 충분한 여유
@@ -2948,80 +2829,61 @@ class BacktestEngine:
         if period_prices.is_empty():
             return factors
 
-        # 🚀 OPTIMIZED: Polars 벡터화 - 모든 종목의 이동평균을 한 번에 계산
-        try:
-            result = (
-                period_prices
-                .sort(['stock_code', 'date'])
-                .with_columns([
-                    # 각 이동평균 계산
-                    pl.col('close_price').rolling_mean(window_size=5, min_periods=5).over('stock_code').alias('ma_5'),
-                    pl.col('close_price').rolling_mean(window_size=20, min_periods=20).over('stock_code').alias('ma_20'),
-                    pl.col('close_price').rolling_mean(window_size=60, min_periods=60).over('stock_code').alias('ma_60'),
-                    pl.col('close_price').rolling_mean(window_size=120, min_periods=120).over('stock_code').alias('ma_120'),
-                    pl.col('close_price').rolling_mean(window_size=250, min_periods=250).over('stock_code').alias('ma_250'),
-                ])
-                # 가장 최근 날짜의 데이터만 선택
-                .group_by('stock_code')
-                .agg([
-                    pl.col('close_price').last().alias('current_price'),
-                    pl.col('ma_5').last().alias('MA_5D'),
-                    pl.col('ma_20').last().alias('MA_20D'),
-                    pl.col('ma_60').last().alias('MA_60D'),
-                    pl.col('ma_120').last().alias('MA_120D'),
-                    pl.col('ma_250').last().alias('MA_250D'),
-                ])
-                # 비율 계산
-                .with_columns([
-                    ((pl.col('current_price') / pl.col('MA_5D') - 1) * 100).alias('MA_5D_RATIO'),
-                    ((pl.col('current_price') / pl.col('MA_20D') - 1) * 100).alias('MA_20D_RATIO'),
-                    ((pl.col('current_price') / pl.col('MA_60D') - 1) * 100).alias('MA_60D_RATIO'),
-                    ((pl.col('current_price') / pl.col('MA_120D') - 1) * 100).alias('MA_120D_RATIO'),
-                    ((pl.col('current_price') / pl.col('MA_250D') - 1) * 100).alias('MA_250D_RATIO'),
-                ])
-            )
+        # 각 종목별로 이동평균 계산
+        for stock in period_prices.select('stock_code').unique().to_series().to_list():
+            stock_data = period_prices.filter(pl.col('stock_code') == stock).sort('date')
+            if stock_data.is_empty():
+                continue
 
-            # Dictionary로 변환
-            for row in result.iter_rows(named=True):
-                stock = row['stock_code']
-                entry = {}
+            # Pandas로 변환하여 rolling 계산
+            stock_pd = stock_data.to_pandas()
+            if len(stock_pd) < 5:  # 최소 5일 데이터 필요
+                continue
 
-                # MA_5D
-                if row['MA_5D'] is not None and row['MA_5D'] > 0:
-                    entry['MA_5D'] = float(row['MA_5D'])
-                    if row['MA_5D_RATIO'] is not None:
-                        entry['MA_5D_RATIO'] = float(row['MA_5D_RATIO'])
+            entry = factors.setdefault(stock, {})
 
-                # MA_20D
-                if row['MA_20D'] is not None and row['MA_20D'] > 0:
-                    entry['MA_20D'] = float(row['MA_20D'])
-                    if row['MA_20D_RATIO'] is not None:
-                        entry['MA_20D_RATIO'] = float(row['MA_20D_RATIO'])
+            try:
+                closes = stock_pd['close_price'].values
+                current_price = closes[-1]
 
-                # MA_60D
-                if row['MA_60D'] is not None and row['MA_60D'] > 0:
-                    entry['MA_60D'] = float(row['MA_60D'])
-                    if row['MA_60D_RATIO'] is not None:
-                        entry['MA_60D_RATIO'] = float(row['MA_60D_RATIO'])
+                # 5일 이동평균
+                if len(closes) >= 5:
+                    ma_5 = pd.Series(closes).rolling(window=5).mean().iloc[-1]
+                    if pd.notna(ma_5) and ma_5 > 0:
+                        entry['MA_5D'] = float(ma_5)
+                        entry['MA_5D_RATIO'] = float((current_price / ma_5 - 1) * 100)  # %
 
-                # MA_120D
-                if row['MA_120D'] is not None and row['MA_120D'] > 0:
-                    entry['MA_120D'] = float(row['MA_120D'])
-                    if row['MA_120D_RATIO'] is not None:
-                        entry['MA_120D_RATIO'] = float(row['MA_120D_RATIO'])
+                # 20일 이동평균
+                if len(closes) >= 20:
+                    ma_20 = pd.Series(closes).rolling(window=20).mean().iloc[-1]
+                    if pd.notna(ma_20) and ma_20 > 0:
+                        entry['MA_20D'] = float(ma_20)
+                        entry['MA_20D_RATIO'] = float((current_price / ma_20 - 1) * 100)
 
-                # MA_250D
-                if row['MA_250D'] is not None and row['MA_250D'] > 0:
-                    entry['MA_250D'] = float(row['MA_250D'])
-                    if row['MA_250D_RATIO'] is not None:
-                        entry['MA_250D_RATIO'] = float(row['MA_250D_RATIO'])
+                # 60일 이동평균
+                if len(closes) >= 60:
+                    ma_60 = pd.Series(closes).rolling(window=60).mean().iloc[-1]
+                    if pd.notna(ma_60) and ma_60 > 0:
+                        entry['MA_60D'] = float(ma_60)
+                        entry['MA_60D_RATIO'] = float((current_price / ma_60 - 1) * 100)
 
-                if entry:
-                    factors[stock] = entry
+                # 120일 이동평균
+                if len(closes) >= 120:
+                    ma_120 = pd.Series(closes).rolling(window=120).mean().iloc[-1]
+                    if pd.notna(ma_120) and ma_120 > 0:
+                        entry['MA_120D'] = float(ma_120)
+                        entry['MA_120D_RATIO'] = float((current_price / ma_120 - 1) * 100)
 
-        except Exception as e:
-            logger.warning(f"이동평균 벡터화 계산 실패: {e}")
-            return factors
+                # 250일 이동평균
+                if len(closes) >= 250:
+                    ma_250 = pd.Series(closes).rolling(window=250).mean().iloc[-1]
+                    if pd.notna(ma_250) and ma_250 > 0:
+                        entry['MA_250D'] = float(ma_250)
+                        entry['MA_250D_RATIO'] = float((current_price / ma_250 - 1) * 100)
+
+            except Exception as e:
+                logger.warning(f"이동평균 계산 실패 [{stock}]: {e}")
+                continue
 
         return factors
 

@@ -12,7 +12,7 @@ __pycache__/
 .env.tunnel
 .env.production
 .env.backup
-.env.*.local
+.env.local
 
 # SSH config
 .ssh/

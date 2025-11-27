@@ -1,11 +1,11 @@
 "use client";
 
+import { Icon } from "@/components/common";
+import { authApi } from "@/lib/api/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
-import { authApi } from "@/lib/api/auth";
-import { Icon } from "@/components/common";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * 전역 사이드바 네비게이션 (반응형)
@@ -115,6 +115,10 @@ export function SideNav({ serverHasToken }: SideNavProps) {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
+  // 랜딩 페이지에서는 사이드바를 숨김
+  if (pathname === "/landing") {
+    return null;
+  }
 
   useEffect(() => {
     const checkLoginStatus = async () => {

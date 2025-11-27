@@ -24,7 +24,7 @@ const features = [
   {
     icon: "🚀",
     title: "실시간 성과 분석",
-    description: "샤프지수, MDD, 승률 등 다양한 지표로 전략의 성과를 실시간으로 분석합니다.",
+    description: "샤프비율, MDD, 승률 등 다양한 지표로 전략의 성과를 실시간으로 분석합니다.",
     gradient: "from-orange-500 to-amber-500",
   },
   {
@@ -64,7 +64,10 @@ const itemVariants = {
 
 export function LandingFeatures() {
   return (
-    <section className="relative py-24 px-6 overflow-hidden">
+    <section
+      id="landing-features"
+      className="relative min-h-screen py-24 px-6 overflow-hidden snap-start"
+    >
       <div className="absolute inset-0 bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" />
 
       <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-blue-500/30 dark:via-blue-500/50 to-transparent" />

@@ -41,7 +41,10 @@ const chatbotExample = {
 
 export function LandingAI() {
   return (
-    <section className="relative py-24 px-6 overflow-hidden">
+    <section
+      id="landing-ai"
+      className="relative min-h-screen py-24 px-6 overflow-hidden snap-start"
+    >
       <div className="absolute inset-0 bg-gradient-to-b from-slate-100 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" />
 
       <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-indigo-500/30 dark:via-indigo-500/50 to-transparent" />

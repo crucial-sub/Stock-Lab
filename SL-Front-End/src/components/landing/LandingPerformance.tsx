@@ -58,7 +58,10 @@ const benchmarks = [
 
 export function LandingPerformance() {
   return (
-    <section className="relative py-24 px-6 overflow-hidden">
+    <section
+      id="landing-performance"
+      className="relative min-h-screen py-24 px-6 overflow-hidden snap-start"
+    >
       <div className="absolute inset-0 bg-gradient-to-b from-white via-slate-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" />
 
       <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-purple-500/30 dark:via-purple-500/50 to-transparent" />

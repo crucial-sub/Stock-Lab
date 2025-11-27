@@ -115,11 +115,8 @@ export function SideNav({ serverHasToken }: SideNavProps) {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
-  // 랜딩 페이지에서는 사이드바를 숨김
-  if (pathname === "/landing") {
-    return null;
-  }
 
+  // 로그인 상태 체크 (모든 Hook은 조건부 return 전에 호출되어야 함)
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
@@ -142,6 +139,26 @@ export function SideNav({ serverHasToken }: SideNavProps) {
       window.removeEventListener("focus", handleFocus);
     };
   }, []);
+
+  // 모바일 메뉴 토글 (Hook은 조건부 return 전에 호출)
+  const toggleMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen((prev) => !prev);
+  }, []);
+
+  // 데스크톱 사이드바 토글
+  const toggleDesktopSidebar = useCallback(() => {
+    setIsOpen((prev) => !prev);
+  }, []);
+
+  // 오버레이 클릭 시 모바일 메뉴 닫기
+  const handleOverlayClick = useCallback(() => {
+    setIsMobileMenuOpen(false);
+  }, []);
+
+  // 랜딩 페이지에서는 사이드바를 숨김 (모든 Hook 호출 이후에 조건부 return)
+  if (pathname === "/landing") {
+    return null;
+  }
 
   // 로그인 상태에 따라 유틸리티 아이템 결정
   const utilityNavItems = [
@@ -172,21 +189,6 @@ export function SideNav({ serverHasToken }: SideNavProps) {
       setIsLoggingOut(false);
     }
   };
-
-  // 모바일 메뉴 토글
-  const toggleMobileMenu = useCallback(() => {
-    setIsMobileMenuOpen((prev) => !prev);
-  }, []);
-
-  // 데스크톱 사이드바 토글
-  const toggleDesktopSidebar = useCallback(() => {
-    setIsOpen((prev) => !prev);
-  }, []);
-
-  // 오버레이 클릭 시 모바일 메뉴 닫기
-  const handleOverlayClick = useCallback(() => {
-    setIsMobileMenuOpen(false);
-  }, []);
 
   // 네비게이션 아이템 컨테이너 클래스
   const navItemContainerClass = (

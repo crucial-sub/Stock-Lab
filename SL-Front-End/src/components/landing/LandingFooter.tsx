@@ -4,7 +4,10 @@ import Link from "next/link";
 
 export function LandingFooter() {
   return (
-    <footer className="relative py-12 px-6 border-t border-slate-200 dark:border-slate-800">
+    <footer
+      id="landing-footer"
+      className="relative snap-start py-12 px-6 border-t border-slate-200 dark:border-slate-800"
+    >
       <div className="absolute inset-0 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-black" />
 
       <div className="relative z-10 container mx-auto max-w-7xl">
@@ -16,11 +19,11 @@ export function LandingFooter() {
               </span>
             </Link>
             <p className="text-slate-400 text-sm max-w-md">
-              고성능 백테스팅 엔진과 54개 금융 팩터를 활용한 퀀트 투자 전략 시뮬레이션 플랫폼
+              고성능 백테스팅 엔진과 140여개 금융 팩터를 활용한 퀀트 투자 전략 시뮬레이션 플랫폼
             </p>
             <div className="mt-6 flex gap-4">
               <a
-                href="https://github.com"
+                href="https://github.com/Krafton-Jungle-10-Final-Project/Stock-Lab"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-blue-400 hover:border-blue-500 transition-all"
@@ -84,20 +87,9 @@ export function LandingFooter() {
             </ul>
           </div>
         </div>
-
-        <div className="pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-500 text-sm">
-            © 2025 Stock Lab. All rights reserved.
-          </p>
-          <div className="flex gap-6 text-sm">
-            <a href="#" className="text-slate-500 hover:text-blue-400 transition-colors">
-              이용약관
-            </a>
-            <a href="#" className="text-slate-500 hover:text-blue-400 transition-colors">
-              개인정보처리방침
-            </a>
-          </div>
-        </div>
+        <p className="text-slate-500 text-sm">
+          © 2025 Stock Lab. All rights reserved.
+        </p>
       </div>
     </footer>
   );

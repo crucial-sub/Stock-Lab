@@ -1,11 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 export function LandingCTA() {
   return (
-    <section className="relative py-24 px-6 overflow-hidden">
+    <section
+      id="landing-cta"
+      className="relative min-h-screen py-24 px-6 overflow-hidden snap-start"
+    >
       <div className="absolute inset-0 bg-gradient-to-b from-slate-100 to-white dark:from-slate-900 dark:to-slate-950" />
 
       <div className="absolute inset-0">
@@ -69,11 +72,11 @@ export function LandingCTA() {
               className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4"
             >
               <Link
-                href="/signup"
+                href="/"
                 className="group relative px-10 py-5 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-lg overflow-hidden transition-all hover:scale-105 hover:shadow-2xl hover:shadow-blue-500/50"
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  무료로 시작하기
+                  시작하기
                   <svg
                     className="w-5 h-5 transition-transform group-hover:translate-x-1"
                     fill="none"
@@ -84,13 +87,6 @@ export function LandingCTA() {
                   </svg>
                 </span>
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </Link>
-
-              <Link
-                href="/login"
-                className="px-10 py-5 rounded-xl border-2 border-slate-400 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-bold text-lg backdrop-blur-sm hover:border-blue-500 hover:text-blue-500 dark:hover:text-blue-300 transition-all hover:scale-105"
-              >
-                로그인
               </Link>
             </motion.div>
 

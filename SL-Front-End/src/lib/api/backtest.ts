@@ -20,8 +20,8 @@ import type {
   SubFactor,
   Themes,
 } from "@/types/api";
-export type { BacktestRunRequest } from "@/types/api";
 import { axiosInstance, axiosServerInstance } from "../axios";
+export type { BacktestRunRequest } from "@/types/api";
 
 /**
  * 백테스트 실행

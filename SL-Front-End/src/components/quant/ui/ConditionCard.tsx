@@ -40,12 +40,12 @@ export function ConditionCard({
   const bgColor = conditionType === "buy" ? "bg-price-up" : "bg-price-down";
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
       {/* 조건식 표시 영역 */}
-      <div className="relative w-[31.25rem] h-12 flex items-center gap-3 rounded-md border-[0.5px]">
+      <div className="relative flex-1 min-w-0 max-w-full sm:max-w-[31.25rem] h-12 flex items-center gap-2 sm:gap-3 rounded-md border-[0.5px]">
         {/* 조건식 ID */}
         <div
-          className={`w-12 h-12 rounded-tl-md rounded-bl-md flex items-center justify-center ${bgColor} text-white`}
+          className={`w-10 sm:w-12 h-12 shrink-0 rounded-tl-md rounded-bl-md flex items-center justify-center ${bgColor} text-white text-sm sm:text-base`}
         >
           {condition.id}
         </div>
@@ -54,7 +54,7 @@ export function ConditionCard({
         <button
           type="button"
           onClick={onFactorSelect}
-          className="flex-1 text-left"
+          className="flex-1 text-left truncate pr-10 text-sm sm:text-base min-w-0"
         >
           {expressionText}
         </button>
@@ -63,40 +63,42 @@ export function ConditionCard({
         <button
           type="button"
           onClick={onRemove}
-          className="absolute right-3 flex items-center justify-center hover:opacity-100 transition-opacity"
+          className="absolute right-2 sm:right-3 flex items-center justify-center hover:opacity-100 transition-opacity shrink-0"
         >
           <Image
             src="/icons/trash.svg"
             alt="삭제"
-            width={24}
-            height={24}
-            className="opacity-30"
+            width={20}
+            height={20}
+            className="opacity-30 sm:w-6 sm:h-6"
           />
         </button>
       </div>
 
       {/* 부등호 선택 */}
-      <Dropdown
-        value={condition.operator}
-        onChange={(value) =>
-          onOperatorChange(value as ">=" | "<=" | ">" | "<" | "=" | "!=")
-        }
-        options={[
-          { value: ">=", label: "≥" },
-          { value: "<=", label: "≤" },
-          { value: ">", label: ">" },
-          { value: "<", label: "<" },
-          { value: "=", label: "=" },
-          { value: "!=", label: "≠" },
-        ]}
-        variant="large"
-      />
+      <div className="shrink-0">
+        <Dropdown
+          value={condition.operator}
+          onChange={(value) =>
+            onOperatorChange(value as ">=" | "<=" | ">" | "<" | "=" | "!=")
+          }
+          options={[
+            { value: ">=", label: "≥" },
+            { value: "<=", label: "≤" },
+            { value: ">", label: ">" },
+            { value: "<", label: "<" },
+            { value: "=", label: "=" },
+            { value: "!=", label: "≠" },
+          ]}
+          variant="large"
+        />
+      </div>
 
       {/* 값 입력 */}
       <UnderlineInput
         value={condition.value}
         onChange={(e) => onValueChange(e.target.value)}
-        className="!w-20 text-center"
+        className="!w-16 sm:!w-20 text-center shrink-0"
       />
     </div>
   );

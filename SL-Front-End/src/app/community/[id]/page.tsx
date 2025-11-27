@@ -1,9 +1,10 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Icon } from "@/components/common/Icon";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import {
   FreeBoardCommentSection,
   FreeBoardDetailCard,
@@ -40,6 +41,23 @@ export default function CommunityPostDetailPage({
 
   const toggleLikeMutation = useTogglePostLikeMutation();
   const createCommentMutation = useCreateCommentMutation();
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   const formattedComments = useMemo(() => {
     if (!commentsData?.comments) return [];
@@ -128,13 +146,25 @@ export default function CommunityPostDetailPage({
               { postId, data: { content } },
               {
                 onError: (error) => {
-                  alert(`댓글 작성 실패: ${error.message}`);
+                  showAlert("댓글 작성 실패", error.message, "error");
                 },
               },
             )
           }
         />
       </div>
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
     </section>
   );
 }

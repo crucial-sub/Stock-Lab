@@ -94,6 +94,9 @@ export interface BacktestRunRequest {
     total_stock_count?: number; // 전체 종목 수
     total_theme_count?: number; // 전체 테마 수 (ChatBot API 호환용)
   };
+
+  /* 포트폴리오 저장 설정 */
+  is_portfolio?: boolean; // 전략 포트폴리오 페이지에서 실행 시 true → 내 목록에 자동 저장
 }
 
 /** 백테스트 실행 응답 타입 */

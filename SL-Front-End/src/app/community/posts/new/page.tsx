@@ -1,14 +1,33 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Icon } from "@/components/common/Icon";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { FreeBoardPostForm } from "@/components/community";
 import { useCreatePostMutation } from "@/hooks/useCommunityQuery";
 
 export default function FreeBoardNewPostPage() {
   const router = useRouter();
   const createPostMutation = useCreatePostMutation();
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   const handleSubmit = (values: {
     title: string;
@@ -27,7 +46,7 @@ export default function FreeBoardNewPostPage() {
           router.push(`/community/${post.postId}?source=create`);
         },
         onError: (error) => {
-          alert(`게시 실패: ${error.message}`);
+          showAlert("게시 실패", error.message, "error");
         },
       },
     );
@@ -59,6 +78,18 @@ export default function FreeBoardNewPostPage() {
           onSubmit={handleSubmit}
         />
       </div>
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
     </section>
   );
 }

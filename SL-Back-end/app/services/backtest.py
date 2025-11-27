@@ -415,10 +415,22 @@ class BacktestEngine:
         self.target_universes = target_universes or []
 
         try:
+            # 📡 웹소켓 매니저 import (준비 단계 전송용)
+            from app.services.backtest_websocket import ws_manager
+
             # 1. 데이터 준비
             logger.info(f"백테스트 시작: {backtest_id}")
             logger.info(f"📅 백테스트 기간: {start_date} ~ {end_date}")
             logger.info(f"매매 대상 필터 - 테마: {self.target_themes}, 종목: {self.target_stocks}, 유니버스: {self.target_universes}")
+
+            # 📡 준비 단계 1: 가격 데이터 로딩
+            await ws_manager.send_preparation_stage(
+                backtest_id=str(backtest_id),
+                stage="LOADING_PRICE_DATA",
+                stage_number=1,
+                total_stages=4,
+                message="주가 데이터를 불러오는 중..."
+            )
 
             # 순차 데이터 로딩 (SQLAlchemy AsyncSession은 동시 작업 미지원)
             price_data = await self._load_price_data(start_date, end_date, target_themes, target_stocks, target_universes)
@@ -426,6 +438,15 @@ class BacktestEngine:
             # 🔥 가격 데이터에서 실제 선택된 종목 코드 추출 (테마 필터링 결과 반영)
             actual_stocks = price_data['stock_code'].unique().tolist() if not price_data.empty else []
             logger.info(f"🎯 실제 선택된 종목: {len(actual_stocks)}개")
+
+            # 📡 준비 단계 2: 재무 데이터 로딩
+            await ws_manager.send_preparation_stage(
+                backtest_id=str(backtest_id),
+                stage="LOADING_FINANCIAL_DATA",
+                stage_number=2,
+                total_stages=4,
+                message=f"재무 데이터를 불러오는 중... ({len(actual_stocks)}개 종목)"
+            )
 
             financial_data = await self._load_financial_data(start_date, end_date, actual_stocks)
 
@@ -528,12 +549,30 @@ class BacktestEngine:
                             exp_right_side=exp_right_side
                         ))
 
+            # 📡 준비 단계 3: 팩터 계산
+            await ws_manager.send_preparation_stage(
+                backtest_id=str(backtest_id),
+                stage="CALCULATING_FACTORS",
+                stage_number=3,
+                total_stages=4,
+                message="매수 조건 팩터를 계산하는 중..."
+            )
+
             # 최적화된 팩터 계산 호출
             logger.info("최적화된 팩터 계산 사용")
             factor_data = await self._calculate_all_factors_optimized(
                 price_data, financial_data, start_date, end_date,
                 buy_conditions=backtest_conditions,
                 priority_factor=priority_factor
+            )
+
+            # 📡 준비 단계 4: 시뮬레이션 준비
+            await ws_manager.send_preparation_stage(
+                backtest_id=str(backtest_id),
+                stage="PREPARING_SIMULATION",
+                stage_number=4,
+                total_stages=4,
+                message="시뮬레이션을 준비하는 중..."
             )
 
             # 3. 벤치마크 데이터 로드
@@ -1628,6 +1667,13 @@ class BacktestEngine:
         quarters_to_calc: Dict[str, List] = defaultdict(list)
 
         # 1단계: 캐시 히트된 분기 먼저 로드 (분기당 1회만)
+        # 🔧 FIX: 캐시된 날짜 추적하여 누락된 날짜 검증
+        cached_dates: Set = set()
+
+        # 🔧 FIX: price_data의 종목 코드 추출 (캐시 필터링용)
+        price_stock_codes = set(price_data['stock_code'].unique()) if not price_data.empty else set()
+        logger.info(f"🎯 현재 백테스트 대상 종목: {len(price_stock_codes)}개")
+
         if cache_enabled:
             unique_quarters = set(get_quarter_key(d) for d in unique_dates)
             logger.info(f"🔍 캐시 조회 대상 분기: {sorted(unique_quarters)}")
@@ -1644,12 +1690,28 @@ class BacktestEngine:
                 try:
                     cached_data = await cache.get(cache_key)
                     if cached_data:
-                        # 필요한 팩터만 필터링 (메모리 절약)
+                        # 🔧 FIX: 캐시에서 현재 백테스트 종목만 필터링
                         filtered_rows = []
                         for row in cached_data:
+                            stock_code = row.get('stock_code')
+
+                            # 🔧 FIX: 현재 백테스트 대상 종목만 포함
+                            if price_stock_codes and stock_code not in price_stock_codes:
+                                continue
+
+                            # 🔧 FIX: 캐시된 날짜 추적
+                            row_date = row.get('date')
+                            if row_date:
+                                if isinstance(row_date, str):
+                                    cached_dates.add(pd.Timestamp(row_date).date())
+                                elif hasattr(row_date, 'date'):
+                                    cached_dates.add(row_date.date())
+                                else:
+                                    cached_dates.add(row_date)
+
                             filtered_row = {
-                                'date': row.get('date'),
-                                'stock_code': row.get('stock_code'),
+                                'date': row_date,
+                                'stock_code': stock_code,
                                 'industry': row.get('industry'),
                                 'size_bucket': row.get('size_bucket')
                             }
@@ -1657,17 +1719,27 @@ class BacktestEngine:
                                 if factor in row:
                                     filtered_row[factor] = row[factor]
                             filtered_rows.append(filtered_row)
-                        logger.info(f"💾 캐시 히트: {quarter_key} - {len(filtered_rows)}개 레코드 (필터링: {len(required_factors)}개 팩터)")
+                        logger.info(f"💾 캐시 히트: {quarter_key} - {len(filtered_rows)}개 레코드 (종목 필터링: {len(price_stock_codes)}개)")
                         all_rows.extend(filtered_rows)
                         loaded_quarters.add(quarter_key)
                 except Exception as e:
                     logger.debug(f"캐시 조회 실패 ({quarter_key}): {e}")
 
             if loaded_quarters:
-                logger.info(f"✅ 캐시 로드 완료: {len(loaded_quarters)}개 분기, {len(all_rows)}개 레코드")
+                logger.info(f"✅ 캐시 로드 완료: {len(loaded_quarters)}개 분기, {len(all_rows)}개 레코드, 캐시된 날짜: {len(cached_dates)}개")
 
-        # 2단계: 캐시 미스된 분기만 계산 (분기별 1회만 계산하여 모든 날짜에 적용)
-        dates_to_calculate = [d for d in unique_dates if get_quarter_key(d) not in loaded_quarters]
+        # 2단계: 캐시 미스된 분기 또는 누락된 날짜 계산
+        # 🔧 FIX: 분기 캐시 히트여도 실제 날짜가 누락되면 재계산
+        def normalize_date(d):
+            """날짜를 date 객체로 정규화"""
+            if hasattr(d, 'date'):
+                return d.date()
+            return d
+
+        dates_to_calculate = [d for d in unique_dates if normalize_date(d) not in cached_dates]
+
+        if dates_to_calculate and loaded_quarters:
+            logger.warning(f"⚠️ 캐시 히트했지만 {len(dates_to_calculate)}개 날짜 누락 - 추가 계산 필요")
 
         if not dates_to_calculate:
             logger.info(f"🚀 모든 분기 캐시 히트 - 팩터 계산 스킵 ({len(all_rows)}개 레코드)")

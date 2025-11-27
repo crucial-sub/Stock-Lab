@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { authApi } from "@/lib/api/auth";
 import { useRouter } from "next/navigation";
 
@@ -22,6 +23,7 @@ export function DeleteAccountModal({
   const [confirmText, setConfirmText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   if (!isOpen) return null;
 
@@ -46,13 +48,7 @@ export function DeleteAccountModal({
         phone_number: userPhone,
       });
 
-      alert("회원탈퇴가 완료되었습니다");
-
-      // 로그아웃 처리
-      await authApi.logout();
-
-      // 로그인 페이지로 이동
-      router.push("/login");
+      setShowSuccessModal(true);
     } catch (err: unknown) {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
@@ -68,6 +64,13 @@ export function DeleteAccountModal({
     setConfirmText("");
     setError(null);
     onClose();
+  };
+
+  // 성공 모달 확인 후 로그아웃 및 이동
+  const handleSuccessConfirm = async () => {
+    setShowSuccessModal(false);
+    await authApi.logout();
+    router.push("/login");
   };
 
   return (
@@ -139,6 +142,18 @@ export function DeleteAccountModal({
           </button>
         </div>
       </div>
+
+      {/* 성공 모달 */}
+      <ConfirmModal
+        isOpen={showSuccessModal}
+        onClose={handleSuccessConfirm}
+        onConfirm={handleSuccessConfirm}
+        title="회원탈퇴 완료"
+        message="회원탈퇴가 완료되었습니다."
+        confirmText="확인"
+        iconType="success"
+        alertOnly
+      />
     </div>
   );
 }

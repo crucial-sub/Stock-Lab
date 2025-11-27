@@ -1,12 +1,15 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import {
   type AutoTradingStrategyResponse,
   type DeactivationConditions,
   autoTradingApi,
 } from "@/lib/api/auto-trading";
+import { kiwoomApi } from "@/lib/api/kiwoom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface AutoTradingSectionProps {
   sessionId: string;
@@ -18,6 +21,7 @@ export function AutoTradingSection({
   sessionStatus,
 }: AutoTradingSectionProps) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [isActivating, setIsActivating] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [showCapitalInput, setShowCapitalInput] = useState(false);
@@ -25,6 +29,30 @@ export function AutoTradingSection({
   const [deactivationConditions, setDeactivationConditions] = useState<DeactivationConditions | null>(null);
   const [allocatedCapital, setAllocatedCapital] = useState<string>("50000000");
   const [strategyName, setStrategyName] = useState<string>("");
+  const [isCheckingKiwoom, setIsCheckingKiwoom] = useState(false);
+  // 증권 계좌 미연동 시 표시할 확인 모달 상태
+  const [showKiwoomRequiredModal, setShowKiwoomRequiredModal] = useState(false);
+  // 활성화/비활성화 성공 알림 모달 상태
+  const [showActivateSuccess, setShowActivateSuccess] = useState(false);
+  const [activateSuccessMessage, setActivateSuccessMessage] = useState("");
+  const [showDeactivateSuccess, setShowDeactivateSuccess] = useState(false);
+  const [deactivateSuccessMessage, setDeactivateSuccessMessage] = useState("");
+  // 일반 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   // 내 키움증권 연동 전략 목록 조회
   const { data: strategies, isLoading } = useQuery({
@@ -49,12 +77,18 @@ export function AutoTradingSection({
         strategy_name: params.name,
       }),
     onSuccess: (data) => {
-      alert(data.message);
+      // 커스텀 모달로 성공 메시지 표시
+      setActivateSuccessMessage(data.message || "자동매매가 활성화되었습니다.");
+      setShowActivateSuccess(true);
       queryClient.invalidateQueries({ queryKey: ["autoTradingStrategies"] });
       setIsActivating(false);
     },
     onError: (error: any) => {
-      alert(error.response?.data?.detail || "키움증권 연동 활성화에 실패했습니다.");
+      showAlert(
+        "활성화 실패",
+        error.response?.data?.detail || "키움증권 연동 활성화에 실패했습니다.",
+        "error"
+      );
       setIsActivating(false);
     },
   });
@@ -67,37 +101,67 @@ export function AutoTradingSection({
         deactivation_mode: params.mode,
       }),
     onSuccess: (data) => {
-      alert(data.message);
+      // 커스텀 모달로 성공 메시지 표시 (매도 정보 앞에 줄바꿈 추가)
+      const message = (data.message || "자동매매가 비활성화되었습니다.").replace(" (매도:", "\n(매도:");
+      setDeactivateSuccessMessage(message);
+      setShowDeactivateSuccess(true);
       queryClient.invalidateQueries({ queryKey: ["autoTradingStrategies"] });
       setIsDeactivating(false);
       setShowDeactivateModal(false);
     },
     onError: (error: any) => {
-      alert(
+      showAlert(
+        "비활성화 실패",
         error.response?.data?.detail || "키움증권 연동 비활성화에 실패했습니다.",
+        "error"
       );
       setIsDeactivating(false);
     },
   });
 
-  const handleActivate = () => {
+  // 가상매매 활성화 버튼 클릭 시 키움증권 연동 상태 확인
+  const handleActivate = async () => {
     if (sessionStatus?.toUpperCase() !== "COMPLETED") {
-      alert("백테스트가 완료된 후에 활성화할 수 있습니다.");
+      showAlert("알림", "백테스트가 완료된 후에 활성화할 수 있습니다.", "warning");
       return;
     }
-    setShowCapitalInput(true);
+
+    // 키움증권 연동 상태 확인
+    setIsCheckingKiwoom(true);
+    try {
+      const status = await kiwoomApi.getStatus();
+
+      if (!status.is_connected) {
+        // 증권 계좌 미연동 시 커스텀 모달 표시
+        setShowKiwoomRequiredModal(true);
+        return;
+      }
+
+      // 연동되어 있으면 기존 로직대로 모달창 열기
+      setShowCapitalInput(true);
+    } catch (error) {
+      console.error("키움증권 연동 상태 확인 실패:", error);
+      showAlert("확인 실패", "증권 계좌 연동 상태 확인에 실패했습니다. 다시 시도해주세요.", "error");
+    } finally {
+      setIsCheckingKiwoom(false);
+    }
+  };
+
+  // 키움증권 연동 필요 모달에서 확인 클릭 시 마이페이지로 이동
+  const handleKiwoomRequiredConfirm = () => {
+    router.push("/mypage");
   };
 
   const handleConfirmActivate = () => {
     const capital = Number.parseFloat(allocatedCapital);
 
     if (Number.isNaN(capital) || capital <= 0) {
-      alert("유효한 금액을 입력해주세요.");
+      showAlert("알림", "유효한 금액을 입력해주세요.", "warning");
       return;
     }
 
     if (capital < 1000000) {
-      alert("최소 100만원 이상의 금액을 입력해주세요.");
+      showAlert("알림", "최소 100만원 이상의 금액을 입력해주세요.", "warning");
       return;
     }
 
@@ -124,7 +188,11 @@ export function AutoTradingSection({
       setDeactivationConditions(conditions);
       setShowDeactivateModal(true);
     } catch (error: any) {
-      alert(error.response?.data?.detail || "비활성화 조건 확인에 실패했습니다.");
+      showAlert(
+        "확인 실패",
+        error.response?.data?.detail || "비활성화 조건 확인에 실패했습니다.",
+        "error"
+      );
     }
   };
 
@@ -167,27 +235,25 @@ export function AutoTradingSection({
               <button
                 onClick={handleActivate}
                 disabled={
-                  isActivating || sessionStatus?.toUpperCase() !== "COMPLETED"
+                  isActivating || isCheckingKiwoom || sessionStatus?.toUpperCase() !== "COMPLETED"
                 }
-                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                  sessionStatus?.toUpperCase() !== "COMPLETED"
-                    ? "bg-gray-300 cursor-not-allowed"
-                    : isActivating
-                      ? "bg-red-400 cursor-wait"
-                      : "bg-red-500 hover:bg-red-600"
-                }`}
+                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${sessionStatus?.toUpperCase() !== "COMPLETED"
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : isActivating || isCheckingKiwoom
+                    ? "bg-red-400 cursor-wait"
+                    : "bg-red-500 hover:bg-red-600"
+                  }`}
               >
-                {isActivating ? "활성화 중..." : "키움증권 연동 활성화"}
+                {isCheckingKiwoom ? "확인 중..." : isActivating ? "활성화 중..." : "키움증권 연동 활성화"}
               </button>
             ) : (
               <button
                 onClick={handleDeactivate}
                 disabled={isDeactivating}
-                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                  isDeactivating
-                    ? "bg-gray-400 cursor-wait"
-                    : "bg-gray-500 hover:bg-gray-600"
-                }`}
+                className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${isDeactivating
+                  ? "bg-gray-400 cursor-wait"
+                  : "bg-gray-500 hover:bg-gray-600"
+                  }`}
               >
                 {isDeactivating ? "비활성화 중..." : "키움증권 연동 비활성화"}
               </button>
@@ -374,6 +440,54 @@ export function AutoTradingSection({
           </div>
         </div>
       )}
+
+      {/* 키움증권 연동 필요 모달 */}
+      <ConfirmModal
+        isOpen={showKiwoomRequiredModal}
+        onClose={() => setShowKiwoomRequiredModal(false)}
+        onConfirm={handleKiwoomRequiredConfirm}
+        title="증권 계좌 등록 필요"
+        message={`가상매매를 활성화하려면 키움증권 계좌 연동이 필요합니다.\n마이페이지에서 증권 계좌를 등록하시겠습니까?`}
+        confirmText="계좌 등록하기"
+        cancelText="취소"
+        iconType="warning"
+      />
+
+      {/* 가상매매 활성화 성공 모달 */}
+      <ConfirmModal
+        isOpen={showActivateSuccess}
+        onClose={() => setShowActivateSuccess(false)}
+        onConfirm={() => setShowActivateSuccess(false)}
+        title={activateSuccessMessage || "자동매매가 활성화되었습니다."}
+        message=""
+        confirmText="확인"
+        iconType="success"
+        alertOnly
+      />
+
+      {/* 가상매매 비활성화 성공 모달 */}
+      <ConfirmModal
+        isOpen={showDeactivateSuccess}
+        onClose={() => setShowDeactivateSuccess(false)}
+        onConfirm={() => setShowDeactivateSuccess(false)}
+        title={deactivateSuccessMessage || "자동매매가 비활성화되었습니다."}
+        message=""
+        confirmText="확인"
+        iconType="success"
+        alertOnly
+      />
+
+      {/* 일반 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
     </>
   );
 }

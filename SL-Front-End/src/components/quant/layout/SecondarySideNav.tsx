@@ -146,36 +146,30 @@ export function SecondarySideNav({ isOpen, setIsOpen }: SecondarySideNavProps) {
   return (
     <aside
       className={[
-        "bg-sidebar flex flex-col border-l border-sidebar",
+        "bg-sidebar flex flex-col border-l border-sidebar relative",
         "transition-all duration-300 ease-in-out",
         isOpen ? "w-[204px]" : "w-[52px]",
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      {/* 헤더: 토글 버튼 */}
-      <div
-        className={[
-          "flex items-center h-14 border-b border-surface",
-          isOpen ? "justify-end px-4" : "justify-center px-0",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
+      {/* 헤더: 토글 버튼 - 항상 보이도록 */}
+      <div className="h-14 border-b border-surface flex items-center justify-center">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-6 h-6 flex items-center justify-center hover:opacity-70 transition-opacity"
+          className={`w-8 h-8 flex items-center justify-center hover:opacity-70 transition-all shrink-0
+            ${isOpen ? "ml-auto mr-4" : ""}
+          `}
           aria-label={isOpen ? "사이드바 닫기" : "사이드바 열기"}
         >
-          <div className="relative w-6 h-6">
-            <Image
-              src={isOpen ? "/icons/arrow_left.svg" : "/icons/arrow_right.svg"}
-              alt=""
-              fill
-              className="object-contain"
-              aria-hidden="true"
-            />
-          </div>
+          <Image
+            src={isOpen ? "/icons/arrow_left.svg" : "/icons/arrow_right.svg"}
+            alt=""
+            width={24}
+            height={24}
+            className="object-contain"
+            aria-hidden="true"
+          />
         </button>
       </div>
 

@@ -9,7 +9,7 @@ import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
 import { useBacktestConfigStore } from "@/stores";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 /**
@@ -65,14 +65,30 @@ export function BuyConditionsSection() {
   // 논리식 자동 생성 모드 (기본값: true)
   const [isAutoLogic, setIsAutoLogic] = useState(true);
 
-  // 우선순위 팩터 기본값 설정 (최초 1회만)
+  // 초기 기본값 설정 완료 여부 (race condition 방지)
+  const initialDefaultSetRef = useRef(false);
+
+  // 우선순위 팩터 기본값 설정 (컴포넌트 최초 마운트 시 1회만)
+  // AI 헬퍼에서 priority_factor를 설정하면 이후 기본값으로 덮어쓰지 않음
   useEffect(() => {
-    if (!priority_factor && factors.length > 0) {
-      // PER 팩터를 기본값으로 설정
+    // 이미 초기 기본값 설정이 완료되었으면 무시 (AI 헬퍼 등 외부에서 설정 시 덮어쓰기 방지)
+    if (initialDefaultSetRef.current) return;
+
+    const hasExistingValue = priority_factor && priority_factor.length > 0;
+
+    if (hasExistingValue) {
+      // 이미 값이 있으면 초기화 완료로 표시하고 종료
+      initialDefaultSetRef.current = true;
+      return;
+    }
+
+    if (factors.length > 0) {
+      // PER 팩터를 기본값으로 설정 (최초 1회만)
       const defaultFactor = factors.find((f) => f.name === "per") || factors[0];
       if (defaultFactor) {
-        setPriorityFactor(`{${defaultFactor.display_name}}`);
-        setPriorityFactorDisplay(defaultFactor.display_name);
+        setPriorityFactor(`기본값({${defaultFactor.display_name}})`);
+        setPriorityFactorDisplay(`기본값({${defaultFactor.display_name}})`);
+        initialDefaultSetRef.current = true;
       }
     }
   }, [factors, priority_factor, setPriorityFactor]);

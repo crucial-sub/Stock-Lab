@@ -311,11 +311,12 @@ export default function QuantStrategySummaryPanel({
         ${isOpen ? "w-[26.25rem]" : "w-10"}
       `}
     >
-      {/* 화살표 버튼 */}
+      {/* 화살표 버튼 - 항상 보이도록 고정 */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`absolute ${isOpen ? "left-5 top-5" : "right-2 left-2 top-5"
-          } top-5 z-10 hover:opacity-70 transition-opacity`}
+        className={`absolute top-5 z-10 hover:opacity-70 transition-opacity
+          ${isOpen ? "left-5" : "left-1/2 -translate-x-1/2"}
+        `}
         aria-label={isOpen ? "요약 패널 닫기" : "요약 패널 열기"}
       >
         <Image

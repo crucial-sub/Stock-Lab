@@ -104,13 +104,14 @@ export function BacktestExecutionRenderer({
       isCompleted,
     });
 
-    if (backtestStatus === "failed") {
+    // 실패 또는 에러 상태 처리
+    if (backtestStatus === "failed" || backtestStatus === "error") {
       setPhase("error");
       return;
     }
 
-    // 시간 추적 시작 (failed는 위에서 이미 return 처리됨)
-    if (!startTimeRef.current && backtestStatus !== "error") {
+    // 시간 추적 시작 (위에서 failed/error는 이미 return 처리됨)
+    if (!startTimeRef.current) {
       startTimeRef.current = Date.now();
     }
 

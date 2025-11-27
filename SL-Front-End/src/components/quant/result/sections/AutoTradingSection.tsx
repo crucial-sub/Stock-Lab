@@ -54,7 +54,7 @@ export function AutoTradingSection({
     setAlertModal({ isOpen: true, title, message, iconType });
   };
 
-  // 내 가상매매 전략 목록 조회
+  // 내 키움증권 연동 전략 목록 조회
   const { data: strategies, isLoading } = useQuery({
     queryKey: ["autoTradingStrategies"],
     queryFn: autoTradingApi.getMyAutoTradingStrategies,
@@ -86,7 +86,7 @@ export function AutoTradingSection({
     onError: (error: any) => {
       showAlert(
         "활성화 실패",
-        error.response?.data?.detail || "가상매매 활성화에 실패했습니다.",
+        error.response?.data?.detail || "키움증권 연동 활성화에 실패했습니다.",
         "error"
       );
       setIsActivating(false);
@@ -112,7 +112,7 @@ export function AutoTradingSection({
     onError: (error: any) => {
       showAlert(
         "비활성화 실패",
-        error.response?.data?.detail || "가상매매 비활성화에 실패했습니다.",
+        error.response?.data?.detail || "키움증권 연동 비활성화에 실패했습니다.",
         "error"
       );
       setIsDeactivating(false);
@@ -220,12 +220,12 @@ export function AutoTradingSection({
           {/* 왼쪽: 제목 */}
           <div>
             <h2 className="text-lg font-bold text-text-strong">
-              증권사 연동 가상매매 {activeStrategy ? "(활성화됨)" : ""}
+              증권사 연동 키움증권 연동 {activeStrategy ? "(활성화됨)" : ""}
             </h2>
             <p className="text-sm text-text-muted mt-1">
               {activeStrategy
-                ? "백테스트 전략을 기반으로 증권사 계좌와 연동되어 가상매매가 실행됩니다. (모의투자 전용)"
-                : "백테스트 전략을 증권사와 연동하여 가상매매로 전환하세요. (모의투자 전용)"}
+                ? "백테스트 전략을 기반으로 키움증권 계좌와 연동되어 가상매매가 실행됩니다. (모의투자 전용)"
+                : "백테스트 전략을 키움증권과 연동하여 가상매매로 전환하세요. (모의투자 전용)"}
             </p>
           </div>
 
@@ -244,7 +244,7 @@ export function AutoTradingSection({
                     : "bg-red-500 hover:bg-red-600"
                   }`}
               >
-                {isCheckingKiwoom ? "확인 중..." : isActivating ? "활성화 중..." : "가상매매 활성화"}
+                {isCheckingKiwoom ? "확인 중..." : isActivating ? "활성화 중..." : "키움증권 연동 활성화"}
               </button>
             ) : (
               <button
@@ -255,7 +255,7 @@ export function AutoTradingSection({
                   : "bg-gray-500 hover:bg-gray-600"
                   }`}
               >
-                {isDeactivating ? "비활성화 중..." : "가상매매 비활성화"}
+                {isDeactivating ? "비활성화 중..." : "키움증권 연동 비활성화"}
               </button>
             )}
           </div>
@@ -341,7 +341,7 @@ export function AutoTradingSection({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
             <h3 className="text-xl font-bold text-gray-900 mb-4">
-              가상매매 비활성화
+              키움증권 연동 비활성화
             </h3>
 
             {/* 현재 상태 표시 */}

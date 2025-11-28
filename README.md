@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6?style=flat-square&logo=typescript" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-3.4-06B6D4?style=flat-square&logo=tailwindcss" />
   <img src="https://img.shields.io/badge/Zustand-5.0-764ABC?style=flat-square" />
+  <img src="https://img.shields.io/badge/TanStack_Query-5.9-160440?style=flat-square&logo=react-query" />
 </p>
 
 <p align="center">
@@ -43,7 +44,7 @@
 
 <br />
 
-[📖 API 문서](./docs/BACKEND_API_SPECIFICATION.md) · [🏗️ 기술 문서](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md)
+[📖 API 문서](./docs/BACKEND_API_SPECIFICATION.md) · [🏗️ 기술 문서](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md) · [🎨 Frontend 아키텍처](./docs/FRONTEND_TECHNICAL_ARCHITECTURE.md) · [🤖 AI Chatbot](./docs/CHATBOT_SPECIFICATION.md)
 
 </div>
 
@@ -68,9 +69,9 @@
 ### 🧪 백테스팅 엔진
 - **150+ 금융 팩터** 실시간 계산
 - Numba JIT 컴파일로 **10배 이상** 성능 최적화
-- 10년치 데이터 **1분 이내** 백테스트 완료
+- 1년치 데이터 **30초 이내** 백테스트 완료
 - 벡터화 조건 평가 (500~1000배 개선)
-- SSE 기반 실시간 진행률 스트리밍
+- WebSocket 기반 실시간 진행률 스트리밍
 
 </td>
 <td width="50%">
@@ -145,8 +146,8 @@
 <img src="https://github.com/crucial-sub.png" width="100px" style="border-radius:50%"/><br />
 <b>박중섭</b>
 </a><br />
-<sub>Design · Frontend</sub><br />
-<sub>🖌️ 디자인 시스템</sub>
+<sub>Frontend · LogicDesign</sub><br />
+<sub>📊 퀀트 & 백테스트 FE</sub>
 </td>
 <td align="center" width="20%">
 <a href="https://github.com/GolemOnce">
@@ -397,7 +398,9 @@ uvicorn api.main:app --port 8001 --reload
 | Document | Description |
 |----------|-------------|
 | [📖 Backend API 명세서](./docs/BACKEND_API_SPECIFICATION.md) | 106개 엔드포인트 상세 문서 |
-| [🏗️ 기술 아키텍처](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md) | 시스템 설계, DB 스키마, 성능 최적화 |
+| [🏗️ Backend 기술 아키텍처](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md) | 시스템 설계, DB 스키마, 성능 최적화 |
+| [🎨 Frontend 기술 아키텍처](./docs/FRONTEND_TECHNICAL_ARCHITECTURE.md) | Next.js 16, React 19, 상태관리, API 통신 |
+| [🧩 Frontend UI 컴포넌트](./docs/FRONTEND_UI_COMPONENTS.md) | 40+ 컴포넌트, 페이지 구조, 디자인 시스템 |
 | [🤖 AI Chatbot 명세서](./docs/CHATBOT_SPECIFICATION.md) | LLM 파이프라인, 프롬프트, DSL 생성 |
 
 <br />

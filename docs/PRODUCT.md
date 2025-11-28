@@ -166,7 +166,7 @@ Stock Lab은 **퀀트 전략을 누구나 쉽게 설계·검증·운용할 수 �
 
 ---
 
-## 사용자 여정(User Journey)
+## User Journey
 
 ### 투자 초보 (Persona #1)
 1. 앱 실행 → 온보딩 시작  

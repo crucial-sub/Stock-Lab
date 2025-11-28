@@ -350,8 +350,16 @@ Stock-Lab/
 │   └── staging.yml
 │
 ├── 📁 docs/                          # Documentation
-│   ├── BACKEND_API_SPECIFICATION.md
-│   └── BACKEND_TECHNICAL_ARCHITECTURE.md
+│   ├── PRODUCT.md                    # 서비스 기획서
+│   ├── BACKEND_API_SPECIFICATION.md  # 백엔드 API 명세
+│   ├── BACKEND_TECHNICAL_ARCHITECTURE.md
+│   ├── CHATBOT_SPECIFICATION.md      # 챗봇 아키텍처/워크플로우
+│   ├── CHATBOT_API.md                # 챗봇 API 명세
+│   ├── FRONTEND_TECHNICAL_ARCHITECTURE.md
+│   ├── FRONTEND_UI_COMPONENTS.md     # 주요 UI 컴포넌트 구조
+│   └── img/
+│       ├── preview/                  # README Preview 스크린샷
+│       └── poster/                   # Showcase Poster 이미지
 │
 └── 🐳 docker-compose.yml             # Docker Orchestration
 ```

@@ -15,40 +15,29 @@ interface DropdownProps {
   onChange: (value: string) => void;
   /** 드롭다운 variant (크기 및 스타일) */
   variant?: "large" | "medium" | "small";
+  /** 전체 너비 사용 여부 (모바일 대응) */
+  fullWidth?: boolean;
   /** 추가 CSS 클래스 */
   className?: string;
 }
 
 /**
- * 3가지 형태를 지닌 공용 커스텀 드롭다운 컴포넌트
- * - large: 88px 너비, 48px 높이, 20px 폰트, 28px 아이콘
- * - medium: 200px 너비, 36px 높이, 일반 폰트, 28px 아이콘
- * - small: 104px 너비, 22px 높이, 12px 폰트, 14px 아이콘
+ * 반응형 커스텀 드롭다운 컴포넌트
+ *
+ * @features
+ * - 3가지 크기 variant 지원
+ * - fullWidth 옵션으로 모바일에서 전체 너비 사용 가능
+ * - 터치 친화적인 최소 높이 (44px) 보장
+ * - 외부 클릭 시 자동 닫힘
  *
  * @example
  * ```tsx
- * // Large variant
- * <Dropdown
- *   value={value}
- *   options={[{ value: "1", label: "옵션 1" }]}
- *   onChange={setValue}
- *   variant="large"
- * />
- *
- * // Medium variant
+ * // 반응형 드롭다운 (모바일에서 전체 너비)
  * <Dropdown
  *   value={value}
  *   options={options}
  *   onChange={setValue}
- *   variant="medium"
- * />
- *
- * // Small variant
- * <Dropdown
- *   value={value}
- *   options={options}
- *   onChange={setValue}
- *   variant="small"
+ *   fullWidth
  * />
  * ```
  */
@@ -57,6 +46,7 @@ export function Dropdown({
   options,
   onChange,
   variant = "medium",
+  fullWidth = false,
   className = "",
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -80,30 +70,45 @@ export function Dropdown({
     }
   }, [isOpen]);
 
-  // Variant별 스타일 설정
+  // Variant별 스타일 설정 (반응형)
   const variantStyles = {
     large: {
-      button:
-        "w-[88px] h-12 border-[0.5px] border-tag-neutral rounded-md p-[10px]",
-      text: "text-[20px] font-semibold",
-      icon: { width: 28, height: 28 },
-      menu: "w-[88px] mt-1",
-      option: "px-[10px] py-2 text-[20px] font-semibold",
+      button: [
+        // 기본: 모바일 친화적 높이
+        "min-h-[2.75rem] sm:h-12",
+        "border-[0.5px] border-tag-neutral rounded-md",
+        "px-3 py-2 sm:p-[10px]",
+        // 너비: fullWidth이면 전체, 아니면 고정
+        fullWidth ? "w-full sm:w-[88px]" : "w-[88px]",
+      ].join(" "),
+      text: "text-base sm:text-[20px] font-semibold",
+      icon: { width: 24, height: 24, smWidth: 28, smHeight: 28 },
+      menu: fullWidth ? "w-full sm:w-[88px] mt-1" : "w-[88px] mt-1",
+      option: "px-3 py-3 sm:px-[10px] sm:py-2 text-base sm:text-[20px] font-semibold min-h-[2.75rem]",
     },
     medium: {
-      button: "w-[200px] h-9 border-[0.5px] border-tag-neutral rounded-md p-1",
-      text: "font-normal",
-      icon: { width: 28, height: 28 },
-      menu: "w-[200px] mt-1",
-      option: "px-1 py-2 font-normal",
+      button: [
+        "min-h-[2.75rem] sm:h-9",
+        "border-[0.5px] border-tag-neutral rounded-md",
+        "px-3 py-2 sm:p-1",
+        fullWidth ? "w-full sm:w-[200px]" : "w-[200px]",
+      ].join(" "),
+      text: "text-base sm:text-sm font-normal",
+      icon: { width: 24, height: 24, smWidth: 28, smHeight: 28 },
+      menu: fullWidth ? "w-full sm:w-[200px] mt-1" : "w-[200px] mt-1",
+      option: "px-3 py-3 sm:px-1 sm:py-2 font-normal min-h-[2.75rem] sm:min-h-0",
     },
     small: {
-      button:
-        "w-[104px] h-[22px] border-[0.5px] border-tag-neutral rounded-md p-1",
-      text: "font-normal text-[12px]",
-      icon: { width: 14, height: 14 },
-      menu: "w-[104px] mt-1",
-      option: "px-1 py-1 font-normal text-[12px]",
+      button: [
+        "min-h-[2.75rem] sm:min-h-0 sm:h-[22px]",
+        "border-[0.5px] border-tag-neutral rounded-md",
+        "px-3 py-2 sm:p-1",
+        fullWidth ? "w-full sm:w-[104px]" : "w-[104px]",
+      ].join(" "),
+      text: "text-base sm:text-[12px] font-normal",
+      icon: { width: 20, height: 20, smWidth: 14, smHeight: 14 },
+      menu: fullWidth ? "w-full sm:w-[104px] mt-1" : "w-[104px] mt-1",
+      option: "px-3 py-3 sm:px-1 sm:py-1 font-normal text-base sm:text-[12px] min-h-[2.75rem] sm:min-h-0",
     },
   };
 
@@ -120,25 +125,25 @@ export function Dropdown({
       >
         {/* 왼쪽 텍스트 영역 */}
         <span
-          className={`flex-1 text-left text-text-strong ${currentVariant.text}`}
+          className={`flex-1 text-left text-text-strong truncate ${currentVariant.text}`}
         >
           {selectedOption?.label || "선택"}
         </span>
 
-        {/* 오른쪽 화살표 영역 */}
+        {/* 오른쪽 화살표 영역 - 반응형 아이콘 크기 */}
         <Image
           src={isOpen ? "/icons/arrow_up.svg" : "/icons/arrow_down.svg"}
           alt=""
           width={currentVariant.icon.width}
           height={currentVariant.icon.height}
-          className="opacity-60"
+          className="opacity-60 shrink-0 sm:w-7 sm:h-7"
         />
       </button>
 
       {/* 드롭다운 메뉴 */}
       {isOpen && (
         <div
-          className={`absolute z-10 ${currentVariant.menu} bg-bg-surface border border-border-default rounded-md shadow-lg max-h-60 overflow-y-auto`}
+          className={`absolute z-20 ${currentVariant.menu} bg-base-0 border border-surface rounded-md shadow-elev-card-soft max-h-60 overflow-y-auto`}
         >
           {options.map((option) => (
             <button
@@ -148,10 +153,10 @@ export function Dropdown({
                 onChange(option.value);
                 setIsOpen(false);
               }}
-              className={`w-full text-left ${currentVariant.option} hover:bg-bg-muted transition-colors ${
+              className={`w-full text-left ${currentVariant.option} transition-colors ${
                 option.value === value
-                  ? "bg-bg-muted text-accent-primary"
-                  : "text-text-body"
+                  ? "bg-surface text-brand"
+                  : "text-body hover:bg-surface"
               }`}
             >
               {option.label}

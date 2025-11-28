@@ -12,26 +12,32 @@
  * - 백테스트 완료 시 자동으로 결과 데이터 갱신
  */
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
+import { PortfolioShareModal } from "@/components/modal/PortfolioShareModal";
 import { BacktestLoadingState } from "@/components/quant/result/BacktestLoadingState";
 import { ReturnsTab } from "@/components/quant/result/ReturnsTab";
-import { SettingsTab } from "@/components/quant/result/SettingsTab";
-import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
-import { StockInfoTab } from "@/components/quant/result/StockInfoTab";
 import {
   AutoTradingSection,
   PageHeader,
   StatisticsSection,
   TabNavigation,
 } from "@/components/quant/result/sections";
+import { SettingsTab } from "@/components/quant/result/SettingsTab";
+import { StatisticsTabWrapper } from "@/components/quant/result/StatisticsTabWrapper";
+import { StockInfoTab } from "@/components/quant/result/StockInfoTab";
 import { TradingHistoryTab } from "@/components/quant/result/TradingHistoryTab";
 import {
+  backtestQueryKey,
   useBacktestResultQuery,
   useBacktestSettingsQuery,
-  useBacktestStatusQuery,
 } from "@/hooks/useBacktestQuery";
+import { useBacktestStatus } from "@/hooks/useBacktestStatus";
+import { communityApi } from "@/lib/api/community";
+import { strategyApi } from "@/lib/api/strategy";
 import { mockBacktestResult } from "@/mocks/backtestResult";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 interface QuantResultPageClientProps {
   backtestId: string;
@@ -45,57 +51,320 @@ export function QuantResultPageClient({
   initialStrategyName,
 }: QuantResultPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("stockInfo");
+  const [editableStrategyName, setEditableStrategyName] = useState<
+    string | undefined
+  >(initialStrategyName);
+  const [hasEditedName, setHasEditedName] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editInputValue, setEditInputValue] = useState("");
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 공유 해제 확인 모달 상태
+  const [showUnshareConfirm, setShowUnshareConfirm] = useState(false);
+
   const queryClient = useQueryClient();
-  const previousStatusRef = useRef<string | undefined>(undefined);
+  const router = useRouter();
+
+  // 시간 추적을 위한 상태
+  const startTimeRef = useRef<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const tickingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Mock 모드 체크
   const isMockMode = backtestId.startsWith("mock");
 
-  // 백테스트 상태 폴링 (pending/running 상태일 때만)
-  const { data: statusData } = useBacktestStatusQuery(
-    backtestId,
-    !isMockMode, // mock 모드가 아닐 때만 활성화
-    2000, // 2초마다 폴링
+  // 🚀 통합 백테스트 상태 훅 사용 (WebSocket 기반 실시간 업데이트)
+  // Mock 모드가 아닌 경우에만 WebSocket 연결 (포트폴리오 결과도 상태 확인 필요)
+  const {
+    status: backtestStatus,
+    progress,
+    chartData,
+    isCompleted,
+    error: wsError,
+    currentReturn,
+    currentCapital,
+    currentDate,
+    currentMdd,
+    buyCount,
+    sellCount,
+  } = useBacktestStatus(
+    isMockMode ? null : backtestId,
+    !isMockMode
   );
 
-  // React Query로 백테스트 결과 조회 (completed 상태일 때만)
+  // React Query로 백테스트 결과 조회
+  // WebSocket으로 완료되지 않더라도 API 호출하여 저장된 포트폴리오 결과 표시
   const {
     data: result,
     isLoading,
     error,
   } = useBacktestResultQuery(
     backtestId,
-    !isMockMode && statusData?.status === "completed",
+    !isMockMode, // isCompleted 조건 제거 - 항상 API 호출
   );
 
-  // 백테스트 설정 조회
+  // API 응답에서 완료 상태 확인 (WebSocket 완료 또는 API에서 completed/failed 상태)
+  const isApiCompleted = result?.status === "completed" || result?.status === "failed";
+  const isActuallyCompleted = isCompleted || isApiCompleted;
+
+  // 백테스트 설정 조회 (진행 중에도 조회하여 차트 X축 고정에 사용)
   const { data: settings, isLoading: isLoadingSettings } =
     useBacktestSettingsQuery(
       backtestId,
-      !isMockMode && statusData?.status === "completed",
+      !isMockMode, // 진행 중에도 설정 조회 (차트 X축 고정 필요)
     );
 
-  // 백테스트 완료 시 결과 데이터 자동 갱신
+  const { data: myStrategies } = useQuery({
+    queryKey: ["myStrategies"],
+    queryFn: strategyApi.getMyStrategies,
+    staleTime: 1000 * 30,
+    enabled: !isMockMode,
+  });
+
+  const currentStrategyMeta = myStrategies?.strategies.find(
+    (item) => item.sessionId === backtestId,
+  );
+  const strategyId = currentStrategyMeta?.strategyId;
+  const isOwner = currentStrategyMeta !== undefined;
+  const isPublic = currentStrategyMeta?.isPublic || false;
+
+  const resolvedStrategyName =
+    currentStrategyMeta?.strategyName ||
+    settings?.strategyName ||
+    initialStrategyName;
+
+  // 🕒 시간 추적 로직 (백테스트 진행 중일 때만 동작)
   useEffect(() => {
-    if (!isMockMode && statusData?.status === "completed") {
-      // 상태가 running → completed로 변경되었을 때만 invalidate
-      if (previousStatusRef.current === "running") {
-        console.log("✅ 백테스트 완료 감지 - 결과 데이터 자동 갱신");
-        queryClient.invalidateQueries({
-          queryKey: ["backtest", "detail", backtestId],
+    if (!isMockMode && (backtestStatus === "running" || backtestStatus === "pending")) {
+      // 시간 추적 시작
+      if (!startTimeRef.current) {
+        startTimeRef.current = Date.now();
+      }
+    }
+  }, [isMockMode, backtestStatus]);
+
+  // 초 단위 부드러운 시간 갱신용 로컬 타이머
+  useEffect(() => {
+    if (!isMockMode && (backtestStatus === "running" || backtestStatus === "pending")) {
+      tickingIntervalRef.current = setInterval(() => {
+        if (!startTimeRef.current) return;
+        const now = Date.now();
+        const elapsed = now - startTimeRef.current;
+        setElapsedTime(elapsed);
+      }, 1000);
+    }
+
+    return () => {
+      if (tickingIntervalRef.current) {
+        clearInterval(tickingIntervalRef.current);
+        tickingIntervalRef.current = null;
+      }
+    };
+  }, [isMockMode, backtestStatus]);
+
+  // 🔄 WebSocket 완료 시 결과 데이터 refetch (타이밍 이슈 해결)
+  // DB 저장 완료 후 WebSocket 완료 메시지가 전송되므로, 이 시점에 데이터를 다시 가져옴
+  useEffect(() => {
+    if (isCompleted && !isMockMode) {
+      // WebSocket에서 완료 메시지를 받으면 쿼리를 invalidate하여 최신 데이터 fetch
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.detail(backtestId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.settings(backtestId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["myStrategies"],
+      });
+      console.log("[QuantResultPageClient] WebSocket 완료 - 결과 데이터 refetch");
+    }
+  }, [isCompleted, isMockMode, backtestId, queryClient]);
+
+  // 외부 데이터로부터 전략명 동기화 (사용자가 직접 수정한 경우는 유지)
+  useEffect(() => {
+    if (!hasEditedName && resolvedStrategyName) {
+      setEditableStrategyName(resolvedStrategyName);
+    }
+  }, [hasEditedName, resolvedStrategyName]);
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
+
+  const updateNameMutation = useMutation({
+    mutationFn: (name: string) => {
+      if (!strategyId) {
+        return Promise.reject(new Error("전략 ID를 찾을 수 없습니다."));
+      }
+      return strategyApi.updateStrategyName(strategyId, name);
+    },
+    onSuccess: (_, name) => {
+      setEditableStrategyName(name);
+      setHasEditedName(true);
+      setIsEditingName(false);
+      queryClient.invalidateQueries({ queryKey: ["myStrategies"] });
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.status(backtestId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.settings(backtestId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: backtestQueryKey.detail(backtestId),
+      });
+
+      queryClient.setQueryData(
+        backtestQueryKey.status(backtestId),
+        (prev: any) => (prev ? { ...prev, strategyName: name } : prev),
+      );
+      queryClient.setQueryData(
+        backtestQueryKey.settings(backtestId),
+        (prev: any) => (prev ? { ...prev, strategyName: name } : prev),
+      );
+    },
+    onError: (error: any) => {
+      showAlert(
+        "이름 수정 실패",
+        error?.response?.data?.detail ||
+        error?.message ||
+        "백테스트 이름을 수정하지 못했습니다.",
+        "error"
+      );
+    },
+  });
+
+  const handleStartEdit = () => {
+    const currentName =
+      editableStrategyName ||
+      resolvedStrategyName ||
+      backtestId ||
+      "백테스트 이름";
+    setEditInputValue(currentName);
+    setIsEditingName(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingName(false);
+    setEditInputValue("");
+  };
+
+  const handleSaveEdit = () => {
+    const nextName = editInputValue.trim();
+    if (!nextName) return;
+
+    if (!strategyId) {
+      showAlert("알림", "전략 ID를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.", "warning");
+      return;
+    }
+
+    updateNameMutation.mutate(nextName);
+  };
+
+  // 전략 복제 핸들러
+  const handleClone = async () => {
+    try {
+      const response = await communityApi.cloneStrategy(backtestId);
+
+      // 복제 성공 - 모달 표시 후 페이지 이동
+      setAlertModal({
+        isOpen: true,
+        title: "복제 완료",
+        message: `전략이 성공적으로 복제되었습니다!\n\n복제된 전략: ${response.message}\n포트폴리오 목록으로 이동합니다.`,
+        iconType: "success",
+      });
+
+      // 모달이 닫힌 후 페이지 이동을 위해 setTimeout 사용
+      setTimeout(() => {
+        window.location.href = "/quant";
+      }, 1500);
+    } catch (error: any) {
+      showAlert(
+        "복제 실패",
+        error?.response?.data?.detail ||
+        error?.message ||
+        "전략 복제에 실패했습니다.",
+        "error"
+      );
+    }
+  };
+
+  // 전략 공유 토글 핸들러
+  const handleToggleShare = () => {
+    if (isPublic) {
+      // 공유 해제 확인 모달 표시
+      setShowUnshareConfirm(true);
+    } else {
+      // 공유 설정 모달 열기
+      setIsShareModalOpen(true);
+    }
+  };
+
+  // 공유 해제 확인 핸들러
+  const handleConfirmUnshare = () => {
+    setShowUnshareConfirm(false);
+    handleShareConfirm({ description: "", isAnonymous: false });
+  };
+
+  // 공유 설정 확인 핸들러
+  const handleShareConfirm = async (params: {
+    description: string;
+    isAnonymous: boolean;
+  }) => {
+    if (!strategyId) {
+      showAlert("알림", "전략 ID를 찾을 수 없습니다.", "warning");
+      return;
+    }
+
+    try {
+      await strategyApi.updateSharingSettings(strategyId, {
+        isPublic: !isPublic,
+        isAnonymous: params.isAnonymous,
+      });
+      // description은 별도로 업데이트
+      if (params.description) {
+        await strategyApi.updateStrategy(strategyId, {
+          description: params.description,
         });
       }
-      previousStatusRef.current = statusData.status;
-    } else if (statusData?.status) {
-      previousStatusRef.current = statusData.status;
+      showAlert(
+        isPublic ? "공유 해제 완료" : "공유 완료",
+        isPublic
+          ? "전략 공유가 해제되었습니다."
+          : "전략이 성공적으로 공유되었습니다.",
+        "success"
+      );
+      setIsShareModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["myStrategies"] });
+    } catch (error: any) {
+      showAlert(
+        "공유 설정 실패",
+        error?.response?.data?.detail ||
+        error?.message ||
+        "전략 공유 설정에 실패했습니다.",
+        "error"
+      );
     }
-  }, [statusData?.status, backtestId, isMockMode, queryClient]);
+  };
 
   // Mock 데이터 또는 실제 데이터 사용
   const finalResult = isMockMode ? mockBacktestResult : result;
 
-  // 상태 데이터 로딩 중이거나 아직 데이터가 없는 경우
-  if (!isMockMode && !statusData) {
+  // API 데이터도 없고 WebSocket 상태도 없는 경우에만 로딩 표시
+  // (저장된 포트폴리오는 API 데이터가 있으므로 로딩 표시 안함)
+  if (!isMockMode && !backtestStatus && !result) {
     return (
       <div className="min-h-screen bg-bg-app flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -106,37 +375,48 @@ export function QuantResultPageClient({
     );
   }
 
-  // 백테스트가 아직 실행 중인 경우
+  // yieldPoints 형식 변환 (차트 컴포넌트용)
+  const yieldPoints = chartData.map(point => ({
+    date: point.date,
+    cumulativeReturn: point.cumulativeReturn,
+    buyCount: point.buyCount,
+    sellCount: point.sellCount,
+  }));
+
+  // 백테스트가 아직 실행 중인 경우 (저장된 포트폴리오는 제외)
+  // API 응답이 있고 completed 상태면 로딩 UI를 표시하지 않음
   if (
     !isMockMode &&
-    statusData &&
-    (statusData.status === "pending" || statusData.status === "running")
+    !isApiCompleted &&  // API에서 completed가 아닌 경우만
+    (backtestStatus === "pending" || backtestStatus === "running")
   ) {
     console.log(
-      "📊 백테스트 진행 중 - yieldPoints:",
-      statusData.yieldPoints ? statusData.yieldPoints.length : 0,
+      "📊 백테스트 진행 중 - chartData points:",
+      chartData.length,
     );
     return (
       <BacktestLoadingState
         backtestId={backtestId}
-        strategyName={statusData.strategyName || initialStrategyName}
-        status={statusData.status}
-        progress={statusData.progress || 0}
-        buyCount={statusData.buyCount}
-        sellCount={statusData.sellCount}
-        currentReturn={statusData.currentReturn}
-        currentCapital={statusData.currentCapital}
-        currentDate={statusData.currentDate}
-        currentMdd={statusData.currentMdd}
-        startDate={statusData.startDate}
-        endDate={statusData.endDate}
-        yieldPoints={statusData.yieldPoints}
+        strategyName={resolvedStrategyName}
+        status={backtestStatus}
+        progress={progress}
+        buyCount={buyCount}
+        sellCount={sellCount}
+        currentReturn={currentReturn}
+        currentCapital={currentCapital}
+        currentDate={currentDate}
+        currentMdd={currentMdd}
+        startDate={settings?.startDate}
+        endDate={settings?.endDate}
+        elapsedTime={elapsedTime}
+        yieldPoints={yieldPoints}
+        webSocketEnabled={true}
       />
     );
   }
 
   // 백테스트가 실패한 경우
-  if (!isMockMode && statusData?.status === "failed") {
+  if (!isMockMode && (backtestStatus === "failed" || backtestStatus === "error")) {
     return (
       <div className="min-h-screen bg-bg-app flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -144,7 +424,7 @@ export function QuantResultPageClient({
             백테스트 실행 실패
           </h1>
           <p className="text-text-secondary">
-            백테스트 실행 중 오류가 발생했습니다.
+            {wsError || "백테스트 실행 중 오류가 발생했습니다."}
           </p>
         </div>
       </div>
@@ -214,33 +494,92 @@ export function QuantResultPageClient({
       return closestPoint?.cumulativeReturn || 0;
     };
 
-    return [
-      { label: "최근 거래일", value: latestReturn },
-      { label: "최근 일주일", value: latestReturn - getReturnAtDate(7) },
-      { label: "최근 1개월", value: latestReturn - getReturnAtDate(30) },
-      { label: "최근 3개월", value: latestReturn - getReturnAtDate(90) },
-      { label: "최근 6개월", value: latestReturn - getReturnAtDate(180) },
-      { label: "최근 1년", value: latestReturn - getReturnAtDate(365) },
-    ];
+    // 백테스트 총 기간 계산 (첫 날짜 ~ 마지막 날짜)
+    const firstPoint = sortedPoints[0];
+    const firstDate = new Date(firstPoint.date);
+    const totalDays = Math.floor(
+      (latestDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    const periods = [];
+
+    // 최근 거래일은 항상 표시
+    periods.push({ label: "최근 거래일", value: latestReturn });
+
+    // 백테스트 기간에 따라 동적으로 표시할 기간 결정
+    if (totalDays >= 7) {
+      periods.push({
+        label: "최근 일주일",
+        value: latestReturn - getReturnAtDate(7),
+      });
+    }
+    if (totalDays >= 30) {
+      periods.push({
+        label: "최근 1개월",
+        value: latestReturn - getReturnAtDate(30),
+      });
+    }
+    if (totalDays >= 90) {
+      periods.push({
+        label: "최근 3개월",
+        value: latestReturn - getReturnAtDate(90),
+      });
+    }
+    if (totalDays >= 180) {
+      periods.push({
+        label: "최근 6개월",
+        value: latestReturn - getReturnAtDate(180),
+      });
+    }
+    if (totalDays >= 350) {
+      // 350일 이상이면 "최근 1년" 표시 (거래일 기준으로 약간의 여유 허용)
+      periods.push({
+        label: "최근 1년",
+        value: latestReturn - getReturnAtDate(365),
+      });
+    }
+    if (totalDays >= 700) {
+      periods.push({
+        label: "최근 2년",
+        value: latestReturn - getReturnAtDate(730),
+      });
+    }
+    if (totalDays >= 1050) {
+      periods.push({
+        label: "최근 3년",
+        value: latestReturn - getReturnAtDate(1095),
+      });
+    }
+
+    return periods;
   };
 
   const periodReturns = calculatePeriodReturns();
 
-  // 백테스트 시작/종료 날짜 추출 (yieldPoints의 첫 번째와 마지막 날짜)
-  const _startDate =
-    finalResult.yieldPoints && finalResult.yieldPoints.length > 0
-      ? finalResult.yieldPoints[0].date
-      : undefined;
-  const _endDate =
-    finalResult.yieldPoints && finalResult.yieldPoints.length > 0
-      ? finalResult.yieldPoints[finalResult.yieldPoints.length - 1].date
-      : undefined;
+  const displayStrategyName =
+    editableStrategyName ||
+    resolvedStrategyName ||
+    finalResult.id ||
+    backtestId;
 
   return (
-    <div className="min-h-screen bg-bg-app py-6 px-6">
-      <div className="max-w-[1400px] mx-auto">
+    <div className="min-h-screen py-[5rem] px-[3.5rem]">
+      <div className="mx-auto">
         {/* 페이지 헤더 */}
-        <PageHeader />
+        <PageHeader
+          strategyName={displayStrategyName}
+          isEditingName={isEditingName}
+          editValue={editInputValue}
+          isSavingName={updateNameMutation.isPending}
+          onStartEdit={handleStartEdit}
+          onChangeEditValue={setEditInputValue}
+          onSaveEdit={handleSaveEdit}
+          onCancelEdit={handleCancelEdit}
+          isOwner={isOwner}
+          isPublic={isPublic}
+          onClone={handleClone}
+          onToggleShare={handleToggleShare}
+        />
 
         {/* 통계 섹션 */}
         <StatisticsSection
@@ -249,10 +588,10 @@ export function QuantResultPageClient({
           periodReturns={periodReturns}
         />
 
-        {/* 자동매매 섹션 */}
+        {/* 가상매매 섹션 */}
         <AutoTradingSection
           sessionId={backtestId}
-          sessionStatus={statusData?.status || "completed"}
+          sessionStatus={backtestStatus || "completed"}
         />
 
         {/* 탭 네비게이션 */}
@@ -287,6 +626,40 @@ export function QuantResultPageClient({
           />
         )}
       </div>
+
+      {/* 공유 설정 모달 */}
+      <PortfolioShareModal
+        isOpen={isShareModalOpen}
+        portfolioName={displayStrategyName}
+        initialDescription=""
+        initialIsAnonymous={false}
+        onClose={() => setIsShareModalOpen(false)}
+        onConfirm={handleShareConfirm}
+      />
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
+
+      {/* 공유 해제 확인 모달 */}
+      <ConfirmModal
+        isOpen={showUnshareConfirm}
+        onClose={() => setShowUnshareConfirm(false)}
+        onConfirm={handleConfirmUnshare}
+        title="공유 해제"
+        message="전략 공유를 해제하시겠습니까?"
+        confirmText="해제"
+        cancelText="취소"
+        iconType="question"
+      />
     </div>
   );
 }

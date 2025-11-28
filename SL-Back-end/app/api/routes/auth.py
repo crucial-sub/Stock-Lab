@@ -15,7 +15,7 @@ from app.core.dependencies import get_current_user, get_current_active_user
 from app.core.cache import get_redis
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token, UserDeleteRequest, PasswordChangeRequest
+from app.schemas.user import UserCreate, UserResponse, Token, UserDeleteRequest
 
 router = APIRouter()
 security = HTTPBearer()
@@ -299,7 +299,8 @@ async def get_current_user_info(
         is_active=current_user.is_active,
         is_superuser=current_user.is_superuser,
         created_at=current_user.created_at,
-        has_kiwoom_account=has_kiwoom
+        has_kiwoom_account=has_kiwoom,
+        ai_recommendation_block=current_user.ai_recommendation_block
     )
 
 
@@ -403,57 +404,6 @@ async def update_nickname(
         )
 
 
-@router.patch("/update-password", status_code=status.HTTP_200_OK)
-async def update_password(
-    password_data: PasswordChangeRequest,
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    비밀번호 변경
-
-    Args:
-        password_data: 비밀번호 변경 요청 (current_password, new_password)
-        current_user: 현재 로그인한 유저
-        db: 데이터베이스 세션
-
-    Returns:
-        dict: 비밀번호 변경 성공 메시지
-
-    Raises:
-        HTTPException: 현재 비밀번호가 올바르지 않은 경우
-    """
-    # 현재 비밀번호 확인
-    if not verify_password(password_data.current_password, current_user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="현재 비밀번호가 올바르지 않습니다"
-        )
-
-    # 새 비밀번호와 현재 비밀번호가 같은지 확인
-    if password_data.current_password == password_data.new_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="새 비밀번호는 현재 비밀번호와 달라야 합니다"
-        )
-
-    # 비밀번호 업데이트
-    current_user.hashed_password = get_password_hash(password_data.new_password)
-
-    try:
-        await db.commit()
-        return {
-            "message": "비밀번호가 성공적으로 변경되었습니다",
-            "email": current_user.email
-        }
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="비밀번호 변경 중 오류가 발생했습니다"
-        )
-
-
 @router.delete("/delete-account", status_code=status.HTTP_200_OK)
 async def delete_account(
     delete_request: UserDeleteRequest,
@@ -518,4 +468,34 @@ async def delete_account(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="회원탈퇴 처리 중 오류가 발생했습니다"
+        )
+
+
+@router.patch("/update-ai-recommendation", response_model=UserResponse)
+async def update_ai_recommendation(
+    block: bool = True,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    AI 추천 블록 설정 변경
+
+    Args:
+        block: 블록 여부 (True: 블록, False: 해제)
+        current_user: 현재 로그인한 유저
+        db: 데이터베이스 세션
+
+    Returns:
+        UserResponse: 업데이트된 유저 정보
+    """
+    current_user.ai_recommendation_block = block
+    try:
+        await db.commit()
+        await db.refresh(current_user)
+        return current_user
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="설정 변경 중 오류가 발생했습니다"
         )

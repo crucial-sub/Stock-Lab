@@ -14,6 +14,7 @@ export interface NewsItem {
   publishedAt: string;
   source: string;
   link: string;
+  theme: string;
   pressName?: string;
 }
 

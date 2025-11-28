@@ -193,14 +193,15 @@ export function useBacktestYieldPointsInfiniteQuery(
 export function useBacktestStatusQuery(
   backtestId: string,
   enabled = true,
-  interval = 2000,
+  interval: number | false = 2000,
 ) {
   return useQuery<BacktestStatus, Error>({
     queryKey: backtestQueryKey.status(backtestId),
     queryFn: () => getBacktestStatus(backtestId),
     enabled: enabled && !!backtestId,
     // 백테스트가 완료되거나 실패하면 폴링 중단
-    refetchInterval: (query) => {
+    // interval이 false이면 폴링 비활성화 (WebSocket 사용 시)
+    refetchInterval: interval === false ? false : (query) => {
       const status = query.state.data?.status;
       if (status === "completed" || status === "failed") {
         return false;
@@ -208,7 +209,7 @@ export function useBacktestStatusQuery(
       return interval;
     },
     // 폴링 중에는 항상 재요청
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: interval !== false,
   });
 }
 

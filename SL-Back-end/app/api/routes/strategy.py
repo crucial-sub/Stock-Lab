@@ -6,14 +6,16 @@ Strategy API 라우터
 """
 from datetime import datetime
 import logging
+import json
 from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, desc, func
+from sqlalchemy import select, and_, or_, desc, func, delete as sql_delete
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.cache import cache
 from app.models.simulation import (
     PortfolioStrategy,
     SimulationSession,
@@ -32,6 +34,8 @@ from app.schemas.strategy import (
     StrategyStatisticsSummary,
     BacktestDeleteRequest,
     StrategyUpdate,
+    PublicStrategiesResponse,
+    PublicStrategyListItem,
 )
 from app.schemas.community import CloneStrategyData
 
@@ -40,20 +44,64 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+async def _invalidate_ranking_cache():
+    """
+    랭킹 캐시 무효화 헬퍼 함수
+    strategy_ranking:* 패턴의 모든 캐시 키 삭제
+    """
+    try:
+        # Redis SCAN을 사용하여 패턴에 맞는 모든 키 조회
+        pattern = "strategy_ranking:*"
+        cursor = 0
+        deleted_count = 0
+
+        while True:
+            cursor, keys = await cache.redis.scan(cursor, match=pattern, count=100)
+            if keys:
+                await cache.redis.delete(*keys)
+                deleted_count += len(keys)
+            if cursor == 0:
+                break
+
+        logger.info(f"랭킹 캐시 {deleted_count}개 삭제됨")
+    except Exception as e:
+        logger.error(f"랭킹 캐시 무효화 중 오류: {e}")
+        raise
+
+
 @router.get("/strategies/my", response_model=MyStrategiesResponse)
 async def get_my_strategies(
+    page: int = Query(1, ge=1, description="페이지 번호"),
+    limit: int = Query(20, ge=1, le=100, description="페이지당 항목 수"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    내 백테스트 결과 목록 조회
-    - 로그인한 사용자의 모든 백테스트 결과 반환 (진행중/완료/실패 모두 포함)
+    내 백테스트 결과 목록 조회 (페이지네이션)
+    - 로그인한 사용자의 백테스트 결과 반환 (진행중/완료/실패 모두 포함)
     - 최신 순으로 정렬
+    - 기본: 페이지당 20개, 최대 100개
     """
     try:
         user_id = current_user.user_id
+        offset = (page - 1) * limit
 
-        # 1. 사용자의 모든 시뮬레이션 세션 조회 (전략 정보 포함)
+        # 1. 전체 개수 조회 (포트폴리오로 저장된 것만)
+        count_query = (
+            select(func.count())
+            .select_from(SimulationSession)
+            .where(
+                and_(
+                    SimulationSession.user_id == user_id,
+                    SimulationSession.is_portfolio == True
+                )
+            )
+        )
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
+
+        # 2. 사용자의 시뮬레이션 세션 조회 (페이지네이션 적용)
+        # 포트폴리오로 저장된 것만 조회
         sessions_query = (
             select(SimulationSession, PortfolioStrategy, SimulationStatistics)
             .join(
@@ -64,14 +112,21 @@ async def get_my_strategies(
                 SimulationStatistics,
                 SimulationStatistics.session_id == SimulationSession.session_id
             )
-            .where(SimulationSession.user_id == user_id)
-            .order_by(SimulationSession.created_at.desc())
+            .where(
+                and_(
+                    SimulationSession.user_id == user_id,
+                    SimulationSession.is_portfolio == True  # 포트폴리오로 저장된 것만
+                )
+            )
+            .order_by(SimulationSession.saved_at.desc())  # saved_at 기준으로 정렬
+            .offset(offset)
+            .limit(limit)
         )
 
         result = await db.execute(sessions_query)
         rows = result.all()
 
-        # 2. 백테스트 결과 리스트 생성
+        # 3. 백테스트 결과 리스트 생성
         my_strategies = []
         for session, strategy, stats in rows:
             # 간소화된 목록 아이템 생성
@@ -82,15 +137,22 @@ async def get_my_strategies(
                 is_active=session.is_active if hasattr(session, 'is_active') else False,
                 is_public=strategy.is_public if hasattr(strategy, 'is_public') else False,
                 status=session.status,
+                source_session_id=session.source_session_id if hasattr(session, 'source_session_id') else None,
                 total_return=float(stats.total_return) if stats and stats.total_return else None,
                 created_at=session.created_at,
                 updated_at=session.updated_at
             )
             my_strategies.append(strategy_item)
 
+        # 4. 다음 페이지 존재 여부 계산
+        has_next = (offset + limit) < total
+
         return MyStrategiesResponse(
             strategies=my_strategies,
-            total=len(my_strategies)
+            total=total,
+            page=page,
+            limit=limit,
+            has_next=has_next
         )
 
     except Exception as e:
@@ -113,7 +175,23 @@ async def get_public_Strategies_ranking(
     - is_public=True인 전략만 조회
     - 각 전략의 최신 백테스트 결과 기준으로 정렬
     - 익명 설정 및 전략 내용 숨김 설정 반영
+    - Redis 캐싱 적용 (TTL: 5분)
     """
+    # 캐시 키 생성
+    cache_key = f"strategy_ranking:{sort_by}:page_{page}:limit_{limit}"
+
+    # 캐시 조회
+    cached_data = await cache.get(cache_key)
+    if cached_data:
+        try:
+            cached_dict = json.loads(cached_data)
+            logger.info(f"랭킹 캐시 히트: {cache_key}")
+            return StrategyRankingResponse(**cached_dict)
+        except Exception as e:
+            logger.warning(f"캐시 데이터 파싱 실패: {e}")
+            # 캐시 데이터가 손상된 경우 삭제
+            await cache.delete(cache_key)
+
     try:
         # 1. 공개 전략 중 완료된 시뮬레이션이 있는 전략만 조회
         # Subquery: 각 전략의 최신 완료된 시뮬레이션 찾기
@@ -221,7 +299,8 @@ async def get_public_Strategies_ranking(
             )
             rankings.append(ranking_item)
 
-        return StrategyRankingResponse(
+        # 응답 생성
+        response = StrategyRankingResponse(
             rankings=rankings,
             total=total or 0,
             page=page,
@@ -229,8 +308,124 @@ async def get_public_Strategies_ranking(
             sort_by=sort_by
         )
 
+        # 캐시에 저장 (TTL: 5분)
+        try:
+            cache_data = response.model_dump()
+            await cache.set(cache_key, json.dumps(cache_data, default=str), ex=300)
+            logger.info(f"랭킹 캐시 저장: {cache_key}")
+        except Exception as cache_error:
+            logger.warning(f"캐시 저장 실패: {cache_error}")
+
+        return response
+
     except Exception as e:
         logger.error(f"공개 투자전략 랭킹 조회 실패: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/strategies/public", response_model=PublicStrategiesResponse)
+async def get_public_strategies(
+    page: int = Query(default=1, ge=1, description="페이지 번호"),
+    limit: int = Query(default=20, ge=1, le=100, description="페이지당 항목 수"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    공개 투자전략 목록 조회 (최신순)
+    - is_public=True 전략만 대상으로 created_at 기준 내림차순 정렬
+    - 익명 설정 및 전략 내용 숨김 설정 반영
+    """
+    try:
+        offset = (page - 1) * limit
+
+        # 최근 완료된 세션 기준 통계 조인 (없어도 통과하도록 OUTER JOIN)
+        latest_sessions_subquery = (
+            select(
+                SimulationSession.strategy_id,
+                func.max(SimulationSession.completed_at).label("max_completed_at"),
+            )
+            .where(SimulationSession.status == "COMPLETED")
+            .group_by(SimulationSession.strategy_id)
+            .subquery()
+        )
+
+        query = (
+            select(PortfolioStrategy, User, SimulationStatistics, SimulationSession)
+            .join(User, User.user_id == PortfolioStrategy.user_id, isouter=True)
+            .join(
+                latest_sessions_subquery,
+                PortfolioStrategy.strategy_id == latest_sessions_subquery.c.strategy_id,
+                isouter=True,
+            )
+            .join(
+                SimulationSession,
+                and_(
+                    SimulationSession.strategy_id
+                    == latest_sessions_subquery.c.strategy_id,
+                    SimulationSession.completed_at
+                    == latest_sessions_subquery.c.max_completed_at,
+                    SimulationSession.status == "COMPLETED",
+                ),
+                isouter=True,
+            )
+            .join(
+                SimulationStatistics,
+                SimulationStatistics.session_id == SimulationSession.session_id,
+                isouter=True,
+            )
+            .where(PortfolioStrategy.is_public == True)  # noqa: E712
+            .order_by(PortfolioStrategy.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        # 전체 개수
+        count_query = (
+            select(func.count())
+            .select_from(PortfolioStrategy)
+            .where(PortfolioStrategy.is_public == True)  # noqa: E712
+        )
+        total = (await db.execute(count_query)).scalar() or 0
+
+        strategies: List[PublicStrategyListItem] = []
+        for strategy, user, stats, session in rows:
+            owner_name = None if strategy.is_anonymous else (user.name if user else None)
+            description = None if strategy.hide_strategy_details else strategy.description
+
+            strategies.append(
+                PublicStrategyListItem(
+                    strategy_id=strategy.strategy_id,
+                    strategy_name=strategy.strategy_name,
+                    description=description,
+                    is_anonymous=strategy.is_anonymous,
+                    hide_strategy_details=strategy.hide_strategy_details,
+                    owner_name=owner_name,
+                    session_id=session.session_id if session else None,
+                    total_return=float(stats.total_return)
+                    if stats and stats.total_return is not None
+                    else None,
+                    annualized_return=float(stats.annualized_return)
+                    if stats and stats.annualized_return is not None
+                    else None,
+                    created_at=strategy.created_at,
+                    updated_at=strategy.updated_at,
+                )
+            )
+
+        has_next = (page * limit) < total
+
+        return PublicStrategiesResponse(
+            strategies=strategies,
+            total=total,
+            page=page,
+            limit=limit,
+            has_next=has_next,
+        )
+
+    except Exception as e:
+        logger.error(f"공개 투자전략 목록 조회 실패: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -307,6 +502,30 @@ async def update_strategy_sharing_settings(
         if strategy.user_id != user_id:
             raise HTTPException(status_code=403, detail="이 전략을 수정할 권한이 없습니다")
 
+        # 1.5. 공유 설정 시 백테스트 상태 확인
+        if settings.is_public is True:
+            # 최신 세션 조회
+            session_query = (
+                select(SimulationSession)
+                .where(SimulationSession.strategy_id == strategy_id)
+                .order_by(desc(SimulationSession.created_at))
+                .limit(1)
+            )
+            session_result = await db.execute(session_query)
+            latest_session = session_result.scalar_one_or_none()
+
+            if latest_session:
+                if latest_session.status == "RUNNING":
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="백테스트 진행 중인 포트폴리오는 공유할 수 없습니다."
+                    )
+                elif latest_session.status == "FAILED":
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="백테스트 실패한 포트폴리오는 공유할 수 없습니다."
+                    )
+
         # 2. is_public 변경 여부 확인 (Redis 동기화용)
         old_is_public = strategy.is_public
 
@@ -366,6 +585,14 @@ async def update_strategy_sharing_settings(
             except Exception as e:
                 logger.warning(f"⚠️ Redis 랭킹 동기화 실패 (무시): {e}")
 
+        # 🎯 5. 랭킹 캐시 무효화 (공개 설정이 변경된 경우)
+        if "is_public" in update_data or "is_anonymous" in update_data or "hide_strategy_details" in update_data:
+            try:
+                await _invalidate_ranking_cache()
+                logger.info("✅ 랭킹 캐시 무효화 완료")
+            except Exception as e:
+                logger.warning(f"⚠️ 랭킹 캐시 무효화 실패 (무시): {e}")
+
         return {
             "message": "공개 설정이 업데이트되었습니다",
             "strategy_id": strategy.strategy_id,
@@ -424,7 +651,14 @@ async def delete_backtest_sessions(
                 detail=f"삭제 권한이 없는 세션이 포함되어 있습니다: {unauthorized_sessions}"
             )
 
-        # 3. 세션 삭제
+        # 3. 관련 데이터 삭제 (SimulationStatistics)
+        stats_delete_query = sql_delete(SimulationStatistics).where(
+            SimulationStatistics.session_id.in_(session_ids)
+        )
+        await db.execute(stats_delete_query)
+        logger.info(f"🗑️ SimulationStatistics 삭제 완료: {len(session_ids)}개 세션")
+
+        # 4. 세션 삭제
         deleted_count = 0
         for session in sessions:
             await db.delete(session)
@@ -432,7 +666,7 @@ async def delete_backtest_sessions(
 
         await db.commit()
 
-        # 🎯 4. Redis 랭킹에서 삭제된 세션 제거
+        # 🎯 5. Redis 랭킹에서 삭제된 세션 제거
         try:
             from app.services.ranking_service import get_ranking_service
             ranking_service = await get_ranking_service()
@@ -466,7 +700,7 @@ async def get_session_clone_data(
 ):
     """
     백테스트 세션 복제 데이터 조회 (백테스트 창으로 전달)
-    - 본인이 소유한 세션만 조회 가능
+    - 본인 소유 세션 또는 공개된 전략의 세션만 조회 가능
     - 매수/매도 조건, 기간, 종목 등 모든 설정을 포함
     """
     try:
@@ -486,7 +720,11 @@ async def get_session_clone_data(
             .where(
                 and_(
                     SimulationSession.session_id == session_id,
-                    SimulationSession.user_id == user_id  # 본인 세션만
+                    # 본인 세션이거나 공개된 전략인 경우
+                    or_(
+                        SimulationSession.user_id == user_id,
+                        PortfolioStrategy.is_public == True
+                    )
                 )
             )
         )

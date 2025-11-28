@@ -20,6 +20,7 @@ export interface UserResponse {
   created_at: string;
   updated_at?: string;
   has_kiwoom_account?: boolean;
+  ai_recommendation_block?: boolean;
 }
 
 export interface Token {
@@ -91,9 +92,10 @@ export const authApi = {
    */
   getCurrentUserServer: async (token: string): Promise<UserResponse> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
+    // 서버 사이드에서는 Docker 내부 네트워크 사용
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const response = await axios.get<UserResponse>(
-      `${baseURL}/api/v1/auth/me`,
+      `${baseURL}/auth/me`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -138,6 +140,18 @@ export const authApi = {
     const response = await axiosInstance.delete("/auth/delete-account", {
       data
     });
+    return response.data;
+  },
+
+  /**
+   * AI 추천 블록 설정 변경
+   */
+  updateAIRecommendation: async (block: boolean): Promise<UserResponse> => {
+    const response = await axiosInstance.patch<UserResponse>(
+      "/auth/update-ai-recommendation",
+      null,
+      { params: { block } }
+    );
     return response.data;
   },
 };

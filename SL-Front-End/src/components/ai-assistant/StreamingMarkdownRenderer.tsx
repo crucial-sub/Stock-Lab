@@ -16,7 +16,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
-import { normalizeMarkdown } from "@/lib/markdown-utils";
+import { normalizeMarkdown, limitBullets } from "@/lib/markdown-utils";
 import { markdownComponents, markdownProseClasses } from "./renderers/shared/MarkdownComponents";
 
 interface StreamingMarkdownRendererProps {
@@ -26,6 +26,8 @@ interface StreamingMarkdownRendererProps {
   isStreaming: boolean;
   /** 메시지 역할 (user 또는 assistant) */
   role?: "user" | "assistant";
+  /** compact 모드: 불릿 개수 제한 */
+  compactMaxBullets?: number;
 }
 
 /**
@@ -51,11 +53,16 @@ export function StreamingMarkdownRenderer({
   content,
   isStreaming,
   role = "assistant",
+  compactMaxBullets,
 }: StreamingMarkdownRendererProps) {
   const isUser = role === "user";
 
   // 마크다운 정규화: 헤딩과 리스트 앞뒤에 줄바꿈 추가
   const normalizedContent = normalizeMarkdown(content);
+  const finalContent =
+    typeof compactMaxBullets === "number"
+      ? limitBullets(normalizedContent, compactMaxBullets)
+      : normalizedContent;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6`}>
@@ -82,7 +89,7 @@ export function StreamingMarkdownRenderer({
                 rehypePlugins={[rehypeHighlight, rehypeRaw]}
                 components={markdownComponents}
               >
-                {normalizedContent}
+                {finalContent}
               </ReactMarkdown>
 
               {/* 커서 깜빡임 애니메이션 (스트리밍 중일 때만 표시) */}

@@ -1,16 +1,26 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { KiwoomConnectModal } from "@/components/modal/KiwoomConnectModal";
+import { autoTradingApi } from "@/lib/api/auto-trading";
 import { kiwoomApi } from "@/lib/api/kiwoom";
 import { formatAmount, formatPercent, getProfitColor } from "@/lib/formatters";
+import { useCallback, useEffect, useState } from "react";
 
 export function AccountSection() {
   const [isKiwoomConnected, setIsKiwoomConnected] = useState(false);
   const [isKiwoomModalOpen, setIsKiwoomModalOpen] = useState(false);
   const [accountBalance, setAccountBalance] = useState<unknown>(null);
+  const [allocatedCapital, setAllocatedCapital] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  // 연동 해제 관련 모달 상태
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showDisconnectSuccess, setShowDisconnectSuccess] = useState(false);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  // 연동 성공 모달 상태
+  const [showConnectSuccess, setShowConnectSuccess] = useState(false);
 
   const fetchAccountBalance = async () => {
     setIsLoading(true);
@@ -18,6 +28,14 @@ export function AccountSection() {
     try {
       const response = await kiwoomApi.getAccountBalance();
       setAccountBalance(response.data);
+
+      // 키움증권 연동 할당 금액 조회
+      try {
+        const dashboardData = await autoTradingApi.getPortfolioDashboard();
+        setAllocatedCapital(Number((dashboardData as any).total_allocated_capital) || 0);
+      } catch (err) {
+        console.warn("키움증권 연동 가상매매 할당 금액 조회 실패:", err);
+      }
     } catch (err: unknown) {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
@@ -48,6 +66,35 @@ export function AccountSection() {
   const handleKiwoomSuccess = () => {
     setIsKiwoomConnected(true);
     fetchAccountBalance();
+    // 연동 성공 모달 표시
+    setShowConnectSuccess(true);
+  };
+
+  // 연동 해제 버튼 클릭 시 확인 모달 표시
+  const handleDisconnect = () => {
+    setShowDisconnectConfirm(true);
+  };
+
+  // 연동 해제 확인 모달에서 확인 클릭 시 실제 해제 수행
+  const handleConfirmDisconnect = async () => {
+    setShowDisconnectConfirm(false);
+
+    try {
+      setIsDisconnecting(true);
+      await kiwoomApi.deleteCredentials();
+      setIsKiwoomConnected(false);
+      setAccountBalance(null);
+      setAllocatedCapital(0);
+      // 성공 모달 표시
+      setShowDisconnectSuccess(true);
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail || "연동 해제에 실패했습니다.";
+      setDisconnectError(errorMessage);
+    } finally {
+      setIsDisconnecting(false);
+    }
   };
 
   return (
@@ -65,13 +112,22 @@ export function AccountSection() {
             계좌 연동하기
           </button>
         ) : (
-          <button
-            onClick={fetchAccountBalance}
-            disabled={isLoading}
-            className="rounded-full bg-[#FF6464] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#FF6464CC] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isLoading ? "조회 중..." : "연동 새로고침"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={fetchAccountBalance}
+              disabled={isLoading || isDisconnecting}
+              className="rounded-full bg-[#5d6bf5] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#5d6bf5]/80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoading ? "조회 중..." : "새로고침"}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={isLoading || isDisconnecting}
+              className="rounded-full bg-[#FF6464] px-5 py-2 text-[0.875rem] font-semibold text-white transition hover:bg-[#FF6464]/80 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isDisconnecting ? "해제 중..." : "연동 해제"}
+            </button>
+          </div>
         )}
       </div>
 
@@ -119,38 +175,37 @@ export function AccountSection() {
             </div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-3xl border border-[#dee4f6] bg-[#f8faff] p-5 shadow-[0_10px_30px_rgba(32,38,74,0.08)]">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#98a0c6]">
-                    계좌 번호
-                  </p>
-                  <p className="mt-2 text-xl font-bold tracking-widest text-[#1f2143]">
-                    {(accountBalance as { account_number?: string; account?: { number?: string } }).account_number ||
-                      (accountBalance as { account?: { number?: string } }).account?.number ||
-                      "연동 정보 없음"}
-                  </p>
-                </div>
-                <div className="rounded-3xl border border-[#dee4f6] bg-[#f8faff] p-5 shadow-[0_10px_30px_rgba(32,38,74,0.08)]">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#98a0c6]">
-                    예수금
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-[#1f2143]">
-                    {formatAmount(
-                      (accountBalance as { cash?: { balance?: string | number } }).cash?.balance || 0
-                    )}
-                    원
-                  </p>
-                </div>
+              <div className="rounded-3xl border border-[#dee4f6] bg-[#f8faff] p-5 shadow-[0_10px_30px_rgba(32,38,74,0.08)]">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#98a0c6]">
+                  예수금
+                </p>
+                <p className="mt-2 text-2xl font-bold text-[#1f2143]">
+                  {formatAmount(
+                    (accountBalance as { cash?: { balance?: string | number } }).cash?.balance || 0
+                  )}
+                  원
+                </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <div className="rounded-3xl border border-[#d6def8] bg-white p-5 shadow-[0_10px_25px_rgba(32,38,74,0.08)]">
                   <p className="text-xs font-medium text-[#9da5c9]">평가액</p>
                   <p className="mt-2 text-xl font-bold text-[#1f2143]">
-                    {formatAmount(
-                      (accountBalance as { holdings?: { tot_evlt_amt?: string | number } }).holdings
-                        ?.tot_evlt_amt || 0
-                    )}
+                    {(() => {
+                      const totEvltAmt = (accountBalance as { holdings?: { tot_evlt_amt?: string | number } }).holdings?.tot_evlt_amt || 0;
+                      const cashBalance = (accountBalance as { cash?: { balance?: string | number } }).cash?.balance || 0;
+
+                      const parseValue = (val: string | number): number => {
+                        if (typeof val === "string") {
+                          return Number.parseInt(val.replace(/,/g, ""), 10) || 0;
+                        }
+                        return val || 0;
+                      };
+
+                      // 전체 평가액에서 키움증권 연동 가상매매 할당 금액 제외
+                      const totalEval = parseValue(totEvltAmt) + parseValue(cashBalance);
+                      return formatAmount(totalEval - allocatedCapital);
+                    })()}
                     원
                   </p>
                 </div>
@@ -194,6 +249,54 @@ export function AccountSection() {
         isOpen={isKiwoomModalOpen}
         onClose={() => setIsKiwoomModalOpen(false)}
         onSuccess={handleKiwoomSuccess}
+      />
+
+      {/* 연동 해제 확인 모달 */}
+      <ConfirmModal
+        isOpen={showDisconnectConfirm}
+        onClose={() => setShowDisconnectConfirm(false)}
+        onConfirm={handleConfirmDisconnect}
+        title="키움증권 연동을 해제하시겠습니까?"
+        message={`해제 시 가상매매 기능을 사용할 수 없습니다.\n활성화된 가상매매 전략이 있다면 먼저 비활성화해주세요.`}
+        confirmText="확인"
+        cancelText="취소"
+        iconType="warning"
+      />
+
+      {/* 연동 해제 성공 모달 */}
+      <ConfirmModal
+        isOpen={showDisconnectSuccess}
+        onClose={() => setShowDisconnectSuccess(false)}
+        onConfirm={() => setShowDisconnectSuccess(false)}
+        title="키움증권 연동이 해제되었습니다."
+        message=""
+        confirmText="확인"
+        iconType="success"
+        alertOnly
+      />
+
+      {/* 연동 해제 에러 모달 */}
+      <ConfirmModal
+        isOpen={!!disconnectError}
+        onClose={() => setDisconnectError(null)}
+        onConfirm={() => setDisconnectError(null)}
+        title="연동 해제 실패"
+        message={disconnectError || ""}
+        confirmText="확인"
+        iconType="error"
+        alertOnly
+      />
+
+      {/* 연동 성공 모달 */}
+      <ConfirmModal
+        isOpen={showConnectSuccess}
+        onClose={() => setShowConnectSuccess(false)}
+        onConfirm={() => setShowConnectSuccess(false)}
+        title="키움증권 연동이 완료되었습니다!"
+        message=""
+        confirmText="확인"
+        iconType="success"
+        alertOnly
       />
     </section>
   );

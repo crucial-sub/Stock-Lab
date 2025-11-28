@@ -21,7 +21,7 @@ export function GuestPortfolioSection() {
   return (
     <section className="flex w-full flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <Title>인기 전략</Title>
+        <span className="text-[1.5rem] font-semibold">인기 전략</span>
       </div>
       <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-3">
         {rankingsLoading ? (

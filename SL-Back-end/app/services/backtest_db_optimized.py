@@ -3,11 +3,12 @@
 - 최소 컬럼 선택으로 네트워크 전송량 감소
 - Bulk insert로 DB 왕복 최소화
 - 인덱스 활용 쿼리 최적화
+- 수정주가 자동 계산 (기업행동 반영)
 """
 
 import logging
 from datetime import date, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from uuid import UUID
 import pandas as pd
 from decimal import Decimal
@@ -25,6 +26,9 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 
+# 수정주가 적용 여부 (기본값: True)
+ENABLE_ADJUSTED_PRICE = True
+
 
 class OptimizedDBManager:
     """최적화된 DB 관리자"""
@@ -39,7 +43,7 @@ class OptimizedDBManager:
         target_themes: List[str] = None,
         target_stocks: List[str] = None,
         required_columns: List[str] = None
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, Dict[str, Dict]]:
         """
         가격 데이터 최적화 로드
 
@@ -56,6 +60,9 @@ class OptimizedDBManager:
                     'date', 'open_price', 'high_price', 'low_price', 'close_price',
                     'volume', 'trading_value', 'market_cap', 'listed_shares'
                 ]
+            # CHANGE_RATE 계산용으로 전일 종가가 필요하므로 close_price는 강제 포함
+            if 'close_price' not in required_columns:
+                required_columns.append('close_price')
 
             # 모멘텀 계산용 날짜 범위 (필요한 만큼만)
             extended_start = start_date - timedelta(days=300)  # 365일 → 300일로 단축
@@ -132,25 +139,140 @@ class OptimizedDBManager:
             # 데이터 타입 최적화
             df['date'] = pd.to_datetime(df['date'])
 
+            # ========== 비정상 주가 데이터 필터링 ==========
+            before_count = len(df)
+
+            # 1. 시가/고가/저가가 0인 데이터 제외 (무상증자/액면분할 등 기업행동 기간)
+            if 'open_price' in df.columns:
+                df = df[df['open_price'] > 0]
+            if 'high_price' in df.columns:
+                df = df[df['high_price'] > 0]
+            if 'low_price' in df.columns:
+                df = df[df['low_price'] > 0]
+
+            filtered_count = len(df)
+            if before_count > filtered_count:
+                logger.warning(f"⚠️ 비정상 주가 데이터 필터링: {before_count - filtered_count}건 제외 (시가/고가/저가 0원)")
+
+            # ========== 비정상 주가 데이터 필터링 끝 ==========
+
+            # 등락률(전일 대비 %) 계산
+            df = df.sort_values(['stock_code', 'date'])
+            df['prev_close'] = df.groupby('stock_code')['close_price'].shift(1)
+            df['CHANGE_RATE'] = ((df['close_price'] - df['prev_close']) / df['prev_close'] * 100).where(df['prev_close'] > 0)
+
+            # 2. 기업행동 감지 및 데이터 필터링 (기업행동 발생일 이후만 제외)
+            # 공공데이터포털 데이터는 수정주가가 아니므로, 기업행동 발생 종목 정보를 반환
+            df, corporate_actions = self._detect_corporate_actions(df)
+
+            df = df.drop(columns=['prev_close'], errors='ignore')
+
             # 메모리 최적화: float64 → float32
-            numeric_columns = ['close_price', 'volume', 'trading_value', 'market_cap', 'listed_shares']
+            numeric_columns = ['close_price', 'volume', 'trading_value', 'market_cap', 'listed_shares', 'CHANGE_RATE']
             for col in numeric_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce').astype('float32')
 
             logger.info(f"Loaded {len(df)} price records for {df['stock_code'].nunique()} stocks (optimized)")
+            if corporate_actions:
+                logger.info(f"🚨 기업행동 감지된 종목: {len(corporate_actions)}개 - 강제 청산 대상")
 
-            return df
+            return df, corporate_actions
 
         except Exception as e:
             logger.error(f"가격 데이터 로드 실패: {e}")
-            return pd.DataFrame()
+            return pd.DataFrame(), {}
+
+    def _detect_corporate_actions(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Dict]]:
+        """
+        기업행동 감지 및 이벤트 정보 반환
+
+        공공데이터포털 데이터는 수정주가가 아니므로,
+        무상증자/액면분할 등 기업행동을 감지하고 해당 정보를 반환합니다.
+
+        하루에 50% 이상 변동하는 경우 기업행동으로 판단합니다.
+
+        Args:
+            df: 주가 데이터 DataFrame
+
+        Returns:
+            Tuple[DataFrame, Dict]:
+                - 기업행동 발생일 이후 데이터가 제외된 DataFrame
+                - 기업행동 이벤트 정보 딕셔너리 {stock_code: {event_date, prev_close, action_type, ...}}
+        """
+        corporate_actions = {}
+
+        if df.empty or 'CHANGE_RATE' not in df.columns:
+            return df, corporate_actions
+
+        ABNORMAL_THRESHOLD = 50.0  # 50% 이상 변동 시 기업행동으로 판단
+        before_count = len(df)
+
+        # 급등/급락 이벤트 감지
+        abnormal_mask = df['CHANGE_RATE'].abs() > ABNORMAL_THRESHOLD
+
+        if not abnormal_mask.any():
+            return df, corporate_actions
+
+        # 기업행동 발생 종목 및 날짜 추출
+        abnormal_events = df[abnormal_mask][['stock_code', 'stock_name', 'date', 'prev_close', 'close_price', 'CHANGE_RATE']].copy()
+
+        # 각 종목별 첫 번째 기업행동 이벤트만 사용 (가장 이른 날짜)
+        abnormal_events = abnormal_events.sort_values('date').drop_duplicates(subset=['stock_code'], keep='first')
+
+        # 기업행동 이벤트 정보 저장 및 로깅
+        for _, row in abnormal_events.iterrows():
+            stock_code = row['stock_code']
+            event_date = row['date']
+            action_type = "무상증자/액면분할" if row['CHANGE_RATE'] > 0 else "감자/액면병합"
+
+            corporate_actions[stock_code] = {
+                'stock_code': stock_code,
+                'stock_name': row['stock_name'],
+                'event_date': event_date,
+                'prev_close': row['prev_close'],
+                'new_close': row['close_price'],
+                'change_rate': row['CHANGE_RATE'],
+                'action_type': action_type
+            }
+
+            logger.warning(
+                f"⚠️ 기업행동 감지: {row['stock_name']}({stock_code}) "
+                f"{event_date.strftime('%Y-%m-%d')} "
+                f"{row['prev_close']:.0f}원 → {row['close_price']:.0f}원 "
+                f"({row['CHANGE_RATE']:+.1f}%) [{action_type}]"
+            )
+
+        # 기업행동 발생일 이후 데이터만 제외 (이전 데이터는 유지)
+        # 각 종목별로 기업행동 발생일 이후 데이터 필터링
+        mask_to_keep = pd.Series(True, index=df.index)
+
+        for stock_code, event_info in corporate_actions.items():
+            event_date = event_info['event_date']
+            # 해당 종목의 기업행동 발생일 이후 데이터 제외
+            stock_mask = (df['stock_code'] == stock_code) & (df['date'] >= event_date)
+            mask_to_keep = mask_to_keep & ~stock_mask
+
+        df_filtered = df[mask_to_keep].copy()
+
+        after_count = len(df_filtered)
+        filtered_count = before_count - after_count
+
+        if filtered_count > 0:
+            logger.warning(
+                f"⚠️ 기업행동 데이터 필터링 완료: "
+                f"{len(corporate_actions)}개 종목 감지, "
+                f"{filtered_count}건 데이터 제외 (기업행동 발생일 이후)"
+            )
+
+        return df_filtered, corporate_actions
 
     async def load_financial_data_optimized(
         self,
         start_date: date,
         end_date: date,
-        required_accounts: List[str] = None
+        required_accounts: List[str] = None,
+        target_stocks: List[str] = None
     ) -> pd.DataFrame:
         """
         재무 데이터 최적화 로드
@@ -166,9 +288,13 @@ class OptimizedDBManager:
             # 필수 계정과목
             if required_accounts is None:
                 required_accounts = [
-                    '매출액', '영업이익', '당기순이익',
+                    # 매출액 (연도별로 다른 이름으로 저장됨)
+                    '매출액', '영업수익', '수익(매출액)',
+                    '영업이익', '당기순이익',
                     '자산총계', '자본총계', '부채총계',
-                    '유동자산', '유동부채', '현금및현금성자산'
+                    '유동자산', '유동부채', '현금및현금성자산',
+                    # 매출원가 (매출총이익 계산에 필요)
+                    '매출원가'
                 ]
 
             # 손익계산서 + 재무상태표 통합 쿼리
@@ -253,6 +379,23 @@ class OptimizedDBManager:
                     return pd.Timestamp(year, 12, 31)
 
             financial_pivot['report_date'] = financial_pivot.apply(make_report_date, axis=1)
+
+            # 🔥 필터링: 선택한 종목만 (DB 로드 이후 필터링)
+            if target_stocks and not financial_pivot.empty:
+                before_count = len(financial_pivot)
+                before_stocks = financial_pivot['stock_code'].nunique()
+                financial_pivot = financial_pivot[financial_pivot['stock_code'].isin(target_stocks)]
+                after_count = len(financial_pivot)
+                after_stocks = financial_pivot['stock_code'].nunique()
+                logger.info(f"🎯 재무 데이터 필터링: {before_count}건({before_stocks}종목) → {after_count}건({after_stocks}종목)")
+            # 매출액 컬럼 정규화 (여러 이름으로 저장된 매출액을 '매출액'으로 통일)
+            revenue_columns = ['매출액', '영업수익', '수익(매출액)']
+            if '매출액' not in financial_pivot.columns:
+                for col in revenue_columns:
+                    if col in financial_pivot.columns and col != '매출액':
+                        financial_pivot['매출액'] = financial_pivot[col]
+                        logger.info(f"매출액 컬럼 정규화: '{col}' → '매출액'")
+                        break
 
             logger.info(f"Loaded financial data for {financial_pivot['stock_code'].nunique()} companies (optimized)")
 

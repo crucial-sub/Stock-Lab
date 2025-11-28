@@ -13,7 +13,7 @@ import json
 from app.core.config import get_settings
 from app.core.database import init_db, close_db
 from app.core.cache import cache
-from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history
+from app.api.routes import backtest, auth, company_info, strategy, factors, market_quote, user_stock, news, kiwoom, auto_trading, community, chat_history, investment_strategy, universes
 from app.api.v1 import industries, realtime
 from app.services.auto_trading_scheduler import start_scheduler, stop_scheduler
 
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
     # DB 초기화 (개발 환경에서만)
     if settings.DEBUG:
-        # await init_db()  # 주의: 테이블 재생성
+        await init_db()  # 주의: 테이블 재생성
         logger.info("Database initialized (dev mode)")
 
     # 자동매매 스케줄러 시작
@@ -84,6 +84,21 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Auto trading scheduler started")
     except Exception as e:
         logger.error(f"❌ Failed to start scheduler: {e}")
+
+    # 🔥 캐시 워밍 (옵션: 서버 시작 시 백그라운드에서 실행)
+    if settings.ENABLE_CACHE_WARMING:
+        try:
+            import asyncio
+            from app.services.cache_warmer import run_cache_warming
+
+            logger.info("🔥 Starting cache warming in background...")
+            # 백그라운드 태스크로 실행 (서버 시작을 블로킹하지 않음)
+            asyncio.create_task(run_cache_warming())
+            logger.info("✅ Cache warming task created")
+        except Exception as e:
+            logger.error(f"❌ Failed to start cache warming: {e}")
+    else:
+        logger.info("⚠️ Cache warming disabled via ENABLE_CACHE_WARMING")
 
     yield
 
@@ -260,6 +275,12 @@ app.include_router(
 )
 
 app.include_router(
+    investment_strategy.router,
+    prefix=f"{settings.API_V1_PREFIX}/investment-strategies",
+    tags=["Investment Strategy"]
+)
+
+app.include_router(
     realtime.router,
     prefix=settings.API_V1_PREFIX,
     tags=["Realtime"]
@@ -269,6 +290,12 @@ app.include_router(
     community.router,
     prefix=f"{settings.API_V1_PREFIX}/community",
     tags=["Community"]
+)
+
+app.include_router(
+    universes.router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Universes"]
 )
 
 # Root 엔드포인트

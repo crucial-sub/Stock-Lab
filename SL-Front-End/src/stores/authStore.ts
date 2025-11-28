@@ -8,9 +8,14 @@ import { create } from "zustand";
 interface AuthStore {
   isSessionExpired: boolean;
   setSessionExpired: (expired: boolean) => void;
+  authErrorMessage: string | null;
+  setAuthErrorMessage: (message: string | null) => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
   isSessionExpired: false,
   setSessionExpired: (expired: boolean) => set({ isSessionExpired: expired }),
+  authErrorMessage: null,
+  setAuthErrorMessage: (message: string | null) =>
+    set({ authErrorMessage: message }),
 }));

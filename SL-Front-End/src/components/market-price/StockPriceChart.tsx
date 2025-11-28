@@ -134,7 +134,7 @@ export function StockPriceChart({
     const xAxis = chart.xAxes.push(
       am5xy.DateAxis.new(root, {
         baseInterval: { timeUnit: "day", count: 1 },
-        grindIntervals: [{ timeUnit: "week", count: 1 }],
+        gridIntervals: [{ timeUnit: "week", count: 1 }],
         renderer: xRenderer,
       }),
     );
@@ -205,10 +205,11 @@ export function StockPriceChart({
 
     // 라인 스타일 설정 (부드럽고 연속적인 라인)
     series.strokes.template.setAll({
-      tension: 0.5, // 곡선 부드럽게
       strokeWidth: 2,
       strokeGradient,
-    });
+    } as any); // tension 등 타입에 없는 속성 허용
+    // 곡선 부드럽게 (타입 정의에 없지만 실제로 동작)
+    (series.strokes.template as any).set("tension", 0.5);
     series.fills.template.setAll({
       visible: true,
       fillGradient: areaGradient,
@@ -274,12 +275,12 @@ export function StockPriceChart({
         value: lastPoint.value,
       }),
     );
-    lastRange.get("grid").setAll({
+    lastRange.get("grid")?.setAll({
       stroke: am5.color(chartColor),
       strokeOpacity: 0.6,
       strokeDasharray: [6, 6],
     });
-    lastRange.get("label").setAll({
+    lastRange.get("label")?.setAll({
       text: `${lastPoint.value.toLocaleString()}원`,
       fontSize: 10,
       fontWeight: "400",

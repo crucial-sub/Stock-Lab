@@ -23,12 +23,12 @@ export default async function AutoTradingStatusPage({
   }
 
   try {
-    // 자동매매 전략 상태 조회
+    // 가상매매 전략 상태 조회
     const axios = (await import("axios")).default;
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
 
     const response = await axios.get(
-      `${baseURL}/api/v1/auto-trading/strategies/${strategyId}/status`,
+      `${baseURL}/auto-trading/strategies/${strategyId}/status`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

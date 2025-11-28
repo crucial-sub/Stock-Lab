@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import { DiscussionPreviewSection } from "@/components/community";
 import {
   RankingCard,
@@ -8,7 +10,7 @@ import {
 } from "@/components/strategy_portfolio";
 import {
   useCloneStrategyMutation,
-  usePostsQuery,
+  usePublicStrategiesQuery,
   useTopRankingsQuery,
 } from "@/hooks/useCommunityQuery";
 
@@ -21,6 +23,21 @@ import {
 export default function CommunityPageClient() {
   const router = useRouter();
 
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 복제 확인 모달 상태
+  const [cloneConfirmModal, setCloneConfirmModal] = useState<{
+    isOpen: boolean;
+    sessionId: string;
+    strategyName: string;
+  }>({ isOpen: false, sessionId: "", strategyName: "" });
+
   // API 연동
   const {
     data: topRankings,
@@ -28,11 +45,20 @@ export default function CommunityPageClient() {
     error: rankingsError,
   } = useTopRankingsQuery();
   const {
-    data: strategySharePosts,
-    isLoading: strategyShareLoading,
-    error: strategyShareError,
-  } = usePostsQuery({ postType: "STRATEGY_SHARE", limit: 3 });
+    data: publicStrategies,
+    isLoading: strategiesLoading,
+    error: strategiesError,
+  } = usePublicStrategiesQuery({ page: 1, limit: 3 });
   const cloneStrategyMutation = useCloneStrategyMutation();
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   // 수익률 포맷팅 함수
   const formatReturn = (value: number): string => {
@@ -40,20 +66,24 @@ export default function CommunityPageClient() {
     return value > 0 ? `+${formatted}` : formatted;
   };
 
-  // 전략 복제 핸들러
+  // 전략 복제 확인 모달 열기
   const handleCloneStrategy = (sessionId: string, strategyName: string) => {
-    if (
-      confirm(`"${strategyName}" 전략을 내 포트폴리오에 복제하시겠습니까?`)
-    ) {
-      cloneStrategyMutation.mutate(sessionId, {
-        onSuccess: () => {
-          alert("전략이 성공적으로 복제되었습니다.");
-        },
-        onError: (error) => {
-          alert(`복제 실패: ${error.message}`);
-        },
-      });
-    }
+    setCloneConfirmModal({ isOpen: true, sessionId, strategyName });
+  };
+
+  // 전략 복제 확인 핸들러
+  const handleConfirmClone = () => {
+    const { sessionId } = cloneConfirmModal;
+    setCloneConfirmModal({ isOpen: false, sessionId: "", strategyName: "" });
+
+    cloneStrategyMutation.mutate(sessionId, {
+      onSuccess: () => {
+        showAlert("복제 완료", "전략이 성공적으로 복제되었습니다.", "success");
+      },
+      onError: (error) => {
+        showAlert("복제 실패", error.message, "error");
+      },
+    });
   };
 
   return (
@@ -61,13 +91,7 @@ export default function CommunityPageClient() {
       {/* 수익률 랭킹 */}
       <section>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-body">수익률 랭킹</h2>
-          <button
-            onClick={() => router.push("/community/rankings")}
-            className="text-base text-gray-700 underline hover:text-gray-600"
-          >
-            더보기
-          </button>
+          <span className="text-[1.5rem] font-semibold text-body">수익률 랭킹</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {rankingsLoading ? (
@@ -102,41 +126,52 @@ export default function CommunityPageClient() {
       {/* 공유된 포트폴리오 */}
       <section>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-body">포트폴리오 공유하기</h2>
+          <span className="text-[1.5rem] font-semibold text-body">포트폴리오 공유하기</span>
           <button
-            onClick={() =>
-              router.push("/community/posts?postType=STRATEGY_SHARE")
-            }
-            className="text-base text-gray-700 underline hover:text-gray-600"
+            onClick={() => router.push("/community/public-strategies")}
+            className="text-[1rem] text-brand-purple font-normal hover:underline"
           >
             더보기
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {strategyShareLoading ? (
+          {strategiesLoading ? (
             <div className="col-span-full text-center py-10">
               <p className="text-muted">로딩 중...</p>
             </div>
-          ) : strategyShareError ? (
+          ) : strategiesError ? (
             <div className="col-span-full text-center py-10">
               <p className="text-muted">
-                포트폴리오 공유 데이터를 불러올 수 없습니다.
+                공개 포트폴리오 데이터를 불러올 수 없습니다.
               </p>
             </div>
-          ) : strategySharePosts?.posts &&
-            strategySharePosts.posts.length > 0 ? (
-            strategySharePosts.posts.map((post) => (
-              <PortfolioShareCard
-                key={post.postId}
-                portfolioName={post.title}
-                author={post.authorNickname || "익명"}
-                description={post.contentPreview}
-                returnRate={formatReturn(0)}
-                stocks={post.tags || []}
-                onAdd={() => router.push(`/community/${post.postId}`)}
-              />
-            ))
+          ) : publicStrategies?.strategies &&
+            publicStrategies.strategies.length > 0 ? (
+            publicStrategies.strategies.map((item) => {
+              const returnRate =
+                typeof item.totalReturn === "number"
+                  ? item.totalReturn.toFixed(2)
+                  : "-";
+
+              return (
+                <PortfolioShareCard
+                  key={item.strategyId}
+                  sessionId={item.sessionId || ""}
+                  portfolioName={item.strategyName}
+                  author={item.ownerName || "익명"}
+                  description={item.description || "설명이 없습니다."}
+                  returnRate={returnRate}
+                  stocks={[]}
+                  onAdd={
+                    item.sessionId
+                      ? () =>
+                        handleCloneStrategy(item.sessionId!, item.strategyName)
+                      : undefined
+                  }
+                />
+              );
+            })
           ) : (
             <div className="col-span-full text-center py-10">
               <p className="text-muted">아직 공유된 포트폴리오가 없습니다.</p>
@@ -147,6 +182,30 @@ export default function CommunityPageClient() {
 
       {/* 자유게시판 */}
       <DiscussionPreviewSection limit={5} />
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
+      />
+
+      {/* 복제 확인 모달 */}
+      <ConfirmModal
+        isOpen={cloneConfirmModal.isOpen}
+        onClose={() => setCloneConfirmModal({ isOpen: false, sessionId: "", strategyName: "" })}
+        onConfirm={handleConfirmClone}
+        title="전략 복제"
+        message={`"${cloneConfirmModal.strategyName}" 전략을 내 포트폴리오에 복제하시겠습니까?`}
+        confirmText="복제"
+        cancelText="취소"
+        iconType="question"
+      />
     </div>
   );
 }

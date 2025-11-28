@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, type FormEvent } from "react";
+import { useEffect, useRef, useState, useMemo, type FormEvent, type KeyboardEvent } from "react";
+import { usePathname } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { sendChatMessage } from "@/lib/api/chatbot";
+import { markdownComponents, markdownProseClasses } from "@/components/ai-assistant/renderers/shared/MarkdownComponents";
+import { normalizeMarkdown, limitBullets } from "@/lib/markdown-utils";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 
 type MessageRole = "assistant" | "user" | "system";
@@ -22,6 +28,7 @@ const WELCOME_MESSAGE: WidgetMessage = {
 };
 
 export function FloatingChatWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<WidgetMessage[]>([WELCOME_MESSAGE]);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -35,11 +42,17 @@ export function FloatingChatWidget() {
     setSellConditionsUI,
   } = useBacktestConfigStore();
 
+  // 메시지 추가 시 자동 스크롤 (모든 Hook은 조건부 return 전에 호출)
   useEffect(() => {
     if (isOpen && endRef.current) {
       endRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isOpen]);
+
+  // 랜딩 페이지에서는 챗봇을 숨김 (모든 Hook 호출 이후에 조건부 return)
+  if (pathname === "/landing") {
+    return null;
+  }
 
   const handleToggle = () => {
     setIsOpen((prev) => !prev);
@@ -79,6 +92,20 @@ export function FloatingChatWidget() {
       });
       setSessionId(response.session_id);
 
+      // 백테스트 조건이 있으면 자동 적용
+      const bc = response.backtest_conditions;
+      if (bc && Array.isArray(bc) && bc.length > 0) {
+        // DSLCondition[]을 BuyConditionUI[]로 변환하여 추가
+        const convertedConditions = bc.map((cond, idx) => ({
+          id: `dsl-${Date.now()}-${idx}`,
+          factorName: cond.factor,
+          subFactorName: "기본값",
+          operator: cond.operator,
+          value: String(cond.value ?? 0), // BuyConditionUI.value는 string 타입
+        }));
+        setBuyConditionsUI([...buyConditionsUI, ...convertedConditions]);
+      }
+
       pushMessage({
         id: createMessageId(),
         role: "assistant",
@@ -96,6 +123,13 @@ export function FloatingChatWidget() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void handleSend();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void handleSend();
+    }
   };
 
   return (
@@ -121,7 +155,7 @@ export function FloatingChatWidget() {
       </button>
 
       {isOpen ? (
-        <div className="fixed bottom-24 right-6 z-30 w-[23rem] max-w-[92vw] rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed bottom-24 right-6 z-30 w-[32rem] max-w-[92vw] rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center justify-between rounded-t-2xl bg-gradient-to-r from-blue-600 to-indigo-500 px-4 py-3 text-white">
             <div>
               <p className="text-sm font-semibold">AI 어시스턴트</p>
@@ -168,7 +202,8 @@ export function FloatingChatWidget() {
                     return {
                       id: `${prefix}${id}`,
                       factorName,
-                      subFactorName: null,
+
+                      subFactorName: cond?.subFactorName || "기본값",
                       operator,
                       value,
                       argument,
@@ -190,6 +225,31 @@ export function FloatingChatWidget() {
                 const hasBuyConditions = buyConditions.length > 0;
                 const hasSellConditions = sellConditions.length > 0;
 
+                const renderContent = () => {
+                  if (isUser || isSystem) {
+                    return <div className="whitespace-pre-wrap">{message.content}</div>;
+                  }
+                  const markdown = limitBullets(
+                    normalizeMarkdown(message.content)
+                      .split("\n")
+                      .filter((line) => line.trim().length > 0)
+                      .slice(0, 8)
+                      .join("\n"),
+                    4,
+                  );
+                  return (
+                    <div className={markdownProseClasses}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
+                        components={markdownComponents}
+                      >
+                        {markdown}
+                      </ReactMarkdown>
+                    </div>
+                  );
+                };
+
                 return (
                   <div
                     key={message.id}
@@ -208,7 +268,7 @@ export function FloatingChatWidget() {
                             : "bg-slate-100 text-slate-900",
                       ].join(" ")}
                     >
-                      {message.content}
+                      {renderContent()}
                       {!isUser && (hasBuyConditions || hasSellConditions) && (
                         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                           {hasBuyConditions && (
@@ -238,16 +298,17 @@ export function FloatingChatWidget() {
             <form onSubmit={handleSubmit} className="border-t border-slate-200 p-3">
               <div className="flex gap-2">
                 <textarea
-                  className="h-16 flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="예: 쿼트투자가 뭐야?"
+                  className="h-10 flex-1 resize-none rounded-[12px] border border-slate-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="예: 퀀트투자가 뭐야?"
                   value={inputValue}
                   onChange={(event) => setInputValue(event.target.value)}
+                  onKeyDown={handleKeyDown}
                   disabled={isSending}
                 />
                 <button
                   type="submit"
                   disabled={isSending || !inputValue.trim()}
-                  className="h-16 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white transition enabled:hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="h-10 rounded-[12px] bg-blue-600 px-4 text-sm font-semibold text-white transition enabled:hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   {isSending ? "전송중" : "보내기"}
                 </button>

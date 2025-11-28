@@ -5,16 +5,20 @@ import { redirect } from "next/navigation";
 // 2. Internal imports (프로젝트 내부)
 import { strategyApi } from "@/lib/api/strategy";
 import { autoTradingApi } from "@/lib/api/auto-trading";
+import { kiwoomApi } from "@/lib/api/kiwoom";
 import { formatDateToCard } from "@/lib/date-utils";
 import { PortfolioPageClient } from "./PortfolioPageClient";
+import { KiwoomAccountData } from "../HomePageClient";
 
-// 포트폴리오 타입 정의 (PortfolioPageClient의 Portfolio 타입과 동일)
-interface Portfolio {
+// 포트폴리오 타입 정의
+export interface Portfolio {
   id: string;
   strategyId: string;
   title: string;
   profitRate: number;
   isActive: boolean;
+  status?: string;
+  sourceSessionId?: string | null;
   lastModified: string;
   createdAt: string;
 }
@@ -42,12 +46,12 @@ export default async function PortfolioPage() {
     // 1. 백테스트 전략 목록 가져오기
     const data = await strategyApi.getMyStrategiesServer(token);
 
-    // 2. 자동매매 활성화된 전략 목록 가져오기
+    // 2.  가상매매활성화된 전략 목록 가져오기
     let autoTradingStrategies: any[] = [];
     try {
       autoTradingStrategies = await autoTradingApi.getMyAutoTradingStrategiesServer(token);
     } catch (error) {
-      console.warn("자동매매 전략 조회 실패:", error);
+      console.warn("키움증권 연동 가상매매 전략 조회 실패:", error);
     }
 
     // 백테스트 전략을 Portfolio 형태로 변환
@@ -57,27 +61,46 @@ export default async function PortfolioPage() {
       title: strategy.strategyName,
       profitRate: strategy.totalReturn ?? 0,
       isActive: strategy.isActive,
+      status: strategy.status,
+      sourceSessionId: strategy.sourceSessionId,
       lastModified: formatDateToCard(strategy.updatedAt),
       createdAt: formatDateToCard(strategy.createdAt),
     }));
 
-    // 자동매매 전략을 Portfolio 형태로 변환
+    // 키움증권 연동 가상매매 전략을 Portfolio 형태로 변환 (활성/비활성 모두 포함)
     const autoTradingPortfolios: Portfolio[] = autoTradingStrategies
-      .filter((s) => s.is_active) // 활성화된 것만
-      .map((strategy) => ({
-        id: `auto-${strategy.strategy_id}`, // 고유한 ID 생성
-        strategyId: strategy.strategy_id,
-        title: `🤖 자동매매 활성화됨`,
-        profitRate: 0, // TODO: 실제 수익률 계산 필요
-        isActive: true,
-        lastModified: formatDateToCard(strategy.activated_at || strategy.created_at),
-        createdAt: formatDateToCard(strategy.created_at),
-      }));
+      .map((strategy) => {
+        // 키움증권 연동 가상매매 전략 이름 사용 (없으면 원래 백테스트 전략 이름 찾기)
+        let displayName = strategy.strategy_name;
+
+        if (!displayName) {
+          // 백엔드에서 이름이 없으면 원래 백테스트 전략 이름 사용
+          const originalStrategy = data.strategies.find(
+            (s) => s.strategyId === strategy.strategy_id
+          );
+          displayName = originalStrategy?.strategyName || "알 수 없는 전략";
+        }
+
+        return {
+          id: `auto-${strategy.strategy_id}`, // 고유한 ID 생성
+          strategyId: strategy.strategy_id,
+          title: `🤖 ${displayName}`,
+          // 키움 API 실제 수익률 사용 (kiwoom_total_profit_rate 우선, 없으면 계산)
+          profitRate: strategy.kiwoom_total_profit_rate != null
+            ? Number(strategy.kiwoom_total_profit_rate)
+            : strategy.allocated_capital > 0
+              ? ((strategy.current_capital - strategy.allocated_capital) / strategy.allocated_capital) * 100
+              : 0,
+          isActive: strategy.is_active,
+          lastModified: formatDateToCard(strategy.activated_at || strategy.created_at),
+          createdAt: formatDateToCard(strategy.created_at),
+        };
+      });
 
     // 두 리스트 합치기
     const portfolios: Portfolio[] = [...backtestPortfolios, ...autoTradingPortfolios];
 
-    // 3. 실제 자동매매 대시보드 데이터 가져오기
+    // 3. 키움증권 연동 가상매매 대시보드 데이터 가져오기
     let dashboardData = {
       total_assets: 0,
       total_return: 0,
@@ -85,6 +108,7 @@ export default async function PortfolioPage() {
       active_strategy_count: 0,
       total_positions: 0,
       total_trades_today: 0,
+      total_allocated_capital: 0,
     };
 
     try {
@@ -93,18 +117,19 @@ export default async function PortfolioPage() {
       console.warn("대시보드 데이터 조회 실패:", error);
     }
 
+    // 키움증권 연동 가상매매 대시보드 데이터만 사용
     const totalAssets = Number(dashboardData.total_assets) || 0;
-    const totalAssetsChange = Number(dashboardData.total_return) || 0;
-    const weeklyProfit = Number(dashboardData.total_profit) || 0;
-    const weeklyProfitChange = Number(dashboardData.total_return) || 0;
+    const totalProfit = Number(dashboardData.total_profit) || 0;
+    const totalReturn = Number(dashboardData.total_return) || 0;
+    const evaluationAmount = totalAssets;
     const activeCount = Number(dashboardData.active_strategy_count) || 0;
 
     return (
       <PortfolioPageClient
         totalAssets={totalAssets}
-        totalAssetsChange={totalAssetsChange}
-        weeklyProfit={weeklyProfit}
-        weeklyProfitChange={weeklyProfitChange}
+        totalProfit={totalProfit}
+        totalReturn={totalReturn}
+        evaluationAmount={evaluationAmount}
         activePortfolioCount={activeCount}
         portfolios={portfolios}
       />
@@ -123,9 +148,9 @@ export default async function PortfolioPage() {
     return (
       <PortfolioPageClient
         totalAssets={0}
-        totalAssetsChange={0}
-        weeklyProfit={0}
-        weeklyProfitChange={0}
+        totalProfit={0}
+        totalReturn={0}
+        evaluationAmount={0}
         activePortfolioCount={0}
         portfolios={[]}
       />

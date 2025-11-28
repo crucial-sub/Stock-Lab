@@ -168,6 +168,8 @@ async def create_tables():
                           calculation_type="TECHNICAL", description="12 Month Price Momentum"),
                     Factor(factor_id="MOMENTUM_SCORE", category_id="momentum", factor_name="모멘텀 점수",
                           calculation_type="CUSTOM", description="Composite momentum score (0~100)"),
+                    Factor(factor_id="CHANGE_RATE", category_id="momentum", factor_name="등락률",
+                          calculation_type="TECHNICAL", description="전일 대비 등락률(%)"),
 
                     # Stability factors
                     Factor(factor_id="DEBT_RATIO", category_id="stability", factor_name="부채비율",

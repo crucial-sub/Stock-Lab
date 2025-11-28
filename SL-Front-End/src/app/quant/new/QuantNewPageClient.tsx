@@ -12,6 +12,7 @@
 
 import { lazy, Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { ConfirmModal } from "@/components/modal/ConfirmModal";
 import QuantStrategySummaryPanel from "@/components/quant/layout/QuantStrategySummaryPanel";
 import { useFactorsQuery } from "@/hooks/useFactorsQuery";
 import { useSubFactorsQuery } from "@/hooks/useSubFactorsQuery";
@@ -19,6 +20,7 @@ import { useThemesQuery } from "@/hooks/useThemesQuery";
 import { useQuantTabStore } from "@/stores";
 import { useBacktestConfigStore } from "@/stores/backtestConfigStore";
 import { useRef } from "react";
+import { communityApi } from "@/lib/api/community";
 
 /**
  * 탭 컴포넌트들을 동적으로 로드 (코드 스플리팅)
@@ -45,11 +47,30 @@ const TargetSelectionTab = lazy(
  */
 export function QuantNewPageClient() {
   // Zustand store에서 탭 상태 가져오기
-  const { activeTab } = useQuantTabStore();
+  const { activeTab, setActiveTab } = useQuantTabStore();
 
   // 요약 패널 열림/닫힘 상태
   const [isSummaryPanelOpen, setIsSummaryPanelOpen] = useState(true);
   const conditionsAppliedRef = useRef(false);
+  const cloneAppliedRef = useRef(false);
+  const [isLoadingClone, setIsLoadingClone] = useState(false);
+
+  // 알림 모달 상태
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    iconType: "info" | "warning" | "error" | "success" | "question";
+  }>({ isOpen: false, title: "", message: "", iconType: "info" });
+
+  // 알림 모달 표시 헬퍼
+  const showAlert = (
+    title: string,
+    message: string,
+    iconType: "info" | "warning" | "error" | "success" | "question" = "info"
+  ) => {
+    setAlertModal({ isOpen: true, title, message, iconType });
+  };
 
   // React Query로 데이터 fetch (클라이언트 사이드)
   // 데이터는 하위 컴포넌트에서 사용하므로 여기서는 캐싱 목적으로만 fetch
@@ -60,6 +81,51 @@ export function QuantNewPageClient() {
   // Query parameter로 전달된 조건 처리 (추천 전략에서 백테스트 실행 시)
   const searchParams = useSearchParams();
   const addBuyConditionUIWithData = useBacktestConfigStore((state) => state.addBuyConditionUIWithData);
+  const {
+    setStrategyName,
+    setIsDayOrMonth,
+    setStartDate,
+    setEndDate,
+    setInitialInvestment,
+    setCommissionRate,
+    setSlippage,
+    setBuyLogic,
+    setPriorityFactor,
+    setPriorityOrder,
+    setPerStockRatio,
+    setMaxHoldings,
+    setMaxBuyValue,
+    setMaxDailyStock,
+    setBuyPriceBasis,
+    setBuyPriceOffset,
+    setTargetAndLoss,
+    setHoldDays,
+    setConditionSell,
+    setTradeTargets,
+    setBuyConditionsUI,
+    setSellConditionsUI,
+  } = useBacktestConfigStore();
+  const reset = useBacktestConfigStore((state) => state.reset);
+
+  // 새 전략 페이지 진입 시 상태 초기화 (캐시 복귀 포함)
+  useEffect(() => {
+    reset();
+    setActiveTab("buy");
+    conditionsAppliedRef.current = false;
+    cloneAppliedRef.current = false;
+  }, [reset, setActiveTab]); // 마운트 시 한 번만 실행
+
+  // 페이지 언마운트 시 cleanup (StrictMode 호환)
+  // 상태 초기화는 진입 시 처리하므로 여기서는 ref만 리셋
+  useEffect(() => {
+    // 언마운트 시 ref 초기화만 수행 (StrictMode에서 중복 호출 방지)
+    return () => {
+      // 다음 마운트에서 새로운 데이터를 로드할 수 있도록 ref만 초기화
+      // store reset은 새로운 페이지 진입 시 수행 (위의 useEffect에서)
+      conditionsAppliedRef.current = false;
+      cloneAppliedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (conditionsAppliedRef.current) return;
@@ -103,11 +169,145 @@ export function QuantNewPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 마운트 시 한 번만 실행
 
+  // 조건식 파싱 헬퍼 함수
+  const parseConditionString = (expression: string): { factorName: string | null; subFactorName: string | null; argument?: string } => {
+    // Case 1: SubFactor({Factor},{Arg}) or SubFactor({Factor})
+    // 예: "이동평균({PER},{20일})" -> subFactor: "이동평균", factor: "PER", arg: "20일"
+    const subFactorMatch = expression.match(/^([^(]+)\(\{([^}]+)\}(?:,\{([^}]+)\})?\)$/);
+    if (subFactorMatch) {
+      return {
+        subFactorName: subFactorMatch[1],
+        factorName: subFactorMatch[2],
+        argument: subFactorMatch[3]
+      };
+    }
+
+    // Case 2: {Factor}
+    // 예: "{PER}" -> factor: "PER"
+    const factorMatch = expression.match(/^\{([^}]+)\}$/);
+    if (factorMatch) {
+      return {
+        factorName: factorMatch[1],
+        subFactorName: null
+      };
+    }
+
+    return { factorName: null, subFactorName: null };
+  };
+
+  // Clone parameter 처리 (복제된 전략)
+  useEffect(() => {
+    if (cloneAppliedRef.current) return;
+    const cloneParam = searchParams.get("clone");
+    if (!cloneParam) return;
+
+    const loadCloneData = async () => {
+      try {
+        setIsLoadingClone(true);
+
+        // 원본 전략 데이터 가져오기
+        console.log("[QuantNewPageClient] 복제 데이터 로드 시작:", cloneParam);
+        const cloneData = await communityApi.getCloneStrategyData(cloneParam);
+        console.log("[QuantNewPageClient] 복제 데이터 로드 성공:", cloneData);
+
+        // API 호출 성공 후에만 ref를 true로 설정 (실패 시 재시도 가능)
+        cloneAppliedRef.current = true;
+
+        // 기존 조건 초기화 (중복 방지)
+        setBuyConditionsUI([]);
+        setSellConditionsUI([]);
+
+        // 기본 설정
+        setStrategyName(cloneData.strategyName);
+        setIsDayOrMonth(cloneData.isDayOrMonth);
+        setStartDate(cloneData.startDate);
+        setEndDate(cloneData.endDate);
+        setInitialInvestment(cloneData.initialInvestment);
+        setCommissionRate(cloneData.commissionRate);
+        setSlippage(cloneData.slippage);
+
+        // 매수 조건
+        setBuyLogic(cloneData.buyLogic);
+        if (cloneData.priorityFactor) setPriorityFactor(cloneData.priorityFactor);
+        setPriorityOrder(cloneData.priorityOrder);
+        setPerStockRatio(cloneData.perStockRatio);
+        setMaxHoldings(cloneData.maxHoldings);
+        if (cloneData.maxBuyValue) setMaxBuyValue(cloneData.maxBuyValue);
+        if (cloneData.maxDailyStock) setMaxDailyStock(cloneData.maxDailyStock);
+        setBuyPriceBasis(cloneData.buyPriceBasis);
+        setBuyPriceOffset(cloneData.buyPriceOffset);
+
+        // 매수 조건 UI
+        if (cloneData.buyConditions && Array.isArray(cloneData.buyConditions)) {
+          cloneData.buyConditions.forEach((condition: any) => {
+            // API의 exp_left_side를 파싱하여 UI 상태로 변환
+            const parsed = parseConditionString(condition.exp_left_side || "");
+
+            addBuyConditionUIWithData({
+              factorName: parsed.factorName,
+              subFactorName: parsed.subFactorName,
+              operator: condition.inequality || "GT",
+              value: condition.exp_right_side !== null ? String(condition.exp_right_side) : "",
+              argument: parsed.argument,
+            });
+          });
+        }
+
+        // 매도 조건
+        if (cloneData.targetAndLoss) setTargetAndLoss(cloneData.targetAndLoss as any);
+        if (cloneData.holdDays) setHoldDays(cloneData.holdDays as any);
+
+        // 조건 매도 (condition_sell) 처리
+        if (cloneData.conditionSell) {
+          setConditionSell(cloneData.conditionSell as any);
+
+          // 매도 조건 UI 복원
+          if (cloneData.conditionSell.sell_conditions && Array.isArray((cloneData.conditionSell as any).sell_conditions)) {
+            (cloneData.conditionSell as any).sell_conditions.forEach((condition: any) => {
+              const parsed = parseConditionString(condition.exp_left_side || "");
+
+              // addSellConditionUIWithData는 store에 정의되어 있어야 함
+              // useBacktestConfigStore에 addSellConditionUIWithData가 있는지 확인 필요
+              // 확인 결과: 있음
+              const { addSellConditionUIWithData } = useBacktestConfigStore.getState();
+
+              addSellConditionUIWithData({
+                factorName: parsed.factorName,
+                subFactorName: parsed.subFactorName,
+                operator: condition.inequality || "GT",
+                value: condition.exp_right_side !== null ? String(condition.exp_right_side) : "",
+                argument: parsed.argument,
+              });
+            });
+          }
+        }
+
+        // 종목 선택
+        setTradeTargets(cloneData.tradeTargets as any);
+
+        // URL에서 clone 파라미터 제거
+        const url = new URL(window.location.href);
+        url.searchParams.delete("clone");
+        window.history.replaceState({}, "", url.toString());
+      } catch (error) {
+        console.error("복제 데이터 로드 실패:", error);
+        showAlert("복제 실패", "전략 복제에 실패했습니다. 다시 시도해주세요.", "error");
+      } finally {
+        setIsLoadingClone(false);
+      }
+    };
+
+    loadCloneData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 마운트 시 한 번만 실행
+
   // 로딩 상태 표시
-  if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes) {
+  if (isLoadingFactors || isLoadingSubFactors || isLoadingThemes || isLoadingClone) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-text-body">데이터를 불러오는 중...</div>
+        <div className="text-text-body">
+          {isLoadingClone ? "전략을 불러오는 중..." : "데이터를 불러오는 중..."}
+        </div>
       </div>
     );
   }
@@ -138,6 +338,18 @@ export function QuantNewPageClient() {
         activeTab={activeTab}
         isOpen={isSummaryPanelOpen}
         setIsOpen={setIsSummaryPanelOpen}
+      />
+
+      {/* 알림 모달 */}
+      <ConfirmModal
+        isOpen={alertModal.isOpen}
+        onClose={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => setAlertModal((prev) => ({ ...prev, isOpen: false }))}
+        title={alertModal.title}
+        message={alertModal.message}
+        confirmText="확인"
+        iconType={alertModal.iconType}
+        alertOnly
       />
     </div>
   );

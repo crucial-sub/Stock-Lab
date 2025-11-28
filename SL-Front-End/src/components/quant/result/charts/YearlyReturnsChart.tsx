@@ -65,11 +65,12 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
 
     // 데이터 변환 (누적 수익률 기준으로 정규화)
     const startReturn = filteredData[0]?.cumulativeReturn || 0;
+    const startBenchmarkReturn = filteredData[0]?.benchmarkCumReturn || 0;
     const chartData = filteredData.map((point) => ({
       date: new Date(point.date).getTime(),
       portfolioReturn: (point.cumulativeReturn || 0) - startReturn,
-      kospiReturn: 0, // TODO: KOSPI 데이터 연동 필요
-      kosdaqReturn: 0, // TODO: KOSDAQ 데이터 연동 필요
+      kospiReturn: (point.benchmarkCumReturn || 0) - startBenchmarkReturn,  // ✅ 벤치마크 데이터 (기본: KOSPI)
+      kosdaqReturn: 0,  // NOTE: KOSDAQ은 백테스트 실행 시 benchmark 파라미터를 "KOSDAQ"으로 설정하여 조회 가능
     }));
 
     // X축 (날짜)
@@ -80,6 +81,19 @@ export function YearlyReturnsChart({ yieldPoints }: YearlyReturnsChartProps) {
           minGridDistance: 50,
         }),
         tooltip: am5.Tooltip.new(root, {}),
+        // 날짜 형식: YYYY.MM 또는 YYYY.MM.DD
+        dateFormats: {
+          day: "yyyy.MM.dd",
+          week: "yyyy.MM.dd",
+          month: "yyyy.MM",
+          year: "yyyy",
+        },
+        periodChangeDateFormats: {
+          day: "yyyy.MM.dd",
+          week: "yyyy.MM.dd",
+          month: "yyyy.MM",
+          year: "yyyy",
+        },
       }),
     );
 

@@ -5,12 +5,52 @@ import types
 import sys
 import uuid
 import json
+import copy
+import traceback
+import logging
+import hashlib
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from dotenv import load_dotenv
 import yaml
-import json
+try:
+    import redis  # type: ignore
+except ImportError:
+    redis = None
 
+# LangChain 캐시 (Redis)
+RedisCache = None
+try:
+    from langchain.cache import RedisCache  # type: ignore
+except Exception:
+    try:
+        from langchain_community.cache import RedisCache  # type: ignore
+    except Exception as e:
+        print(f"경고: LangChain RedisCache를 불러오지 못했습니다. 캐시 비활성화. 오류: {e}")
+        RedisCache = None
+
+
+class InMemorySessionStore:
+    """대화 세션 스토어 (메모리 기반)."""
+    def __init__(self):
+        self._store: Dict[str, Any] = {}
+
+    def get_or_create(self, key: str, factory: Any) -> Any:
+        if key not in self._store:
+            self._store[key] = factory()
+        return self._store[key]
+
+    def delete(self, key: str) -> None:
+        if key in self._store:
+            del self._store[key]
+
+    def delete_by_suffix(self, suffix: str) -> None:
+        keys = [k for k in self._store.keys() if k.endswith(suffix)]
+        for k in keys:
+            del self._store[k]
+
+    def clear(self) -> None:
+        self._store.clear()
 _pydantic_v1_module = None
 try:
     import pydantic as _pydantic
@@ -33,6 +73,8 @@ except ImportError:
     pass
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock").lower()
+
+# 자연어 → 상위 팩터 카테고리 매핑 (config/nl_category_mapping.json 파일에서 로드)
 
 # LangChain 의존성은 버전에 따라 모듈 경로가 달라지므로 개별적으로 로드한다.
 ChatBedrock = None
@@ -90,20 +132,30 @@ except ImportError as e:
     BaseMessage = None
 
 try:
-    from langchain.memory import ConversationBufferWindowMemory  # type: ignore
+    from langchain.memory import ChatMessageHistory  # type: ignore
 except ImportError:
     try:
-        # LangChain 0.3+는 메모리 API가 classic 패키지로 이동했다.
-        from langchain_classic.memory import ConversationBufferWindowMemory  # type: ignore
-        print('정보: langchain.memory 대신 langchain_classic.memory에서 ConversationBufferWindowMemory를 로드했습니다.')
+        # LangChain 0.3+는 메모리 API가 classic/community 패키지로 이동했다.
+        from langchain_community.chat_message_histories import ChatMessageHistory  # type: ignore
+        print('정보: ChatMessageHistory를 langchain_community에서 로드했습니다.')
     except ImportError as e:
-        print(f"경고: ConversationBufferWindowMemory를 불러오지 못했습니다. pip install langchain-classic 실행 필요. 오류: {e}")
-        ConversationBufferWindowMemory = None
+        print(f"경고: ChatMessageHistory를 불러오지 못했습니다. pip install langchain-community 실행 필요. 오류: {e}")
+        ChatMessageHistory = None
+
+# 토큰 스트리밍 콜백
+AsyncIteratorCallbackHandler = None
+try:
+    from langchain.callbacks import AsyncIteratorCallbackHandler  # type: ignore
+except ImportError:
+    try:
+        from langchain.callbacks.base import AsyncIteratorCallbackHandler  # type: ignore
+    except ImportError as e:
+        print(f"경고: AsyncIteratorCallbackHandler를 불러오지 못했습니다. LangChain 버전을 확인하세요. 오류: {e}")
+        AsyncIteratorCallbackHandler = None
 
 # Load environment variables
 env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(env_path)
-import asyncio
 try:
     from factor_sync import FactorSync
 except ImportError:
@@ -119,7 +171,7 @@ except ImportError:
     BaseRetriever = None
 
 try:
-    from news_retriever import NewsRetriever
+    from retrievers.news_retriever import NewsRetriever
 except ImportError:
     print("Warning: NewsRetriever not imported")
     NewsRetriever = None
@@ -136,8 +188,12 @@ class ChatHandler:
 
     GREETING_KEYWORDS = {"안녕", "안녕하세요", "hi", "hello", "하이", "헬로"}
     DEFAULT_GREETING_RESPONSE = "안녕하세요! AI assistent 입니다 :) 어떤 도움이 필요하신가요?"
+    DSL_CACHE_VERSION = "v1"
 
     def __init__(self, config_path: str = "config.yaml"):
+        if not logging.getLogger().handlers:
+            logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
         self.config_path = config_path
         self.llm_client = None
         self.rag_retriever = None
@@ -146,16 +202,36 @@ class ChatHandler:
         self.agent_executors: Dict[str, Any] = {}
         self.system_prompts: Dict[str, str] = {}
         self.conversation_history = {}
+        self.cache_client = None
         # 설문/추천 상태
         self.session_state: Dict[str, Dict[str, Any]] = {}
         self.forbidden_patterns: Dict[str, List[str]] = {}
         self.questions: List[Dict[str, Any]] = []
+        self.nl_category_mapping: Dict[str, List[str]] = {}
+        # LLM 메타 데이터 (에러 로깅용)
+        self.llm_region: Optional[str] = None
+        self.llm_model_id: Optional[str] = None
+        self.llm_inference_profile_id: Optional[str] = None
+        self.llm_target_id: Optional[str] = None
+        # 외부 서비스 핸들러 (선언만 해 AttributeError 방지)
+        self.sentiment_service = None
+        # 챗봇 사용 가이드 캐시
+        self.usage_notes: Optional[str] = None
+        self.page_guides_cache: Dict[str, str] = {}
+        # 세션 스토어 (메모리 기본, 교체 가능)
+        self.session_store = InMemorySessionStore()
+        # 기존 코드 호환용 (더 이상 직접 사용하지 않는 것을 권장)
+        self.conversation_history = self.session_store._store
 
         self._load_config()
         self._load_forbidden_patterns()
         self.questions = self._load_questions()
         self._load_strategies()
+        self._load_nl_category_mapping()
+        self._load_usage_notes()
+        self._init_cache_client()
         self._init_components()
+        self._ensure_news_retriever()
 
     def _needs_news_keyword(self, message: str) -> Optional[str]:
         """뉴스 의도지만 키워드가 없는 경우 간단 안내 반환."""
@@ -171,6 +247,23 @@ class ChatHandler:
             if len(cleaned) < 2:
                 return "어떤 종목/테마 뉴스가 궁금한지 알려주세요. 예) '삼성전자 뉴스 알려줘', '반도체 테마 뉴스 요약해줘'"
         return None
+
+    def _init_cache_client(self):
+        """Redis 캐시 클라이언트 초기화."""
+        redis_url = os.getenv("REDIS_URL")
+        if not redis_url or not redis:
+            return
+        try:
+            self.cache_client = redis.from_url(redis_url, decode_responses=True)
+            self.logger.info(f"Redis cache enabled ({redis_url})")
+            # LangChain Redis 캐시 설정 (프롬프트/컨텍스트 해시 기반)
+            if RedisCache:
+                import langchain
+                langchain.cache = RedisCache(self.cache_client)
+                self.logger.info("LangChain Redis cache 활성화됨")
+        except Exception as e:
+            self.logger.warning(f"Redis 초기화 실패: {e}")
+            self.cache_client = None
 
     def _load_questions(self):
         """설문 질문을 외부 파일에서 로드하고, 실패하면 기본값 사용."""
@@ -242,6 +335,56 @@ class ChatHandler:
             },
         ]
 
+    def _load_usage_notes(self) -> None:
+        """챗봇 사용 가이드(요약)를 로드해 캐시."""
+        candidates = [
+            Path("/app/docs/user-guide/chatbot-usage-notes.md"),
+            Path(__file__).parent.parent.parent / "docs" / "user-guide" / "chatbot-usage-notes.md",
+        ]
+        for path in candidates:
+            if path.exists():
+                try:
+                    text = path.read_text(encoding="utf-8")
+                    # 너무 길면 앞부분만 캐시
+                    self.usage_notes = text[:1200]
+                    print(f"Loaded chatbot usage notes from {path}")
+                    return
+                except Exception as exc:
+                    print(f"WARNING: failed to load usage notes ({path}): {exc}")
+        self.usage_notes = None
+
+    def _load_doc_snippet(self, path: Path, max_chars: int = 800) -> Optional[str]:
+        """지정된 문서에서 앞부분만 잘라 요약 스니펫으로 반환."""
+        try:
+            text = path.read_text(encoding="utf-8")
+            return text[:max_chars]
+        except Exception as exc:
+            print(f"WARNING: failed to load doc snippet ({path}): {exc}")
+            return None
+
+    def _load_nl_category_mapping(self):
+        """자연어 → 상위 팩터 카테고리 매핑 로드."""
+        path = Path("/app/config/nl_category_mapping.json")
+        if not path.exists():
+            path = Path(__file__).parent.parent.parent / "config" / "nl_category_mapping.json"
+
+        if not path.exists():
+            print(f"WARNING: nl_category_mapping.json not found at {path}")
+            self.nl_category_mapping = {}
+            return
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                self.nl_category_mapping = {k.upper(): v for k, v in data.items()}
+                print(f"Loaded nl_category_mapping ({len(self.nl_category_mapping)} categories)")
+            else:
+                print(f"WARNING: nl_category_mapping.json has invalid format")
+                self.nl_category_mapping = {}
+        except Exception as e:
+            print(f"ERROR: Failed to load nl_category_mapping.json: {e}")
+            self.nl_category_mapping = {}
+
     def _load_config(self):
         """Load configuration."""
         config_file = Path(__file__).parent.parent / "config.yaml"
@@ -302,10 +445,14 @@ class ChatHandler:
             sid = s.get("id")
             if not sid:
                 continue
+            backtest_cfg = s.get("backtest_config")
+            if backtest_cfg is not None:
+                backtest_cfg = copy.deepcopy(backtest_cfg)
             self.strategy_backtest_templates[sid] = {
                 "strategy_name": s.get("name", sid),
                 "buy_conditions": self._filter_valid_conditions(s.get("buy_conditions", [])),
                 "sell_conditions": self._filter_valid_conditions(s.get("sell_conditions", [])),
+                "backtest_config": backtest_cfg,
             }
             alias_tokens = self._build_strategy_aliases(
                 sid,
@@ -313,7 +460,7 @@ class ChatHandler:
                 s.get("aliases", []),
             )
             self.strategy_alias_map[sid] = alias_tokens
-
+            
     def _load_forbidden_patterns(self):
         """금지 패턴을 외부 설정에서 로드 (없으면 기본값 사용)."""
         default_patterns = {
@@ -339,6 +486,12 @@ class ChatHandler:
                 r"(당신|너|니|저는|우리는|우리)\s*(경우|상황|환경).*?(전략|투자|추천|사는|사세요)",
                 r"(월|분기|년)\s*(\d+)\s*(만원|천원|원).*?(투자|사세요|해야)",
                 r"(특별히|맞춤|특화|개인|따라).*?(투자|전략|추천)",
+            ],
+            "비속어": [
+                r"(씨발|시발|좆|병신|개새끼|ㅅㅂ|ㅈㄴ|fuck|shit|bitch)",
+            ],
+            "도박": [
+                r"(도박|카지노|토토|바카라|룰렛|베팅|배팅)",
             ],
         }
 
@@ -429,16 +582,61 @@ class ChatHandler:
                     config=retry_config
                 )
 
-                self.llm_client = ChatBedrock(
-                    client=bedrock_client,
-                    model_id=os.getenv("BEDROCK_MODEL_ID", self.config["llm"]["model"]),
-                    model_kwargs={
-                        "temperature": self.config["llm"]["temperature"],
-                        "max_tokens": self.config["llm"]["max_tokens"],
-                    },
-                    streaming=False
+                model_id = os.getenv("BEDROCK_MODEL_ID", self.config["llm"]["model"])
+                inference_profile_id = (
+                    os.getenv("BEDROCK_INFERENCE_PROFILE_ID")
+                    or os.getenv("BEDROCK_INFERENCE_PROFILE_ARN")
+                    or self.config["llm"].get("inference_profile_id")
                 )
-                print(f"Step 1 OK: AWS Bedrock 사용 - 리전: {aws_region}, 모델: {self.llm_client.model_id}")
+                model_kwargs = {
+                    "temperature": self.config["llm"]["temperature"],
+                    "max_tokens": self.config["llm"]["max_tokens"],
+                }
+                chatbedrock_kwargs = {
+                    "client": bedrock_client,
+                    "model_kwargs": model_kwargs,
+                    "streaming": True,
+                }
+                # inference_profile_id를 사용하면 provider 지정이 필요하다.
+                if inference_profile_id:
+                    chatbedrock_kwargs["provider"] = "anthropic"
+                if inference_profile_id:
+                    # For provisioned throughput deployments
+                    chatbedrock_kwargs["inference_profile_id"] = inference_profile_id
+                else:
+                    chatbedrock_kwargs["model_id"] = model_id
+
+                try:
+                    self.llm_client = ChatBedrock(**chatbedrock_kwargs)
+                except Exception as e:
+                    # ValidationError (Pydantic) or TypeError (old langchain-aws versions)
+                    error_msg = str(e)
+                    if inference_profile_id and ("inference_profile_id" in error_msg or "extra fields not permitted" in error_msg):
+                        # Older langchain-aws versions don't expose inference_profile_id;
+                        # fall back to passing it as model_id so the client can still route.
+                        print(f"⚠️  inference_profile_id 미지원 감지 ({type(e).__name__}), model_id로 fallback...")
+                        chatbedrock_kwargs.pop("inference_profile_id", None)
+                        chatbedrock_kwargs["model_id"] = inference_profile_id
+                        chatbedrock_kwargs.setdefault("provider", "anthropic")
+                        self.llm_client = ChatBedrock(**chatbedrock_kwargs)
+                        print("✅ ChatBedrock을 inference_profile_id 대신 model_id로 초기화했습니다.")
+                    else:
+                        # 다른 에러는 재발생
+                        raise
+
+                target_id = inference_profile_id or model_id
+                # 에러 로깅을 위해 메타 데이터 저장
+                self.llm_region = aws_region
+                self.llm_model_id = model_id
+                self.llm_inference_profile_id = inference_profile_id
+                self.llm_target_id = target_id
+
+                print(
+                    "Step 1 OK: AWS Bedrock 사용 - "
+                    f"리전: {aws_region}, 대상: {target_id}, "
+                    f"env_model: {os.getenv('BEDROCK_MODEL_ID')}, "
+                    f"env_profile: {os.getenv('BEDROCK_INFERENCE_PROFILE_ID') or os.getenv('BEDROCK_INFERENCE_PROFILE_ARN')}"
+                )
 
                 # 2. 도구 초기화
                 print("Step 2: 도구 초기화 중...")
@@ -493,7 +691,8 @@ class ChatHandler:
                         tools=tools,
                         verbose=False,
                         return_intermediate_steps=True,
-                        handle_parsing_errors=True
+                        handle_parsing_errors=True,
+                        max_iterations=5
                     )
                     self.agent_executors[mode] = executor
                     print(f"  - {mode} AgentExecutor 생성 완료")
@@ -527,7 +726,14 @@ class ChatHandler:
         if session_id is None:
             session_id = str(uuid.uuid4())
 
-        client_type = (client_type or "assistant").lower()
+        # client_type이 명시되지 않았거나 "assistant"일 경우 자동 라우팅
+        if not client_type or client_type.lower() == "assistant":
+            client_type = self._route_client_type(message)
+            print(f"[AUTO-ROUTING] '{message[:50]}...' -> {client_type}")
+        else:
+            client_type = client_type.lower()
+
+        # 유효성 검증
         if client_type not in ("assistant", "ai_helper", "home_widget"):
             client_type = "assistant"
 
@@ -544,20 +750,15 @@ class ChatHandler:
             }
 
         if client_type == "home_widget":
+            # 먼저 shortcut 처리 시도 (뉴스/스크리닝 등)
             home_widget_response = await self._handle_home_widget_shortcuts(message)
             if home_widget_response:
                 home_widget_response["session_id"] = session_id
                 return home_widget_response
+            # shortcut이 없으면 home_widget 프롬프트로 일반 처리
+            # (계속 진행하여 _generate_response_langchain에서 home_widget 에이전트 사용)
 
-        # 0-0. 도메인(금융/투자) 외 질문 차단
-        domain_violation = self._check_domain_restriction(message)
-        if domain_violation:
-            return {
-                "answer": domain_violation,
-                "intent": "policy_violation",
-                "session_id": session_id,
-                "sources": []
-            }
+        # 도메인(금융/투자) 필터 비활성화됨
 
         # 뉴스 요청인데 키워드가 부족한 경우 사전 안내
         news_hint = self._needs_news_keyword(message)
@@ -570,7 +771,7 @@ class ChatHandler:
             }
 
         # 0. 정책 검사 (투자 조언 금지 정책)
-        policy_violation = self._check_investment_advisory_policy(message)
+        policy_violation = self._check_investment_advisory_policy(message, session_id=session_id)
         if policy_violation:
             return {
                 "answer": policy_violation,
@@ -579,10 +780,40 @@ class ChatHandler:
                 "sources": []
             }
 
+        # 카테고리 매핑 기반 간단 DSL 생성 (초보자 자연어 → 상위 카테고리)
+        category_response = self._maybe_handle_category_mapping(message)
+        if category_response:
+            category_response["session_id"] = session_id
+            return category_response
+
+        # 사용 가이드 요청 시 즉시 가이드 반환
+        guide_response = self._maybe_handle_usage_guide(message)
+        if guide_response:
+            guide_response["session_id"] = session_id
+            return guide_response
+
+        # 뉴스/테마 요청인데 뉴스/테마 서비스가 없으면 즉시 템플릿형 안내로 응답
+        self._ensure_news_retriever()
+        if self._is_news_theme_request(message) and not self.news_retriever:
+            unavailable_answer = self._format_news_unavailable(message)
+            return {
+                "answer": unavailable_answer,
+                "intent": "news_unavailable",
+                "session_id": session_id,
+                "sources": []
+            }
+        # 뉴스/테마 요청이면 일관된 뉴스 요약으로 즉시 응답
+        if self._is_news_theme_request(message) and self.news_retriever:
+            news_resp = await self._build_news_response(message)
+            news_resp["session_id"] = session_id
+            return news_resp
+
         # 1. Classify intent
         intent = await self._classify_intent(message)
-        if client_type == "ai_helper" and intent not in {"dsl_generation", "backtest_configuration", "explain"}:
-            intent = "dsl_generation"
+        if client_type == "ai_helper":
+            # 헬퍼 모드에서는 개념 설명 대신 조건/DSL 생성에 집중
+            if intent != "backtest_configuration":
+                intent = "dsl_generation"
 
         # 2. Intent에 따라 다른 핸들러 호출
         if intent == 'dsl_generation':
@@ -591,7 +822,58 @@ class ChatHandler:
             response = await self._handle_explain_mode(message, session_id, client_type)
         else:
             # 기존 통합 플로우 (recommend, general 등)
-            context = await self._retrieve_context(message, intent)
+            # home_widget은 빠른 응답을 위해 RAG 검색 생략
+            if client_type == "home_widget":
+                context = ""
+            else:
+                context = await self._retrieve_context(message, intent)
+
+            # 뉴스/테마 키워드 감지 시 강제로 뉴스 + 감성 분석 먼저 수행
+            news_context = ""
+            if self._is_news_theme_request(message) and self.news_retriever:
+                news_context = await self._fetch_news_for_context(message)
+                sentiment_context = await self._fetch_sentiment_for_context(message)
+
+                combined_context = ""
+                if news_context:
+                    combined_context += f"[최신 뉴스 정보]\n{news_context}"
+                if sentiment_context:
+                    combined_context += f"\n\n[감성 분석 데이터]\n{sentiment_context}"
+
+                if combined_context:
+                    context = f"{context}\n\n{combined_context}" if context else combined_context
+
+                # 뉴스 요청이면 바로 요약을 반환해 애매한 답변을 방지
+                if news_context:
+                    answer_lines = ["## 최신 뉴스 요약", news_context]
+                    if sentiment_context:
+                        answer_lines.append("\n### 감성 요약")
+                        answer_lines.append(sentiment_context)
+                    answer_lines.append("\n※ 매수/매도 권유가 아닌 정보 제공용입니다.")
+                    return {
+                        "answer": "\n".join(answer_lines),
+                        "intent": "news_summary",
+                        "session_id": session_id,
+                        "sources": []
+                    }
+                else:
+                    # 뉴스 데이터가 없으면 명확하게 안내하고 종료
+                    no_news = (
+                        "## 최신 뉴스 요약\n"
+                        "죄송합니다. 해당 키워드로 최근 뉴스 데이터를 찾지 못했습니다.\n\n"
+                        "### 다음에 시도해보세요\n"
+                        "- 더 구체적인 종목명/테마로 다시 요청 (예: '삼성전자 최근 뉴스')\n"
+                        "- 기간을 넓혀 과거 뉴스 포함 검색\n"
+                        "- 다른 키워드로 재시도\n\n"
+                        "※ 매수/매도 권유가 아닌 정보 제공용입니다."
+                    )
+                    return {
+                        "answer": no_news,
+                        "intent": "news_summary",
+                        "session_id": session_id,
+                        "sources": []
+                    }
+
             if intent == 'backtest_configuration':
                 response = self._handle_backtest_configuration(message, session_id)
             else:
@@ -600,6 +882,9 @@ class ChatHandler:
                 )
 
         response["session_id"] = session_id
+        # AI 헬퍼 모드에서는 바로 적용 가능한 매수/매도 버튼을 노출하도록 UI 언어를 보강한다.
+        if client_type == "ai_helper":
+            self._ensure_ai_helper_actions(response)
         return response
 
     def _is_simple_greeting(self, message: str) -> bool:
@@ -613,6 +898,113 @@ class ChatHandler:
         msg = (message or "").lower()
         triggers = ["전략 추천", "추천받고 싶어요", "추천 해줘", "설문", "투자 성향"]
         return any(t in msg for t in triggers) or msg.strip() == ""
+
+    def _route_client_type(self, message: str) -> str:
+        """메시지 내용을 분석하여 적절한 client_type을 자동으로 결정합니다.
+
+        우선순위:
+        1. AI_HELPER - 행동 요청 (조건 만들기, DSL 생성, 전략 적용 등)
+        2. ASSISTANT - 개념 설명 요청 (뭐야, 의미, 차이, 설명 등)
+        3. HOME_WIDGET - 짧은 질문, 요약 요청
+        4. ASSISTANT - 나머지 모든 경우 (기본값)
+
+        Args:
+            message: 사용자 입력 메시지
+
+        Returns:
+            "ai_helper", "home_widget", 또는 "assistant"
+        """
+        if not message:
+            return "assistant"
+
+        text = message.strip()
+
+        # === 1순위: AI HELPER 규칙 (행동 요청) ===
+
+        # 예외: 백테스트 개념 질문은 헬퍼가 아님
+        helper_exception_patterns = [
+            r"백테스트.*(무엇|뭐|왜|어떻게|알아야|필요|의미|설명)",
+        ]
+
+        is_helper_exception = False
+        for pattern in helper_exception_patterns:
+            if re.search(pattern, text):
+                is_helper_exception = True
+                break
+
+        if not is_helper_exception:
+            # AI HELPER로 보내야 하는 패턴들 (매우 명확한 DSL 생성 요청만)
+            helper_patterns = [
+                # 구체적인 수치가 있는 조건
+                r"(<=|>=|<|>|%|이상|이하).*(매수|매도)",
+                r"\d+.*(이상|이하|초과|미만).*(매수|매도)",
+
+                # 팩터 + 조건 명시
+                r"(PER|PBR|ROE|RSI|MACD|볼린저).*(조건|매수|매도)",
+
+                # 명확한 조건/DSL 생성 요청 (전략명 없이)
+                r"^(조건|DSL).*(만들|생성|해줘)",
+                r"^(룰|규칙).*(만들|생성)",
+
+                # 백테스트 + 구체적 요청
+                r"백테스트.*(조건|만들|생성)",
+            ]
+
+            for pattern in helper_patterns:
+                if re.search(pattern, text):
+                    return "ai_helper"
+
+        # === 2순위: ASSISTANT 개념 설명 패턴 (짧은 문장이라도 설명 요청이면 assistant) ===
+
+        # 투자 거장/전략명 패턴 (짧아도 assistant로)
+        strategy_investor_patterns = [
+            r"(워렌버핏|워렌|버핏|buffett)",
+            r"(피터린치|피터|린치|lynch)",
+            r"(벤자민그레이엄|벤자민|그레이엄|graham)",
+            r"(레이달리오|레이|달리오|dalio)",
+            r"(필립피셔|필립|피셔|fisher)",
+            r"전략",  # "전략" 키워드
+            r"(가치투자|성장투자|모멘텀투자|배당투자)",
+        ]
+
+        for pattern in strategy_investor_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return "assistant"
+
+        explanation_patterns = [
+            r"(뭐야|뭔데|무엇|뭔지|뭔가요|뭘까)",  # "PER이 뭐야?"
+            r"(의미|뜻|개념|정의)(\?|$)",  # "RSI 의미?"
+            r"(설명|알려|가르쳐|알아야|이해)",  # "쉽게 설명해줘"
+            r"(차이|비교|다른점)",  # "모멘텀과 가치 전략 차이"
+            r"(어떤|무슨).*전략",  # "어떤 전략이 맞아?"
+            r"하기 전에",  # "백테스트 하기 전에"
+            r"(\?|？).*\?",  # 물음표가 2개 이상
+        ]
+
+        for pattern in explanation_patterns:
+            if re.search(pattern, text):
+                return "assistant"
+
+        # === 3순위: HOME WIDGET 규칙 (짧은 질문/요약) ===
+
+        # 20자 이하이면서 간단한 문장 (? 하나만 있거나, 단어 2-3개)
+        if len(text) <= 20:
+            # 단어 개수 확인
+            words = re.findall(r'\S+', text)
+            if len(words) <= 3:
+                return "home_widget"
+
+        # 요약/간단 요청 키워드
+        widget_patterns = [
+            r"(요약|간단히|한줄|짧게|핵심만)",
+        ]
+
+        for pattern in widget_patterns:
+            if re.search(pattern, text):
+                return "home_widget"
+
+        # === 4순위: ASSISTANT (기본값) ===
+        return "assistant"
 
     async def _handle_home_widget_shortcuts(self, message: str) -> Optional[dict]:
         """홈 위젯에서 자주 요청되는 단순 응답 처리."""
@@ -649,10 +1041,25 @@ class ChatHandler:
         if not self._is_home_widget_news_request(message):
             return None
 
+        # 핵심 키워드 추출 (불필요한 단어 제거)
+        search_query = message.strip()
+        noise_words = ["테마", "동향", "뉴스", "알려줘", "확인해줘", "최근", "의", "을", "를", "이", "가"]
+        for word in noise_words:
+            search_query = search_query.replace(word, " ")
+        # 연속된 공백을 하나로
+        import re
+        search_query = re.sub(r'\s+', ' ', search_query).strip()
+
+        if not search_query:
+            search_query = message.strip()
+
+        print(f"[뉴스 검색] 원본: '{message}' → 검색어: '{search_query}'")
+
         news_items: List[Dict[str, Any]] = []
         if self.news_retriever:
             try:
-                news_items = await self.news_retriever.search_news_by_keyword(message.strip(), max_results=3)
+                news_items = await self.news_retriever.search_news_by_keyword(search_query, max_results=3)
+                print(f"[뉴스 검색] 결과 {len(news_items)}건")
             except Exception as exc:
                 print(f"[WARN] 홈 위젯 뉴스 검색 실패: {exc}")
 
@@ -714,11 +1121,392 @@ class ChatHandler:
             "sources": []
         }
 
+    def _extract_number(self, message: str, default: float = 10) -> float:
+        """메시지에서 숫자를 추출합니다. 없으면 기본값 반환."""
+        import re
+        numbers = re.findall(r'\d+(?:\.\d+)?', message)
+        if numbers:
+            return float(numbers[0])
+        return default
+
+    def _is_home_widget_screening_request(self, message: str) -> bool:
+        """홈 위젯 스크리닝 요청 여부 판단 (특정 키워드 기반)."""
+        if not message:
+            return False
+        lower = message.lower()
+        # 단순 스크리닝 키워드 (팩터 조합은 category_mapping에서 처리)
+        keywords = ["per", "pbr", "roe", "스크리닝", "조건 찾", "필터링"]
+        return any(kw in lower for kw in keywords)
+
     def _is_home_widget_news_request(self, message: str) -> bool:
         if not message:
             return False
         lower = message.lower()
-        return "뉴스" in lower or "동향" in lower or "headline" in lower
+        keywords = ["뉴스", "동향", "headline", "테마", "시장", "최근", "트렌드", "이슈"]
+        return any(kw in lower for kw in keywords)
+
+    def _is_news_theme_request(self, message: str) -> bool:
+        """뉴스/테마 요청 여부 판단 (일반 모드용)"""
+        if not message:
+            return False
+        lower = message.lower()
+        keywords = ["뉴스", "동향", "headline", "테마", "시장", "최근", "트렌드", "이슈"]
+        return any(kw in lower for kw in keywords)
+
+    async def _fetch_news_for_context(self, message: str) -> str:
+        """뉴스를 검색해서 컨텍스트 문자열로 반환"""
+        # 핵심 키워드 추출
+        search_query = message.strip()
+        noise_words = ["테마", "동향", "뉴스", "알려줘", "확인해줘", "최근", "의", "을", "를", "이", "가"]
+        for word in noise_words:
+            search_query = search_query.replace(word, " ")
+        import re
+        search_query = re.sub(r'\s+', ' ', search_query).strip()
+
+        # 검색어가 너무 짧으면 원본 사용
+        if not search_query or len(search_query) < 2:
+            search_query = message.strip()
+
+        # IT는 정보기술로 확장
+        if search_query.lower() in ["it", "i t"]:
+            search_query = "정보기술"
+
+        print(f"[뉴스 컨텍스트 검색] 원본: '{message}' → 검색어: '{search_query}'")
+
+        try:
+            news_items = await self.news_retriever.search_news_by_keyword(search_query, max_results=5)
+            # 공백 제거 버전으로 재시도 (예: '삼성 전자' → '삼성전자')
+            if not news_items and " " in search_query:
+                compact_query = search_query.replace(" ", "")
+                print(f"[뉴스 컨텍스트 검색] 결과 없음 → 공백 제거 재시도: '{compact_query}'")
+                news_items = await self.news_retriever.search_news_by_keyword(compact_query, max_results=5)
+            print(f"[뉴스 컨텍스트 검색] 결과 {len(news_items)}건")
+
+            if not news_items:
+                return ""
+
+            # 뉴스를 컨텍스트 문자열로 변환
+            news_lines = []
+            for idx, item in enumerate(news_items[:5], 1):
+                title = item.get("title", "제목 없음")
+                summary = item.get("summary") or item.get("content") or ""
+                summary = summary[:150] if summary else ""
+                published = item.get("publishedAt") or item.get("date", {}).get("display") or ""
+
+                news_lines.append(f"{idx}. {title}")
+                if published:
+                    news_lines.append(f"   발행일: {published}")
+                if summary:
+                    news_lines.append(f"   요약: {summary}")
+
+            return "\n".join(news_lines)
+        except Exception as exc:
+            print(f"[WARN] 뉴스 컨텍스트 검색 실패: {exc}")
+            return ""
+
+    async def _fetch_sentiment_for_context(self, message: str) -> str:
+        """감성 분석 데이터를 검색해서 컨텍스트 문자열로 반환"""
+        if not self.sentiment_service:
+            return ""
+
+        print(f"[감성 분석 검색] 테마별 감성 데이터 조회")
+
+        try:
+            # 테마별 감성 인사이트 가져오기
+            insights = await self.sentiment_service.get_theme_sentiment_insights(limit=10)
+            print(f"[감성 분석 검색] 결과 {len(insights)}건")
+
+            if not insights:
+                return ""
+
+            # 감성 데이터를 컨텍스트 문자열로 변환
+            sentiment_lines = []
+            for insight in insights[:10]:
+                theme_name = insight.get("theme_name", "알 수 없는 테마")
+                sentiment_score = insight.get("sentiment_score", 0)
+                news_count = insight.get("news_count", 0)
+                interpretation = insight.get("interpretation", "")
+
+                # 긍정/부정 판단
+                if sentiment_score > 0.2:
+                    sentiment_label = "긍정적"
+                elif sentiment_score < -0.2:
+                    sentiment_label = "부정적"
+                else:
+                    sentiment_label = "중립적"
+
+                sentiment_lines.append(
+                    f"- {theme_name}: {sentiment_label} (점수: {sentiment_score:.2f}, 뉴스 {news_count}건)"
+                )
+                if interpretation:
+                    sentiment_lines.append(f"  해석: {interpretation}")
+
+            return "\n".join(sentiment_lines)
+        except Exception as exc:
+            print(f"[WARN] 감성 분석 검색 실패: {exc}")
+            return ""
+
+    def _detect_nl_categories(self, message: str) -> List[str]:
+        """자연어 문장에서 상위 팩터 카테고리를 추출."""
+        if not message or not self.nl_category_mapping:
+            return []
+        msg_lower = message.lower()
+        detected = []
+        for category, keywords in self.nl_category_mapping.items():
+            for kw in keywords:
+                if kw.lower() in msg_lower:
+                    detected.append(category)
+                    break
+        return detected
+
+    def _build_category_conditions(self, categories: List[str], message: str = "") -> List[Dict[str, Any]]:
+        """카테고리별 기본 DSL 조건 묶음 생성 + 메시지 숫자 반영."""
+        preset: Dict[str, List[Dict[str, Any]]] = {
+            "VALUE_QUALITY": [
+                {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "PBR", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 1.0},
+                {"factor": "ROE", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 15},
+                {"factor": "DebtRatio", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 150},
+            ],
+            "PURE_VALUE": [
+                {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "PBR", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 1.0},
+            ],
+            "GROWTH": [
+                {"factor": "revenue_cagr_3y", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "eps_growth_rate", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+            ],
+            "VALUE_GROWTH": [
+                {"factor": "PER", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 15},
+                {"factor": "PBR", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 1.5},
+                {"factor": "revenue_cagr_3y", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 10},
+            ],
+            "QUALITY": [
+                {"factor": "ROE", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 15},
+                {"factor": "OperatingProfitMargin", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 10},
+                {"factor": "DebtRatio", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 100},
+            ],
+            "STABILITY": [
+                {"factor": "DebtRatio", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 100},
+                {"factor": "VOLATILITY_60D", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 0.2},
+            ],
+            "DIVIDEND": [
+                {"factor": "DividendYield", "params": [], "operator": ">=", "right_factor": None, "right_params": [], "value": 4},
+            ],
+            "MOMENTUM": [
+                {"factor": "RET_20D", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 0.05},
+                {"factor": "RET_60D", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 0},
+            ],
+            "SHORT_TERM": [
+                {"factor": "RET_5D", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 0.03},
+                {"factor": "volume_ratio", "params": [], "operator": ">", "right_factor": None, "right_params": [], "value": 1.5},
+            ],
+            "LOW_RISK": [
+                {"factor": "VOLATILITY_60D", "params": [], "operator": "<=", "right_factor": None, "right_params": [], "value": 0.15},
+                {"factor": "BETA", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 0.9},
+            ],
+            "REVERSAL": [
+                {"factor": "RET_20D", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": -0.1},
+                {"factor": "RSI_14", "params": [], "operator": "<", "right_factor": None, "right_params": [], "value": 30},
+            ],
+        }
+        # 메시지에 나온 숫자를 간단히 반영 (PER/PBR/ROE만 우선)
+        msg_lower = (message or "").lower()
+        numeric_overrides: Dict[str, float] = {}
+        for token, factor in [("per", "PER"), ("pbr", "PBR"), ("roe", "ROE")]:
+            import re
+            m = re.search(rf"{token}\s*([0-9]+\.?[0-9]*)", msg_lower)
+            if m:
+                try:
+                    numeric_overrides[factor] = float(m.group(1))
+                except Exception:
+                    pass
+
+        conditions: List[Dict[str, Any]] = []
+        # 숫자 지정이 있다면, 해당 팩터만 최소 조건으로 생성하여 불필요한 프리셋을 제거
+        if numeric_overrides:
+            default_ops = {"PER": "<=", "PBR": "<=", "ROE": ">="}
+            for factor, val in numeric_overrides.items():
+                op = default_ops.get(factor, "<=")
+                conditions.append(
+                    {
+                        "factor": factor,
+                        "params": [],
+                        "operator": op,
+                        "right_factor": None,
+                        "right_params": [],
+                        "value": val,
+                    }
+                )
+        else:
+            for cat in categories:
+                conditions.extend(preset.get(cat, []))
+
+        return conditions
+
+    def _ensure_ai_helper_actions(self, response: Dict[str, Any]) -> None:
+        """AI 헬퍼 응답에 매수/매도 통합 적용 버튼을 강제한다."""
+        backtest_conditions = response.get("backtest_conditions")
+        # 조건이 없으면 기본 빈 구조라도 제공
+        if not backtest_conditions:
+            backtest_conditions = {"buy": [], "sell": []}
+        ui_language = response.get("ui_language") or {}
+        # 기존 actions를 통합 적용 버튼 하나로 덮어쓴다.
+        ui_language["type"] = ui_language.get("type") or "backtest_configuration"
+        ui_language["actions"] = [
+            {
+                "type": "apply_backtest_conditions",
+                "label": "매수·매도 한번에 적용",
+                "conditions": backtest_conditions,
+            }
+        ]
+        response["ui_language"] = ui_language
+        # 프런트에서 버튼 렌더를 위해 조건은 그대로 유지
+        response["backtest_conditions"] = backtest_conditions
+
+    async def _build_news_response(self, message: str) -> dict:
+        """뉴스/테마 요청에 대한 일관된 요약 응답 생성."""
+        news_context = await self._fetch_news_for_context(message)
+        sentiment_context = await self._fetch_sentiment_for_context(message)
+
+        if news_context:
+            answer_lines = ["## 최신 뉴스 요약", news_context]
+            if sentiment_context:
+                answer_lines.append("\n### 감성 요약")
+                answer_lines.append(sentiment_context)
+            answer_lines.append("\n※ 매수/매도 권유가 아닌 정보 제공용입니다.")
+            return {
+                "answer": "\n".join(answer_lines),
+                "intent": "news_summary",
+                "sources": [],
+            }
+
+        no_news = (
+            "## 최신 뉴스 요약\n"
+            "죄송합니다. 해당 키워드로 최근 뉴스 데이터를 찾지 못했습니다.\n\n"
+            "### 다음에 시도해보세요\n"
+            "- 더 구체적인 종목명/테마로 다시 요청 (예: '삼성전자 최근 뉴스')\n"
+            "- 기간을 넓혀 과거 뉴스 포함 검색\n"
+            "- 다른 키워드로 재시도\n\n"
+            "※ 매수/매도 권유가 아닌 정보 제공용입니다."
+        )
+        return {
+            "answer": no_news,
+            "intent": "news_summary",
+            "sources": [],
+        }
+
+    def _maybe_handle_category_mapping(self, message: str) -> Optional[dict]:
+        """자연어 카테고리 매핑으로 즉시 DSL 조건을 반환."""
+        categories = self._detect_nl_categories(message)
+        if not categories:
+            return None
+
+        conditions = self._build_category_conditions(categories, message=message)
+        if not conditions:
+            return None
+
+        cat_text = ", ".join(categories)
+        lines = [f"- {c['factor']} {c['operator']} {c['value']}" for c in conditions]
+        # 매도 의도 탐지
+        msg_lower = message.lower()
+        sell_triggers = ["매도", "팔", "익절", "손절", "청산"]
+        is_sell = any(t in msg_lower for t in sell_triggers)
+        buy_conditions: List[Dict[str, Any]] = conditions if not is_sell else []
+        sell_conditions: List[Dict[str, Any]] = conditions if is_sell else []
+
+        answer = (
+            "## 요약\n"
+            f"{cat_text} 기준으로 스크리닝 조건을 만들었습니다.\n\n"
+            "### 조건식\n" + "\n".join(lines) + "\n\n"
+            "### 다음 단계\n- 매수/매도 조건에 추가 버튼을 눌러 적용하세요. \n"
+        )
+
+        return {
+            "answer": answer,
+            "intent": "dsl_suggestion",
+            "sources": [],
+            "backtest_conditions": {
+                "buy": buy_conditions,
+                "sell": sell_conditions
+            }
+        }
+
+    def _maybe_handle_usage_guide(self, message: str) -> Optional[dict]:
+        """챗봇 사용 가이드 요청이면 요약과 경로를 반환."""
+        if not message:
+            return None
+        msg_lower = message.lower()
+        guide_triggers = ["가이드", "사용법", "이용법", "어떻게 써", "도움말", "how to use", "사용 방법", "챗봇 쓰는", "매뉴얼"]
+        if not any(t in msg_lower for t in guide_triggers):
+            return None
+        # 페이지별 키워드 매핑
+        page_guides = [
+            {
+                "id": "chatbot",
+                "keywords": ["챗봇", "ai 어시스턴트", "assistant"],
+                "title": "챗봇 이용 안내",
+                "path": Path(__file__).parent.parent.parent / "docs" / "user-guide" / "chatbot-usage-notes.md",
+            },
+            {
+                "id": "quant",
+                "keywords": ["전략 포트폴리오", "백테스트", "퀀트", "전략 페이지"],
+                "title": "전략/포트폴리오 사용법",
+                "path": Path(__file__).parent.parent.parent / "docs" / "user-guide" / "06-quant.md",
+            },
+            {
+                "id": "quant_new",
+                "keywords": ["새 전략", "전략 생성", "조건 만들기"],
+                "title": "새 전략 생성 가이드",
+                "path": Path(__file__).parent.parent.parent / "docs" / "user-guide" / "07-quant-new.md",
+            },
+            {
+                "id": "market",
+                "keywords": ["시세", "가격", "realtime", "실시간"],
+                "title": "실시간 시세 사용법",
+                "path": Path(__file__).parent.parent.parent / "docs" / "user-guide" / "12-realtime.md",
+            },
+        ]
+
+        for pg in page_guides:
+            if any(k in msg_lower for k in pg["keywords"]):
+                cache_key = pg["id"]
+                snippet = self.page_guides_cache.get(cache_key)
+                if not snippet:
+                    snippet = self._load_doc_snippet(pg["path"])
+                    if snippet:
+                        self.page_guides_cache[cache_key] = snippet
+                # 파일을 못 읽으면 간단한 텍스트 가이드로 대체
+                fallback_texts = {
+                    "chatbot": "AI 어시스턴트에서 질문을 입력하면 실시간으로 답변을 받습니다. 로그인 시 대화 기록이 저장되고, 전략/뉴스/지표 등 금융 질문에만 응답합니다.",
+                    "quant": "전략 포트폴리오에서 보유 전략을 확인하고 백테스트 결과를 비교합니다. 각 전략 카드를 눌러 상세 성과를 보고, 백테스트를 재실행할 수 있습니다.",
+                    "quant_new": "새 전략 생성 페이지에서 매수/매도 조건을 입력하고 기간·리밸런싱 등을 설정 후 백테스트를 실행합니다. 결과 페이지로 이동해 성과를 확인하세요.",
+                    "market": "실시간 시세에서 종목을 검색해 현재가/차트를 확인하고, 관심 종목을 추가할 수 있습니다.",
+                }
+                text_body = snippet or fallback_texts.get(cache_key, "해당 가이드를 로드하지 못했습니다.")
+                answer = (
+                    f"{pg['title']}\n"
+                    f"{text_body}\n\n"
+                    f"자세히: docs/user-guide/{pg['path'].name}"
+                )
+                return {
+                    "answer": answer,
+                    "intent": "guide",
+                    "sources": [f"docs/user-guide/{pg['path'].name}"],
+                }
+
+        # 기본 챗봇 가이드
+        summary = self.usage_notes or "챗봇 이용 가이드를 로드하지 못했습니다. docs/user-guide/chatbot-usage-notes.md를 확인해주세요."
+        answer = (
+            "## 챗봇 이용 안내\n"
+            "가이드 요약을 전달드려요. 자세한 내용은 docs/user-guide/chatbot-usage-notes.md를 참고하세요.\n\n"
+            f"{summary}"
+        )
+        return {
+            "answer": answer,
+            "intent": "guide",
+            "sources": ["docs/user-guide/chatbot-usage-notes.md"],
+        }
 
     async def _handle_questionnaire_flow(self, session_id: str, answer: Optional[dict], message: str) -> dict:
         """5문항 설문 → 전략 추천 UI Language 생성."""
@@ -827,56 +1615,59 @@ class ChatHandler:
         opt = next((o for o in q["options"] if o["id"] == option_id), None)
         return opt["label"] if opt else ""
 
-    def _check_domain_restriction(self, message: str) -> Optional[str]:
-        """금융/투자 관련 키워드가 없으면 차단 응답을 반환."""
-        msg = message.lower()
-        finance_keywords = [
-            
-        # 투자/주식 일반
-        "주식", "종목", "투자", "전략", "시장", "백테스트", "포트폴리오", "퀀트",
-        "재무", "재무제표", "리스크", "수익률", "매수", "매도",
+    # def _check_domain_restriction(self, message: str) -> Optional[str]:
+    #     """금융/투자 관련 키워드가 없으면 차단 응답을 반환."""
+    #     msg = (message or "").lower()
+    #     finance_keywords = [
 
-        # 기본 팩터/지표
-        "per", "pbr", "psr", "roe", "roa", "eps", "ebitda", "ev", "fcf",
+    #     # 투자/주식 일반
+    #     "주식", "종목", "투자", "전략", "시장", "백테스트", "포트폴리오", "퀀트",
+    #     "재무", "재무제표", "리스크", "수익률", "매수", "매도",
 
-        # 기술적 지표
-        "rsi", "macd", "sma", "ema", "볼린저", "stochastic",
+    #     # 기본 팩터/지표
+    #     "per", "pbr", "psr", "roe", "roa", "eps", "ebitda", "ev", "fcf",
 
-        # 백테스트 주요 지표
-        "cagr", "연환산", "연평균", 
-        "mdd", "max drawdown", "낙폭", 
-        "샤프", "sharpe", 
-        "소티노", "sortino",
-        "승률", "win rate",
-        "손익비", "profit factor", "pf",
-        "변동성", "volatility",
-        "누적 수익률", "cumulative",
-        "연도별", "월별",
-        "드로우다운", "drawdown",
-        "회복기간", "duration",
+    #     # 기술적 지표
+    #     "rsi", "macd", "sma", "ema", "볼린저", "stochastic",
 
-        # 뉴스/테마
-        "뉴스", "테마", "섹터", "감성",
-        ]
+    #     # 백테스트 주요 지표
+    #     "cagr", "연환산", "연평균",
+    #     "mdd", "max drawdown", "낙폭",
+    #     "샤프", "sharpe",
+    #     "소티노", "sortino",
+    #     "승률", "win rate",
+    #     "손익비", "profit factor", "pf",
+    #     "변동성", "volatility",
+    #     "누적 수익률", "cumulative",
+    #     "연도별", "월별",
+    #     "드로우다운", "drawdown",
+    #     "회복기간", "duration",
+
+    #     # 뉴스/테마
+    #     "뉴스", "테마", "섹터", "감성",
+    #     ]
 
 
-        # 전략 인물 이름(문서 내 등장) 허용
-        strategy_people = [
-            "워렌버핏", "워런 버핏", "버핏", "워렌 버핏",
-            "벤저민 그레이엄", "그레이엄",
-            "피터 린치", "린치",
-            "레이 달리오", "달리오",
-            "찰리 멍거", "멍거",
-            "조엘 그린블라트", "그린블라트",
-        ]
-        
-        if any(k.lower() in msg for k in finance_keywords + strategy_people):
-            return None
+    #     # 전략 인물 이름(문서 내 등장) 허용
+    #     strategy_people = [
+    #         "워렌버핏", "워런 버핏", "버핏", "워렌 버핏",
+    #         "벤저민 그레이엄", "그레이엄",
+    #         "피터 린치", "린치",
+    #         "레이 달리오", "달리오",
+    #         "찰리 멍거", "멍거",
+    #         "조엘 그린블라트", "그린블라트",
+    #     ]
 
-        return (
-            "이 서비스는 투자·금융 관련 질문에만 답변합니다. "
-            "주식, 시장, 전략, 뉴스 등 금융 주제로 질문해주세요."
-        )
+    #     if any(k.lower() in msg for k in finance_keywords + strategy_people):
+    #         return None
+    #     # 자연어 카테고리 매핑에 걸리면 금융 질문으로 간주
+    #     if self._detect_nl_categories(message):
+    #         return None
+
+    #     return (
+    #         "이 서비스는 투자·금융 관련 질문에만 답변합니다. "
+    #         "주식, 시장, 전략, 뉴스 등 금융 주제로 질문해주세요."
+    #     )
 
     async def _classify_intent(self, message: str) -> str:
         """사용자 의도 분류. DSL 생성과 설명 모드를 명확히 구분합니다."""
@@ -970,9 +1761,8 @@ class ChatHandler:
                     state["selected_strategy"] = "custom"
                     strategy_name = "커스텀 조건"
                 elif user_choice == 2:
-                    # 기본 전략만 적용 (워렌버핏)
-                    matched_id = "warren_buffett"
-                    tpl = self.strategy_backtest_templates[matched_id]
+                    
+                    
                     state["backtest_conditions"] = {
                         "buy": self._filter_valid_conditions(tpl["buy_conditions"]),
                         "sell": self._filter_valid_conditions(tpl["sell_conditions"]),
@@ -981,8 +1771,7 @@ class ChatHandler:
                     strategy_name = tpl["strategy_name"]
                 else:  # user_choice == 3
                     # 전략 + 커스텀 조건 모두 적용
-                    matched_id = "warren_buffett"
-                    tpl = self.strategy_backtest_templates[matched_id]
+                    
                     buy_conditions = self._filter_valid_conditions(tpl["buy_conditions"])
                     buy_conditions.append(custom_buy_condition)
                     state["backtest_conditions"] = {
@@ -1043,10 +1832,19 @@ class ChatHandler:
                 "session_id": session_id,
             }
 
-        # 기본값: 워렌버핏
+        # 전략이 식별되지 않았다면 기본값으로 워렌버핏을 사용
         if not matched_id:
             matched_id = "warren_buffett"
-        tpl = self.strategy_backtest_templates[matched_id]
+        tpl = self.strategy_backtest_templates.get(matched_id)
+        backtest_cfg = tpl.get("backtest_config") if tpl else None
+        if backtest_cfg is not None:
+            backtest_cfg = copy.deepcopy(backtest_cfg)
+        if not tpl:
+            return {
+                "answer": "해당 전략 템플릿을 찾지 못했습니다. strategies.json을 확인해주세요.",
+                "intent": "backtest_configuration",
+                "session_id": session_id,
+            }
 
         # 세션 상태에 DSL 저장 (백테스트 실행 시 사용)
         state = self.session_state.setdefault(session_id, {})
@@ -1055,6 +1853,7 @@ class ChatHandler:
             "sell": self._filter_valid_conditions(tpl["sell_conditions"]),
         }
         state["selected_strategy"] = matched_id
+        state["backtest_config"] = backtest_cfg
 
         answer = (
             f"{tpl['strategy_name']}으로 진행할게요.\n"
@@ -1118,6 +1917,7 @@ class ChatHandler:
             "intent": "backtest_configuration",
             "ui_language": ui_language,
             "backtest_conditions": state["backtest_conditions"],
+            "backtest_config": backtest_cfg,
         }
 
     async def _retrieve_context(self, message: str, intent: str) -> str:
@@ -1177,6 +1977,32 @@ class ChatHandler:
 
         return "\n".join(context_parts) if context_parts else ""
 
+    def _ensure_news_retriever(self) -> None:
+        """뉴스 리트리버가 없으면 환경 변수로 재초기화."""
+        if self.news_retriever is not None:
+            return
+        backend_url = os.getenv("BACKEND_URL") or os.getenv("STOCK_LAB_API_URL")
+        if not backend_url:
+            backend_url = "http://backend:8000/api/v1"
+        if NewsRetriever:
+            try:
+                self.news_retriever = NewsRetriever(backend_url)
+                print(f"[NewsRetriever] Lazy initialized with {backend_url}")
+            except Exception as exc:
+                print(f"[NewsRetriever] Lazy init failed: {exc}")
+                self.news_retriever = None
+
+    def _format_news_unavailable(self, message: str) -> str:
+        """뉴스 서비스 중단 시 템플릿형 안내 메시지 생성."""
+        title = (message.strip() or "시장 동향")[:30]
+        return (
+            f"## {title}\n"
+            "- **데이터 없음**: 현재 뉴스/테마 감성 데이터를 가져올 수 없습니다.\n"
+            "- **대안**: 뉴스 서비스 복구 후 다시 요청해주세요.\n"
+            "- **참고**: 다른 투자/전략 질문은 바로 답변할 수 있습니다.\n\n"
+            "💡 다음 단계: 서비스 복구 시 다시 테마 동향을 요청해주세요"
+        )
+
     def _generate_backtest_ui(self, state: dict, strategy_name: str) -> dict:
         """백테스트 UI Language 생성 헬퍼 함수"""
         answer = (
@@ -1185,6 +2011,7 @@ class ChatHandler:
             "설정이 완료되면 바로 결과를 확인하실 수 있어요."
         )
 
+        backtest_config = state.get("backtest_config")
         ui_language = {
             "type": "backtest_configuration",
             "strategy": {
@@ -1235,12 +2062,15 @@ class ChatHandler:
                 },
             ],
         }
+        if backtest_config:
+            ui_language["backtest_config"] = backtest_config
 
         return {
             "answer": answer,
             "intent": "backtest_configuration",
             "ui_language": ui_language,
             "backtest_conditions": state["backtest_conditions"],
+            "backtest_config": backtest_config,
         }
 
     def _filter_valid_conditions(self, conditions: List[dict]) -> List[dict]:
@@ -1257,6 +2087,206 @@ class ChatHandler:
     def _normalize_text(self, text: str) -> str:
         """소문자 + 공백 제거로 간단히 정규화."""
         return re.sub(r"\s+", "", text.lower())
+
+    def _normalize_cache_text(self, text: str) -> str:
+        """캐시 키용 정규화 (소문자 + 공백 축소)."""
+        return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+    def _fallback_parse_simple_conditions(self, message: str) -> List[dict]:
+        """LLM DSL 파싱 실패 시 간단한 규칙으로 조건 추출."""
+        text = self._normalize_condition_separators(message.lower())
+        # 문장 분할: 줄바꿈, 쉼표, 그리고/및
+        chunks = re.split(r"[\n,]+|\s+그리고\s+|\s+및\s+", text)
+        conditions: List[dict] = []
+
+        op_map = {
+            "이하": "<=",
+            "미만": "<",
+            "이상": ">=",
+            "초과": ">",
+        }
+
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+
+            # 패턴: [팩터] [숫자][%옵션] [비교어]
+            match = re.search(r"([a-zA-Z가-힣_]+)\s*([\d\.]+)\s*(%|퍼센트)?\s*(이상|초과|이하|미만)", chunk)
+            if not match:
+                # 패턴이 반대 순서인 경우 (예: 30 이하면 RSI)
+                match_alt = re.search(r"([\d\.]+)\s*(%|퍼센트)?\s*(이상|초과|이하|미만)\s*([a-zA-Z가-힣_]+)", chunk)
+                if not match_alt:
+                    continue
+                factor_raw = match_alt.group(4)
+                value_raw = match_alt.group(1)
+                pct = match_alt.group(2) or ""
+                op_kr = match_alt.group(3)
+            else:
+                factor_raw = match.group(1)
+                value_raw = match.group(2)
+                pct = match.group(3) or ""
+                op_kr = match.group(4)
+
+            operator = op_map.get(op_kr)
+            if not operator:
+                continue
+
+            try:
+                value = float(value_raw)
+            except ValueError:
+                continue
+
+            conditions.append({
+                "factor": factor_raw.upper(),
+                "params": [],
+                "operator": operator,
+                "right_factor": None,
+                "right_params": [],
+                "value": value,
+            })
+
+        if conditions:
+            print(f"[DSL Fallback] {len(conditions)}개 조건을 규칙 기반으로 파싱")
+        return conditions
+
+    def _merge_text_extracted_conditions(self, conditions: List[dict], message: str) -> List[dict]:
+        """텍스트에서 직접 감지한 조건을 추가로 병합."""
+        existing_factors = {str(c.get("factor") or "").upper() for c in conditions}
+        extracted = self._extract_conditions_from_text(message)
+
+        for cond in extracted:
+            factor = str(cond.get("factor") or "").upper()
+            if not factor:
+                continue
+            if factor in existing_factors:
+                continue
+            conditions.append(cond)
+            existing_factors.add(factor)
+
+        return conditions
+
+    def _extract_conditions_from_text(self, message: str) -> List[dict]:
+        """자연어에서 직접 조건을 추출 (LLM 누락 대비)."""
+        text = self._normalize_condition_separators((message or "").lower())
+        chunks = re.split(r"[\n,]+|\s+그리고\s+|\s+및\s+", text)
+        conditions: List[dict] = []
+
+        op_map = {
+            "이하": "<=",
+            "미만": "<",
+            "이상": ">=",
+            "초과": ">",
+        }
+
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+
+            m = re.search(r"([a-zA-Z가-힣_]+)\s*([\d\.]+)\s*(%|퍼센트)?\s*(이상|초과|이하|미만)", chunk)
+            if not m:
+                m = re.search(r"([\d\.]+)\s*(%|퍼센트)?\s*(이상|초과|이하|미만)\s*([a-zA-Z가-힣_]+)", chunk)
+                if not m:
+                    continue
+                factor = m.group(4)
+                value_raw = m.group(1)
+                op_kr = m.group(3)
+            else:
+                factor = m.group(1)
+                value_raw = m.group(2)
+                op_kr = m.group(4)
+
+            operator = op_map.get(op_kr)
+            if not operator:
+                continue
+
+            try:
+                value = float(value_raw)
+            except ValueError:
+                continue
+
+            conditions.append({
+                "factor": factor.upper(),
+                "params": [],
+                "operator": operator,
+                "right_factor": None,
+                "right_params": [],
+                "value": value,
+            })
+
+        return conditions
+
+    def _normalize_condition_separators(self, text: str) -> str:
+        """조건 연결어를 표준화 (이하이고, 이상이고 등)."""
+        if not text:
+            return text
+        # "이하이고" → "이하 그리고", 등 비교어 뒤에 붙은 '이고'를 분리
+        text = re.sub(r"(이하|이상|미만|초과)\s*이고", r"\1 그리고", text)
+        # 숫자/퍼센트 뒤에 바로 '이고'가 붙은 경우 분리
+        text = re.sub(r"(\d+(?:\.\d+)?\s*%?)\s*이고", r"\1 그리고", text)
+        return text
+
+    def _make_dsl_cache_key(self, message: str) -> Optional[str]:
+        """DSL 캐시 키 생성."""
+        if not message:
+            return None
+        norm = self._normalize_cache_text(message)
+        digest = hashlib.sha256(norm.encode("utf-8")).hexdigest()
+        return f"dsl:{self.DSL_CACHE_VERSION}:{digest}"
+
+    def _get_cache(self, key: Optional[str]) -> Optional[dict]:
+        if not key or not self.cache_client:
+            return None
+        try:
+            raw = self.cache_client.get(key)
+            if raw:
+                return json.loads(raw)
+        except Exception as e:
+            self.logger.warning(f"Redis 캐시 조회 실패: {e}")
+        return None
+
+    def _set_cache(self, key: Optional[str], value: dict, ttl: int = 600):
+        if not key or not self.cache_client:
+            return
+        try:
+            self.cache_client.setex(key, ttl, json.dumps(value, ensure_ascii=False))
+        except Exception as e:
+            self.logger.warning(f"Redis 캐시 저장 실패: {e}")
+
+    def _postprocess_condition_values(self, conditions: List[dict], message: str) -> List[dict]:
+        """자연어 숫자/스케일을 문맥 기반으로 보정."""
+        if not conditions:
+            return conditions
+
+        message_lower = (message or "").lower()
+        raw_scale_factors = {"per", "pbr", "psr", "peg"}
+
+        def _value_from_text(factor_token: str) -> Optional[float]:
+            pattern = rf"{re.escape(factor_token)}\s*([0-9]+(?:\.[0-9]+)?)"
+            m = re.search(pattern, message_lower)
+            if m:
+                try:
+                    return float(m.group(1))
+                except ValueError:
+                    return None
+            return None
+
+        for cond in conditions:
+            factor = str(cond.get("factor") or "").lower()
+            value = cond.get("value")
+            if not factor or value is None:
+                continue
+
+            text_value = _value_from_text(factor)
+            if text_value is not None:
+                cond["value"] = text_value
+                continue
+
+            if factor in raw_scale_factors and isinstance(value, (int, float)) and 0 < abs(value) < 1:
+                cond["value"] = round(value * 100, 4)
+
+        return conditions
 
     def _build_strategy_aliases(self, strategy_id: str, name: Optional[str], aliases: Optional[List[str]]) -> List[str]:
         """전략 이름/별칭을 정규화된 토큰 리스트로 생성."""
@@ -1345,6 +2375,79 @@ class ChatHandler:
             return executor
         return self.agent_executors.get("assistant")
 
+    def _get_memory(self, session_id: str, client_type: str):
+        """세션별 대화 메모리 가져오기 (스토어 추상화)."""
+        key = f"{client_type}:{session_id}"
+        return self.session_store.get_or_create(key, ChatMessageHistory)
+
+    def delete_session_history(self, session_id: str) -> None:
+        """세션별 메모리 삭제."""
+        self.session_store.delete_by_suffix(f":{session_id}")
+
+    def _process_agent_response(
+        self,
+        response: dict,
+        message: str,
+        memory: Optional[Any],
+        intent: str,
+        context: str,
+    ) -> dict:
+        """에이전트 응답을 파싱하고 메모리/부가 데이터까지 정리."""
+        answer = response.get("output", "No response generated.")
+        if isinstance(answer, list):
+            formatted_parts = []
+            for element in answer:
+                if isinstance(element, str):
+                    formatted_parts.append(element)
+                elif isinstance(element, dict):
+                    text = element.get("text") or element.get("message") or element.get("output")
+                    if isinstance(text, str):
+                        formatted_parts.append(text)
+                    else:
+                        formatted_parts.append(str(text))
+                else:
+                    formatted_parts.append(str(element))
+            answer = "\n".join(formatted_parts)
+
+        answer = self._clean_tool_calls_from_response(answer)
+
+        if memory:
+            memory.add_user_message(message)
+            memory.add_ai_message(answer)
+
+        backtest_conditions = None
+        intermediate_steps = response.get("intermediate_steps", [])
+        print(f"DEBUG: intermediate_steps count: {len(intermediate_steps)}")
+
+        for i, step in enumerate(intermediate_steps):
+            print(f"DEBUG: Step {i}: type={type(step)}, len={len(step) if hasattr(step, '__len__') else 'N/A'}")
+            if len(step) >= 2:
+                action, result = step[0], step[1]
+                print(f"DEBUG: Action type: {type(action)}, has tool attr: {hasattr(action, 'tool')}")
+                if hasattr(action, 'tool'):
+                    print(f"DEBUG: Action.tool = '{action.tool}'")
+                print(f"DEBUG: Result type: {type(result)}, content: {result}")
+
+                if hasattr(action, 'tool') and action.tool == 'build_backtest_conditions':
+                    print(f"DEBUG: Found build_backtest_conditions tool!")
+                    if isinstance(result, dict) and result.get("success"):
+                        backtest_conditions = result.get("conditions", [])
+                        print(f"DEBUG: Extracted conditions: {backtest_conditions}")
+                        break
+                    else:
+                        print(f"DEBUG: Result not successful or not dict: {result}")
+
+        result_dict = {
+            "answer": answer,
+            "intent": intent,
+            "context": context
+        }
+
+        if backtest_conditions:
+            result_dict["backtest_conditions"] = backtest_conditions
+
+        return result_dict
+
     async def _generate_response_langchain(
         self,
         message: str,
@@ -1369,20 +2472,17 @@ class ChatHandler:
             }
 
         # Get or create conversation memory for the session
-        memory_key = f"{client_type}:{session_id}"
-        if memory_key not in self.conversation_history:
-            self.conversation_history[memory_key] = ConversationBufferWindowMemory(
-                k=5, memory_key="chat_history", return_messages=True
-            )
-        memory = self.conversation_history[memory_key]
+        memory = self._get_memory(session_id, client_type)
 
         try:
             # Use asyncio.to_thread to run the synchronous invoke method in a separate thread
             # Pass inputs in a structured dictionary, not a single message list
-            chat_history = memory.load_memory_variables({})["chat_history"]
-            # Ensure chat_history is a list of BaseMessage objects
-            if isinstance(chat_history, str):
-                chat_history = []
+            raw_chat_history = getattr(memory, "messages", []) if memory else []
+            # Bedrock/Anthropic는 빈 content 메시지를 허용하지 않으므로 필터링
+            chat_history = [
+                m for m in raw_chat_history
+                if hasattr(m, "content") and isinstance(m.content, str) and m.content.strip()
+            ]
 
             # Prepare invoke input
             # Note: agent_scratchpad is required for both tool-calling and ReAct agents
@@ -1407,65 +2507,22 @@ class ChatHandler:
                     invoke_input
                 )
 
-            answer = response.get("output", "No response generated.")
-            if isinstance(answer, list):
-                formatted_parts = []
-                for element in answer:
-                    if isinstance(element, str):
-                        formatted_parts.append(element)
-                    elif isinstance(element, dict):
-                        text = element.get("text") or element.get("message") or element.get("output")
-                        if isinstance(text, str):
-                            formatted_parts.append(text)
-                        else:
-                            formatted_parts.append(str(text))
-                    else:
-                        formatted_parts.append(str(element))
-                answer = "\n".join(formatted_parts)
-
-
-            answer = self._clean_tool_calls_from_response(answer)
-
-            # Manually save conversation history to the session's memory
-            memory.save_context({"input": message}, {"output": answer})
-
-            # Extract backtest conditions from intermediate steps if build_backtest_conditions was called
-            backtest_conditions = None
-            intermediate_steps = response.get("intermediate_steps", [])
-            print(f"DEBUG: intermediate_steps count: {len(intermediate_steps)}")
-
-            for i, step in enumerate(intermediate_steps):
-                print(f"DEBUG: Step {i}: type={type(step)}, len={len(step) if hasattr(step, '__len__') else 'N/A'}")
-                if len(step) >= 2:
-                    action, result = step[0], step[1]
-                    print(f"DEBUG: Action type: {type(action)}, has tool attr: {hasattr(action, 'tool')}")
-                    if hasattr(action, 'tool'):
-                        print(f"DEBUG: Action.tool = '{action.tool}'")
-                    print(f"DEBUG: Result type: {type(result)}, content: {result}")
-
-                    # Check if this was a build_backtest_conditions tool call
-                    if hasattr(action, 'tool') and action.tool == 'build_backtest_conditions':
-                        print(f"DEBUG: Found build_backtest_conditions tool!")
-                        if isinstance(result, dict) and result.get("success"):
-                            backtest_conditions = result.get("conditions", [])
-                            print(f"DEBUG: Extracted conditions: {backtest_conditions}")
-                            break
-                        else:
-                            print(f"DEBUG: Result not successful or not dict: {result}")
-
-            result_dict = {
-                "answer": answer,
-                "intent": intent,
-                "context": context
-            }
-
-            if backtest_conditions:
-                result_dict["backtest_conditions"] = backtest_conditions
-
-            return result_dict
+            return self._process_agent_response(
+                response=response,
+                message=message,
+                memory=memory,
+                intent=intent,
+                context=context,
+            )
         except Exception as e:
             error_str = str(e)
-            print(f"LangChain Agent execution error: {e}")
+            self._log_agent_error(
+                error=e,
+                intent=intent,
+                client_type=client_type,
+                message=message,
+                context=context
+            )
 
             # Throttling 에러인 경우 친절한 메시지
             if "ThrottlingException" in error_str or "Too many requests" in error_str:
@@ -1477,6 +2534,164 @@ class ChatHandler:
                 "answer": user_message,
                 "intent": intent
             }
+
+    async def stream_response_langchain(
+        self,
+        message: str,
+        intent: str,
+        context: str,
+        session_id: Optional[str],
+        client_type: str = "assistant",
+    ) -> Any:
+        """LangChain 에이전트를 스트리밍으로 실행해 토큰을 yield."""
+        executor = self._get_agent_executor(client_type)
+        if not executor or not AsyncIteratorCallbackHandler:
+            # 스트리밍 콜백을 사용할 수 없으면 기존 방식으로 전체 응답 반환
+            final_response = await self._generate_response_langchain(
+                message=message,
+                intent=intent,
+                context=context,
+                session_id=session_id,
+                client_type=client_type,
+            )
+            yield {"type": "final", "result": final_response}
+            return
+
+        memory = self._get_memory(session_id, client_type)
+        chat_history = getattr(memory, "messages", []) if memory else []
+
+        invoke_input = {
+            "input": message,
+            "context": context,
+            "chat_history": chat_history,
+            "agent_scratchpad": ""
+        }
+
+        callback = AsyncIteratorCallbackHandler()
+        response_holder: Dict[str, Any] = {}
+
+        async def _invoke_agent():
+            if hasattr(executor, "ainvoke"):
+                response_holder["response"] = await executor.ainvoke(
+                    invoke_input,
+                    config={"callbacks": [callback]},
+                )
+            else:
+                response_holder["response"] = await asyncio.to_thread(
+                    executor.invoke,
+                    invoke_input,
+                    config={"callbacks": [callback]},
+                )
+
+        task = asyncio.create_task(_invoke_agent())
+
+        try:
+            async for token in callback.aiter():
+                # LangChain/Anthropic 툴 호출 태그 제거 (<function_calls>, <parameters>, <tool_name> 등)
+                if not isinstance(token, str):
+                    continue
+                if "<function_calls" in token or "</function_calls" in token or "<tool_name>" in token or "<parameters>" in token:
+                    continue
+                cleaned = re.sub(
+                    r"<\/?function_calls>|<\/?invoke>|<\/?tool_name>.*?<\/tool_name>|<\/?parameters>.*?<\/parameters>",
+                    "",
+                    token,
+                    flags=re.DOTALL,
+                )
+                # 완전히 빈 토큰만 건너뛰고, 나머지는 모델 출력 그대로 전달
+                if cleaned == "":
+                    continue
+                yield {"type": "token", "content": cleaned}
+        except Exception as e:
+            self._log_agent_error(
+                error=e,
+                intent=intent,
+                client_type=client_type,
+                message=message,
+                context=context,
+            )
+            raise
+        finally:
+            await task
+
+        if task.cancelled():
+            return
+
+        if task.exception():
+            exc = task.exception()
+            self._log_agent_error(
+                error=exc,
+                intent=intent,
+                client_type=client_type,
+                message=message,
+                context=context,
+            )
+            raise exc
+
+        response = response_holder.get("response")
+        if not response:
+            yield {
+                "type": "final",
+                "result": {
+                    "answer": "스트리밍 응답 생성에 실패했습니다.",
+                    "intent": intent,
+                    "context": context,
+                },
+            }
+            return
+
+        result_dict = self._process_agent_response(
+            response=response,
+            message=message,
+            memory=memory,
+            intent=intent,
+            context=context,
+        )
+
+        yield {"type": "final", "result": result_dict}
+
+    def _log_agent_error(
+        self,
+        error: Exception,
+        intent: str,
+        client_type: str,
+        message: str,
+        context: str
+    ) -> None:
+        """에이전트 실패 시 디버깅 정보를 구조화해 로깅."""
+        bedrock_info = None
+        if self.provider == "bedrock":
+            bedrock_info = {
+                "region": self.llm_region,
+                "model_id": self.llm_model_id,
+                "inference_profile_id": self.llm_inference_profile_id,
+                "target_id": self.llm_target_id,
+                "env_model_id": os.getenv("BEDROCK_MODEL_ID"),
+                "env_inference_profile_id": os.getenv("BEDROCK_INFERENCE_PROFILE_ID") or os.getenv("BEDROCK_INFERENCE_PROFILE_ARN"),
+            }
+
+        error_log = {
+            "event": "langchain_agent_error",
+            "intent": intent,
+            "client_type": client_type,
+            "provider": self.provider,
+            "error": str(error),
+            "traceback": traceback.format_exc(),
+            "context_chars": len(context or ""),
+            "message_chars": len(message or ""),
+            "bedrock": bedrock_info,
+            "message_ko": "LangChain 에이전트 실행 중 오류가 발생했습니다.",
+        }
+        try:
+            # 한국어 요약 + JSON 상세 모두 출력
+            print(
+                "ERROR: LangChain 에이전트 오류 발생 | "
+                f"의도={intent}, 클라이언트={client_type}, 제공자={self.provider}, "
+                f"Bedrock대상={self.llm_target_id or self.llm_model_id}"
+            )
+            print(f"ERROR: {json.dumps(error_log, ensure_ascii=False)}")
+        except Exception:
+            print(f"ERROR: langchain_agent_error (fallback print) {error_log}")
 
     def _clean_tool_calls_from_response(self, response: str) -> str:
         """LangChain의 내부 도구 호출 형식(<function_calls>, <invoke> 등)을 제거합니다."""
@@ -1495,6 +2710,13 @@ class ChatHandler:
             response,
             flags=re.DOTALL
         )
+        # <parameters> 블록 제거
+        response = re.sub(
+            r'<parameters>.*?</parameters>',
+            '',
+            response,
+            flags=re.DOTALL
+        )
 
         # 연속된 빈 줄 제거
         response = re.sub(r'\n\n+', '\n\n', response)
@@ -1509,6 +2731,11 @@ class ChatHandler:
         - build_backtest_conditions 도구 호출하여 JSON 생성
         - backtest_conditions 필드로 분리하여 반환
         """
+        cache_key = self._make_dsl_cache_key(message)
+        cached = self._get_cache(cache_key)
+        if cached:
+            return cached
+
         # system.txt에서 DSL 템플릿 영역을 추출해 dsl_generator에 적용
         dsl_system_prompt = self._load_dsl_system_prompt()
 
@@ -1544,6 +2771,16 @@ class ChatHandler:
             conditions = [condition.dict() for condition in result.conditions]
             # 필수 필드 누락 조건은 제거
             conditions = self._filter_valid_conditions(conditions)
+
+            # 기본 DSL 파싱이 실패하면 단순 규칙 기반 파서로 재시도
+            if not conditions:
+                conditions = self._fallback_parse_simple_conditions(message)
+
+            # 텍스트에서 추가로 감지되는 조건을 병합 (LLM 누락 방지)
+            conditions = self._merge_text_extracted_conditions(conditions, message)
+
+            # 자연어 숫자와 스케일이 어긋나면 문장 기반으로 보정
+            conditions = self._postprocess_condition_values(conditions, message)
 
             if not conditions:
                 return {
@@ -1657,30 +2894,44 @@ class ChatHandler:
                 else:
                     buy_conditions.append(cond)
 
-            # 조건들을 자연어로 포맷팅
-            all_condition_lines = []
-            for cond in conditions:
+            # 조건 포맷팅 (요약형)
+            def _fmt_value(val: Any) -> str:
+                if isinstance(val, (int, float)):
+                    if float(val).is_integer():
+                        return str(int(val))
+                    return str(round(val, 6)).rstrip("0").rstrip(".")
+                return str(val)
+
+            def _fmt(cond: Dict[str, Any]) -> str:
                 factor = cond['factor']
                 operator = cond['operator']
                 value = cond.get('value')
                 params = cond.get('params', [])
-
-                # params가 있으면 함수 형태로 표시 (예: SMA(20))
                 if params:
                     factor_str = f"{factor}({', '.join(map(str, params))})"
                 else:
                     factor_str = factor
+                return f"{factor_str} {operator} {_fmt_value(value)}" if value is not None else factor_str
 
-                # value가 있으면 비교 조건
-                if value is not None:
-                    all_condition_lines.append(f"• {factor_str} {operator} {value}")
-                else:
-                    all_condition_lines.append(f"• {factor_str}")
+            buy_summary = ", ".join([_fmt(c) for c in buy_conditions]) if buy_conditions else ""
+            sell_summary = ", ".join([_fmt(c) for c in sell_conditions]) if sell_conditions else ""
 
-            conditions_text = "\n".join(all_condition_lines)
-            answer_text = f"다음 조건이 생성되었습니다:\n{conditions_text}"
+            summary_lines = []
+            if buy_summary:
+                summary_lines.append(f"매수: {buy_summary}")
+            if sell_summary:
+                summary_lines.append(f"매도: {sell_summary}")
+            summary_text = "\n".join(summary_lines) if summary_lines else "조건을 버튼으로 추가할 수 있습니다."
 
-            return {
+            answer_text = (
+                "## 요약\n"
+                f"{summary_text}\n\n"
+                "### 다음 단계\n"
+                "- 매수/매도 조건 버튼으로 바로 적용\n"
+                "- 수치 조정이 필요하면 말씀해 주세요"
+            )
+
+            response_payload = {
                 "answer": answer_text,
                 "intent": "dsl_generation",
                 "backtest_conditions": {
@@ -1688,6 +2939,9 @@ class ChatHandler:
                     "sell": sell_conditions
                 }
             }
+
+            self._set_cache(cache_key, response_payload)
+            return response_payload
         except Exception as e:
             print(f"DSL 생성 오류: {e}")
             import traceback
@@ -1732,7 +2986,7 @@ class ChatHandler:
             message, 'explain', context, session_id, client_type
         )
 
-    def _check_investment_advisory_policy(self, message: str) -> Optional[str]:
+    def _check_investment_advisory_policy(self, message: str, session_id: Optional[str] = None) -> Optional[str]:
         """투자 조언 정책 위반 확인.
 
         Returns:
@@ -1750,7 +3004,9 @@ class ChatHandler:
                     break
 
         if violations_found:
-            return self._get_policy_violation_response(violations_found[0])
+            violation_type = violations_found[0]
+            self._log_policy_block(violation_type, session_id or "", message)
+            return self._get_policy_violation_response(violation_type)
 
         return None
 
@@ -1802,5 +3058,34 @@ class ChatHandler:
                 "- 투자 목표 설정 방법\n\n"
                 "본인의 상황과 목표에 맞는 투자 계획을 세우시기 바랍니다."
             )
+        elif violation_type == "비속어":
+            return (
+                "서비스 품질 유지를 위해 비속어·욕설은 차단하고 있습니다.\n"
+                "궁금한 점을 정중한 표현으로 말씀해주시면 빠르게 도와드릴게요."
+            )
+        elif violation_type == "도박":
+            return (
+                "도박·베팅 관련 내용은 지원하지 않습니다. 투자·금융 관련 질문만 받아요.\n"
+                "주식 시장, 전략, 지표 등에 대해 물어봐주세요."
+            )
 
         return base_response
+
+    def _log_policy_block(self, violation_type: str, session_id: str, message: str):
+        """감사 추적용 정책 차단 로그."""
+        try:
+            snippet = (message or "").strip()
+            if len(snippet) > 200:
+                snippet = snippet[:200] + "...(truncated)"
+            log_payload = {
+                "event": "policy_block",
+                "violation_type": violation_type,
+                "session_id": session_id,
+                "message": snippet,
+            }
+            if self.logger:
+                self.logger.info(json.dumps(log_payload, ensure_ascii=False))
+            else:
+                print(json.dumps(log_payload, ensure_ascii=False))
+        except Exception as e:
+            print(f"Failed to log policy block: {e}")

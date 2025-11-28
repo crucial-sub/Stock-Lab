@@ -4,10 +4,17 @@ import { axiosInstance } from "../axios";
 export interface AutoTradingActivateRequest {
   session_id: string;
   initial_capital?: number;
+  allocated_capital: number;
+  strategy_name?: string;
 }
 
 export interface AutoTradingDeactivateRequest {
   sell_all_positions: boolean;
+  deactivation_mode?: string; // immediate, sell_and_deactivate, scheduled_sell
+}
+
+export interface AutoTradingStrategyNameUpdateRequest {
+  strategy_name: string;
 }
 
 // Response Types
@@ -24,6 +31,12 @@ export interface AutoTradingDeactivateResponse {
   is_active: boolean;
   deactivated_at: string;
   positions_sold: number;
+}
+
+export interface AutoTradingStrategyNameUpdateResponse {
+  message: string;
+  strategy_id: string;
+  strategy_name: string;
 }
 
 export interface LivePositionResponse {
@@ -77,10 +90,12 @@ export interface AutoTradingStrategyResponse {
   strategy_id: string;
   user_id: string;
   simulation_session_id: string;
+  strategy_name?: string;
   is_active: boolean;
   initial_capital: number;
   current_capital: number;
   cash_balance: number;
+  allocated_capital: number;
   per_stock_ratio: number;
   max_positions: number;
   rebalance_frequency: string;
@@ -88,6 +103,12 @@ export interface AutoTradingStrategyResponse {
   activated_at?: string;
   deactivated_at?: string;
   last_executed_at?: string;
+  scheduled_deactivation?: boolean;
+  deactivation_mode?: string;
+  deactivation_requested_at?: string;
+  kiwoom_total_eval?: number;
+  kiwoom_total_profit?: number;
+  kiwoom_total_profit_rate?: number;
 }
 
 export interface AutoTradingStatusResponse {
@@ -197,9 +218,18 @@ export interface AutoTradingExecutionReportResponse {
   summary: ExecutionReportSummary;
 }
 
+export interface DeactivationConditions {
+  can_deactivate_immediately: boolean;
+  can_sell_and_deactivate: boolean;
+  needs_scheduled_sell: boolean;
+  position_count: number;
+  is_market_hours: boolean;
+  recommended_mode: string;
+}
+
 export const autoTradingApi = {
   /**
-   * 자동매매 활성화
+   * 키움증권 연동 활성화
    */
   activateAutoTrading: async (
     request: AutoTradingActivateRequest,
@@ -212,7 +242,19 @@ export const autoTradingApi = {
   },
 
   /**
-   * 자동매매 비활성화
+   * 비활성화 조건 확인
+   */
+  checkDeactivationConditions: async (
+    strategyId: string,
+  ): Promise<DeactivationConditions> => {
+    const response = await axiosInstance.get<DeactivationConditions>(
+      `/auto-trading/strategies/${strategyId}/deactivation-conditions`,
+    );
+    return response.data;
+  },
+
+  /**
+   * 키움증권 연동 비활성화
    */
   deactivateAutoTrading: async (
     strategyId: string,
@@ -226,7 +268,22 @@ export const autoTradingApi = {
   },
 
   /**
-   * 자동매매 전략 상태 조회
+   * 키움증권 연동 전략 이름 수정
+   */
+  updateStrategyName: async (
+    strategyId: string,
+    request: AutoTradingStrategyNameUpdateRequest,
+  ): Promise<AutoTradingStrategyNameUpdateResponse> => {
+    const response =
+      await axiosInstance.patch<AutoTradingStrategyNameUpdateResponse>(
+        `/auto-trading/strategies/${strategyId}/name`,
+        request,
+      );
+    return response.data;
+  },
+
+  /**
+   * 키움증권 연동 전략 상태 조회
    */
   getAutoTradingStatus: async (
     strategyId: string,
@@ -238,7 +295,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 내 자동매매 전략 목록 조회
+   * 내 키움증권 연동 전략 목록 조회
    */
   getMyAutoTradingStrategies: async (): Promise<
     AutoTradingStrategyResponse[]
@@ -250,16 +307,16 @@ export const autoTradingApi = {
   },
 
   /**
-   * 내 자동매매 전략 목록 조회 (서버 사이드)
+   * 내 키움증권 연동 전략 목록 조회 (서버 사이드)
    */
   getMyAutoTradingStrategiesServer: async (
     token: string,
   ): Promise<AutoTradingStrategyResponse[]> => {
     const axios = (await import("axios")).default;
-    // Docker 환경에서는 컨테이너 이름 사용
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
+    // 서버 사이드에서는 Docker 내부 네트워크 또는 localhost 사용
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const response = await axios.get<AutoTradingStrategyResponse[]>(
-      `${baseURL}/api/v1/auto-trading/my-strategies`,
+      `${baseURL}/auto-trading/my-strategies`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -270,7 +327,7 @@ export const autoTradingApi = {
   },
 
   /**
-   * 자동매매 수동 실행 (테스트용)
+   * 키움증권 연동 수동 실행 (테스트용)
    */
   executeAutoTrading: async (
     strategyId: string,
@@ -361,11 +418,13 @@ export const autoTradingApi = {
     active_strategy_count: number;
     total_positions: number;
     total_trades_today: number;
+    total_allocated_capital: number;
   }> => {
     const axios = (await import("axios")).default;
-    const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://backend:8000";
+    // 서버 사이드에서는 Docker 내부 네트워크 또는 localhost 사용
+    const baseURL = process.env.API_BASE_URL || "http://localhost:8000/api/v1";
     const response = await axios.get(
-      `${baseURL}/api/v1/auto-trading/dashboard`,
+      `${baseURL}/auto-trading/dashboard`,
       {
         headers: {
           Authorization: `Bearer ${token}`,

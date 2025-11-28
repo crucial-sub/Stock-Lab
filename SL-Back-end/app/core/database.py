@@ -21,9 +21,9 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DATABASE_ECHO if hasattr(settings, 'DATABASE_ECHO') else False,
     # ✅ 커넥션 풀 활성화 (완전 비동기 전환으로 호환성 문제 해결)
-    # advanced_backtest.py의 동기/비동기 혼용 제거 완료
-    pool_size=10,  # 기본 커넥션 10개
-    max_overflow=20,  # 최대 30개까지 확장 가능
+    # 🚀 EXTREME PERFORMANCE: 병렬 데이터 로드 지원 (3개 동시 쿼리)
+    pool_size=20,  # 기본 커넥션 20개 (병렬 로드 지원)
+    max_overflow=30,  # 최대 50개까지 확장 가능
     pool_timeout=30,  # 커넥션 대기 시간 (초)
     pool_recycle=3600,  # 1시간마다 커넥션 재생성
     pool_pre_ping=True,  # 커넥션 유효성 검증
@@ -80,7 +80,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def init_db():
     """데이터베이스 테이블 생성 (개발용)"""
     # 모든 모델 import (테이블 생성을 위해)
-    from app.models import user, strategy, backtest, community, chat, auto_trading
+    from app.models import (
+        user, simulation, backtest, community, auto_trading,
+        company, stock_price, disclosure, financial_statement,
+        balance_sheet, income_statement, cashflow_statement,
+        news, investment_strategy
+    )
 
     async with engine.begin() as conn:
         # await conn.run_sync(Base.metadata.drop_all)  # 주의: 모든 테이블 삭제

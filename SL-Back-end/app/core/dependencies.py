@@ -141,37 +141,59 @@ async def get_current_superuser(
     return current_user
 
 async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
     db: AsyncSession = Depends(get_db)
-) -> User:
+) -> Optional[User]:
     """
-    개발용: 인증 없이 admin 유저 반환
+    현재 로그인한 유저 가져오기 (Optional)
 
-    TODO: 프로덕션 배포 전에 제거하고 get_current_user 사용할 것
+    토큰이 없어도 에러를 발생시키지 않고 None을 반환합니다.
+    공개 API에서 로그인 여부에 따라 다른 동작을 할 때 사용합니다.
 
     Args:
+        credentials: HTTP Authorization 헤더의 토큰 (optional)
         db: 데이터베이스 세션
 
     Returns:
-        User: admin 유저 객체
+        Optional[User]: 현재 유저 객체 또는 None (비로그인)
     """
-    # admin 유저 (UUID: 00000000-0000-0000-0000-000000000001) 조회
-    admin_user_id = UUID('00000000-0000-0000-0000-000000000001')
+    # 토큰이 없으면 None 반환
+    if credentials is None:
+        return None
 
-    result = await db.execute(select(User).where(User.user_id == admin_user_id))
+    token = credentials.credentials
+
+    # Redis가 있으면 블랙리스트 체크
+    try:
+        redis_client = get_redis()
+        if redis_client:
+            blacklist_key = f"token_blacklist:{token}"
+            is_blacklisted = await redis_client.exists(blacklist_key)
+            if is_blacklisted:
+                logger.info(f"Blocked blacklisted token")
+                return None
+    except Exception as e:
+        logger.warning(f"Redis blacklist check failed: {e}")
+
+    # 토큰 디코드
+    payload = decode_access_token(token)
+    if payload is None:
+        return None
+
+    user_id_str: Optional[str] = payload.get("user_id")
+    if user_id_str is None:
+        return None
+
+    try:
+        user_id: UUID = UUID(user_id_str)
+    except (ValueError, AttributeError):
+        return None
+
+    # DB에서 유저 조회
+    result = await db.execute(select(User).where(User.user_id == user_id))
     user = result.scalar_one_or_none()
 
-    if not user:
-        # admin 유저가 없으면 생성
-        user = User(
-            user_id=admin_user_id,
-            email="admin@stocklab.com",
-            hashed_password="dummy",  # 실제로 로그인 안 함
-            username="admin",
-            is_active=True,
-            is_superuser=True
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+    if user is None or not user.is_active:
+        return None
 
     return user

@@ -19,7 +19,7 @@ interface DiscussionPreviewSectionProps {
 export function DiscussionPreviewSection({
   title = "자유게시판",
   limit,
-  showMoreHref = "/community/discussion",
+  showMoreHref = "/community/posts",
   className = "",
 }: DiscussionPreviewSectionProps) {
   const router = useRouter();
@@ -47,11 +47,11 @@ export function DiscussionPreviewSection({
   return (
     <section className={`flex flex-col gap-5 ${className}`}>
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold text-body">{title}</h2>
+        <h2 className="text-[1.5rem] font-semibold text-body">{title}</h2>
         {showMoreHref && (
           <button
             onClick={() => router.push(showMoreHref)}
-            className="text-base text-gray-700 underline hover:text-gray-600"
+            className="text-[1rem] text-brand-purple font-normal hover:underline"
           >
             더보기
           </button>

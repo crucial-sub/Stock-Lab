@@ -51,7 +51,6 @@ interface BacktestConfigStore extends BacktestRunRequest {
   // API 변환 함수
   syncUIToAPI: () => void;
   // 설정값 업데이트 함수들
-  setUserId: (userId: string) => void;
   setStrategyName: (name: string) => void;
   setIsDayOrMonth: (value: string) => void;
   setStartDate: (date: string) => void;
@@ -78,7 +77,11 @@ interface BacktestConfigStore extends BacktestRunRequest {
   setConditionSell: (value: BacktestRunRequest["condition_sell"]) => void;
 
   // 매매 대상 업데이트
-  setTradeTargets: (value: BacktestRunRequest["trade_targets"]) => void;
+  setTradeTargets: (
+    value:
+      | BacktestRunRequest["trade_targets"]
+      | ((prev: BacktestRunRequest["trade_targets"]) => BacktestRunRequest["trade_targets"])
+  ) => void;
 
   // 모든 설정 초기화
   reset: () => void;
@@ -94,7 +97,6 @@ interface BacktestConfigStore extends BacktestRunRequest {
  * - 토글 기본값: 목표가/손절가 on, 나머지 off
  */
 const defaultConfig: BacktestRunRequest = {
-  user_id: "default_user", // 실제로는 로그인한 사용자 ID를 사용
   strategy_name: "새 전략", // 기본 전략 이름
   is_day_or_month: "daily", // "일봉"
   start_date: "", // 초기값 공백 (클라이언트에서 설정)
@@ -124,7 +126,6 @@ const defaultConfig: BacktestRunRequest = {
   condition_sell: null, // 토글 off
   trade_targets: {
     use_all_stocks: true,
-    selected_universes: [],
     selected_themes: [],
     selected_stocks: [],
   },
@@ -199,6 +200,11 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
         buyConditionsUI: state.buyConditionsUI.filter((c) => c.id !== id),
       })),
 
+    setBuyConditionsUI: (conditions) =>
+      set(() => ({
+        buyConditionsUI: conditions,
+      })),
+
     // ========================================
     // Sell 조건 관리 함수
     // ========================================
@@ -247,6 +253,11 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
     removeSellConditionUI: (id) =>
       set((state) => ({
         sellConditionsUI: state.sellConditionsUI.filter((c) => c.id !== id),
+      })),
+
+    setSellConditionsUI: (conditions) =>
+      set(() => ({
+        sellConditionsUI: conditions,
       })),
 
     // ========================================
@@ -313,7 +324,6 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
     },
 
     // 기본 설정 업데이트 함수들
-    setUserId: (userId) => set({ user_id: userId }),
     setStrategyName: (name) => set({ strategy_name: name }),
     setIsDayOrMonth: (value) => set({ is_day_or_month: value }),
     setStartDate: (date) => set({ start_date: date }),
@@ -340,10 +350,33 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
     setConditionSell: (value) => set({ condition_sell: value }),
 
     // 매매 대상 업데이트 함수
-    setTradeTargets: (value) => set({ trade_targets: value }),
+    setTradeTargets: (value) =>
+      set((state) => ({
+        trade_targets: typeof value === "function" ? value(state.trade_targets) : value,
+      })),
 
     // 초기화 함수
-    reset: () => set(defaultConfig),
+    reset: () => {
+      // 현재 날짜 계산 (클라이언트 사이드에서만 유효)
+      const today = new Date();
+      const oneYearAgo = new Date(today);
+      oneYearAgo.setFullYear(today.getFullYear() - 1);
+
+      const formatDate = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+      };
+
+      set({
+        ...defaultConfig,
+        start_date: formatDate(oneYearAgo),
+        end_date: formatDate(today),
+        buyConditionsUI: [],
+        sellConditionsUI: [],
+      });
+    },
 
     // BacktestRunRequest 형식으로 데이터 반환
     getBacktestRequest: () => {
@@ -352,7 +385,6 @@ export const useBacktestConfigStore = create<BacktestConfigStore>(
 
       const state = get();
       return {
-        user_id: state.user_id,
         strategy_name: state.strategy_name,
         is_day_or_month: state.is_day_or_month,
         start_date: state.start_date,

@@ -39,7 +39,8 @@ const formatCurrency = (value?: number | null) => {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "-";
   }
-  return `${value.toLocaleString("ko-KR")}원`;
+  // 원화는 정수로 표시 (소수점 반올림)
+  return `${Math.round(value).toLocaleString("ko-KR")}원`;
 };
 
 export function StrategyInsightPanel({
@@ -169,7 +170,7 @@ export function StrategyInsightPanel({
               </p>
               <p className="text-xs text-slate-500">
                 {signal.current_price
-                  ? `${signal.current_price.toLocaleString("ko-KR")}원`
+                  ? `${Math.round(signal.current_price).toLocaleString("ko-KR")}원`
                   : "-"}
               </p>
             </div>
@@ -279,12 +280,12 @@ export function StrategyInsightPanel({
 
       {!options.length ? (
         <div className="mt-6 rounded-2xl bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-          아직 자동매매로 전환된 전략이 없습니다. 전략을 활성화하면 실시간
+          아직 가상매매로 전환된 전략이 없습니다. 전략을 활성화하면 실시간
           리포트를 확인할 수 있습니다.
         </div>
       ) : !selectedPortfolio?.isActive ? (
         <div className="mt-6 rounded-2xl bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-          선택한 전략은 아직 가상 매매가 시작되지 않았습니다. 자동매매를
+          선택한 전략은 아직 가상매매가 시작되지 않았습니다. 키움증권 연동을
           활성화하면 실시간 리포트를 볼 수 있습니다.
         </div>
       ) : (

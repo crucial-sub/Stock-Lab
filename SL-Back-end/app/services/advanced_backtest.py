@@ -4,10 +4,11 @@
 - API 라우터에서 호출
 """
 
+import asyncio
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -116,8 +117,9 @@ async def _run_backtest_async(
     benchmark: str,
     target_themes: List[str],
     target_stocks: List[str],
+    target_universes: List[str],
     use_all_stocks: bool,
-    buy_conditions: List[dict],
+    buy_conditions: Union[List[dict], dict],  # 리스트 또는 딕셔너리 (벡터화 지원)
     buy_logic: str,
     priority_factor: str,
     priority_order: str,
@@ -132,7 +134,7 @@ async def _run_backtest_async(
     max_buy_value: Optional[float],
     max_daily_stock: Optional[int]
 ):
-    """비동기 백테스트 실행"""
+    """비동기 백테스트 실행 (항상 초고속 모드)"""
 
     async with AsyncSessionLocal() as db:
         try:
@@ -141,8 +143,8 @@ async def _run_backtest_async(
             logger.info(f"초기 자본금: {initial_capital:,}원")
             logger.info(f"전체 종목 사용: {use_all_stocks}")
             logger.info(f"선택된 테마: {target_themes}")
+            logger.info(f"선택된 유니버스: {target_universes}")
             logger.info(f"선택된 종목: {target_stocks}")
-            logger.info(f"매수 조건: {buy_conditions}")
             logger.info(f"리밸런싱 주기: {rebalance_frequency}")
 
             # 세션 상태 업데이트 (RUNNING)
@@ -161,65 +163,99 @@ async def _run_backtest_async(
             await db.execute(stmt)
             await db.commit()
 
+            # 🎯 FIX: WebSocket 연결 대기 (클라이언트가 연결할 때까지 최대 3초 대기)
+            from app.services.backtest_websocket import ws_manager
+
+            logger.info("⏳ WebSocket 클라이언트 연결 대기 중...")
+            max_wait_time = 3.0  # 최대 3초 대기
+            wait_interval = 0.1  # 0.1초 간격으로 체크
+            elapsed = 0.0
+
+            while elapsed < max_wait_time:
+                if session_id in ws_manager.active_connections and len(ws_manager.active_connections[session_id]) > 0:
+                    logger.info(f"✅ WebSocket 클라이언트 연결됨 ({elapsed:.1f}초 대기)")
+                    break
+                await asyncio.sleep(wait_interval)
+                elapsed += wait_interval
+
+            if session_id not in ws_manager.active_connections:
+                logger.warning(f"⚠️ WebSocket 클라이언트 연결 안 됨 ({elapsed:.1f}초 대기 후 백테스트 시작)")
+
+            # 추가 안정화 대기 (연결 직후 메시지 수신 준비)
+            await asyncio.sleep(0.2)
+
             # BacktestEngine 생성 (최적화 적용)
             engine = BacktestEngine(db)
 
-            # 🚀 최적화 모듈 통합
-            try:
-                from app.services.backtest_integration import integrate_optimizations
-                integrate_optimizations(engine)
-                logger.info("✅ 백테스트 최적화 모듈 적용 완료!")
-            except Exception as e:
-                logger.warning(f"⚠️ 최적화 모듈 적용 실패 (기본 모드로 실행): {e}")
+            # 최적화는 BacktestEngine 내부에 통합되어 있음
+            logger.info("✅ BacktestEngine 초기화 완료 (최적화 내장)")
 
             import re
 
             def _extract_factor(expr: str) -> Optional[str]:
+                """
+                팩터 이름 추출 (중괄호 유무 무관)
+                - "{roe}" → "ROE" (포트폴리오 페이지 형식)
+                - "roe" → "ROE" (DB 저장 형식, AI 어시스턴트 형식)
+                """
                 if not expr:
                     return None
+                # 중괄호가 있으면 추출
                 match = re.search(r'\{([^}]+)\}', expr)
-                if not match:
-                    return None
-                return match.group(1).strip().upper()
+                if match:
+                    return match.group(1).strip().upper()
+                # 중괄호가 없으면 그대로 사용
+                return expr.strip().upper()
 
-            parsed_conditions = []
-            if buy_conditions:
-                for cond in buy_conditions:
-                    factor_code = _extract_factor(cond.get('exp_left_side'))
-                    if not factor_code:
-                        continue
-                    parsed_conditions.append({
-                        "id": cond.get('name') or factor_code,
-                        "factor": factor_code,
-                        "operator": cond.get('inequality', '>'),
-                        "value": cond.get('exp_right_side'),
-                        "description": cond.get('exp_left_side')
-                    })
-
-            # 논리식 생성: buy_logic에 따라 조건 ID들을 연결
-            expression_text = ""
-            if parsed_conditions:
-                if buy_logic and buy_logic.upper() == "OR":
-                    expression_text = " or ".join([c["id"] for c in parsed_conditions])
-                else:
-                    # 기본값은 AND
-                    expression_text = " and ".join([c["id"] for c in parsed_conditions])
-
-            logger.info(f"📊 파싱된 조건: {parsed_conditions}")
-            logger.info(f"📊 생성된 expression: {expression_text}")
-
-            # 우선순위 팩터 정규화
-            normalized_priority_factor = _extract_factor(priority_factor)
-
+            # 🚀 벡터화 평가 지원: buy_conditions가 이미 딕셔너리 형식인 경우 그대로 사용
             buy_condition_payload: Optional[dict] = None
-            if parsed_conditions and expression_text:
-                buy_condition_payload = {
-                    "expression": expression_text,
-                    "conditions": parsed_conditions,
-                    "priority_factor": normalized_priority_factor,
-                    "priority_order": priority_order or "desc"
-                }
-                logger.info(f"📊 최종 buy_condition_payload: {buy_condition_payload}")
+
+            if isinstance(buy_conditions, dict) and 'expression' in buy_conditions and 'conditions' in buy_conditions:
+                # 이미 벡터화 형식 (expression + conditions)
+                logger.info("✅ 벡터화 형식의 buy_conditions 감지")
+                buy_condition_payload = buy_conditions
+                # 우선순위 팩터가 없으면 파라미터에서 가져옴
+                if 'priority_factor' not in buy_condition_payload:
+                    normalized_priority_factor = _extract_factor(priority_factor)
+                    buy_condition_payload['priority_factor'] = normalized_priority_factor
+                if 'priority_order' not in buy_condition_payload:
+                    buy_condition_payload['priority_order'] = priority_order or "desc"
+            else:
+                # 레거시 형식 (리스트) → 파싱하여 벡터화 형식으로 변환
+                logger.info("📋 레거시 형식의 buy_conditions 감지 - 벡터화 형식으로 변환")
+                parsed_conditions = []
+                if buy_conditions:
+                    for cond in buy_conditions:
+                        factor_code = _extract_factor(cond.get('exp_left_side'))
+                        if not factor_code:
+                            continue
+                        parsed_conditions.append({
+                            "id": cond.get('name') or factor_code,
+                            "factor": factor_code,
+                            "operator": cond.get('inequality', '>'),
+                            "value": cond.get('exp_right_side'),
+                            "description": cond.get('exp_left_side')
+                        })
+
+                # 논리식 생성: buy_logic에 따라 조건 ID들을 연결
+                expression_text = ""
+                if parsed_conditions:
+                    if buy_logic and buy_logic.upper() == "OR":
+                        expression_text = " or ".join([c["id"] for c in parsed_conditions])
+                    else:
+                        # 기본값은 AND
+                        expression_text = " and ".join([c["id"] for c in parsed_conditions])
+
+                # 우선순위 팩터 정규화
+                normalized_priority_factor = _extract_factor(priority_factor)
+
+                if parsed_conditions and expression_text:
+                    buy_condition_payload = {
+                        "expression": expression_text,
+                        "conditions": parsed_conditions,
+                        "priority_factor": normalized_priority_factor,
+                        "priority_order": priority_order or "desc"
+                    }
 
             # 기능상 SELL condition 리스트는 STOP/TAKE/HOLD 로직에 의해 관리하므로
             # condition_sell 의 factor 조건만 전달 (없으면 빈 리스트)
@@ -257,8 +293,9 @@ async def _run_backtest_async(
                 benchmark=benchmark,
                 commission_rate=Decimal(str(commission_rate / 100)),  # % -> decimal
                 slippage=Decimal(str(slippage / 100)),  # % -> decimal
-                target_themes=target_themes if not use_all_stocks else [],
-                target_stocks=target_stocks if not use_all_stocks else [],
+                target_themes=target_themes,
+                target_stocks=target_stocks,
+                target_universes=target_universes,
                 per_stock_ratio=per_stock_ratio,
                 max_buy_value=max_buy_value_won,
                 max_daily_stock=max_daily_stock
@@ -308,6 +345,79 @@ async def _run_backtest_async(
             await db.execute(stmt_stats)
             logger.info(f"✅ SimulationStatistics 저장 완료")
 
+            # 2.5 백테스트 요약 생성 및 저장 (상세 마크다운 형식)
+            # - backtest.py의 _generate_backtest_summary 로직과 동일
+            total_profit = final_capital - float(initial_capital)
+            total_days = (end_date - start_date).days
+            profit_or_loss = "수익" if final_return >= 0 else "손실"
+            performance_emoji = "📈" if final_return >= 0 else "📉"
+
+            summary = f"""### {performance_emoji} 백테스트 결과 요약
+
+#### 📊 핵심 성과 지표
+- **총 수익률**: {final_return:+.2f}% ({profit_or_loss})
+- **최종 자산**: {final_capital:,.0f}원 (초기 자산: {float(initial_capital):,.0f}원)
+- **순손익**: {total_profit:+,.0f}원
+
+#### 📉 위험 지표
+- **최대 낙폭 (MDD)**: {max_drawdown:.2f}%
+- **연환산 수익률 (CAGR)**: {annualized_return:.2f}%
+- **샤프 비율**: {sharpe_ratio:.2f}
+
+#### 📅 백테스트 정보
+- **테스트 기간**: {start_date.strftime('%Y년 %m월 %d일')} ~ {end_date.strftime('%Y년 %m월 %d일')} ({total_days}일)
+- **총 거래 횟수**: {total_trades}회
+- **승률**: {win_rate:.2f}%
+
+#### 💡 종합 평가
+"""
+            # 수익률 평가
+            if final_return >= 20:
+                summary += "- ✅ **우수한 수익률**: 목표 대비 높은 수익을 달성했습니다.\n"
+            elif final_return >= 10:
+                summary += "- ✅ **양호한 수익률**: 안정적인 수익을 기록했습니다.\n"
+            elif final_return >= 0:
+                summary += "- ⚠️ **보통 수익률**: 소폭의 수익을 기록했습니다.\n"
+            else:
+                summary += "- ⚠️ **손실 발생**: 전략 재검토가 필요합니다.\n"
+
+            # MDD 평가
+            if abs(max_drawdown) <= 10:
+                summary += "- ✅ **낮은 리스크**: MDD가 양호한 수준입니다.\n"
+            elif abs(max_drawdown) <= 20:
+                summary += "- ⚠️ **중간 리스크**: MDD 관리가 필요합니다.\n"
+            else:
+                summary += "- ⚠️ **높은 리스크**: 손실 폭이 큰 편입니다. 리스크 관리 전략 보완이 필요합니다.\n"
+
+            # 샤프 비율 평가
+            if sharpe_ratio >= 1.5:
+                summary += "- ✅ **우수한 위험 대비 수익**: 샤프 비율이 매우 좋습니다.\n"
+            elif sharpe_ratio >= 1.0:
+                summary += "- ✅ **양호한 위험 대비 수익**: 샤프 비율이 양호합니다.\n"
+            elif sharpe_ratio >= 0.5:
+                summary += "- ⚠️ **보통 위험 대비 수익**: 샤프 비율이 보통 수준입니다.\n"
+            else:
+                summary += "- ⚠️ **낮은 위험 대비 수익**: 리스크 대비 수익이 낮습니다.\n"
+
+            # 거래 빈도 평가
+            if total_trades == 0:
+                summary += "- ⚠️ **거래 없음**: 매수/매도 조건을 재검토하세요.\n"
+            elif total_trades < 10:
+                summary += "- ⚠️ **낮은 거래 빈도**: 거래 기회가 제한적입니다.\n"
+            elif total_trades < 50:
+                summary += "- ✅ **적절한 거래 빈도**: 균형잡힌 거래 빈도입니다.\n"
+            else:
+                summary += "- ⚠️ **높은 거래 빈도**: 과도한 거래로 수수료 부담이 클 수 있습니다.\n"
+
+            # description 필드에 요약 저장
+            stmt_summary = (
+                update(SimulationSession)
+                .where(SimulationSession.session_id == session_id)
+                .values(description=summary)
+            )
+            await db.execute(stmt_summary)
+            logger.info(f"✅ 백테스트 요약 저장 완료")
+
             # 3. 세션 상태 업데이트 (COMPLETED)
             stmt = (
                 update(SimulationSession)
@@ -323,8 +433,27 @@ async def _run_backtest_async(
 
             logger.info(f"✅ 백테스트 최종 통계 저장 완료 - 수익률: {final_return:.2f}%, 승률: {win_rate:.2f}%, 거래: {total_trades}건")
 
+            # 📡 WebSocket 완료 메시지 전송 (DB 저장 완료 후 전송하여 타이밍 이슈 해결)
+            from app.services.backtest_websocket import ws_manager
+            await ws_manager.send_completion(
+                backtest_id=str(session_id),
+                statistics={
+                    'final_value': float(final_capital),
+                    'total_return': float(final_return),
+                    'annualized_return': float(annualized_return),
+                    'max_drawdown': float(max_drawdown),
+                    'total_trades': total_trades,
+                    'win_rate': float(win_rate),
+                    'sharpe_ratio': float(sharpe_ratio)
+                },
+                summary=summary
+            )
+            logger.info(f"📡 WebSocket 완료 메시지 전송 완료 - session_id: {session_id}")
+
             # 🎯 랭킹 업데이트 (공개 전략인 경우)
             try:
+                from sqlalchemy import select
+                from app.models.portfolio import PortfolioStrategy
                 from app.services.ranking_service import get_ranking_service
 
                 # 전략 공개 여부 확인
@@ -373,6 +502,37 @@ async def _run_backtest_async(
         except Exception as e:
             logger.error(f"백테스트 실행 중 오류: {e}", exc_info=True)
 
+            # 🔧 FAILED 상태에서도 기본 통계 저장 (0% 방지)
+            from app.models.simulation import SimulationStatistics
+            from sqlalchemy.dialects.postgresql import insert
+
+            # 기본 통계 데이터 생성 (실패했지만 초기값 저장)
+            default_stats = {
+                'session_id': session_id,
+                'total_return': 0.0,
+                'annualized_return': 0.0,
+                'max_drawdown': 0.0,
+                'volatility': 0.0,
+                'sharpe_ratio': 0.0,
+                'total_trades': 0,
+                'winning_trades': 0,
+                'losing_trades': 0,
+                'win_rate': 0.0,
+                'profit_factor': 0.0,
+                'final_capital': float(initial_capital),  # 초기 자본금 그대로
+                'total_commission': 0.0,
+                'total_tax': 0.0
+            }
+
+            # SimulationStatistics 저장 (UPSERT)
+            stmt_stats = insert(SimulationStatistics).values(default_stats)
+            stmt_stats = stmt_stats.on_conflict_do_update(
+                index_elements=['session_id'],
+                set_=default_stats
+            )
+            await db.execute(stmt_stats)
+            logger.info(f"⚠️ FAILED 백테스트 기본 통계 저장 완료")
+
             # 세션 상태를 'FAILED'로 업데이트
             from app.models.simulation import SimulationSession
             from sqlalchemy import update
@@ -388,6 +548,17 @@ async def _run_backtest_async(
             )
             await db.execute(stmt)
             await db.commit()
+
+            # 📡 WebSocket 에러 메시지 전송 (실패 케이스)
+            try:
+                from app.services.backtest_websocket import ws_manager
+                await ws_manager.send_error(
+                    backtest_id=str(session_id),
+                    error_message=str(e)
+                )
+                logger.info(f"📡 WebSocket 에러 메시지 전송 완료 - session_id: {session_id}")
+            except Exception as ws_error:
+                logger.warning(f"WebSocket 에러 메시지 전송 실패 (무시): {ws_error}")
 
             # 🚀 Rate Limit 해제 (백테스트 실패 시에도)
             try:

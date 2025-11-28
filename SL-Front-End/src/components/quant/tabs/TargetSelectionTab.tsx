@@ -118,6 +118,7 @@ export default function TargetSelectionTab() {
     useState(0);
 
   // 커스텀 훅으로 매매 대상 선택 로직 관리
+  // 임시로 0을 전달하고, 나중에 실제 값으로 계산
   const {
     selectedIndustries,
     isAllIndustriesSelected,
@@ -127,12 +128,22 @@ export default function TargetSelectionTab() {
     industries,
     [],
     Array.from(selectedStocks),
-    selectedIndustryStockCount + selectedStocks.size, // 최종 선택된 종목 수
+    0, // 임시값
     totalStockCount,
   );
 
-  // 최종 선택된 종목 수 = 체크박스로 선택된 산업의 종목 + 개별 검색으로 선택된 종목
-  const finalSelectedCount = selectedIndustryStockCount + selectedStocks.size;
+  // 최종 선택된 종목 수 계산
+  // 중요: 업종(테마)을 선택하지 않으면 0개!
+  const finalSelectedCount = selectedIndustries.size === 0 && selectedStocks.size === 0
+    ? 0  // 업종도 개별 종목도 선택 안 함 -> 0개
+    : selectedIndustries.size > 0
+      ? selectedIndustryStockCount + selectedStocks.size  // 업종 기반
+      : selectedStocks.size;  // 개별 종목만 선택
+
+  // 최종 전체 종목 수 계산
+  const finalTotalCount = totalStockCount;
+
+  const { trade_targets, setTradeTargets } = useBacktestConfigStore();
 
   // 종목 검색 핸들러
   const handleSearch = async (query: string) => {
@@ -199,9 +210,25 @@ export default function TargetSelectionTab() {
 
       const finalStrategyName = strategyName || defaultStrategyName;
 
+      // 최종 종목 수를 스토어에 업데이트
+      setTradeTargets({
+        ...trade_targets,
+        selected_stock_count: finalSelectedCount,
+        total_stock_count: finalTotalCount,
+        total_theme_count: industries.length,  // 전체 테마 수 추가
+      });
+
       const request = {
         ...getBacktestRequest(),
         strategy_name: finalStrategyName,
+        trade_targets: {
+          ...getBacktestRequest().trade_targets,
+          selected_stock_count: finalSelectedCount,
+          total_stock_count: finalTotalCount,
+          total_theme_count: industries.length,  // 전체 테마 수 추가
+        },
+        // 전략 포트폴리오 페이지에서 실행한 백테스트는 자동으로 내 목록에 저장
+        is_portfolio: true,
       };
 
       console.log("=== 백테스트 요청 데이터 ===");
@@ -247,7 +274,7 @@ export default function TargetSelectionTab() {
       {/* 헤더 */}
       <TradeTargetHeader
         selectedCount={finalSelectedCount}
-        totalCount={totalStockCount}
+        totalCount={finalTotalCount}
       />
 
       {/* 전략 이름 입력 */}
@@ -267,10 +294,10 @@ export default function TargetSelectionTab() {
       <FieldPanel conditionType="target">
         <StockCount
           selectedCount={finalSelectedCount}
-          totalCount={totalStockCount}
+          totalCount={finalTotalCount}
         />
 
-        {/* 주식 테마 선택 (DB 산업 데이터) */}
+        {/* 업종(테마) 선택 (DB 산업 데이터) */}
         <UniverseThemeSelection
           industries={industries}
           selectedIndustries={selectedIndustries}

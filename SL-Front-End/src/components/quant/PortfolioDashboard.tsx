@@ -10,26 +10,26 @@
 interface PortfolioDashboardProps {
   /** 총 모의 자산 (원) */
   totalAssets: number;
-  /** 총 자산 수익률 (%) */
-  totalAssetsChange: number;
-  /** 이번주 수익 (원) */
-  weeklyProfit: number;
-  /** 이번주 수익률 (%) */
-  weeklyProfitChange: number;
+  /** 평가손익 (원) */
+  totalProfit: number;
+  /** 수익률 (%) */
+  totalReturn: number;
+  /** 평가금액 (원) */
+  evaluationAmount: number;
   /** 활성 포트폴리오 개수 */
   activePortfolioCount: number;
 }
 
 export function PortfolioDashboard({
   totalAssets,
-  totalAssetsChange,
-  weeklyProfit,
-  weeklyProfitChange,
+  totalProfit,
+  totalReturn,
+  evaluationAmount,
   activePortfolioCount,
 }: PortfolioDashboardProps) {
-  // 숫자를 천 단위 콤마로 포맷팅
+  // 숫자를 천 단위 콤마로 포맷팅 (원화는 정수로 표시)
   const formatNumber = (num: number) => {
-    return new Intl.NumberFormat("ko-KR").format(num);
+    return new Intl.NumberFormat("ko-KR").format(Math.round(num));
   };
 
   // 수익률 포맷팅 (+/- 부호 포함)
@@ -49,25 +49,13 @@ export function PortfolioDashboard({
       </h1>
 
       {/* 대시보드 카드 그리드 */}
-      <div className="grid grid-cols-3 gap-5">
-        {/* 총 모의 자산 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        {/* 총 자산 */}
         <div className="bg-[#AC64FF0D] border border-[#AC64FF33] rounded-lg px-5 py-5 h-[9.25rem]">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-[1.25rem] font-semibold text-black">
-              총 모의 자산
+              총 자산
             </h2>
-            <span
-              className={[
-                "px-3 py-1 rounded-[100px] bg-[#FF646433] font-semibold text-[0.75rem]",
-                isPositive(totalAssetsChange)
-                  ? "bg-red-50 text-red-500"
-                  : "bg-blue-50 text-blue-500",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {formatPercent(totalAssetsChange)}
-            </span>
           </div>
           <div>
             <p className="text-[1.5rem] font-semibold text-black">
@@ -77,56 +65,39 @@ export function PortfolioDashboard({
             <p
               className={[
                 "",
-                isPositive(totalAssetsChange)
+                isPositive(totalProfit)
                   ? "text-red-500"
                   : "text-blue-500",
               ]
                 .filter(Boolean)
                 .join(" ")}
             >
-              {isPositive(totalAssetsChange) ? "+" : ""}
-              {formatNumber(
-                Math.floor(totalAssets * (totalAssetsChange / 100)),
-              )}
-              원
+              평가손익 {isPositive(totalProfit) ? "+" : ""}
+              {formatNumber(totalProfit)}원
             </p>
           </div>
         </div>
 
-        {/* 이번주 수익 */}
+        {/* 수익률 */}
         <div className="bg-[#AC64FF0D] border border-[#AC64FF33] rounded-lg px-5 py-5 h-[9.25rem]">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-[1.25rem] font-semibold text-black">
-              이번주 수익
+              수익률
             </h2>
-            <span
-              className={[
-                "px-3 py-1 rounded-[100px] bg-[#FF646433] font-semibold text-[0.75rem]",
-                isPositive(totalAssetsChange)
-                  ? "bg-red-50 text-red-500"
-                  : "bg-blue-50 text-blue-500",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {formatPercent(weeklyProfitChange)}
-            </span>
           </div>
-          <p className="text-[1.5rem] font-semibold text-black">
-            {formatNumber(weeklyProfit)}
-            <span className="text-[1rem] text-normal ml-1">원</span>
-          </p>
           <p
             className={[
-              "",
-              isPositive(weeklyProfitChange) ? "text-red-500" : "text-blue-500",
+              "text-[1.5rem] font-semibold",
+              totalReturn > 0
+                ? "text-red-500"
+                : totalReturn < 0
+                  ? "text-blue-500"
+                  : "text-black",
             ]
               .filter(Boolean)
               .join(" ")}
           >
-            {isPositive(weeklyProfitChange) ? "+" : ""}
-            {formatNumber(Math.floor(totalAssets * (weeklyProfitChange / 100)))}
-            원
+            {formatPercent(totalReturn)}
           </p>
         </div>
 

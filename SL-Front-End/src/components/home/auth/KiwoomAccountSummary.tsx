@@ -24,7 +24,7 @@ export function KiwoomAccountSummary({ account }: KiwoomAccountSummaryProps) {
   const evaluationAmount = account.holdings?.tot_evlt_amt ?? 0;
 
   return (
-    <section className="rounded-[12px] border border-[#18223433] bg-[#18223405] p-5 shadow-elev-card">
+    <section className="rounded-[12px] border border-[#18223433] bg-[#1822340D] p-5 shadow-elev-card">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold text-text-body">연동 계좌 요약</h3>
         <span className="text-sm text-text-muted">프로필과 동일한 실시간 잔고</span>

@@ -57,8 +57,8 @@ export function GeneralSettingsSection() {
           </div>
         </div>
 
-        {/* 투자 설정 */}
-        <div className="grid grid-cols-5 gap-6">
+        {/* 투자 설정 - 유동 그리드 */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3 sm:gap-4 lg:gap-6">
           <FormField
             label="투자 금액"
             type="number"
@@ -67,9 +67,9 @@ export function GeneralSettingsSection() {
             suffix="만원"
           />
 
-          <div>
-            <Title variant="subtitle" className="mb-2">
-              투자 시작일
+          <div className="min-w-0">
+            <Title variant="subtitle" className="mb-2 whitespace-nowrap">
+              시작일
             </Title>
             <UnderlineInput
               type="date"
@@ -85,12 +85,13 @@ export function GeneralSettingsSection() {
                 const date = e.target.value.replace(/-/g, "");
                 setStartDate(date);
               }}
+              className="w-full"
             />
           </div>
 
-          <div>
-            <Title variant="subtitle" className="mb-2">
-              투자 종료일
+          <div className="min-w-0">
+            <Title variant="subtitle" className="mb-2 whitespace-nowrap">
+              종료일
             </Title>
             <UnderlineInput
               type="date"
@@ -106,6 +107,7 @@ export function GeneralSettingsSection() {
                 const date = e.target.value.replace(/-/g, "");
                 setEndDate(date);
               }}
+              className="w-full"
             />
           </div>
 

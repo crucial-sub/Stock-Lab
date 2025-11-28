@@ -49,10 +49,10 @@ export function FreeBoardPostForm({
               key={tag}
               type="button"
               onClick={() => handleChange("tag", tag)}
-              className={`rounded-[4px] px-3 py-1 text-xs font-semibold ${
+              className={`rounded-[4px] px-4 pt-1 pb-0.5 text-[0.75rem] font-normal ${
                 selected
                   ? "bg-brand-purple text-white"
-                  : "bg-white/60 text-[#646464]"
+                  : "border-[0.5px] border-[#18223433]"
               }`}
             >
               {tag}
@@ -67,13 +67,13 @@ export function FreeBoardPostForm({
           value={values.title}
           onChange={(e) => handleChange("title", e.target.value)}
           placeholder="제목을 작성하세요."
-          className="rounded-[12px] border border-[#18223414] bg-white px-4 py-3 text-sm text-black placeholder:text-[#AC64FF80] focus:border-brand-purple focus:outline-none"
+          className="rounded-[12px] border border-[#18223433] bg-[#FFFFFF80] px-4 py-3 text-[1rem] text-black placeholder:text-muted focus:outline-none"
         />
         <textarea
           value={values.content}
           onChange={(e) => handleChange("content", e.target.value)}
           placeholder="본문을 작성하세요."
-          className="min-h-[200px] rounded-[12px] border border-[#18223414] bg-white px-4 py-3 text-sm text-black placeholder:text-[#AC64FF80] focus:border-brand-purple focus:outline-none"
+          className="min-h-[160px] rounded-[12px] border-[0.5px] border-[#18223433] bg-[#FFFFFF80] px-4 py-3 text-[1rem] text-black placeholder:text-muted focus:outline-none"
         />
       </div>
 

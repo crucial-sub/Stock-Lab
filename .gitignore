@@ -65,7 +65,6 @@ __pycache__/
 .DS_Store
 SL-Back-end/logs/quant_api.log
 .venv/
-/docs
 /.cursor
 /scripts
 

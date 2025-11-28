@@ -396,8 +396,9 @@ uvicorn api.main:app --port 8001 --reload
 
 | Document | Description |
 |----------|-------------|
-| [📖 API 명세서](./docs/BACKEND_API_SPECIFICATION.md) | 106개 엔드포인트 상세 문서 |
+| [📖 Backend API 명세서](./docs/BACKEND_API_SPECIFICATION.md) | 106개 엔드포인트 상세 문서 |
 | [🏗️ 기술 아키텍처](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md) | 시스템 설계, DB 스키마, 성능 최적화 |
+| [🤖 AI Chatbot 명세서](./docs/CHATBOT_SPECIFICATION.md) | LLM 파이프라인, 프롬프트, DSL 생성 |
 
 <br />
 

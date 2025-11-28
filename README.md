@@ -44,7 +44,7 @@
 
 <br />
 
-[📖 API 문서](./docs/BACKEND_API_SPECIFICATION.md) · [🏗️ 기술 문서](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md) · [🎨 Frontend 아키텍처](./docs/FRONTEND_TECHNICAL_ARCHITECTURE.md) · [🤖 AI Chatbot](./docs/CHATBOT_SPECIFICATION.md)
+[💡 기획서](./docs/PRODUCT.md) · [📖 API 문서](./docs/BACKEND_API_SPECIFICATION.md) · [🏗️ 기술 문서](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md) · [🎨 Frontend 아키텍처](./docs/FRONTEND_TECHNICAL_ARCHITECTURE.md) · [🤖 AI Chatbot](./docs/CHATBOT_SPECIFICATION.md)
 
 </div>
 
@@ -103,7 +103,6 @@
 - 전략 복제 (1-Click Clone)
 - 익명/공개 옵션 지원
 - 게시판, 댓글, 좋아요 시스템
-- 실시간 알림
 
 </td>
 </tr>
@@ -118,11 +117,11 @@
 <table>
 <tr>
 <td align="center" width="20%">
-<a href="https://github.com/IIIBreakeRIII">
+<a href="https://devpaul.dev">
 <img src="https://github.com/IIIBreakeRIII.png" width="100px" style="border-radius:50%"/><br />
 <b>류현소</b>
 </a><br />
-<sub>Frontend · Design</sub><br />
+<sub>Lead <br/> FE · Design</sub><br />
 <sub>🎨 UI/UX 설계</sub>
 </td>
 <td align="center" width="20%">
@@ -130,7 +129,7 @@
 <img src="https://github.com/EUNTELLA.png" width="100px" style="border-radius:50%"/><br />
 <b>김은비</b>
 </a><br />
-<sub>AI · Data</sub><br />
+<sub>AI <br/> Data</sub><br />
 <sub>🤖 LLM 파이프라인</sub>
 </td>
 <td align="center" width="20%">
@@ -138,7 +137,7 @@
 <img src="https://github.com/Lucainr.png" width="100px" style="border-radius:50%"/><br />
 <b>김형욱</b>
 </a><br />
-<sub>Backend · Infra · Data</sub><br />
+<sub>BE <br /> Infra · Data</sub><br />
 <sub>⚙️ 시스템 아키텍처</sub>
 </td>
 <td align="center" width="20%">
@@ -146,16 +145,64 @@
 <img src="https://github.com/crucial-sub.png" width="100px" style="border-radius:50%"/><br />
 <b>박중섭</b>
 </a><br />
-<sub>Frontend · LogicDesign</sub><br />
-<sub>📊 퀀트 & 백테스트 FE</sub>
+<sub>FE<br/>Back-Testing</sub><br />
+<sub>💻 FE 총괄 개발 </sub>
 </td>
 <td align="center" width="20%">
 <a href="https://github.com/GolemOnce">
 <img src="https://github.com/GolemOnce.png" width="100px" style="border-radius:50%"/><br />
 <b>손형호</b>
 </a><br />
-<sub>Backend</sub><br />
+<sub>BE<br/>DB</sub><br />
 <sub>🔧 API 개발</sub>
+</td>
+</tr>
+</table>
+
+<br />
+
+---
+
+## 🖼 Preview
+
+<table>
+<tr>
+<td align="center" width="33%">
+  <img src="./docs/img/preview/main.png" alt="Main Dashboard" />
+</td>
+<td align="center" width="33%">
+  <img src="./docs/img/preview/portfolio.png" alt="Portfolio Overview" />
+</td>
+<td align="center" width="33%">
+  <img src="./docs/img/preview/ai-assistant.png" alt="AI Assistant" />
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+  <img src="./docs/img/preview/ai-assistant-guide.png" alt="AI Assistant Guide" />
+</td>
+<td align="center" width="33%">
+  <img src="./docs/img/preview/portfolio-result.png" alt="Portfolio Backtest Result" />
+</td>
+<td align="center" width="33%">
+  <img src="./docs/img/preview/portfolio-new.png" alt="Create New Portfolio" />
+</td>
+</tr>
+</table>
+
+<br />
+
+---
+
+## 🖼 Showcase Poster
+
+<table>
+<tr>
+<td align="center" width="50%">
+  <img src="./docs/img/poster/poster-1.jpg" alt="Showcase Poster 1" />
+</td>
+<td align="center" width="50%">
+  <img src="./docs/img/poster/poster-2.jpg" alt="Showcase Poster 2" />
 </td>
 </tr>
 </table>
@@ -166,7 +213,7 @@
 
 ## 🛠️ Tech Stack
 
-### Frontend
+### Front-End
 
 | Category | Technologies |
 |----------|-------------|
@@ -178,7 +225,7 @@
 | **Markdown** | React Markdown, Rehype, Remark GFM |
 | **Tooling** | Biome (Lint/Format), PostCSS |
 
-### Backend
+### Back-End
 
 | Category | Technologies |
 |----------|-------------|
@@ -220,8 +267,8 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                  Client                                     │
-│                      Next.js 16 + React 19 + TypeScript                    │
-│                    Zustand · TanStack Query · Tailwind CSS                 │
+│                      Next.js 16 + React 19 + TypeScript                     │
+│                    Zustand · TanStack Query · Tailwind CSS                  │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                           ┌───────────┴───────────┐
@@ -340,20 +387,20 @@ cp .env.example .env
 docker-compose up -d
 
 # 4. Access the application
-#    Frontend:  http://localhost:3000
-#    Backend:   http://localhost:8000
+#    Front-End:  http://localhost:3000
+#    Back-End:   http://localhost:8000
 #    API Docs:  http://localhost:8000/docs
 ```
 
 ### Development Setup
 
 ```bash
-# Frontend
+# Front-End
 cd SL-Front-End
 npm install
 npm run dev          # http://localhost:3000
 
-# Backend
+# Back-End
 cd SL-Back-end
 python -m venv venv
 source venv/bin/activate
@@ -397,6 +444,7 @@ uvicorn api.main:app --port 8001 --reload
 
 | Document | Description |
 |----------|-------------|
+| [💡 기획서](./docs/PRODUCT.md) | 기획 및 유저 정의 |
 | [📖 Backend API 명세서](./docs/BACKEND_API_SPECIFICATION.md) | 106개 엔드포인트 상세 문서 |
 | [🏗️ Backend 기술 아키텍처](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md) | 시스템 설계, DB 스키마, 성능 최적화 |
 | [🎨 Frontend 기술 아키텍처](./docs/FRONTEND_TECHNICAL_ARCHITECTURE.md) | Next.js 16, React 19, 상태관리, API 통신 |
@@ -411,7 +459,7 @@ uvicorn api.main:app --port 8001 --reload
 
 This project is **private and proprietary**.
 
-© 2025 **Krafton Jungle 10th Final Project Team**. All rights reserved.
+© 2025 **크래프톤 정글 10기 Team 5**. All rights reserved.
 
 <br />
 
@@ -422,8 +470,6 @@ This project is **private and proprietary**.
 **Built with ❤️ by Stock Lab Team**
 
 <br />
-
-[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FKrafton-Jungle-10-Final-Project%2FStock-Lab&count_bg=%236366F1&title_bg=%23555555&icon=github.svg&icon_color=%23E7E7E7&title=hits&edge_flat=false)](https://github.com/Krafton-Jungle-10-Final-Project/Stock-Lab)
 
 [⬆️ Back to Top](#stock-lab)
 

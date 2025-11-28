@@ -357,32 +357,42 @@ uvicorn api.main:app --port 8001 --reload
 <table>
 <tr>
 <td align="center" width="20%">
-<img src="https://via.placeholder.com/100/6366f1/ffffff?text=HS" width="80px" style="border-radius:50%"/><br />
-<b>류현소</b><br />
+<a href="https://github.com/IIIBreakeRIII">
+<img src="https://github.com/IIIBreakeRIII.png" width="100px" style="border-radius:50%"/><br />
+<b>류현소</b>
+</a><br />
 <sub>Frontend · Design</sub><br />
 <sub>🎨 UI/UX 설계</sub>
 </td>
 <td align="center" width="20%">
-<img src="https://via.placeholder.com/100/ec4899/ffffff?text=EB" width="80px" style="border-radius:50%"/><br />
-<b>김은비</b><br />
+<a href="https://github.com/EUNTELLA">
+<img src="https://github.com/EUNTELLA.png" width="100px" style="border-radius:50%"/><br />
+<b>김은비</b>
+</a><br />
 <sub>AI · Data</sub><br />
 <sub>🤖 LLM 파이프라인</sub>
 </td>
 <td align="center" width="20%">
-<img src="https://via.placeholder.com/100/10b981/ffffff?text=HW" width="80px" style="border-radius:50%"/><br />
-<b>김형욱</b><br />
+<a href="https://github.com/Lucainr">
+<img src="https://github.com/Lucainr.png" width="100px" style="border-radius:50%"/><br />
+<b>김형욱</b>
+</a><br />
 <sub>Backend · Infra · Data</sub><br />
 <sub>⚙️ 시스템 아키텍처</sub>
 </td>
 <td align="center" width="20%">
-<img src="https://via.placeholder.com/100/f59e0b/ffffff?text=JS" width="80px" style="border-radius:50%"/><br />
-<b>박중섭</b><br />
+<a href="https://github.com/crucial-sub">
+<img src="https://github.com/crucial-sub.png" width="100px" style="border-radius:50%"/><br />
+<b>박중섭</b>
+</a><br />
 <sub>Design · Frontend</sub><br />
 <sub>🖌️ 디자인 시스템</sub>
 </td>
 <td align="center" width="20%">
-<img src="https://via.placeholder.com/100/3b82f6/ffffff?text=HH" width="80px" style="border-radius:50%"/><br />
-<b>손형호</b><br />
+<a href="https://github.com/GolemOnce">
+<img src="https://github.com/GolemOnce.png" width="100px" style="border-radius:50%"/><br />
+<b>손형호</b>
+</a><br />
 <sub>Backend</sub><br />
 <sub>🔧 API 개발</sub>
 </td>

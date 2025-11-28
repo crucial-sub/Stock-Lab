@@ -112,6 +112,57 @@
 
 ---
 
+## 👥 Team
+
+<table>
+<tr>
+<td align="center" width="20%">
+<a href="https://github.com/IIIBreakeRIII">
+<img src="https://github.com/IIIBreakeRIII.png" width="100px" style="border-radius:50%"/><br />
+<b>류현소</b>
+</a><br />
+<sub>Frontend · Design</sub><br />
+<sub>🎨 UI/UX 설계</sub>
+</td>
+<td align="center" width="20%">
+<a href="https://github.com/EUNTELLA">
+<img src="https://github.com/EUNTELLA.png" width="100px" style="border-radius:50%"/><br />
+<b>김은비</b>
+</a><br />
+<sub>AI · Data</sub><br />
+<sub>🤖 LLM 파이프라인</sub>
+</td>
+<td align="center" width="20%">
+<a href="https://github.com/Lucainr">
+<img src="https://github.com/Lucainr.png" width="100px" style="border-radius:50%"/><br />
+<b>김형욱</b>
+</a><br />
+<sub>Backend · Infra · Data</sub><br />
+<sub>⚙️ 시스템 아키텍처</sub>
+</td>
+<td align="center" width="20%">
+<a href="https://github.com/crucial-sub">
+<img src="https://github.com/crucial-sub.png" width="100px" style="border-radius:50%"/><br />
+<b>박중섭</b>
+</a><br />
+<sub>Design · Frontend</sub><br />
+<sub>🖌️ 디자인 시스템</sub>
+</td>
+<td align="center" width="20%">
+<a href="https://github.com/GolemOnce">
+<img src="https://github.com/GolemOnce.png" width="100px" style="border-radius:50%"/><br />
+<b>손형호</b>
+</a><br />
+<sub>Backend</sub><br />
+<sub>🔧 API 개발</sub>
+</td>
+</tr>
+</table>
+
+<br />
+
+---
+
 ## 🛠️ Tech Stack
 
 ### Frontend
@@ -347,57 +398,6 @@ uvicorn api.main:app --port 8001 --reload
 |----------|-------------|
 | [📖 API 명세서](./docs/BACKEND_API_SPECIFICATION.md) | 106개 엔드포인트 상세 문서 |
 | [🏗️ 기술 아키텍처](./docs/BACKEND_TECHNICAL_ARCHITECTURE.md) | 시스템 설계, DB 스키마, 성능 최적화 |
-
-<br />
-
----
-
-## 👥 Team
-
-<table>
-<tr>
-<td align="center" width="20%">
-<a href="https://github.com/IIIBreakeRIII">
-<img src="https://github.com/IIIBreakeRIII.png" width="100px" style="border-radius:50%"/><br />
-<b>류현소</b>
-</a><br />
-<sub>Frontend · Design</sub><br />
-<sub>🎨 UI/UX 설계</sub>
-</td>
-<td align="center" width="20%">
-<a href="https://github.com/EUNTELLA">
-<img src="https://github.com/EUNTELLA.png" width="100px" style="border-radius:50%"/><br />
-<b>김은비</b>
-</a><br />
-<sub>AI · Data</sub><br />
-<sub>🤖 LLM 파이프라인</sub>
-</td>
-<td align="center" width="20%">
-<a href="https://github.com/Lucainr">
-<img src="https://github.com/Lucainr.png" width="100px" style="border-radius:50%"/><br />
-<b>김형욱</b>
-</a><br />
-<sub>Backend · Infra · Data</sub><br />
-<sub>⚙️ 시스템 아키텍처</sub>
-</td>
-<td align="center" width="20%">
-<a href="https://github.com/crucial-sub">
-<img src="https://github.com/crucial-sub.png" width="100px" style="border-radius:50%"/><br />
-<b>박중섭</b>
-</a><br />
-<sub>Design · Frontend</sub><br />
-<sub>🖌️ 디자인 시스템</sub>
-</td>
-<td align="center" width="20%">
-<a href="https://github.com/GolemOnce">
-<img src="https://github.com/GolemOnce.png" width="100px" style="border-radius:50%"/><br />
-<b>손형호</b>
-</a><br />
-<sub>Backend</sub><br />
-<sub>🔧 API 개발</sub>
-</td>
-</tr>
-</table>
 
 <br />
 

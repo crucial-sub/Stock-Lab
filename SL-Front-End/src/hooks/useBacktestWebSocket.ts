@@ -2,12 +2,13 @@
  * 백테스트 실시간 WebSocket 훅
  * - 백테스트 진행 상황을 WebSocket으로 실시간 수신
  * - 차트 데이터 실시간 업데이트
+ * - Delta 프로토콜 지원: 변경된 필드만 수신하여 네트워크 효율성 향상
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 /**
- * WebSocket 메시지 타입
+ * WebSocket 메시지 타입 - 전체 데이터 전송 (기존 방식)
  */
 export interface ProgressMessage {
   type: "progress";
@@ -21,6 +22,28 @@ export interface ProgressMessage {
   current_mdd: number;
   buy_count: number;
   sell_count: number;
+}
+
+/**
+ * Delta 메시지 타입 - 변경된 필드만 전송 (최적화 방식)
+ * - 매번 전체 데이터를 보내는 대신, 변경된 필드만 전송하는 Delta 프로토콜
+ * - 네트워크 전송량 감소 및 불필요한 리렌더 방지
+ */
+export interface DeltaMessage {
+  type: "delta";
+  date: string;
+  /** 변경된 필드만 포함 (Partial) */
+  changes: Partial<{
+    portfolio_value: number;
+    cash: number;
+    position_value: number;
+    daily_return: number;
+    cumulative_return: number;
+    progress_percent: number;
+    current_mdd: number;
+    buy_count: number;
+    sell_count: number;
+  }>;
 }
 
 export interface CompletedMessage {
@@ -66,6 +89,7 @@ export interface PreparationStage {
 
 export type WebSocketMessage =
   | ProgressMessage
+  | DeltaMessage
   | CompletedMessage
   | ErrorMessage
   | PreparationMessage;
@@ -103,6 +127,35 @@ export interface UseBacktestWebSocketReturn {
   summary: string | null;
   /** 현재 준비 단계 정보 (백테스트 시작 전) */
   preparationStage: PreparationStage | null;
+}
+
+/**
+ * Delta 메시지를 ChartDataPoint로 변환
+ * - 변경된 필드만 포함된 Delta 메시지를 기존 데이터와 병합
+ */
+function applyDeltaToDataPoint(
+  existing: ChartDataPoint | undefined,
+  delta: DeltaMessage
+): ChartDataPoint {
+  const base: ChartDataPoint = existing || {
+    date: delta.date,
+    portfolioValue: 0,
+    cumulativeReturn: 0,
+    dailyReturn: 0,
+    currentMdd: 0,
+    buyCount: 0,
+    sellCount: 0,
+  };
+
+  return {
+    date: delta.date,
+    portfolioValue: delta.changes.portfolio_value ?? base.portfolioValue,
+    cumulativeReturn: delta.changes.cumulative_return ?? base.cumulativeReturn,
+    dailyReturn: delta.changes.daily_return ?? base.dailyReturn,
+    currentMdd: delta.changes.current_mdd ?? base.currentMdd,
+    buyCount: delta.changes.buy_count ?? base.buyCount,
+    sellCount: delta.changes.sell_count ?? base.sellCount,
+  };
 }
 
 /**
@@ -144,6 +197,77 @@ export function useBacktestWebSocket(
 
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  /**
+   * Progress 메시지 처리 (전체 데이터 전송 방식)
+   * - 기존 방식과 호환성 유지
+   */
+  const handleProgressMessage = useCallback((message: ProgressMessage) => {
+    console.log(
+      `📊 진행률: ${message.progress_percent}% (수익률: ${message.cumulative_return.toFixed(2)}%)`,
+    );
+
+    // 시뮬레이션 시작됨 -> 준비 단계 완료
+    setPreparationStage(null);
+
+    const newDataPoint: ChartDataPoint = {
+      date: message.date,
+      portfolioValue: message.portfolio_value,
+      cumulativeReturn: message.cumulative_return,
+      dailyReturn: message.daily_return,
+      currentMdd: message.current_mdd,
+      buyCount: message.buy_count,
+      sellCount: message.sell_count,
+    };
+
+    // 차트 데이터 추가
+    setChartData((prev) => {
+      const updated = [...prev, newDataPoint];
+      return updated;
+    });
+
+    // 진행률 업데이트
+    setProgress(message.progress_percent);
+  }, []);
+
+  /**
+   * Delta 메시지 처리 (변경분만 전송 방식)
+   * - 변경된 필드만 기존 데이터에 병합
+   * - 불필요한 리렌더 방지
+   */
+  const handleDeltaMessage = useCallback((message: DeltaMessage) => {
+    console.log(
+      `📊 [Delta] 날짜: ${message.date}, 변경 필드: ${Object.keys(message.changes).join(", ")}`,
+    );
+
+    // 시뮬레이션 시작됨 -> 준비 단계 완료
+    setPreparationStage(null);
+
+    // 변경분만 캐시에 병합
+    setChartData((prev) => {
+      const existingIndex = prev.findIndex((p) => p.date === message.date);
+
+      if (existingIndex !== -1) {
+        // 기존 데이터가 있으면 변경분만 병합
+        const existing = prev[existingIndex];
+        const updated = applyDeltaToDataPoint(existing, message);
+
+        // 불변성 유지하며 업데이트
+        const newData = [...prev];
+        newData[existingIndex] = updated;
+        return newData;
+      } else {
+        // 새 데이터면 추가
+        const newDataPoint = applyDeltaToDataPoint(undefined, message);
+        return [...prev, newDataPoint];
+      }
+    });
+
+    // 진행률 업데이트 (Delta에 포함된 경우)
+    if (message.changes.progress_percent !== undefined) {
+      setProgress(message.changes.progress_percent);
+    }
+  }, []);
 
   useEffect(() => {
     // WebSocket 연결 조건 확인
@@ -200,34 +324,14 @@ export function useBacktestWebSocket(
               });
               break;
 
+            // 📊 전체 데이터 전송 방식 (기존 호환)
             case "progress":
-              console.log(
-                `📊 진행률: ${message.progress_percent}% (수익률: ${message.cumulative_return.toFixed(2)}%)`,
-              );
+              handleProgressMessage(message);
+              break;
 
-              // 시뮬레이션 시작됨 -> 준비 단계 완료
-              setPreparationStage(null);
-
-              const newDataPoint = {
-                date: message.date,
-                portfolioValue: message.portfolio_value,
-                cumulativeReturn: message.cumulative_return,
-                dailyReturn: message.daily_return,
-                currentMdd: message.current_mdd,
-                buyCount: message.buy_count,
-                sellCount: message.sell_count,
-              };
-              console.log(`📊 [useBacktestWebSocket] 새 데이터 포인트 추가:`, newDataPoint);
-
-              // 차트 데이터 추가
-              setChartData((prev) => {
-                const updated = [...prev, newDataPoint];
-                console.log(`📊 [useBacktestWebSocket] chartData 업데이트: ${prev.length} → ${updated.length}개`);
-                return updated;
-              });
-
-              // 진행률 업데이트
-              setProgress(message.progress_percent);
+            // 📊 Delta 프로토콜: 변경분만 전송 (최적화)
+            case "delta":
+              handleDeltaMessage(message);
               break;
 
             case "completed":
@@ -294,7 +398,7 @@ export function useBacktestWebSocket(
         pingIntervalRef.current = null;
       }
     };
-  }, [backtestId, enabled, apiUrl]);
+  }, [backtestId, enabled, apiUrl, handleProgressMessage, handleDeltaMessage]);
 
   return {
     isConnected,

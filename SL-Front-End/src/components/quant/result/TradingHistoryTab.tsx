@@ -1,11 +1,12 @@
 "use client";
 
+import { StockDetailModal } from "@/components/modal/StockDetailModal";
+import type { BacktestResult } from "@/types/api";
 import * as am5 from "@amcharts/amcharts5";
 import am5themes_Animated from "@amcharts/amcharts5/themes/Animated";
 import * as am5xy from "@amcharts/amcharts5/xy";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useRef, useState } from "react";
-import type { BacktestResult } from "@/types/api";
-import { StockDetailModal } from "@/components/modal/StockDetailModal";
 
 /**
  * 매매 내역 탭 컴포넌트
@@ -23,7 +24,6 @@ export function TradingHistoryTab({
   trades,
   yieldPoints = [],
 }: TradingHistoryTabProps) {
-  const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<"all" | "byDate">("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [selectedStock, setSelectedStock] = useState<{
@@ -31,24 +31,26 @@ export function TradingHistoryTab({
     code: string;
   } | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
-  const itemsPerPage = 10;
+  const parentRef = useRef<HTMLDivElement>(null);
 
   // 월별로 거래 필터링
   const filteredTrades =
     viewMode === "all"
       ? trades
       : trades.filter((trade) => {
-          if (!selectedMonth) return true;
-          // 매수일의 연-월이 선택된 월과 같은 거래만 표시
-          const tradeMonth = trade.buyDate.substring(0, 7); // "2024-01-15" -> "2024-01"
-          return tradeMonth === selectedMonth;
-        });
+        if (!selectedMonth) return true;
+        // 매수일의 연-월이 선택된 월과 같은 거래만 표시
+        const tradeMonth = trade.buyDate.substring(0, 7); // "2024-01-15" -> "2024-01"
+        return tradeMonth === selectedMonth;
+      });
 
-  // 페이지네이션 계산
-  const totalPages = Math.ceil(filteredTrades.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentTrades = filteredTrades.slice(startIndex, endIndex);
+  // Virtual scroll 설정
+  const rowVirtualizer = useVirtualizer({
+    count: filteredTrades.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 56, // 각 행의 예상 높이 (px)
+    overscan: 10, // 뷰포트 밖에 미리 렌더링할 행 수
+  });
 
   // 보유일수 계산
   const calculateHoldingDays = (buyDate: string, sellDate: string) => {
@@ -65,10 +67,12 @@ export function TradingHistoryTab({
     .sort()
     .reverse(); // 최신 월이 먼저 오도록 역순 정렬
 
-  // viewMode 변경 시 페이지 초기화
+  // viewMode나 selectedMonth 변경 시 스크롤 위치 초기화
   useEffect(() => {
-    setCurrentPage(1);
-  }, []);
+    if (parentRef.current) {
+      parentRef.current.scrollTop = 0;
+    }
+  }, [viewMode, selectedMonth]);
 
   // 누적 수익률 차트 렌더링
   useEffect(() => {
@@ -189,22 +193,20 @@ export function TradingHistoryTab({
               <button
                 type="button"
                 onClick={() => setViewMode("byDate")}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  viewMode === "byDate"
-                    ? "bg-accent-primary text-white"
-                    : "text-text-muted hover:text-text-body"
-                }`}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${viewMode === "byDate"
+                  ? "bg-accent-primary text-white"
+                  : "text-text-muted hover:text-text-body"
+                  }`}
               >
                 날짜별 보기
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("all")}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  viewMode === "all"
-                    ? "bg-accent-primary text-white"
-                    : "text-text-muted hover:text-text-body"
-                }`}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${viewMode === "all"
+                  ? "bg-accent-primary text-white"
+                  : "text-text-muted hover:text-text-body"
+                  }`}
               >
                 전체 보기
               </button>
@@ -273,109 +275,86 @@ export function TradingHistoryTab({
           </div>
         </div>
 
-        {/* 테이블 바디 */}
-        <div>
-          {currentTrades.length === 0 ? (
-            <div className="py-12 text-center text-text-muted">
-              {viewMode === "byDate" && selectedMonth
-                ? `${selectedMonth}에 거래 내역이 없습니다.`
-                : "거래 내역이 없습니다."}
-            </div>
-          ) : (
-            currentTrades.map((trade, idx) => (
-              <div
-                key={`${trade.stockCode}-${idx}`}
-                className="grid grid-cols-[1fr_120px_120px_100px_100px_90px_100px] gap-4 px-6 py-4 border-b border-border-subtle hover:bg-bg-muted transition-colors"
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedStock({
-                      name: trade.stockName,
-                      code: trade.stockCode,
-                    })
-                  }
-                  className="text-text-body font-medium text-left hover:text-accent-primary hover:underline transition-colors"
-                >
-                  {trade.stockName}
-                </button>
-                <div className="text-text-body text-right">{trade.buyDate}</div>
-                <div className="text-text-body text-right">
-                  {trade.sellDate || "-"}
-                </div>
-                <div className="text-text-body text-right">
-                  {trade.buyPrice.toLocaleString('ko-KR')}
-                </div>
-                <div className="text-text-body text-right">
-                  {trade.sellPrice.toLocaleString('ko-KR')}
-                </div>
-                <div className="text-text-body text-right">
-                  {calculateHoldingDays(trade.buyDate, trade.sellDate)}일
-                </div>
-                <div
-                  className={`text-right font-semibold ${
-                    trade.profitRate >= 0 ? "text-red-500" : "text-blue-500"
-                  }`}
-                >
-                  {trade.profitRate.toFixed(2)}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* 페이지네이션 */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 py-6">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-text-body disabled:opacity-30 disabled:cursor-not-allowed"
+        {/* 테이블 바디 (Virtual Scroll) */}
+        {filteredTrades.length === 0 ? (
+          <div className="py-12 text-center text-text-muted">
+            {viewMode === "byDate" && selectedMonth
+              ? `${selectedMonth}에 거래 내역이 없습니다.`
+              : "거래 내역이 없습니다."}
+          </div>
+        ) : (
+          <div
+            ref={parentRef}
+            className="overflow-auto"
+            style={{ height: "500px" }}
+          >
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
             >
-              &lt;
-            </button>
-
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter((page) => {
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const trade = filteredTrades[virtualRow.index];
                 return (
-                  page === 1 ||
-                  page === totalPages ||
-                  Math.abs(page - currentPage) <= 2
-                );
-              })
-              .map((page, idx, arr) => {
-                const prevPage = arr[idx - 1];
-                const showEllipsis = prevPage && page - prevPage > 1;
-
-                return (
-                  <div key={page} className="flex items-center gap-2">
-                    {showEllipsis && (
-                      <span className="text-text-muted">...</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded font-medium transition-colors ${
-                        currentPage === page
-                          ? "bg-accent-primary text-white"
-                          : "text-text-muted hover:text-text-body hover:bg-bg-muted"
-                      }`}
-                    >
-                      {page}
-                    </button>
+                  <div
+                    key={virtualRow.index}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <div className="grid grid-cols-[1fr_120px_120px_100px_100px_90px_100px] gap-4 px-6 py-4 border-b border-border-subtle hover:bg-bg-muted transition-colors h-full items-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedStock({
+                            name: trade.stockName,
+                            code: trade.stockCode,
+                          })
+                        }
+                        className="text-text-body font-medium text-left hover:text-accent-primary hover:underline transition-colors truncate"
+                      >
+                        {trade.stockName}
+                      </button>
+                      <div className="text-text-body text-right">
+                        {trade.buyDate}
+                      </div>
+                      <div className="text-text-body text-right">
+                        {trade.sellDate || "-"}
+                      </div>
+                      <div className="text-text-body text-right">
+                        {trade.buyPrice.toLocaleString("ko-KR")}
+                      </div>
+                      <div className="text-text-body text-right">
+                        {trade.sellPrice.toLocaleString("ko-KR")}
+                      </div>
+                      <div className="text-text-body text-right">
+                        {calculateHoldingDays(trade.buyDate, trade.sellDate)}일
+                      </div>
+                      <div
+                        className={`text-right font-semibold ${trade.profitRate >= 0 ? "text-red-500" : "text-blue-500"
+                          }`}
+                      >
+                        {trade.profitRate.toFixed(2)}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
 
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="w-8 h-8 flex items-center justify-center text-text-muted hover:text-text-body disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              &gt;
-            </button>
+        {/* 총 거래 수 표시 */}
+        {filteredTrades.length > 0 && (
+          <div className="px-6 py-3 text-sm text-text-muted text-center border-t border-border-subtle">
+            총 {filteredTrades.length}건의 거래 (스크롤하여 더 보기)
           </div>
         )}
       </div>

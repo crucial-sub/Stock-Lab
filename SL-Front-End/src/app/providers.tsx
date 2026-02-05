@@ -13,6 +13,7 @@ import { getQueryClient } from "@/lib/query-client";
 import { SessionExpiredModal } from "@/components/modal/SessionExpiredModal";
 import { useAuthStore } from "@/stores/authStore";
 import { FloatingChatWidget } from "@/components/home/FloatingChatWidget";
+import { PerformanceDashboard } from "@/components/dev/PerformanceDashboard";
 
 export function Providers({ children }: { children: ReactNode }) {
   // 브라우저 환경에서 싱글톤 QueryClient 사용
@@ -40,6 +41,8 @@ export function Providers({ children }: { children: ReactNode }) {
       />
       {/* 전역 플로팅 챗봇 (시세/뉴스/커뮤니티/퀀트 탭에서도 노출) */}
       <FloatingChatWidget />
+      {/* 성능 대시보드 (개발 모드에서만 렌더링) */}
+      <PerformanceDashboard />
     </QueryClientProvider>
   );
 }

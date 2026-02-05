@@ -1,23 +1,11 @@
 'use client'
 
-import { useEffect, useState, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useTickWorker, type TickData } from '@/hooks/useTickWorker'
 
-interface TickData {
-  timestamp: string
-  client: string
-  code: string
-  data: {
-    item: string
-    price: string
-    change: string
-    change_rate: string
-    volume: string
-    timestamp: string
-    strength?: string  // 체결강도 (-100~+100)
-    net_buy_volume?: string  // 순매수량
-  }
-}
+// TickData는 useTickWorker에서 import
 
 interface StockData {
   code: string
@@ -29,6 +17,9 @@ interface StockData {
   volume?: number
   tradingValue?: number
 }
+
+// 테이블 행 높이 상수
+const ROW_HEIGHT = 52
 
 type TabType = 'tradingValue' | 'volume' | 'rising' | 'falling'
 
@@ -49,9 +40,13 @@ export default function RealtimePage() {
   const [previousRanks, setPreviousRanks] = useState<Map<string, number>>(new Map())
   const [rankChanges, setRankChanges] = useState<Map<string, 'up' | 'down' | 'same'>>(new Map())
   const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const [visibleCount, setVisibleCount] = useState(50)
-  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map())
-  const positionsRef = useRef<Map<string, DOMRect>>(new Map())
+  const tableContainerRef = useRef<HTMLDivElement>(null)
+
+  // Web Worker를 통한 tick 데이터 배치 처리
+  const { sendTick, latestUpdates } = useTickWorker({
+    batchInterval: 100,
+    enabled: connected,
+  })
 
   // 종목명 매핑
   const stockNames: Record<string, string> = {
@@ -124,41 +119,8 @@ export default function RealtimePage() {
       if (message.type === 'MODE') {
         setMode(message.mode)
       } else if (message.type === 'TICK') {
-        const tick: TickData = message.data
-
-        // 해당 종목 데이터 업데이트
-        setStocks(prev => prev.map(stock => {
-          if (stock.code === tick.code) {
-            const prevRate = stock.change_rate
-            const newRate = tick.data.change_rate
-            const hasChanged = prevRate && newRate && prevRate !== newRate
-
-            // 등락률 변경 시 flash 효과
-            if (hasChanged) {
-              // 1.5초 후 flash 제거
-              setTimeout(() => {
-                setStocks(prev => prev.map(s =>
-                  s.code === tick.code ? { ...s, showFlash: false } : s
-                ))
-              }, 1500)
-            }
-
-            const price = parseFloat(tick.data.price) || 0
-            const volume = parseFloat(tick.data.volume) || 0
-            const tradingValue = price * volume
-
-            return {
-              ...stock,
-              latest: tick,
-              price: tick.data.price,
-              change_rate: newRate,
-              showFlash: Boolean(hasChanged),
-              volume,
-              tradingValue
-            }
-          }
-          return stock
-        }))
+        // tick 데이터를 Web Worker로 전달하여 배치 처리
+        sendTick(message.data as TickData)
       }
     }
 
@@ -243,13 +205,46 @@ export default function RealtimePage() {
   }
 
   const sortedStocks = getSortedStocks()
-  const displayedStocks = sortedStocks.slice(0, visibleCount)
-  const hasMore = visibleCount < sortedStocks.length
 
-  // 탭 변경 시 visibleCount 초기화
+  // Virtual scroll 설정
+  const rowVirtualizer = useVirtualizer({
+    count: sortedStocks.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 5,
+  })
+
+  // Web Worker로부터 배치 업데이트 수신 시 stocks 상태 업데이트
   useEffect(() => {
-    setVisibleCount(50)
-  }, [selectedTab])
+    if (Object.keys(latestUpdates).length === 0) return
+
+    setStocks(prev => prev.map(stock => {
+      const update = latestUpdates[stock.code]
+      if (!update) return stock
+
+      const prevRate = stock.change_rate
+      const newRate = update.change_rate
+      const hasChanged = prevRate && newRate && prevRate !== newRate
+
+      // 등락률 변경 시 flash 효과
+      if (hasChanged) {
+        setTimeout(() => {
+          setStocks(prevStocks => prevStocks.map(s =>
+            s.code === stock.code ? { ...s, showFlash: false } : s
+          ))
+        }, 1500)
+      }
+
+      return {
+        ...stock,
+        price: update.price,
+        change_rate: update.change_rate,
+        volume: update.volume,
+        tradingValue: update.tradingValue,
+        showFlash: Boolean(hasChanged),
+      }
+    }))
+  }, [latestUpdates])
 
   // 초기 로딩 완료 감지
   useEffect(() => {
@@ -262,23 +257,14 @@ export default function RealtimePage() {
     }
   }, [stocks.length, isInitialLoad])
 
-  // 순위 변동 추적 및 FLIP 애니메이션
+  // 순위 변동 추적 (가상 스크롤과 호환되는 방식)
   useEffect(() => {
     if (isInitialLoad) return
 
-    // First: 현재 위치 저장 (변경 전)
-    const beforePositions = new Map<string, DOMRect>()
-    rowRefs.current.forEach((element, code) => {
-      if (element) {
-        beforePositions.set(code, element.getBoundingClientRect())
-      }
-    })
-
-    // 순위 변경 추적
     const newRanks = new Map<string, number>()
     const changes = new Map<string, 'up' | 'down' | 'same'>()
 
-    displayedStocks.forEach((stock, index) => {
+    sortedStocks.forEach((stock, index) => {
       const currentRank = index + 1
       const previousRank = previousRanks.get(stock.code)
 
@@ -298,42 +284,13 @@ export default function RealtimePage() {
     setPreviousRanks(newRanks)
     setRankChanges(changes)
 
-    // Last & Invert & Play: DOM 업데이트 후 애니메이션
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        rowRefs.current.forEach((element, code) => {
-          if (!element) return
-
-          const beforePos = beforePositions.get(code)
-          if (!beforePos) return
-
-          const afterPos = element.getBoundingClientRect()
-          const deltaY = beforePos.top - afterPos.top
-
-          if (Math.abs(deltaY) > 1) {
-            console.log(`${code}: ${deltaY}px 이동`)
-
-            // Invert
-            element.style.transform = `translateY(${deltaY}px)`
-            element.style.transition = 'none'
-
-            // Play
-            requestAnimationFrame(() => {
-              element.style.transform = 'translateY(0)'
-              element.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'
-            })
-          }
-        })
-      })
-    })
-
-    // 1.5초 후 애니메이션 표시 초기화
+    // 1.5초 후 순위 변동 표시 초기화
     const timer = setTimeout(() => {
       setRankChanges(new Map())
     }, 1500)
 
     return () => clearTimeout(timer)
-  }, [displayedStocks.map(s => s.code + s.change_rate).join(','), isInitialLoad])
+  }, [sortedStocks.map(s => s.code + s.change_rate).join(','), isInitialLoad])
 
   const formatNumber = (num: number): string => {
     if (num >= 1000000000000) {
@@ -455,122 +412,134 @@ export default function RealtimePage() {
             </div>
           </div>
 
-          <table className="min-w-full">
-            <thead className="bg-white border-b border-gray-100">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
-                  순위
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
-                  종목
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
-                  이름
-                </th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
-                  현재가
-                </th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
-                  등락률
-                </th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
-                  {selectedTab === 'tradingValue' ? '거래대금' : '거래량'}
-                </th>
-                <th className="px-4 py-2.5 text-center text-xs font-medium text-gray-500 w-48">
-                  체결강도
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-50">
-              {displayedStocks.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                    데이터 로딩 중...
-                  </td>
-                </tr>
-              ) : (
-                displayedStocks.map((stock, index) => {
+          {/* 테이블 헤더 */}
+          <div className="grid grid-cols-[80px_96px_128px_112px_96px_96px_192px] bg-white border-b border-gray-100">
+            <div className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
+              순위
+            </div>
+            <div className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
+              종목
+            </div>
+            <div className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
+              이름
+            </div>
+            <div className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+              현재가
+            </div>
+            <div className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+              등락률
+            </div>
+            <div className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">
+              {selectedTab === 'tradingValue' ? '거래대금' : '거래량'}
+            </div>
+            <div className="px-4 py-2.5 text-center text-xs font-medium text-gray-500">
+              체결강도
+            </div>
+          </div>
+
+          {/* 가상화된 테이블 바디 */}
+          {sortedStocks.length === 0 ? (
+            <div className="px-6 py-8 text-center text-gray-500">
+              데이터 로딩 중...
+            </div>
+          ) : (
+            <div
+              ref={tableContainerRef}
+              className="overflow-auto"
+              style={{ height: 'calc(100vh - 380px)', minHeight: '400px' }}
+            >
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const stock = sortedStocks[virtualRow.index]
                   const changeRate = stock.change_rate ? parseFloat(stock.change_rate) : 0
                   const isPositive = changeRate > 0
                   const isNegative = changeRate < 0
                   const rankChange = rankChanges.get(stock.code)
 
                   return (
-                    <tr
+                    <div
                       key={stock.code}
-                      ref={(el) => {
-                        if (el) {
-                          rowRefs.current.set(stock.code, el)
-                        }
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
                       }}
-                      className="hover:bg-gray-50/50 cursor-pointer"
-                      onClick={() => window.location.href = `/realtime/${stock.code}`}
                     >
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 w-20">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-6 text-center">{index + 1}</span>
-                          {rankChange === 'up' && (
-                            <span className="text-red-500 text-[10px]">▲</span>
-                          )}
-                          {rankChange === 'down' && (
-                            <span className="text-blue-500 text-[10px]">▼</span>
-                          )}
+                      <div
+                        className="grid grid-cols-[80px_96px_128px_112px_96px_96px_192px] h-full items-center border-b border-gray-50 hover:bg-gray-50/50 cursor-pointer"
+                        onClick={() => window.location.href = `/realtime/${stock.code}`}
+                      >
+                        <div className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-6 text-center">{virtualRow.index + 1}</span>
+                            {rankChange === 'up' && (
+                              <span className="text-red-500 text-[10px]">▲</span>
+                            )}
+                            {rankChange === 'down' && (
+                              <span className="text-blue-500 text-[10px]">▼</span>
+                            )}
+                          </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono text-gray-500 w-24">
-                        {stock.code}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium w-32">
-                        <Link
-                          href={`/realtime/${stock.code}`}
-                          className="text-gray-900 hover:text-blue-600 hover:underline transition-colors"
-                        >
-                          {stock.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900 w-28 tabular-nums">
-                        {formatPrice(stock.price)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right w-24">
-                        <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-300 min-w-[60px] ${
-                          stock.showFlash
-                            ? isPositive
-                              ? 'bg-red-200 text-red-700'
-                              : 'bg-blue-200 text-blue-700'
-                            : isPositive
-                              ? 'bg-red-50 text-red-600'
-                              : isNegative
-                                ? 'bg-blue-50 text-blue-600'
-                                : 'bg-gray-50 text-gray-600'
-                        }`}>
-                          {isPositive ? '+' : ''}{changeRate.toFixed(2)}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 w-24 tabular-nums">
-                        {selectedTab === 'tradingValue'
-                          ? formatNumber(stock.tradingValue || 0)
-                          : formatNumber(stock.volume || 0)
-                        }
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {renderStrengthBar(stock.latest?.data.strength)}
-                      </td>
-                    </tr>
+                        <div className="px-4 py-3 whitespace-nowrap text-xs font-mono text-gray-500">
+                          {stock.code}
+                        </div>
+                        <div className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          <Link
+                            href={`/realtime/${stock.code}`}
+                            className="text-gray-900 hover:text-blue-600 hover:underline transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {stock.name}
+                          </Link>
+                        </div>
+                        <div className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900 tabular-nums">
+                          {formatPrice(stock.price)}
+                        </div>
+                        <div className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                          <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-300 min-w-[60px] ${
+                            stock.showFlash
+                              ? isPositive
+                                ? 'bg-red-200 text-red-700'
+                                : 'bg-blue-200 text-blue-700'
+                              : isPositive
+                                ? 'bg-red-50 text-red-600'
+                                : isNegative
+                                  ? 'bg-blue-50 text-blue-600'
+                                  : 'bg-gray-50 text-gray-600'
+                          }`}>
+                            {isPositive ? '+' : ''}{changeRate.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900 tabular-nums">
+                          {selectedTab === 'tradingValue'
+                            ? formatNumber(stock.tradingValue || 0)
+                            : formatNumber(stock.volume || 0)
+                          }
+                        </div>
+                        <div className="px-4 py-3 whitespace-nowrap">
+                          {renderStrengthBar(stock.latest?.data.strength)}
+                        </div>
+                      </div>
+                    </div>
                   )
-                })
-              )}
-            </tbody>
-          </table>
+                })}
+              </div>
+            </div>
+          )}
 
-          {/* 더보기 버튼 */}
-          {hasMore && (
-            <div className="px-6 py-4 border-t border-gray-100">
-              <button
-                onClick={() => setVisibleCount(prev => prev + 50)}
-                className="w-full py-3 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                더보기 ({visibleCount}/{sortedStocks.length})
-              </button>
+          {/* 종목 수 표시 */}
+          {sortedStocks.length > 0 && (
+            <div className="px-6 py-3 border-t border-gray-100 text-center text-sm text-gray-500">
+              총 {sortedStocks.length}개 종목 (스크롤하여 더 보기)
             </div>
           )}
         </div>

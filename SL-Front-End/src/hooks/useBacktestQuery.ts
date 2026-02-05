@@ -214,23 +214,72 @@ export function useBacktestStatusQuery(
 }
 
 /**
- * 백테스트 삭제 뮤테이션 훅
+ * 백테스트 삭제 뮤테이션 훅 (Optimistic Update 적용)
  * - 백테스트를 삭제합니다
+ * - 서버 응답을 기다리지 않고 UI 먼저 업데이트
+ * - 실패 시 자동 롤백
  *
  * @returns 백테스트 삭제 뮤테이션
  */
 export function useDeleteBacktestMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<void, Error, string>({
+  return useMutation<
+    void,
+    Error,
+    string,
+    { previousList: PaginatedResponse<BacktestResult> | undefined }
+  >({
     mutationFn: deleteBacktest,
-    onSuccess: (_, backtestId) => {
-      // 백테스트 목록 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: backtestQueryKey.lists() });
+
+    // 1. Optimistic Update - 서버 응답 전에 UI 먼저 업데이트
+    onMutate: async (backtestId: string) => {
+      // 진행중인 refetch 취소 (낙관적 업데이트와 충돌 방지)
+      await queryClient.cancelQueries({ queryKey: backtestQueryKey.lists() });
+
+      // 이전 데이터 스냅샷 저장 (롤백용)
+      const previousList = queryClient.getQueryData<
+        PaginatedResponse<BacktestResult>
+      >(backtestQueryKey.lists());
+
+      // 캐시 즉시 업데이트 (삭제된 항목 제거)
+      queryClient.setQueryData<PaginatedResponse<BacktestResult>>(
+        backtestQueryKey.lists(),
+        (old) =>
+          old
+            ? {
+                ...old,
+                data: old.data.filter((item) => item.id !== backtestId),
+                pagination: {
+                  ...old.pagination,
+                  total: old.pagination.total - 1,
+                },
+              }
+            : old
+      );
+
+      // context로 이전 데이터 반환 (onError에서 롤백용)
+      return { previousList };
+    },
+
+    // 2. 에러 시 롤백 - 스냅샷으로 복원
+    onError: (_err, _backtestId, context) => {
+      if (context?.previousList) {
+        queryClient.setQueryData(
+          backtestQueryKey.lists(),
+          context.previousList
+        );
+      }
+    },
+
+    // 3. 완료 후 서버와 동기화 (성공/실패 무관)
+    onSettled: (_, __, backtestId) => {
       // 삭제된 백테스트 상세 쿼리 제거
       queryClient.removeQueries({
         queryKey: backtestQueryKey.detail(backtestId),
       });
+      // 목록 서버와 동기화
+      queryClient.invalidateQueries({ queryKey: backtestQueryKey.lists() });
     },
   });
 }
